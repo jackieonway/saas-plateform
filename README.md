@@ -95,11 +95,12 @@ tests/                  现有 shell 运行时检查脚本
 
 需要可用的 PostgreSQL、Rust/Cargo、Node.js 22 与 npm；开发 Vue/jQuery 子服务时还需 Bun。`mini-services/oauth-playground/` 和 `notification-ws/` 使用 `node --watch index.ts`，需要支持直接运行该 TypeScript 写法的 Node.js 版本。以下命令均在各自目录执行；PowerShell 可分别打开终端。
 
-1. 创建 PostgreSQL 数据库 `dante_cloud` 与用户 `dante`，确保连接串可用。迁移不需要手动执行。
+1. 创建 PostgreSQL 账号 `dante` 并确认服务器可连接。可手动创建数据库 `dante_cloud`；若账号拥有 `CREATEDB` 权限，也可设置 `AUTO_CREATE_DATABASE=true`，让后端首次启动时创建缺失的目标库。迁移不需要手动执行。
 2. 在 `backend/` 目录提供环境变量或本地 `.env`，例如：
 
    ```dotenv
    DATABASE_URL=postgres://dante:<password>@127.0.0.1:5432/dante_cloud
+   AUTO_CREATE_DATABASE=true
    JWT_SECRET=<自定义的长随机密钥>
    BIND_ADDR=0.0.0.0:3001
    ```
@@ -110,7 +111,7 @@ tests/                  现有 shell 运行时检查脚本
 
 首次空库启动时，`seed.rs` 创建演示数据，包括超管 `admin`。其初始密码在源码中为 `admin123`，只适合本地演示；部署后应立即修改。种子主要在 `users` 表为空时执行，已存在用户的数据库不会重建整套演示数据。`backend/migrations/0002_seed.sql` 只是占位迁移，真正的种子逻辑在 Rust 代码中。
 
-**环境变量**：后端读取 `DATABASE_URL`、`BIND_ADDR`、`JWT_SECRET`、`SESSION_TTL_HOURS`、`CREDENTIAL_TICKET_TTL_MINUTES`、`ACCESS_TOKEN_TTL_SECONDS`、`REFRESH_TOKEN_TTL_SECONDS`、`PUBLIC_APP_URL`、`STATIC_DIR`。默认值见 `backend/src/config.rs`。后端使用 `dotenv_override()`，从 `backend/` 运行时该目录 `.env` 会覆盖同名进程环境变量。
+**环境变量**：后端读取 `DATABASE_URL`、`AUTO_CREATE_DATABASE`、`BIND_ADDR`、`JWT_SECRET`、`SESSION_TTL_HOURS`、`CREDENTIAL_TICKET_TTL_MINUTES`、`ACCESS_TOKEN_TTL_SECONDS`、`REFRESH_TOKEN_TTL_SECONDS`、`PUBLIC_APP_URL`、`STATIC_DIR`。`AUTO_CREATE_DATABASE` 默认关闭，建议仅在本地或受控初始化环境开启；已有数据库不会执行建库，账号无 `CREATEDB` 权限时会明确报错。默认值见 `backend/src/config.rs`。后端使用 `dotenv_override()`，从 `backend/` 运行时该目录 `.env` 会覆盖同名进程环境变量。
 
 ## 7. API 与数据库
 

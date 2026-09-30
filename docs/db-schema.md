@@ -298,3 +298,7 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
   | resource-portal | CONFIDENTIAL | authorization_code,password,refresh_token | 密码模式演示 |
 
 > 种子里用户密码哈希:后端 `main.rs` 启动时若 users 表为空则执行种子(密码用 Argon2 现算);SQL 迁移只建表。种子逻辑集中在 `src/seed.rs`,幂等(存在即跳过)。dev 默认 client secrets: dante-web=dante-web-secret, api-service=api-service-secret, resource-portal=resource-portal-secret。
+
+## 0013 结构约束补充
+
+后续迁移 [`0013_tenant_relationship_integrity.sql`](../backend/migrations/0013_tenant_relationship_integrity.sql) 在现有表上增加同租户组织父节点、同组织部门父节点、成员部门归属、角色租户/组织归属的复合外键，并用触发器阻止组织和部门树形成环路。存量库执行前请先运行[只读关系审计](./sql/tenant-relationship-audit.sql)，按[迁移说明](./tenant-relationship-migration.md)处理异常；本节不改变上面的初始结构 SQL。
