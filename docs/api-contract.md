@@ -160,3 +160,9 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 `POST /api/auth/login` 返回的 ticket 与 `POST /api/auth/context` 返回的 session 令牌分别绑定用户会话版本；session 还绑定持久会话 ID。旧版无 `sid/ver` 的 session 需重新登录。`POST /api/auth/context` 切换组织时撤销旧 session，且只能选直接加入、状态有效的组织。`POST /api/auth/logout` 撤销当前 session；`PUT /api/auth/password` 和管理员重置密码撤销目标用户全部平台 session。管理员 `/api/oauth/tokens/kick` 还会撤销全部平台 session，响应增加 `platformSessionsRevoked`。
 
 `GET /api/auth/my-sessions` 在原有 OAuth `sessions`、`revokedTotal` 外增加 `platformSessions:[{id,tenantId,tenantName,organizationId,organizationName,issuedAt,expiresAt,revokedAt,ip,userAgent,active,isCurrent}]`。`DELETE /api/auth/sessions/:id` 只能撤销本人指定的设备会话。
+
+### 应用专用令牌（Phase 5）
+
+`POST /api/oauth/session-token`：以平台 session Bearer 认证，请求 `{"appCode":"your-app"}`。租户和组织均获应用授权、应用及关联机密客户端启用时返回 `201 {"accessToken":"...","tokenType":"Bearer","expiresIn":<=300,"audience":"your-app"}`；否则返回 404。JWT 含 `sub/tenant/org/cid/aud/jti/iat/exp`，同秒重签也有不同 `jti`。
+
+业务后端用关联应用的机密客户端凭据调用 `POST /oauth/introspect`，只接受 `active:true` 且 `aud` 等于本应用 code 的 access token。应用令牌的活跃性还依赖当前平台 session、直接成员关系、租户/组织状态与两级应用授权。其他应用客户端内省返回 `active:false`；过期、撤销和 refresh token 也返回 `active:false`。详情见[应用令牌接入契约](./application-token-contract.md)。

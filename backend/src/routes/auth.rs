@@ -198,6 +198,8 @@ async fn login(
         scope: None,
         sid: None,
         ver: Some(session_version),
+        aud: None,
+        jti: None,
         exp: now + state.config.credential_ticket_ttl_minutes * 60,
         iat: now,
     };
@@ -338,6 +340,8 @@ async fn context(
         scope: None,
         sid: Some(session_id.to_string()),
         ver: Some(session_version),
+        aud: None,
+        jti: None,
         exp: expires_at.timestamp(),
         iat: now,
     };

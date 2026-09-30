@@ -16,6 +16,7 @@ use crate::routes;
 use crate::state::AppState;
 use crate::util::jwt::{self, Claims};
 use crate::util::password;
+use crate::util::hash;
 
 async fn call(
     app: &Router,
@@ -43,6 +44,17 @@ async fn call(
     let value =
         serde_json::from_slice(&bytes).unwrap_or_else(|_| json!(String::from_utf8_lossy(&bytes)));
     Ok((status, value))
+}
+
+async fn call_form(app: &Router, path: &str, client_id: &str, secret: &str, extra: &str) -> Result<(StatusCode, Value)> {
+    let body = format!("client_id={client_id}&client_secret={secret}&{extra}");
+    let request = Request::builder().method(Method::POST).uri(path)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from(body))?;
+    let response = app.clone().oneshot(request).await?;
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 1024 * 1024).await?;
+    Ok((status, serde_json::from_slice(&bytes).unwrap_or_else(|_| json!(String::from_utf8_lossy(&bytes)))))
 }
 
 async fn session(
@@ -76,6 +88,8 @@ async fn session(
             scope: None,
             sid: Some(session_id.to_string()),
             ver: Some(version),
+            aud: None,
+            jti: None,
             iat: now,
             exp: now + 3600,
         },
@@ -99,6 +113,21 @@ async fn tenant(pool: &PgPool, suffix: &str, label: &str) -> Result<(Uuid, Uuid)
     .fetch_one(pool)
     .await?;
     Ok((id, org))
+}
+
+async fn test_application(pool: &PgPool, suffix: &str) -> Result<(Uuid, String, String, String)> {
+    let code = format!("scope-app-{suffix}");
+    let app_id: Uuid = sqlx::query_scalar("INSERT INTO applications (code, name) VALUES ($1, $2) RETURNING id")
+        .bind(&code).bind(&code).fetch_one(pool).await?;
+    let client_id = format!("scope-client-{suffix}");
+    let secret = format!("s{}", Uuid::new_v4().simple());
+    sqlx::query("INSERT INTO oauth_clients \
+        (client_id, client_secret_hash, client_name, client_type, grant_types, scopes, \
+         access_token_validity, refresh_token_validity, application_id) \
+         VALUES ($1, $2, $3, 'CONFIDENTIAL', 'client_credentials', 'profile', 7200, 604800, $4)")
+        .bind(&client_id).bind(hash::sha256_hex(&secret)).bind(&client_id).bind(app_id)
+        .execute(pool).await?;
+    Ok((app_id, code, client_id, secret))
 }
 
 async fn test_user(pool: &PgPool, suffix: &str, orgs: &[Uuid]) -> Result<Uuid> {
@@ -897,6 +926,8 @@ async fn platform_session_lifecycle() -> Result<()> {
                 scope: None,
                 sid: None,
                 ver: None,
+                aud: None,
+                jti: None,
                 iat: chrono::Utc::now().timestamp(),
                 exp: chrono::Utc::now().timestamp() + 3600,
             },
@@ -930,5 +961,251 @@ async fn platform_session_lifecycle() -> Result<()> {
         .bind(admin_session_id)
         .execute(&pool)
         .await?;
+    result
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing at an isolated PostgreSQL test database"]
+async fn application_token_audience_and_revocation() -> Result<()> {
+    let url = std::env::var("TEST_DATABASE_URL")?;
+    let pool = PgPoolOptions::new().max_connections(5).connect(&url).await?;
+    let suffix = Uuid::new_v4().simple().to_string();
+    let (tenant_a, org_a) = tenant(&pool, &format!("app-a-{suffix}"), "App tenant A").await?;
+    let (tenant_b, org_b) = tenant(&pool, &format!("app-b-{suffix}"), "App tenant B").await?;
+    let user_a = test_user(&pool, &format!("app-a-{suffix}"), &[org_a]).await?;
+    let user_b = test_user(&pool, &format!("app-b-{suffix}"), &[org_b]).await?;
+    let (app_a, code_a, client_a, secret_a) = test_application(&pool, &format!("a-{suffix}")).await?;
+    let (app_b, code_b, client_b, secret_b) = test_application(&pool, &format!("b-{suffix}")).await?;
+    for (tenant, org, app_id) in [(tenant_a, org_a, app_a), (tenant_b, org_b, app_b)] {
+        sqlx::query("INSERT INTO tenant_applications (tenant_id, application_id) VALUES ($1, $2)")
+            .bind(tenant).bind(app_id).execute(&pool).await?;
+        sqlx::query("INSERT INTO organization_applications (organization_id, application_id) VALUES ($1, $2)")
+            .bind(org).bind(app_id).execute(&pool).await?;
+    }
+    let secret = "isolated-app-token-test-only";
+    let mut config = Config::from_env();
+    config.database_url = url;
+    config.jwt_secret = secret.into();
+    let app = Router::new().merge(routes::api_router())
+        .nest("/oauth", routes::oauth2::oauth_router())
+        .with_state(AppState::new(pool.clone(), Arc::new(config)));
+    let (session_a, _) = session(&pool, user_a, tenant_a, org_a, secret).await?;
+    let (session_b, _) = session(&pool, user_b, tenant_b, org_b, secret).await?;
+
+    let result: Result<()> = async {
+        let (status, issued) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        ensure!(status == StatusCode::CREATED, "authorized app token issue failed: {status} {issued}");
+        ensure!(issued["expiresIn"].as_i64().is_some_and(|ttl| ttl > 0 && ttl <= 300),
+            "app token TTL exceeded five minutes");
+        ensure!(issued["audience"] == code_a, "app audience missing from response");
+        ensure!(!issued.to_string().contains("clientSecret") && !issued.to_string().contains(&secret_a),
+            "token response disclosed client secret");
+        let token_a = issued["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing app token"))?.to_string();
+        let claims = jwt::verify(&token_a, secret)?;
+        ensure!(claims.sub == user_a.to_string() && claims.tenant.as_deref() == Some(tenant_a.to_string().as_str())
+            && claims.org.as_deref() == Some(org_a.to_string().as_str())
+            && claims.aud.as_deref() == Some(code_a.as_str()) && claims.jti.is_some(),
+            "app JWT subject/context/audience/jti mismatch");
+        let stored: (String, Option<String>, Option<Uuid>, Option<Uuid>, Option<Uuid>, Option<String>) = sqlx::query_as(
+            "SELECT token_use, audience, jti, application_id, platform_session_id, jwt \
+             FROM oauth_tokens WHERE token_hash = $1",
+        ).bind(hash::sha256_hex(&token_a)).fetch_one(&pool).await?;
+        ensure!(stored.0 == "app" && stored.1.as_deref() == Some(code_a.as_str())
+            && stored.2.map(|j| j.to_string()) == claims.jti && stored.3 == Some(app_a)
+            && stored.4.is_some() && stored.5.is_none(), "app token database binding incomplete");
+        let (status, second) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        ensure!(status == StatusCode::CREATED && second["accessToken"] != token_a,
+            "same-second app token issuance reused JWT");
+        let token_a2 = second["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing second token"))?.to_string();
+
+        ensure!(call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_b}))).await?.0 == StatusCode::NOT_FOUND,
+            "A obtained B application token");
+        ensure!(call(&app, Method::POST, "/api/oauth/session-token", &session_b,
+            Some(json!({"appCode":code_a}))).await?.0 == StatusCode::NOT_FOUND,
+            "B obtained A application token");
+        let (status, _) = call(&app, Method::POST, "/api/oauth/session-token", &session_b,
+            Some(json!({"appCode":code_b}))).await?;
+        ensure!(status == StatusCode::CREATED, "B legitimate application token failed");
+
+        let (status, active_a) = call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a}")).await?;
+        ensure!(status == StatusCode::OK && active_a["active"] == true && active_a["aud"] == code_a
+            && active_a["jti"] == claims.jti.as_deref().unwrap_or_default(),
+            "A backend could not introspect A token");
+        let (_, wrong_audience) = call_form(&app, "/oauth/introspect", &client_b, &secret_b,
+            &format!("token={token_a}")).await?;
+        ensure!(wrong_audience["active"] == false, "B backend accepted A token");
+        ensure!(call(&app, Method::GET, "/oauth/userinfo", &token_a, None).await?.0 == StatusCode::OK,
+            "authorized app token broke userinfo compatibility");
+        let (status, external) = call(&app, Method::GET, "/api/external/menus", &token_a, None).await?;
+        ensure!(status == StatusCode::OK && external["application"]["id"] == app_a.to_string(),
+            "authorized app token broke external menu compatibility");
+
+        let (status, legacy) = call_form(&app, "/oauth/token", &client_a, &secret_a,
+            "grant_type=client_credentials").await?;
+        ensure!(status == StatusCode::OK, "legacy client_credentials flow failed: {status} {legacy}");
+        let legacy_token = legacy["access_token"].as_str().ok_or_else(|| anyhow::anyhow!("missing legacy token"))?;
+        let (_, legacy_active) = call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={legacy_token}")).await?;
+        ensure!(legacy_active["active"] == true, "legacy OAuth token lost introspection compatibility");
+        ensure!(call_form(&app, "/oauth/introspect", &client_b, &secret_b,
+            &format!("token={legacy_token}")).await?.1["active"] == false,
+            "B backend introspected A legacy OAuth token");
+        let refresh_probe = format!("refreshprobe{}", Uuid::new_v4().simple());
+        sqlx::query("INSERT INTO oauth_tokens (token_hash, token_type, user_id, client_id, expires_at) \
+                     VALUES ($1, 'refresh', $2, $3, now() + interval '1 hour')")
+            .bind(hash::sha256_hex(&refresh_probe)).bind(user_a).bind(&client_a)
+            .execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={refresh_probe}")).await?.1["active"] == false,
+            "refresh token was accepted as resource access token");
+
+        call_form(&app, "/oauth/revoke", &client_a, &secret_a, &format!("token={token_a}")).await?;
+        let (_, revoked) = call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a}")).await?;
+        ensure!(revoked["active"] == false, "revoked app token remained active");
+        ensure!(call(&app, Method::GET, "/api/external/menus", &token_a, None).await?.0 == StatusCode::UNAUTHORIZED,
+            "external API accepted revoked app token");
+
+        sqlx::query("DELETE FROM organization_applications WHERE organization_id = $1 AND application_id = $2")
+            .bind(org_a).bind(app_a).execute(&pool).await?;
+        let (_, after_org_revoke) = call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a2}")).await?;
+        ensure!(after_org_revoke["active"] == false, "organization grant removal did not revoke app token");
+        ensure!(call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?.0 == StatusCode::NOT_FOUND,
+            "app token issued without organization grant");
+        sqlx::query("INSERT INTO organization_applications (organization_id, application_id) VALUES ($1, $2)")
+            .bind(org_a).bind(app_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a2}")).await?.1["active"] == false,
+            "regrant revived revoked app token");
+
+        let (_, issued3) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        let token_a3 = issued3["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing third token"))?.to_string();
+        sqlx::query("UPDATE oauth_clients SET status = 'DISABLED' WHERE client_id = $1")
+            .bind(&client_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_b, &secret_b,
+            &format!("token={token_a3}")).await?.1["active"] == false,
+            "disabled client token remained active");
+        ensure!(call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?.0 == StatusCode::NOT_FOUND,
+            "disabled client issued app token");
+        sqlx::query("UPDATE oauth_clients SET status = 'ENABLED' WHERE client_id = $1")
+            .bind(&client_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a3}")).await?.1["active"] == false,
+            "client reenable revived token");
+
+        let (_, issued4) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        let token_a4 = issued4["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing fourth token"))?.to_string();
+        sqlx::query("UPDATE applications SET status = 'DISABLED' WHERE id = $1")
+            .bind(app_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a4}")).await?.1["active"] == false,
+            "disabled application token remained active");
+        sqlx::query("UPDATE applications SET status = 'ENABLED' WHERE id = $1")
+            .bind(app_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a4}")).await?.1["active"] == false,
+            "application reenable revived token");
+
+        let (_, issued5) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        let token_a5 = issued5["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing fifth token"))?.to_string();
+        sqlx::query("DELETE FROM tenant_applications WHERE tenant_id = $1 AND application_id = $2")
+            .bind(tenant_a).bind(app_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a5}")).await?.1["active"] == false,
+            "tenant grant removal did not revoke token");
+        sqlx::query("INSERT INTO tenant_applications (tenant_id, application_id) VALUES ($1, $2)")
+            .bind(tenant_a).bind(app_a).execute(&pool).await?;
+
+        let (_, code_issue) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        let code_token = code_issue["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing code-change token"))?.to_string();
+        let changed_code = format!("x{}", &code_a[1..]);
+        sqlx::query("UPDATE applications SET code = $1 WHERE id = $2")
+            .bind(&changed_code).bind(app_a).execute(&pool).await?;
+        sqlx::query("UPDATE applications SET code = $1 WHERE id = $2")
+            .bind(&code_a).bind(app_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={code_token}")).await?.1["active"] == false,
+            "restoring application code revived token");
+
+        let (_, config_issue) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        let config_token = config_issue["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing config-change token"))?.to_string();
+        sqlx::query("UPDATE oauth_clients SET access_token_validity = access_token_validity + 1 WHERE client_id = $1")
+            .bind(&client_a).execute(&pool).await?;
+        sqlx::query("UPDATE oauth_clients SET access_token_validity = access_token_validity - 1 WHERE client_id = $1")
+            .bind(&client_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={config_token}")).await?.1["active"] == false,
+            "restoring client token configuration revived token");
+
+        let (_, issued6) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        let token_a6 = issued6["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing sixth token"))?.to_string();
+        sqlx::query("UPDATE oauth_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = $1")
+            .bind(hash::sha256_hex(&token_a6)).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a6}")).await?.1["active"] == false,
+            "expired app token remained active");
+
+        let (_, issued7) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
+            Some(json!({"appCode":code_a}))).await?;
+        let token_a7 = issued7["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing seventh token"))?.to_string();
+        ensure!(call(&app, Method::POST, "/api/auth/logout", &session_a, None).await?.0 == StatusCode::OK,
+            "session logout failed");
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a7}")).await?.1["active"] == false,
+            "app token survived parent session logout");
+
+        let (fresh_session, _) = session(&pool, user_a, tenant_a, org_a, secret).await?;
+        let (_, issued8) = call(&app, Method::POST, "/api/oauth/session-token", &fresh_session,
+            Some(json!({"appCode":code_a}))).await?;
+        let token_a8 = issued8["accessToken"].as_str().ok_or_else(|| anyhow::anyhow!("missing eighth token"))?.to_string();
+        sqlx::query("DELETE FROM memberships WHERE user_id = $1 AND organization_id = $2")
+            .bind(user_a).bind(org_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a8}")).await?.1["active"] == false,
+            "app token survived member removal");
+        ensure!(call(&app, Method::POST, "/api/oauth/session-token", &fresh_session,
+            Some(json!({"appCode":code_a}))).await?.0 == StatusCode::UNAUTHORIZED,
+            "user without membership obtained app token");
+        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+            .bind(user_a).bind(org_a).execute(&pool).await?;
+        ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
+            &format!("token={token_a8}")).await?.1["active"] == false,
+            "re-adding member revived app token");
+
+        let audit_details: Vec<String> = sqlx::query_scalar(
+            "SELECT detail FROM audit_logs WHERE user_id = $1 AND action = 'TOKEN_ISSUED'",
+        ).bind(user_a).fetch_all(&pool).await?;
+        ensure!(audit_details.iter().all(|line| !line.contains(&secret_a) && !line.contains(&secret_b)),
+            "audit log disclosed client secret");
+        Ok(())
+    }.await;
+
+    sqlx::query("DELETE FROM oauth_tokens WHERE client_id = ANY($1)")
+        .bind(&[&client_a, &client_b]).execute(&pool).await?;
+    sqlx::query("DELETE FROM audit_logs WHERE tenant_id = ANY($1) OR user_id = ANY($2) \
+                 OR username = ANY($3)")
+        .bind(&[tenant_a, tenant_b]).bind(&[user_a, user_b])
+        .bind(&[&client_a, &client_b]).execute(&pool).await?;
+    sqlx::query("DELETE FROM oauth_clients WHERE client_id = ANY($1)")
+        .bind(&[&client_a, &client_b]).execute(&pool).await?;
+    sqlx::query("DELETE FROM applications WHERE id = ANY($1)")
+        .bind(&[app_a, app_b]).execute(&pool).await?;
+    sqlx::query("DELETE FROM tenants WHERE id = ANY($1)")
+        .bind(&[tenant_a, tenant_b]).execute(&pool).await?;
+    sqlx::query("DELETE FROM users WHERE id = ANY($1)")
+        .bind(&[user_a, user_b]).execute(&pool).await?;
     result
 }

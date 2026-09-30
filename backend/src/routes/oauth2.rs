@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use crate::app_token;
 use crate::error::AppError;
 use crate::extractors::{bearer_token, ApiJson, CurrentUser};
 use crate::routes::oauth_admin::{fetch_client, ClientFull};
@@ -420,8 +421,7 @@ fn oauth_error_into(e: OAuthError) -> AppError {
 /// POST /api/oauth/session-token — 会话鉴权, 为当前会话用户签发微前端子应用访问令牌
 ///
 /// body: {"appCode": "vue-workshop"}；applications.code 定位应用 → oauth_clients.application_id
-/// 取第一个关联客户端 → 应用或客户端不存在 404 → 复用 issue_tokens 签发 access token
-/// (JWT, token_hash 落库, TTL = 客户端 access_token_validity, 关联 user_id/client_id)
+/// 取第一个已启用的机密客户端，检查租户/组织两级授权并签发 5 分钟内的专用令牌。
 /// → 201 {"accessToken","expiresIn","tokenType":"Bearer"}；明文 token 仅出现在响应体,
 /// 不落库不打日志 (库内仅存 token_hash)。
 async fn session_token(
@@ -434,13 +434,25 @@ async fn session_token(
     if app_code.is_empty() {
         return Err(AppError::bad_request("缺少 appCode"));
     }
-    let app_id: Uuid = sqlx::query_scalar("SELECT id FROM applications WHERE code = $1")
+    let app_id: Uuid = sqlx::query_scalar("SELECT id FROM applications WHERE code = $1 AND status = 'ENABLED'")
         .bind(app_code)
         .fetch_optional(&state.pool)
         .await?
-        .ok_or_else(|| AppError::not_found("应用不存在"))?;
+        .ok_or_else(|| AppError::not_found("应用不可用"))?;
+    let authorized: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM tenant_applications ta \
+         JOIN organization_applications oa ON oa.application_id = ta.application_id \
+         WHERE ta.tenant_id = $1 AND oa.organization_id = $2 AND ta.application_id = $3)",
+    )
+    .bind(user.tenant_id).bind(user.org_id).bind(app_id)
+    .fetch_one(&state.pool).await?;
+    if !authorized {
+        return Err(AppError::not_found("应用不可用"));
+    }
     let shell_client_id: String =
-        sqlx::query_scalar("SELECT client_id FROM oauth_clients WHERE application_id = $1 ORDER BY created_at LIMIT 1")
+        sqlx::query_scalar("SELECT client_id FROM oauth_clients \
+                            WHERE application_id = $1 AND status = 'ENABLED' \
+                            AND client_type = 'CONFIDENTIAL' ORDER BY created_at LIMIT 1")
             .bind(app_id)
             .fetch_optional(&state.pool)
             .await?
@@ -448,31 +460,58 @@ async fn session_token(
     let client = fetch_client(&state.pool, &shell_client_id)
         .await?
         .ok_or_else(|| AppError::not_found("该应用未关联 OAuth 客户端"))?;
-    if client.status != "ENABLED" {
-        return Err(AppError::forbidden("客户端已禁用"));
+    if client.status != "ENABLED" || client.client_type != "CONFIDENTIAL"
+        || client.application_id != Some(app_id) {
+        return Err(AppError::not_found("应用不可用"));
     }
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let scope = resolve_scope(None, &client).map_err(oauth_error_into)?;
-    let issued = issue_tokens(
-        &state,
-        &client,
-        Some(user.user_id),
-        &user.username,
-        Some(user.tenant_id),
-        Some(user.org_id),
-        &scope,
-        &ip,
-        &ua,
+    let parent_expires: DateTime<Utc> = sqlx::query_scalar(
+        "SELECT expires_at FROM platform_sessions WHERE id = $1 AND user_id = $2 \
+         AND revoked_at IS NULL AND expires_at > now()",
+    ).bind(user.session_id).bind(user.user_id)
+     .fetch_optional(&state.pool).await?
+     .ok_or_else(|| AppError::unauthorized("会话已失效"))?;
+    let now = Utc::now();
+    let ttl = client.access_token_validity.min(300);
+    if ttl <= 0 { return Err(AppError::bad_request("客户端令牌有效期配置无效")); }
+    let expires_at = std::cmp::min(now + chrono::Duration::seconds(ttl), parent_expires);
+    let expires_in = (expires_at - now).num_seconds();
+    if expires_in <= 0 { return Err(AppError::unauthorized("会话即将过期，请重新登录")); }
+    let jti = Uuid::new_v4();
+    let claims = jwt::Claims {
+        sub: user.user_id.to_string(), typ: "access".into(),
+        tenant: Some(user.tenant_id.to_string()), org: Some(user.org_id.to_string()),
+        cid: Some(client.client_id.clone()), scope: Some(scope.clone()),
+        sid: None, ver: None,
+        aud: Some(app_code.to_string()), jti: Some(jti.to_string()),
+        iat: now.timestamp(), exp: expires_at.timestamp(),
+    };
+    let access_token = jwt::sign(&claims, &state.config.jwt_secret)?;
+    sqlx::query(
+        "INSERT INTO oauth_tokens \
+         (token_hash, token_type, jwt, user_id, client_id, tenant_id, organization_id, \
+          scope, expires_at, token_use, audience, jti, application_id, platform_session_id) \
+         VALUES ($1, 'access', NULL, $2, $3, $4, $5, $6, $7, 'app', $8, $9, $10, $11)",
     )
-    .await
-    .map_err(oauth_error_into)?;
+    .bind(hash::sha256_hex(&access_token)).bind(user.user_id).bind(&client.client_id)
+    .bind(user.tenant_id).bind(user.org_id).bind(&scope).bind(expires_at)
+    .bind(app_code).bind(jti).bind(app_id).bind(user.session_id)
+    .execute(&state.pool).await?;
+    audit::write(&state.pool, audit::AuditInfo {
+        user_id: Some(user.user_id), username: &user.username,
+        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
+        action: "TOKEN_ISSUED", detail: &format!("签发应用令牌: app={} client={} jti={}", app_code, client.client_id, jti),
+        ip: &ip, user_agent: &ua,
+    }).await;
     Ok((
         StatusCode::CREATED,
         Json(json!({
-            "accessToken": issued.access_token,
-            "expiresIn": issued.expires_in,
+            "accessToken": access_token,
+            "expiresIn": expires_in,
             "tokenType": "Bearer",
+            "audience": app_code,
         })),
     )
         .into_response())
@@ -482,10 +521,6 @@ async fn session_token(
 
 struct IssuedToken {
     response: Value,
-    /// 明文 access token (JWT) — 仅供响应返回, 不落库不写日志
-    access_token: String,
-    /// access token 有效期 (秒)
-    expires_in: i64,
 }
 
 /// 签发 access (+refresh) 并写库与审计
@@ -514,6 +549,8 @@ async fn issue_tokens(
         scope: Some(scope.to_string()),
         sid: None,
         ver: None,
+        aud: None,
+        jti: None,
         exp: now + access_ttl,
         iat: now,
     };
@@ -574,8 +611,6 @@ async fn issue_tokens(
     .await;
     Ok(IssuedToken {
         response,
-        access_token: access,
-        expires_in: access_ttl,
     })
 }
 
@@ -903,17 +938,20 @@ async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Result<J
     if claims.typ != "access" {
         return Err(OAuthError::invalid_token("令牌类型错误"));
     }
-    let row = sqlx::query_as::<_, (Option<Uuid>, Option<Uuid>, Option<Uuid>, String, bool, DateTime<Utc>)>(
-        "SELECT user_id, tenant_id, organization_id, COALESCE(scope,'') AS scope, revoked, expires_at \
+    let row = sqlx::query_as::<_, (Option<Uuid>, Option<Uuid>, Option<Uuid>, String, bool, DateTime<Utc>, String)>(
+        "SELECT user_id, tenant_id, organization_id, COALESCE(scope,'') AS scope, revoked, expires_at, token_use \
          FROM oauth_tokens WHERE token_hash = $1 AND token_type = 'access'",
     )
     .bind(hash::sha256_hex(&token))
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| OAuthError::invalid_token("令牌无效或已过期"))?;
-    let (user_id, tenant_id, org_id, scope, revoked, expires_at) = row;
+    let (user_id, tenant_id, org_id, scope, revoked, expires_at, token_use) = row;
     if revoked || expires_at < Utc::now() {
         return Err(OAuthError::invalid_token("令牌已被吊销或已过期"));
+    }
+    if token_use == "app" && app_token::inspect(&state.pool, &token, &claims).await?.is_none() {
+        return Err(OAuthError::invalid_token("应用令牌已失效"));
     }
     let user_id = user_id.ok_or_else(|| OAuthError::invalid_token("该令牌没有关联用户"))?;
     let (username, real_name, email, phone) = sqlx::query_as::<_, (String, String, String, String)>(
@@ -977,19 +1015,48 @@ async fn introspect(
     if let Err(resp) = check_oauth_rate(&state, &headers) {
         return Ok(resp);
     }
-    let _client = authenticate_client(&state, &headers, &form).await?;
+    let caller = authenticate_client(&state, &headers, &form).await?;
     let token = form.get("token").ok_or_else(|| OAuthError::invalid_request("缺少 token"))?;
-    let row = sqlx::query_as::<_, (Option<Uuid>, String, String, DateTime<Utc>, DateTime<Utc>, bool, Option<i64>)>(
+    let row = sqlx::query_as::<_, (Option<Uuid>, String, String, DateTime<Utc>, DateTime<Utc>, bool, Option<i64>, String, String)>(
         "SELECT user_id, client_id, COALESCE(scope,'') AS scope, created_at, expires_at, revoked, \
-         EXTRACT(EPOCH FROM expires_at)::bigint AS exp_epoch \
+         EXTRACT(EPOCH FROM expires_at)::bigint AS exp_epoch, token_use \
+         , token_type \
          FROM oauth_tokens WHERE token_hash = $1",
     )
     .bind(hash::sha256_hex(token))
     .fetch_optional(&state.pool)
     .await?;
-    let Some((user_id, client_id, scope, created_at, expires_at, revoked, exp_epoch)) = row else {
+    let Some((user_id, client_id, scope, created_at, expires_at, revoked, exp_epoch, token_use, token_type)) = row else {
         return Ok(Json(json!({"active": false})).into_response());
     };
+    if token_type != "access" {
+        return Ok(Json(json!({"active": false})).into_response());
+    }
+    if token_use == "app" {
+        if caller.client_type != "CONFIDENTIAL" {
+            return Ok(Json(json!({"active": false})).into_response());
+        }
+        let claims = match jwt::verify(token, &state.config.jwt_secret) {
+            Ok(claims) => claims,
+            Err(_) => return Ok(Json(json!({"active": false})).into_response()),
+        };
+        let Some(info) = app_token::inspect(&state.pool, token, &claims).await? else {
+            return Ok(Json(json!({"active": false})).into_response());
+        };
+        if caller.application_id != Some(info.application_id) {
+            return Ok(Json(json!({"active": false})).into_response());
+        }
+        return Ok(Json(json!({
+            "active": true, "scope": info.scope, "client_id": info.client_id,
+            "token_type": "Bearer", "sub": info.user_id,
+            "tenant_id": info.tenant_id, "organization_id": info.organization_id,
+            "aud": info.audience, "jti": info.jti,
+            "exp": info.expires_at.timestamp(), "iat": created_at.timestamp(),
+        })).into_response());
+    }
+    if caller.client_id != client_id {
+        return Ok(Json(json!({"active": false})).into_response());
+    }
     let active = !revoked && expires_at > Utc::now();
     if !active {
         return Ok(Json(json!({"active": false})).into_response());

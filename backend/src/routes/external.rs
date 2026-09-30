@@ -16,6 +16,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use crate::app_token;
 use crate::error::AppError;
 use crate::extractors::bearer_token;
 use crate::routes::oauth_admin::fetch_client;
@@ -50,8 +51,8 @@ async fn authenticate_external(state: &AppState, headers: &HeaderMap) -> Result<
         return Err(AppError::unauthorized("令牌类型错误"));
     }
     // 与 userinfo 同口径查库校验 (token_hash 唯一); user_id 可为 NULL (client_credentials)
-    let row = sqlx::query_as::<_, (Option<Uuid>, Option<String>, bool, DateTime<Utc>)>(
-        "SELECT t.user_id, u.username, t.revoked, t.expires_at \
+    let row = sqlx::query_as::<_, (Option<Uuid>, Option<String>, bool, DateTime<Utc>, String)>(
+        "SELECT t.user_id, u.username, t.revoked, t.expires_at, t.token_use \
          FROM oauth_tokens t LEFT JOIN users u ON u.id = t.user_id \
          WHERE t.token_hash = $1 AND t.token_type = 'access'",
     )
@@ -59,10 +60,14 @@ async fn authenticate_external(state: &AppState, headers: &HeaderMap) -> Result<
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::unauthorized("令牌无效或已过期"))?;
-    let (user_id, username, revoked, expires_at) = row;
+    let (user_id, username, revoked, expires_at, token_use) = row;
     if revoked || expires_at < Utc::now() {
         return Err(AppError::unauthorized("令牌已被吊销或已过期"));
     }
+    let app_binding = if token_use == "app" {
+        Some(app_token::inspect(&state.pool, &token, &claims).await?
+            .ok_or_else(|| AppError::unauthorized("应用令牌已失效"))?)
+    } else { None };
     let cid = claims
         .cid
         .as_deref()
@@ -78,6 +83,9 @@ async fn authenticate_external(state: &AppState, headers: &HeaderMap) -> Result<
     let application_id = client
         .application_id
         .ok_or_else(|| AppError::not_found("该客户端未关联应用, 请在 OAuth 客户端管理中配置"))?;
+    if app_binding.as_ref().is_some_and(|binding| binding.application_id != application_id) {
+        return Err(AppError::unauthorized("应用令牌受众不匹配"));
+    }
     Ok(ExternalContext {
         client_id: client.client_id,
         application_id,
