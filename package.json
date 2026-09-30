@@ -1,0 +1,20 @@
+{
+  "name": "dante-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dante Cloud 多租户多组织权限平台 (Rust + PostgreSQL + Vite + React)",
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "dev:frontend": "cd frontend && bun run dev",
+    "dev:backend": "cd backend && cargo run",
+    "db:push": "echo '[dante-cloud] 数据库由 Rust 后端 SQLx 迁移自动管理 (PostgreSQL)'",
+    "lint": "cd frontend && bun run lint",
+    "build": "cd frontend && bun run build",
+    "micro:sync": "node scripts/sync-microapp.mjs"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.3",
+    "postgres": "^3.4.9",
+    "socket.io": "^4.8.4"
+  }
+}

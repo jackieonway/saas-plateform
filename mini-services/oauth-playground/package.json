@@ -1,0 +1,10 @@
+{
+  "name": "oauth-playground",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dante Cloud OAuth 测试服务 (设备码 RFC 8628 + 授权码 PKCE 双流程演练, 纯 node:http 零依赖, 端口 3004)",
+  "scripts": {
+    "dev": "node --watch index.ts"
+  }
+}

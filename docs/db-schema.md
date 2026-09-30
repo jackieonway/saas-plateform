@@ -1,0 +1,300 @@
+# Dante Cloud — PostgreSQL 数据库设计
+
+> 连接串: `postgres://dante@127.0.0.1:5432/dante_cloud` (本地 trust 认证;docker 部署时带密码)
+> 使用 SQLx 迁移: `backend/migrations/0001_init.sql`(结构) + `0002_seed.sql`(种子数据)
+> 所有主键 UUID (gen_random_uuid()),时间 timestamptz。
+
+## 实体关系
+
+```
+applications 1─N menus (自引用树 parent_id)
+tenants 1─N organizations (自引用多层级树 parent_id)
+organizations 1─N departments (自引用树)
+users N─N organizations (memberships, 含 department)
+tenants N─N applications (tenant_applications 授权)
+tenants N─N menus (tenant_menus 授权)
+organizations N─N applications (organization_applications 授权, ⊆ 租户授权)
+organizations N─N menus (organization_menus 授权, ⊆ 租户授权)
+roles (scope: organization_id 必填) N─N menus (role_menus, ⊆ 组织授权)
+users N─N roles (user_roles, organization_id 记录授权上下文)
+oauth_clients / oauth_tokens / oauth_device_codes / oauth_authorization_codes / oauth_authorization_requests
+audit_logs
+```
+
+## 表结构 (完整 SQL 由后端代理实现,此处为权威定义)
+
+```sql
+CREATE TABLE tenants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL,
+  code VARCHAR(50) NOT NULL UNIQUE,
+  description TEXT DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE applications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
+  icon VARCHAR(100) DEFAULT 'LayoutGrid',
+  base_path VARCHAR(200) DEFAULT '',
+  description TEXT DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE menus (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  parent_id UUID REFERENCES menus(id) ON DELETE CASCADE,
+  type VARCHAR(20) NOT NULL DEFAULT 'MENU',        -- DIR | MENU | BUTTON
+  title VARCHAR(100) NOT NULL,
+  path VARCHAR(200) DEFAULT '',
+  component VARCHAR(200) DEFAULT '',
+  icon VARCHAR(100) DEFAULT '',
+  permission VARCHAR(100) DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  visible BOOLEAN NOT NULL DEFAULT true,
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_menus_app ON menus(application_id);
+
+CREATE TABLE organizations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  parent_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  code VARCHAR(50) DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  description TEXT DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_orgs_tenant ON organizations(tenant_id);
+
+CREATE TABLE departments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  parent_id UUID REFERENCES departments(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  code VARCHAR(50) DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  description TEXT DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username VARCHAR(50) NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  real_name VARCHAR(100) DEFAULT '',
+  email VARCHAR(100) DEFAULT '',
+  phone VARCHAR(30) DEFAULT '',
+  avatar TEXT DEFAULT '',
+  gender VARCHAR(10) DEFAULT 'UNKNOWN',   -- MALE | FEMALE | UNKNOWN
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  is_super_admin BOOLEAN NOT NULL DEFAULT false,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE memberships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
+  position VARCHAR(50) DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, organization_id)
+);
+
+CREATE TABLE roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,  -- 角色 scope
+  name VARCHAR(100) NOT NULL,
+  code VARCHAR(50) DEFAULT '',
+  description TEXT DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  built_in BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(organization_id, name)
+);
+
+CREATE TABLE role_menus (
+  role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  menu_id UUID NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
+  PRIMARY KEY (role_id, menu_id)
+);
+
+CREATE TABLE user_roles (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, role_id)
+);
+
+CREATE TABLE tenant_applications (
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, application_id)
+);
+
+CREATE TABLE tenant_menus (
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  menu_id UUID NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, menu_id)
+);
+
+CREATE TABLE organization_applications (
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (organization_id, application_id)
+);
+
+CREATE TABLE organization_menus (
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  menu_id UUID NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (organization_id, menu_id)
+);
+
+-- ===== OAuth2 =====
+CREATE TABLE oauth_clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id VARCHAR(100) NOT NULL UNIQUE,
+  client_secret_hash TEXT,                       -- PUBLIC 客户端为 NULL
+  client_name VARCHAR(200) NOT NULL,
+  description TEXT DEFAULT '',
+  client_type VARCHAR(20) NOT NULL DEFAULT 'CONFIDENTIAL',  -- CONFIDENTIAL | PUBLIC
+  redirect_uris TEXT DEFAULT '',                 -- 逗号分隔
+  grant_types TEXT DEFAULT 'authorization_code,refresh_token', -- 逗号分隔
+  scopes TEXT DEFAULT 'profile',                 -- 逗号分隔
+  access_token_validity INT NOT NULL DEFAULT 7200,
+  refresh_token_validity INT NOT NULL DEFAULT 604800,
+  status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE oauth_authorization_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id VARCHAR(100) NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT '',
+  state TEXT DEFAULT '',
+  code_challenge TEXT DEFAULT '',
+  code_challenge_method VARCHAR(10) DEFAULT '',
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE oauth_authorization_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code_hash TEXT NOT NULL UNIQUE,
+  client_id VARCHAR(100) NOT NULL,
+  user_id UUID NOT NULL,
+  tenant_id UUID, organization_id UUID,
+  redirect_uri TEXT NOT NULL,
+  scope TEXT DEFAULT '',
+  code_challenge TEXT DEFAULT '',
+  code_challenge_method VARCHAR(10) DEFAULT '',
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE oauth_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_hash TEXT NOT NULL UNIQUE,
+  token_type VARCHAR(20) NOT NULL,               -- access | refresh
+  jwt TEXT,                                      -- access 存 JWT 本体便于 introspect 快速返回
+  user_id UUID,                                  -- client_credentials 为 NULL
+  client_id VARCHAR(100) NOT NULL,
+  tenant_id UUID, organization_id UUID,
+  scope TEXT DEFAULT '',
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_tokens_user ON oauth_tokens(user_id);
+
+CREATE TABLE oauth_device_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_code_hash TEXT NOT NULL UNIQUE,
+  user_code VARCHAR(20) NOT NULL UNIQUE,
+  client_id VARCHAR(100) NOT NULL,
+  scope TEXT DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING | APPROVED | DENIED | EXPIRED
+  user_id UUID, tenant_id UUID, organization_id UUID,
+  interval_seconds INT NOT NULL DEFAULT 5,
+  last_polled_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID, username VARCHAR(50) DEFAULT '',
+  tenant_id UUID, tenant_name VARCHAR(100) DEFAULT '',
+  organization_id UUID, organization_name VARCHAR(100) DEFAULT '',
+  action VARCHAR(50) NOT NULL,
+  detail TEXT DEFAULT '',
+  ip VARCHAR(50) DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
+```
+
+## 种子数据 (0002_seed.sql,密码 Argon2 哈希由 Rust 启动时 upsert 生成)
+
+- **租户** dante「Dante 云平台」
+- **应用** ①system 系统管理(LayoutGrid, /system) ②athena 数据分析(BarChart3, /athena) ③hermes 消息中心(MessageSquare, /hermes)
+- **system 菜单树**:
+  - 仪表盘 MENU /dashboard permission dashboard:view
+  - 组织机构 DIR:租户管理(/system/tenants, system:tenant) + 授权按钮(BUTTON system:tenant:auth)、组织管理(/system/organizations, system:organization)、部门管理(/system/departments, system:department)、授权管理(/system/authorizations, system:authorization)
+  - 用户与角色 DIR:用户管理(/system/users, system:user)、角色管理(/system/roles, system:role)
+  - 平台配置 DIR:应用管理(/system/applications, system:application)、菜单管理(/system/menus, system:menu)
+  - 开放平台 DIR:OAuth 客户端(/system/oauth/clients, system:oauth)、设备与会话(/system/oauth/tokens, system:oauth)、审计日志(/system/audit-logs, system:audit)、平台监控(/system/monitor, system:monitor)
+- **athena 菜单树**: 数据概览(/athena/overview)、报表中心 DIR(销售报表 /athena/reports/sales、运营报表 /athena/reports/operations)、数据源管理(/athena/sources)
+- **hermes 菜单树**: 收件箱(/hermes/inbox)、通知设置(/hermes/notifications)
+- **组织树**(dante 租户): 总公司 → {华东区分公司 → {上海办事处, 杭州办事处}, 华北区分公司 → {北京办事处}}
+- **部门**(总公司下): 产品部、研发部(→前端组、后端组)、人事部;华东区分公司下:交付一组
+- **用户**:
+  | 用户 | 密码 | 说明 |
+  |---|---|---|
+  | admin | admin123 | 超级管理员,membership=总公司,体验全部功能 |
+  | zhangsan | Zs@12345 | 华东区分公司 组织管理员(角色:组织管理员) |
+  | lisi | Ls@12345 | 总公司 普通用户 |
+  | wangwu | Ww@12345 | 总公司 + 华北区分公司 双 membership(演示登录选择) |
+  | tianqi | Tq@12345 | 上海办事处 普通用户 |
+- **角色**(dante 租户):
+  - 超级管理员(scope 总公司, built_in, 全菜单)
+  - 组织管理员(scope 华东区分公司: 组织机构+用户与角色模块菜单+仪表盘)
+  - 普通用户(scope 总公司: 仪表盘+各应用基础菜单)
+- **授权链演示**: 租户 dante 授权全部 3 应用全部菜单;总公司授权 system+athena+hermes 全部;华东区分公司授权 athena+hermes(无 system);华北区分公司仅 hermes;上海/杭州/北京办事处:华东/华北同款或更少(athena 或 hermes)
+- **OAuth 客户端**:
+  | client_id | 类型 | 授权 | 用途 |
+  |---|---|---|---|
+  | dante-web | CONFIDENTIAL | authorization_code,refresh_token + PKCE | Web 应用演示,redirect_uri: https://oauthdebugger.com/callback,http://localhost:9000/callback |
+  | smart-tv | PUBLIC | urn:ietf:params:oauth:grant-type:device_code,refresh_token | 智能电视等输入设备码设备 |
+  | api-service | CONFIDENTIAL | client_credentials | 服务间调用 |
+  | resource-portal | CONFIDENTIAL | authorization_code,password,refresh_token | 密码模式演示 |
+
+> 种子里用户密码哈希:后端 `main.rs` 启动时若 users 表为空则执行种子(密码用 Argon2 现算);SQL 迁移只建表。种子逻辑集中在 `src/seed.rs`,幂等(存在即跳过)。dev 默认 client secrets: dante-web=dante-web-secret, api-service=api-service-secret, resource-portal=resource-portal-secret。

@@ -1,0 +1,16 @@
+# 构建上下文排除(加速 docker build)
+**/node_modules
+**/target
+**/dist
+.git
+docs
+examples
+mini-services
+skills
+tests
+upload
+download
+.zscripts
+*.log
+db
+prisma

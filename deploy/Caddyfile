@@ -1,0 +1,30 @@
+# Dante Cloud 生产网关 (运行在 web 容器内的 Caddy)
+# - /api/* 与 /oauth/* 反向代理到 Rust 后端
+# - 其余请求托管前端 SPA (history 路由 fallback 到 index.html)
+# 如需 HTTPS: 将 ':80' 块替换为 'example.com {' 并开放 443 端口, Caddy 自动签发证书
+
+{
+	admin off
+	auto_https off
+	logger {
+		level WARN
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:3001
+	}
+
+	handle /oauth/* {
+		reverse_proxy backend:3001
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

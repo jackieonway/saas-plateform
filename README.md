@@ -1,0 +1,152 @@
+# Dante Cloud 项目文档
+
+> 基于当前仓库代码整理（2026-09-29）。本文以实际入口、路由、迁移和构建文件为准；`docs/api-contract.md` 与 `docs/db-schema.md` 可作为接口和表结构的进一步参考。
+
+## 1. 项目定位
+
+Dante Cloud 是一个多租户、多层级组织、多应用的权限管理演示平台。它提供租户、组织、部门、用户、角色、菜单与应用的管理，按租户和组织逐层授权，并包含 OAuth 2.0、审计、监控、通知和微前端演示功能。
+
+仓库由 **Rust/Axum 后端 + PostgreSQL 数据库 + React/TypeScript 管理端**组成。通知 WebSocket、OAuth 演练站点以及 Vue、jQuery 子应用位于 `mini-services/`，属于独立服务或演示应用。
+
+## 2. 架构与数据流
+
+```mermaid
+flowchart LR
+    U[浏览器] --> W[React 管理端 / Vite 或 Caddy]
+    W -->|/api 和 /oauth| B[Rust Axum :3001]
+    B --> P[(PostgreSQL :5432)]
+    B -->|pg_notify new_notification| P
+    P -->|LISTEN / 轮询降级| N[Socket.IO 通知服务 :3003]
+    N -->|实时通知| U
+    W -->|HTML 入口或 ESM 入口| M[微前端子应用]
+    O[OAuth 演练站点 :3004] --> B
+```
+
+后端启动时先连接数据库，执行 `backend/migrations/` 中的 SQLx 迁移，再运行 `backend/src/seed.rs` 的初始化数据逻辑。HTTP 入口在 `backend/src/main.rs`；`/api/*` 由业务路由提供，`/oauth/*` 提供授权协议端点。设置 `STATIC_DIR` 时，后端也能托管前端静态文件及 SPA 回退页面。
+
+前端由 `frontend/src/App.tsx` 定义页面路由，`AppLayout` 处理已登录区域。API 请求统一经过 `frontend/src/lib/api.ts`，会话令牌由 Zustand store 保存到浏览器 `localStorage`。Vite 开发服务器默认监听 3000，并将 `/api`、`/oauth` 转发到后端。
+
+## 3. 技术栈
+
+| 层 | 主要技术 | 作用 |
+| --- | --- | --- |
+| 后端 | Rust 2021、Axum 0.8、Tokio、SQLx 0.8 | HTTP API、权限校验、OAuth、数据库访问 |
+| 数据库 | PostgreSQL 17（Compose 镜像） | 业务数据、授权关系、OAuth 令牌、通知及审计 |
+| 前端 | React 19、TypeScript、Vite 6、Tailwind CSS 4 | 管理界面与 SPA 路由 |
+| 前端状态 | TanStack Query、Zustand | 服务端数据缓存与登录状态 |
+| 通知 | Socket.IO、PostgreSQL LISTEN/NOTIFY | 实时通知推送 |
+| 微前端 | `import-html-entry`、自定义沙箱、ESM 动态导入 | HTML 子应用和第一方模块接入 |
+| 部署 | Docker Compose、Caddy | 前端静态托管及 API 反向代理 |
+
+## 4. 主要业务模块
+
+| 模块 | 当前实现 |
+| --- | --- |
+| 登录与个人中心 | 用户名密码登录、选择组织上下文、切换组织、个人资料、修改密码、登录历史与会话查看 |
+| 租户与组织 | 租户管理、组织树、部门树、平台租户跨租户管理约束 |
+| 用户与角色 | 用户状态、成员关系、组织范围角色、角色菜单和角色用户分配 |
+| 应用与菜单 | 应用管理、目录/菜单/按钮、外链与微前端菜单 |
+| 分层授权 | 租户应用/菜单授权、组织应用/菜单授权、角色菜单授权 |
+| OAuth | 客户端管理、授权码与 PKCE、刷新令牌、客户端凭据、密码模式、设备授权、令牌管理与撤销 |
+| 通知 | 站内通知、未读数、批量操作、偏好与免打扰、Socket.IO 实时提醒 |
+| 运维 | 审计日志与 CSV 导出、平台监控、租户洞察与 CSV 导出、健康检查 |
+| 演示应用 | Athena 数据分析、Hermes 消息中心、Vue/jQuery HTML 子应用、报表中心 ESM 子应用 |
+
+Athena 页面使用 `frontend/src/pages/athena/mock.tsx` 中的演示数据，不能据此判断已有真实分析数据链路。OAuth 演练站点位于 `mini-services/oauth-playground/`，是授权服务器的测试客户端。
+
+### 权限模型
+
+主要实体关系：`tenant → organization → department`；用户通过 `memberships` 加入组织，角色归属某个组织，用户与角色通过 `user_roles` 关联。应用和菜单先授权给租户，再授权给组织，角色只能分配授权范围内的菜单。
+
+普通用户的有效权限由 **用户角色菜单 ∩ 当前组织菜单授权 ∩ 所属租户菜单授权** 得出；祖先组织的角色可在子组织上下文生效。后端在 `backend/src/state.rs` 中计算权限并缓存 30 秒，授权或角色变更时清除缓存。超级管理员在后端权限检查中直接通过。前端菜单显示基于 `/api/auth/menus`，操作权限仍以服务端检查为准。
+
+登录流程为 `POST /api/auth/login` 获取短期 credential ticket 和可选组织，再调用 `POST /api/auth/context` 获取带租户、组织上下文的 session JWT。请求携带 `Authorization: Bearer <token>`。前端的可用应用列表来自 `/api/auth/profile`。
+
+## 5. 代码目录
+
+```text
+backend/
+  src/main.rs             后端启动、迁移、种子、HTTP 服务
+  src/config.rs           环境配置
+  src/routes/            业务 API 与 OAuth 路由
+  src/state.rs            权限计算、缓存、OAuth 限流
+  src/seed.rs             初始租户、应用、组织、用户和客户端
+  migrations/            0001–0012 SQLx 迁移
+frontend/
+  src/App.tsx             页面路由
+  src/pages/             各业务页面
+  src/api/               各模块 API 调用
+  src/components/micro/  HTML/ESM 微前端加载与沙箱
+  src/stores/auth.ts      会话与当前应用状态
+  public/sub-apps/       已放入 public 的 Vue、jQuery 静态子应用
+mini-services/
+  notification-ws/       通知 Socket.IO 服务
+  oauth-playground/      OAuth 流程演练站点
+  micro-vue/             Vue HTML 子应用源码/开发服务
+  micro-jquery/          jQuery HTML 子应用源码/开发服务
+docs/                   API 契约与数据库设计说明
+deploy/Caddyfile        Compose 中的生产网关配置
+docker-compose.yml      PostgreSQL、后端、Web 三服务编排
+scripts/                开发环境辅助脚本
+tests/                  现有 shell 运行时检查脚本
+```
+
+## 6. 本地开发
+
+需要可用的 PostgreSQL、Rust/Cargo、Node.js 22 与 npm；开发 Vue/jQuery 子服务时还需 Bun。`mini-services/oauth-playground/` 和 `notification-ws/` 使用 `node --watch index.ts`，需要支持直接运行该 TypeScript 写法的 Node.js 版本。以下命令均在各自目录执行；PowerShell 可分别打开终端。
+
+1. 创建 PostgreSQL 数据库 `dante_cloud` 与用户 `dante`，确保连接串可用。迁移不需要手动执行。
+2. 在 `backend/` 目录提供环境变量或本地 `.env`，例如：
+
+   ```dotenv
+   DATABASE_URL=postgres://dante:<password>@127.0.0.1:5432/dante_cloud
+   JWT_SECRET=<自定义的长随机密钥>
+   BIND_ADDR=0.0.0.0:3001
+   ```
+
+3. 启动后端：`cd backend; cargo run`。健康检查为 `http://localhost:3001/api/health`。
+4. 启动前端：`cd frontend; npm ci; npm run dev`，访问 `http://localhost:3000`。Vite 会代理 API；`npm run build` 执行 TypeScript 检查及生产构建。
+5. 如需实时通知，另行启动 `mini-services/notification-ws/`；如需 OAuth 流程演练，启动 `mini-services/oauth-playground/`；HTML 子应用可使用 `frontend/public/sub-apps/` 的静态副本，也可分别启动 3005/3006 开发服务并修改应用入口地址为 `/sub/vue/`、`/sub/jquery/`。
+
+首次空库启动时，`seed.rs` 创建演示数据，包括超管 `admin`。其初始密码在源码中为 `admin123`，只适合本地演示；部署后应立即修改。种子主要在 `users` 表为空时执行，已存在用户的数据库不会重建整套演示数据。`backend/migrations/0002_seed.sql` 只是占位迁移，真正的种子逻辑在 Rust 代码中。
+
+**环境变量**：后端读取 `DATABASE_URL`、`BIND_ADDR`、`JWT_SECRET`、`SESSION_TTL_HOURS`、`CREDENTIAL_TICKET_TTL_MINUTES`、`ACCESS_TOKEN_TTL_SECONDS`、`REFRESH_TOKEN_TTL_SECONDS`、`PUBLIC_APP_URL`、`STATIC_DIR`。默认值见 `backend/src/config.rs`。后端使用 `dotenv_override()`，从 `backend/` 运行时该目录 `.env` 会覆盖同名进程环境变量。
+
+## 7. API 与数据库
+
+- 健康检查：`GET /api/health`，含数据库可用性状态。
+- 业务 API：`/api/auth`、`/api/tenants`、`/api/organizations`、`/api/departments`、`/api/users`、`/api/roles`、`/api/applications`、`/api/menus`、`/api/notifications`、`/api/oauth`、`/api/audit-logs`、`/api/monitor` 等。路由注册以 `backend/src/routes/mod.rs` 及各模块 `routes()` 为准。
+- OAuth 协议 API：`/oauth/authorize`、`/oauth/token`、`/oauth/userinfo`、`/oauth/introspect`、`/oauth/revoke`、`/oauth/device/authorization` 和发现文档。
+- 通用分页：`page` 从 1 起，`size` 有效范围为 1–200；列表响应通常为 `{records,total,page,size}`。普通业务错误以 `{code,message}` 返回；OAuth 协议端点使用自己的 OAuth 错误结构。
+- 结构迁移：`backend/migrations/0001_init.sql` 建核心表，后续迁移加入通知、平台租户、外链、外部 API 和微前端入口等。迁移文件目前到 `0012_micro_esm.sql`。
+
+详细字段和接口示例参见 [API 契约](docs/api-contract.md) 与 [数据库设计](docs/db-schema.md)。这两份早期说明未覆盖全部后续迁移与新增路由，修改代码时应同步更新。
+
+独立子应用的开发与上线步骤参见 [微前端接入与上线指南](docs/microfrontend-integration.md)。
+
+面向真实多租户业务的改造目标、功能需求和验收标准参见 [SaaS 与微前端改造需求分析](docs/saas-microfrontend-requirements.md)。
+
+## 8. 通知与微前端
+
+通知写入 PostgreSQL `notifications` 表后，后端向 `new_notification` 通道发送 `pg_notify`。独立通知服务监听该通道并向已认证用户的 Socket.IO 房间推送；LISTEN 失败时尝试每 2 秒轮询。前端连接失败后仍有轮询兜底。通知偏好、免打扰和弹窗节流在前端处理，消息记录仍保留在库中。
+
+微前端以 `applications.entry_type` / `entry_url` 配置入口，以 `/micro/:appCode/*` 路由挂载。HTML 通道通过 `import-html-entry` 加载脚本并交给自定义沙箱运行，示例为 Vue 与 jQuery；ESM 通道动态导入第一方模块，不经过 HTML 沙箱。容器仅从当前用户已授权应用中查找入口，向子应用传递用户、主题、菜单、路由及通知等属性。
+
+新建 HTML 微应用可使用“快速接入”：名称和编码确定 `/micro/{code}` 路由及 `/sub-apps/{code}/index.html` 入口，系统自动创建首页菜单。构建产物可用 `npm run micro:sync -- <code> <构建目录>` 同步到前端静态目录；租户、组织和角色授权仍需配置。
+
+## 9. 部署现状与已知限制
+
+`docker-compose.yml` 定义 PostgreSQL、Rust 后端、Caddy Web 三个服务。网关把 `/api/*`、`/oauth/*` 反代到 3001，其余路径作为前端 SPA 静态资源处理。Compose 并未编排 `notification-ws`、OAuth 演练站点或两个微前端开发服务，因此这些能力需要单独部署或使用静态资源。
+
+当前代码有以下可直接确认的部署问题，生产交付前需处理：
+
+1. 前端 Docker 构建现使用 `frontend/package-lock.json` 与 `npm ci`。本地前端构建已确认包含 `sub-apps/` 目录；发布前仍需实际构建并验证镜像。
+2. `mini-services/notification-ws/index.ts` 的 PostgreSQL URL 固定为本机地址，JWT 密钥备用读取路径固定为 `/home/z/my-project/backend/.env`；离开原开发环境需调整配置实现，并保证其密钥与后端一致。
+3. 微前端种子中 Vue/jQuery 入口为 `/sub/vue/`、`/sub/jquery/`，这依赖 Vite 开发代理和 3005/3006 服务；生产 Caddy 未配置对应反代。虽然 `frontend/public/sub-apps/` 有静态副本，数据库入口仍需改为静态路径才能使用。
+4. `report-center` 的 ESM 入口种子为 `/src/micro-apps/report-center.tsx`，属于 Vite 开发路径，生产构建后的静态站点不提供该源码 URL。需改为构建产物可访问的模块入口。
+5. 根目录 `scripts/start-all.sh` 写死 `/home/z/my-project`，`scripts/dev.sh` 依赖特定 Linux 下的 PostgreSQL 启动脚本；它们不是跨平台启动方案。当前 Windows 环境建议按第 6 节分别启动服务。
+6. 后端配置和 Compose 含演示默认密钥/密码，且后端启用宽松 CORS。面向公网部署前必须替换密钥与账号，并复核跨域、外链和 OAuth 客户端配置。
+
+## 10. 维护入口
+
+新增业务模块时，通常需要同时修改 `backend/src/routes/`、`frontend/src/api/`、`frontend/src/pages/` 和 `frontend/src/App.tsx`；若涉及持久化，再新增 SQLx 迁移。菜单、权限码和默认授权可参考 `backend/src/seed.rs`，新旧数据库的数据补丁应通过新迁移实现，避免改动已执行迁移。现有 shell 检查脚本位于 `tests/`，两个 HTML 子应用各有 `smoke-test.cjs`；仓库没有统一的一键测试命令。

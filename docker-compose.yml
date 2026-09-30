@@ -1,0 +1,66 @@
+# Dante Cloud — docker-compose 生产部署
+# 用法:
+#   1. (可选) 在项目根目录创建 .env.docker 设置 JWT_SECRET / PUBLIC_APP_URL / CADDY_DOMAIN
+#   2. docker compose up -d --build
+#   3. 访问 http://<主机IP>/  (默认账号 admin / admin123, 请立即修改)
+#
+# 架构:
+#   [ caddy(web) :80/:443 ] ──/api,/oauth──> [ backend(Rust/Axum) :3001 ] ──> [ postgres :5432 ]
+#        └── 静态托管前端 SPA (frontend/dist 构建产物)
+#
+# 备选「Rust 后端直接托管前端」单进程模式(不用 caddy):
+#   docker compose up -d --build postgres backend
+#   cd frontend && bun run build && STATIC_DIR=./dist BIND_ADDR=0.0.0.0:3001 cargo run
+#   (backend 检测到 STATIC_DIR 后会自动托管静态文件并把 /api /oauth 一起服务)
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: dante-postgres
+    environment:
+      POSTGRES_USER: dante
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dante_cloud_2024}
+      POSTGRES_DB: dante_cloud
+      TZ: Asia/Shanghai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dante -d dante_cloud"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: dante-backend
+    environment:
+      DATABASE_URL: postgres://dante:${POSTGRES_PASSWORD:-dante_cloud_2024}@postgres:5432/dante_cloud
+      BIND_ADDR: 0.0.0.0:3001
+      # 生产必须修改 JWT 密钥!
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-use-random-32bytes}
+      # 对外基础地址(影响 OAuth 发现文档 issuer 与 authorize 跳转), 留空则按请求 Host 推断
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      SESSION_TTL_HOURS: 12
+      RUST_LOG: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 数据库迁移与种子在启动时自动执行(幂等)
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: dante-web
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
