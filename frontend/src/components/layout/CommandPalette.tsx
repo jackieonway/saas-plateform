@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import {
   Bell,
   Building2,
@@ -518,9 +519,16 @@ export function CommandPalette({
               value="退出登录 logout"
               onSelect={() => {
                 onOpenChange(false)
-                void authApi.logout().catch(() => undefined)
-                logout()
-                navigate("/login", { replace: true })
+                void (async () => {
+                  try {
+                    await authApi.logout()
+                  } catch {
+                    toast.warning("本机已退出，服务端会话撤销未确认")
+                  } finally {
+                    logout()
+                    navigate("/login", { replace: true })
+                  }
+                })()
               }}
             >
               <LogOut className="size-4 text-muted-foreground" />

@@ -154,3 +154,9 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 ## 4. 公共
 - GET `/api/health` → `{"status":"UP","version":"1.0.0","database":"UP"}` (无需认证)
 - 401 → 错误码 UNAUTHORIZED;403 → FORBIDDEN;统一 JSON。
+
+### 平台会话（Phase 4）
+
+`POST /api/auth/login` 返回的 ticket 与 `POST /api/auth/context` 返回的 session 令牌分别绑定用户会话版本；session 还绑定持久会话 ID。旧版无 `sid/ver` 的 session 需重新登录。`POST /api/auth/context` 切换组织时撤销旧 session，且只能选直接加入、状态有效的组织。`POST /api/auth/logout` 撤销当前 session；`PUT /api/auth/password` 和管理员重置密码撤销目标用户全部平台 session。管理员 `/api/oauth/tokens/kick` 还会撤销全部平台 session，响应增加 `platformSessionsRevoked`。
+
+`GET /api/auth/my-sessions` 在原有 OAuth `sessions`、`revokedTotal` 外增加 `platformSessions:[{id,tenantId,tenantName,organizationId,organizationName,issuedAt,expiresAt,revokedAt,ip,userAgent,active,isCurrent}]`。`DELETE /api/auth/sessions/:id` 只能撤销本人指定的设备会话。

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::extractors::{bearer_token, ApiJson, CurrentUser};
 use crate::routes::page_json;
+use crate::session;
 use crate::state::{AppState, ORG_ANCESTORS_SQL};
 use crate::util::{audit, jwt, password as pw, tree};
 
@@ -75,6 +76,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/auth/password", put(change_password))
         .route("/api/auth/login-history", get(login_history))
         .route("/api/auth/my-sessions", get(my_sessions))
+        .route("/api/auth/sessions/{id}", axum::routing::delete(revoke_my_session))
 }
 
 #[derive(sqlx::FromRow)]
@@ -96,7 +98,7 @@ async fn fetch_memberships(pool: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Mem
          JOIN organizations o ON o.id = m.organization_id \
          JOIN tenants t ON t.id = o.tenant_id \
          LEFT JOIN departments d ON d.id = m.department_id \
-         WHERE m.user_id = $1 \
+         WHERE m.user_id = $1 AND org_chain_active(o.id) AND t.status = 'ENABLED' \
          AND (o.expires_at IS NULL OR o.expires_at > now()) \
          AND (t.expires_at IS NULL OR t.expires_at > now()) \
          ORDER BY m.created_at",
@@ -145,14 +147,14 @@ async fn login(
         }).await;
         return Err(AppError::forbidden("登录尝试过于频繁, 请 10 分钟后再试"));
     }
-    let row = sqlx::query_as::<_, (Uuid, String, String, bool)>(
-        "SELECT id, password_hash, status, is_super_admin FROM users WHERE username = $1",
+    let row = sqlx::query_as::<_, (Uuid, String, String, bool, i64)>(
+        "SELECT id, password_hash, status, is_super_admin, session_version FROM users WHERE username = $1",
     )
     .bind(&username)
     .fetch_optional(&state.pool)
     .await?;
 
-    let Some((user_id, hash, status, _)) = row else {
+    let Some((user_id, hash, status, _, session_version)) = row else {
         record_login_failure(&username, &ip);
         audit::write(&state.pool, audit::AuditInfo {
             user_id: None, username: &username, tenant_id: None, organization_id: None,
@@ -194,6 +196,8 @@ async fn login(
         org: None,
         cid: None,
         scope: None,
+        sid: None,
+        ver: Some(session_version),
         exp: now + state.config.credential_ticket_ttl_minutes * 60,
         iat: now,
     };
@@ -241,30 +245,48 @@ async fn context(
         .sub
         .parse()
         .map_err(|_| AppError::unauthorized("凭证无效"))?;
+    let claim_version = claims.ver.ok_or_else(|| AppError::unauthorized("旧版凭证已失效，请重新登录"))?;
+    let old_session_id = if claims.typ == "session" {
+        let sid: Uuid = claims.sid.as_deref()
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
+        let old_tenant = claims.tenant.as_deref().and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or_else(|| AppError::unauthorized("会话缺少租户上下文"))?;
+        let old_org = claims.org.as_deref().and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or_else(|| AppError::unauthorized("会话缺少组织上下文"))?;
+        session::active_user(&state.pool, user_id, old_tenant, old_org, sid, claim_version).await?;
+        Some(sid)
+    } else {
+        None
+    };
     let org_id: Uuid = body
         .organization_id
         .parse()
         .map_err(|_| AppError::bad_request("组织 ID 格式错误"))?;
 
-    let user = sqlx::query_as::<_, (String, String, String, String, String, String, bool, String)>(
+    let user = sqlx::query_as::<_, (String, String, String, String, String, String, bool, String, i64)>(
         "SELECT username, COALESCE(real_name,''), COALESCE(email,''), COALESCE(phone,''), \
-         COALESCE(avatar,''), COALESCE(gender,'UNKNOWN'), is_super_admin, status FROM users WHERE id = $1",
+         COALESCE(avatar,''), COALESCE(gender,'UNKNOWN'), is_super_admin, status, session_version FROM users WHERE id = $1",
     )
     .bind(user_id)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::unauthorized("用户不存在"))?;
-    let (username, real_name, email, phone, avatar, gender, is_super, status) = user;
+    let (username, real_name, email, phone, avatar, gender, is_super, status, session_version) = user;
     if status != "ENABLED" {
         return Err(AppError::unauthorized("账号已被禁用"));
     }
+    if session_version != claim_version {
+        return Err(AppError::unauthorized("凭证已撤销，请重新登录"));
+    }
 
     let org = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, String, bool, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>(
-        "SELECT o.id, o.name, org_path(o.id), o.tenant_id, t.name, t.code, t.is_platform, o.expires_at, t.expires_at \
+        "SELECT o.id, o.name, org_path(o.id), o.tenant_id, t.name, t.code, t.is_platform, org_chain_expires_at(o.id), t.expires_at \
          FROM memberships m \
          JOIN organizations o ON o.id = m.organization_id \
          JOIN tenants t ON t.id = o.tenant_id \
-         WHERE m.user_id = $1 AND m.organization_id = $2",
+         WHERE m.user_id = $1 AND m.organization_id = $2 \
+         AND org_chain_active(o.id) AND t.status = 'ENABLED'",
     )
     .bind(user_id)
     .bind(org_id)
@@ -282,6 +304,31 @@ async fn context(
 
     let now = Utc::now().timestamp();
     let ttl = state.config.session_ttl_hours * 3600;
+    if ttl <= 0 {
+        return Err(AppError::bad_request("会话有效期配置无效"));
+    }
+    let ip = audit::client_ip(&headers);
+    let ua = audit::ua_of(&headers);
+    let mut tx = state.pool.begin().await?;
+    let (session_id, expires_at): (Uuid, DateTime<Utc>) = sqlx::query_as(
+        "INSERT INTO platform_sessions \
+         (user_id, tenant_id, organization_id, expires_at, ip, user_agent) \
+         VALUES ($1, $2, $3, LEAST(now() + make_interval(secs => $4::float8), \
+                $7::timestamptz, $8::timestamptz), $5, $6) \
+         RETURNING id, expires_at",
+    )
+    .bind(user_id).bind(tenant_id).bind(org_id).bind(ttl as f64).bind(&ip).bind(&ua)
+    .bind(org_expires).bind(tenant_expires)
+    .fetch_one(&mut *tx).await?;
+    if let Some(old_id) = old_session_id {
+        let revoked = sqlx::query(
+            "UPDATE platform_sessions SET revoked_at = now() \
+             WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > now()",
+        ).bind(old_id).bind(user_id).execute(&mut *tx).await?.rows_affected();
+        if revoked != 1 {
+            return Err(AppError::unauthorized("会话已失效，请重新登录"));
+        }
+    }
     let session = jwt::Claims {
         sub: user_id.to_string(),
         typ: "session".into(),
@@ -289,14 +336,15 @@ async fn context(
         org: Some(org_id.to_string()),
         cid: None,
         scope: None,
-        exp: now + ttl,
+        sid: Some(session_id.to_string()),
+        ver: Some(session_version),
+        exp: expires_at.timestamp(),
         iat: now,
     };
     let access_token = jwt::sign(&session, &state.config.jwt_secret)?;
+    tx.commit().await?;
 
     if claims.typ == "session" {
-        let ip = audit::client_ip(&headers);
-        let ua = audit::ua_of(&headers);
         audit::write(&state.pool, audit::AuditInfo {
             user_id: Some(user_id), username: &username,
             tenant_id: Some(tenant_id), organization_id: Some(org_id),
@@ -459,6 +507,7 @@ async fn logout(
     headers: HeaderMap,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
+    session::revoke_one(&state.pool, user.user_id, user.session_id).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
@@ -494,11 +543,7 @@ async fn change_password(
         return Err(AppError::bad_request("原密码不正确"));
     }
     let new_hash = pw::hash_password(&body.new_password)?;
-    sqlx::query("UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1")
-        .bind(user.user_id)
-        .bind(new_hash)
-        .execute(&state.pool)
-        .await?;
+    session::revoke_all(&state.pool, user.user_id, Some(&new_hash)).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
@@ -577,6 +622,11 @@ type MySessionTuple = (
     Option<String>,
 );
 
+type PlatformSessionTuple = (
+    Uuid, Uuid, String, Uuid, String, DateTime<Utc>, DateTime<Utc>,
+    Option<DateTime<Utc>>, String, String, bool,
+);
+
 /// GET /api/auth/my-sessions — 本人 OAuth 令牌按客户端聚合的会话视图
 ///
 /// 个人安全中心自助查询: 仅本人令牌行 (user_id = 当前用户, client_credentials 的
@@ -621,5 +671,59 @@ async fn my_sessions(State(state): State<AppState>, user: CurrentUser) -> Result
             },
         )
         .collect();
-    Ok(Json(json!({"sessions": sessions, "revokedTotal": revoked_total})))
+    let platform_rows: Vec<PlatformSessionTuple> = sqlx::query_as(
+        "SELECT s.id, s.tenant_id, t.name, s.organization_id, o.name, \
+         s.issued_at, s.expires_at, s.revoked_at, s.ip, s.user_agent, \
+         (s.revoked_at IS NULL AND s.expires_at > now() \
+          AND t.status = 'ENABLED' AND org_chain_active(o.id) \
+          AND (t.expires_at IS NULL OR t.expires_at > now()) \
+          AND EXISTS(SELECT 1 FROM memberships m WHERE m.user_id = s.user_id \
+                     AND m.organization_id = s.organization_id)) AS active \
+         FROM platform_sessions s \
+         JOIN tenants t ON t.id = s.tenant_id \
+         JOIN organizations o ON o.id = s.organization_id \
+         WHERE s.user_id = $1 ORDER BY s.issued_at DESC, s.id DESC LIMIT 100",
+    )
+    .bind(user.user_id)
+    .fetch_all(&state.pool)
+    .await?;
+    let platform_sessions: Vec<Value> = platform_rows.into_iter()
+        .map(|(id, tenant_id, tenant_name, organization_id, organization_name,
+              issued_at, expires_at, revoked_at, ip, user_agent, active)| {
+            json!({
+                "id": id, "tenantId": tenant_id, "tenantName": tenant_name,
+                "organizationId": organization_id, "organizationName": organization_name,
+                "issuedAt": issued_at, "expiresAt": expires_at, "revokedAt": revoked_at,
+                "ip": ip, "userAgent": user_agent, "active": active,
+                "isCurrent": id == user.session_id,
+            })
+        }).collect();
+    Ok(Json(json!({"sessions": sessions, "revokedTotal": revoked_total,
+                   "platformSessions": platform_sessions})))
+}
+
+/// DELETE /api/auth/sessions/{id} — 用户撤销自己的指定设备会话。
+async fn revoke_my_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let target: Option<(Uuid, Uuid)> = sqlx::query_as(
+        "UPDATE platform_sessions SET revoked_at = now() \
+         WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL \
+         RETURNING tenant_id, organization_id",
+    )
+    .bind(id).bind(user.user_id).fetch_optional(&state.pool).await?;
+    let (tenant_id, org_id) = target.ok_or_else(|| AppError::not_found("会话不存在"))?;
+    let ip = audit::client_ip(&headers);
+    let ua = audit::ua_of(&headers);
+    audit::write(&state.pool, audit::AuditInfo {
+        user_id: Some(user.user_id), username: &user.username,
+        tenant_id: Some(tenant_id), organization_id: Some(org_id),
+        action: "REVOKE_SESSION", detail: &format!("撤销设备会话: {}", id),
+        ip: &ip, user_agent: &ua,
+    }).await;
+    Ok(Json(json!({"ok": true})))
 }

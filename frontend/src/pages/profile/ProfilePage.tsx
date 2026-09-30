@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zResolver } from "@/lib/form"
@@ -66,6 +66,8 @@ const LOGIN_HISTORY_PAGE_SIZE = 10
 
 export default function ProfilePage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const logout = useAuthStore((s) => s.logout)
   const profile = useAuthStore((s) => s.profile)
   const user = profile?.user
   const displayName = user?.realName || user?.username || "用户"
@@ -81,8 +83,11 @@ export default function ProfilePage() {
   const changeMutation = useMutation({
     mutationFn: (v: PasswordForm) => authApi.changePassword(v.oldPassword, v.newPassword),
     onSuccess: () => {
-      toast.success("密码修改成功,下次登录请使用新密码")
+      toast.success("密码修改成功，请重新登录")
       form.reset({ oldPassword: "", newPassword: "", confirmPassword: "" })
+      logout()
+      queryClient.clear()
+      navigate("/login", { replace: true })
     },
     onError: (e: Error) => toast.error(e.message || "修改失败"),
   })
@@ -113,6 +118,15 @@ export default function ProfilePage() {
     retry: 1,
   })
   const mySessions = sessionsQuery.data?.sessions ?? []
+  const platformSessions = sessionsQuery.data?.platformSessions ?? []
+  const revokeSessionMutation = useMutation({
+    mutationFn: authApi.revokeSession,
+    onSuccess: () => {
+      toast.success("设备会话已撤销")
+      void sessionsQuery.refetch()
+    },
+    onError: (e: Error) => toast.error(e.message || "撤销失败"),
+  })
   const activeSessionCount = mySessions.filter((s) => s.activeAccess + s.activeRefresh > 0).length
   const revokedTotal = sessionsQuery.data?.revokedTotal ?? 0
 
@@ -320,12 +334,39 @@ export default function ProfilePage() {
                   <div className="mb-3 flex items-center gap-2">
                     <MonitorSmartphone className="size-4 text-primary/80" />
                     <h3 className="text-[13px] font-semibold text-foreground/90">我的活跃会话</h3>
-                    {!sessionsQuery.isLoading && !sessionsQuery.isError && mySessions.length > 0 && (
+                    {!sessionsQuery.isLoading && !sessionsQuery.isError && (mySessions.length > 0 || platformSessions.length > 0) && (
                       <span className="ml-auto text-[11px] tabular-nums text-muted-foreground/70">
-                        活跃 {activeSessionCount}/{mySessions.length}
+                        活跃 {activeSessionCount + platformSessions.filter((s) => s.active).length}/{mySessions.length + platformSessions.length}
                       </span>
                     )}
                   </div>
+
+                  {!sessionsQuery.isLoading && !sessionsQuery.isError && platformSessions.length > 0 && (
+                    <div className="mb-4 space-y-2">
+                      <p className="text-[11px] font-medium text-muted-foreground">平台登录设备</p>
+                      {platformSessions.map((s) => (
+                        <div key={s.id} className="flex items-center gap-2 rounded-lg border bg-background/70 p-3 text-xs">
+                          <MonitorSmartphone className="size-4 shrink-0 text-primary" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{s.tenantName} / {s.organizationName}</p>
+                            <p className="truncate text-[11px] text-muted-foreground" title={s.userAgent}>
+                              {s.ip || "未知 IP"} · {formatDateTime(s.issuedAt)}
+                            </p>
+                          </div>
+                          {s.isCurrent ? <Badge variant="outline">当前设备</Badge> : s.active ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={revokeSessionMutation.isPending}
+                              onClick={() => revokeSessionMutation.mutate(s.id)}
+                            >
+                              撤销
+                            </Button>
+                          ) : <Badge variant="outline">已失效</Badge>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {sessionsQuery.isLoading ? (
                     <div className="space-y-2.5">

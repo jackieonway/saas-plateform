@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRef } from "react"
 import { useAuthStore } from "@/stores/auth"
 import { authApi } from "@/api/auth"
 import { asArray } from "@/lib/api"
@@ -42,12 +43,22 @@ export function usePermissionsQuery() {
 /** 组织上下文切换:POST context(旧 session token)→ 更新 token → 全量刷新 */
 export function useSwitchContext() {
   const queryClient = useQueryClient()
-  const token = useAuthStore((s) => s.token)
   const setToken = useAuthStore((s) => s.setToken)
+  const switching = useRef(false)
   return async (organizationId: string) => {
-    const resp = await authApi.switchContext(organizationId, token!)
-    setToken(resp.accessToken)
-    await queryClient.invalidateQueries()
-    return resp
+    if (switching.current) throw new Error("组织切换进行中，请稍候")
+    switching.current = true
+    try {
+      const token = useAuthStore.getState().token
+      if (!token) throw new Error("会话已失效，请重新登录")
+      const resp = await authApi.switchContext(organizationId, token)
+      if (useAuthStore.getState().token !== token) throw new Error("会话已变化，请重试")
+      await queryClient.cancelQueries()
+      queryClient.clear()
+      setToken(resp.accessToken)
+      return resp
+    } finally {
+      switching.current = false
+    }
   }
 }

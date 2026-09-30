@@ -14,6 +14,7 @@ use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
 use crate::routes::notifications::notify;
 use crate::routes::{page_json, paging};
+use crate::session;
 use crate::state::AppState;
 use crate::util::{audit, password as pw};
 
@@ -517,13 +518,9 @@ async fn reset_password(
     let hash = pw::hash_password(&body.new_password)?;
     let mut tx = state.pool.begin().await?;
     let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
-    let (username,): (String,) =
-        sqlx::query_as("UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 RETURNING username")
-            .bind(id)
-            .bind(&hash)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or_else(|| AppError::not_found("用户不存在"))?;
+    let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id = $1")
+        .bind(id).fetch_one(&mut *tx).await?;
+    session::revoke_all_in_tx(&mut tx, id, Some(&hash)).await?;
     tx.commit().await?;
     audit_user_change(&state, &headers, &user, &target_tenants, "RESET_PASSWORD",
         &format!("重置用户密码: {}", username)).await;

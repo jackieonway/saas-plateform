@@ -4,6 +4,7 @@ mod error;
 mod extractors;
 mod routes;
 mod seed;
+mod session;
 mod state;
 mod util;
 

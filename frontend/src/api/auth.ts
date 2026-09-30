@@ -39,4 +39,5 @@ export const authApi = {
 
   /** 本人名下按 OAuth 客户端聚合的会话概览 */
   mySessions: () => api.get<MySessionsResp>("/api/auth/my-sessions"),
+  revokeSession: (id: string) => api.del<{ ok: boolean }>(`/api/auth/sessions/${encodeURIComponent(id)}`),
 }

@@ -15,6 +15,7 @@ use crate::config::Config;
 use crate::routes;
 use crate::state::AppState;
 use crate::util::jwt::{self, Claims};
+use crate::util::password;
 
 async fn call(
     app: &Router,
@@ -44,9 +45,28 @@ async fn call(
     Ok((status, value))
 }
 
-fn session(user: Uuid, tenant: Uuid, org: Uuid, secret: &str) -> Result<String> {
+async fn session(
+    pool: &PgPool,
+    user: Uuid,
+    tenant: Uuid,
+    org: Uuid,
+    secret: &str,
+) -> Result<(String, Uuid)> {
     let now = chrono::Utc::now().timestamp();
-    jwt::sign(
+    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id = $1")
+        .bind(user)
+        .fetch_one(pool)
+        .await?;
+    let session_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO platform_sessions (user_id, tenant_id, organization_id, expires_at) \
+         VALUES ($1, $2, $3, now() + interval '1 hour') RETURNING id",
+    )
+    .bind(user)
+    .bind(tenant)
+    .bind(org)
+    .fetch_one(pool)
+    .await?;
+    let token = jwt::sign(
         &Claims {
             sub: user.to_string(),
             typ: "session".into(),
@@ -54,11 +74,14 @@ fn session(user: Uuid, tenant: Uuid, org: Uuid, secret: &str) -> Result<String> 
             org: Some(org.to_string()),
             cid: None,
             scope: None,
+            sid: Some(session_id.to_string()),
+            ver: Some(version),
             iat: now,
             exp: now + 3600,
         },
         secret,
-    )
+    )?;
+    Ok((token, session_id))
 }
 
 async fn tenant(pool: &PgPool, suffix: &str, label: &str) -> Result<(Uuid, Uuid)> {
@@ -157,6 +180,44 @@ async fn grant_admin(
     Ok(role)
 }
 
+async fn login_and_select(
+    app: &Router,
+    username: &str,
+    password: &str,
+    org: Uuid,
+) -> Result<(String, String)> {
+    let (status, login) = call(
+        app,
+        Method::POST,
+        "/api/auth/login",
+        "",
+        Some(json!({"username":username,"password":password})),
+    )
+    .await?;
+    ensure!(status == StatusCode::OK, "login failed: {status} {login}");
+    let ticket = login["ticket"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("missing ticket"))?
+        .to_string();
+    let (status, context) = call(
+        app,
+        Method::POST,
+        "/api/auth/context",
+        &ticket,
+        Some(json!({"organizationId":org.to_string()})),
+    )
+    .await?;
+    ensure!(
+        status == StatusCode::OK,
+        "context failed: {status} {context}"
+    );
+    let token = context["accessToken"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("missing access token"))?
+        .to_string();
+    Ok((ticket, token))
+}
+
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing at an isolated PostgreSQL test database"]
 async fn tenant_management_scope_matrix() -> Result<()> {
@@ -204,9 +265,10 @@ async fn tenant_management_scope_matrix() -> Result<()> {
     let app = Router::new()
         .merge(routes::api_router())
         .with_state(AppState::new(pool.clone(), Arc::new(config)));
-    let a = session(admin_a, tenant_a, org_a, secret)?;
-    let b = session(admin_b, tenant_b, org_b, secret)?;
-    let platform = session(platform_user, platform_tenant, platform_org, secret)?;
+    let (a, _) = session(&pool, admin_a, tenant_a, org_a, secret).await?;
+    let (b, _) = session(&pool, admin_b, tenant_b, org_b, secret).await?;
+    let (platform, platform_session_id) =
+        session(&pool, platform_user, platform_tenant, platform_org, secret).await?;
     let created_username = format!("scope-created-{suffix}");
 
     let result: Result<()> = async {
@@ -373,6 +435,499 @@ async fn tenant_management_scope_matrix() -> Result<()> {
         .await?;
     sqlx::query("DELETE FROM users WHERE id = ANY($1)")
         .bind(&[admin_a, admin_b, shared])
+        .execute(&pool)
+        .await?;
+    sqlx::query("DELETE FROM platform_sessions WHERE id = $1")
+        .bind(platform_session_id)
+        .execute(&pool)
+        .await?;
+    result
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing at an isolated PostgreSQL test database"]
+async fn platform_session_lifecycle() -> Result<()> {
+    let url = std::env::var("TEST_DATABASE_URL")?;
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await?;
+    let suffix = Uuid::new_v4().simple().to_string();
+    let (tenant_id, root) = tenant(&pool, &format!("session-{suffix}"), "Session test").await?;
+    let child: Uuid = sqlx::query_scalar("INSERT INTO organizations (tenant_id, parent_id, name) VALUES ($1, $2, 'Child') RETURNING id")
+        .bind(tenant_id).bind(root).fetch_one(&pool).await?;
+    let unrelated: Uuid = sqlx::query_scalar("INSERT INTO organizations (tenant_id, parent_id, name) VALUES ($1, $2, 'Unrelated') RETURNING id")
+        .bind(tenant_id).bind(root).fetch_one(&pool).await?;
+    let username = format!("session-user-{suffix}");
+    let initial_hash = password::hash_password("StartPass123")?;
+    let user_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(&username)
+    .bind(initial_hash)
+    .fetch_one(&pool)
+    .await?;
+    for org in [root, child] {
+        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(org)
+            .execute(&pool)
+            .await?;
+    }
+    let (admin_id, admin_tenant, admin_org): (Uuid, Uuid, Uuid) = sqlx::query_as(
+        "SELECT u.id, t.id, o.id FROM users u, tenants t, organizations o \
+         WHERE u.is_super_admin = true AND t.is_platform = true AND o.tenant_id = t.id \
+         AND o.parent_id IS NULL LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await?;
+    let secret = "isolated-session-test-only";
+    let mut config = Config::from_env();
+    config.database_url = url;
+    config.jwt_secret = secret.into();
+    let app = Router::new()
+        .merge(routes::api_router())
+        .with_state(AppState::new(pool.clone(), Arc::new(config)));
+    let (admin_token, admin_session_id) =
+        session(&pool, admin_id, admin_tenant, admin_org, secret).await?;
+
+    let result: Result<()> = async {
+        let (old_ticket, first) = login_and_select(&app, &username, "StartPass123", root).await?;
+        let (_, second) = login_and_select(&app, &username, "StartPass123", root).await?;
+        let (status, listing) =
+            call(&app, Method::GET, "/api/auth/my-sessions", &first, None).await?;
+        ensure!(status == StatusCode::OK, "session list failed");
+        ensure!(
+            listing["platformSessions"]
+                .as_array()
+                .map_or(false, |items| items
+                    .iter()
+                    .filter(|item| item["active"] == true)
+                    .count()
+                    >= 2),
+            "two independent device sessions were not listed"
+        );
+
+        let (status, _) = call(&app, Method::POST, "/api/auth/logout", &first, None).await?;
+        ensure!(status == StatusCode::OK, "logout failed");
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &first, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "logged-out session remained active"
+        );
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &second, None)
+                .await?
+                .0
+                == StatusCode::OK,
+            "logout revoked another device"
+        );
+
+        let (status, switched) = call(
+            &app,
+            Method::POST,
+            "/api/auth/context",
+            &second,
+            Some(json!({"organizationId":child.to_string()})),
+        )
+        .await?;
+        ensure!(
+            status == StatusCode::OK,
+            "valid context switch failed: {switched}"
+        );
+        let switched_token = switched["accessToken"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("missing switched token"))?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &second, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "old context session remained active"
+        );
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", switched_token, None)
+                .await?
+                .0
+                == StatusCode::OK,
+            "new context session was not active"
+        );
+        ensure!(
+            call(
+                &app,
+                Method::POST,
+                "/api/auth/context",
+                switched_token,
+                Some(json!({"organizationId":unrelated.to_string()}))
+            )
+            .await?
+            .0 == StatusCode::FORBIDDEN,
+            "user switched into organization without direct membership"
+        );
+        ensure!(
+            call(
+                &app,
+                Method::POST,
+                "/api/auth/context",
+                &second,
+                Some(json!({"organizationId":root.to_string()}))
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "concurrent reuse of old context token was accepted"
+        );
+
+        let (third, third_id) = session(&pool, user_id, tenant_id, root, secret).await?;
+        ensure!(
+            call(
+                &app,
+                Method::DELETE,
+                &format!("/api/auth/sessions/{third_id}"),
+                switched_token,
+                None
+            )
+            .await?
+            .0 == StatusCode::OK,
+            "self-service device revocation failed"
+        );
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &third, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "revoked device remained active"
+        );
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", switched_token, None)
+                .await?
+                .0
+                == StatusCode::OK,
+            "device revocation affected current device"
+        );
+
+        ensure!(
+            call(
+                &app,
+                Method::PUT,
+                "/api/auth/password",
+                switched_token,
+                Some(json!({"oldPassword":"StartPass123","newPassword":"NextPass123"}))
+            )
+            .await?
+            .0 == StatusCode::OK,
+            "personal password change failed"
+        );
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", switched_token, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "password change did not revoke current session"
+        );
+        ensure!(
+            call(
+                &app,
+                Method::POST,
+                "/api/auth/context",
+                &old_ticket,
+                Some(json!({"organizationId":root.to_string()}))
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "old credential ticket survived password change"
+        );
+        ensure!(
+            call(
+                &app,
+                Method::POST,
+                "/api/auth/login",
+                "",
+                Some(json!({"username":username,"password":"StartPass123"}))
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "old password still worked"
+        );
+        let (ticket_after_change, after_change) =
+            login_and_select(&app, &username, "NextPass123", root).await?;
+
+        let (status, kicked) = call(
+            &app,
+            Method::POST,
+            "/api/oauth/tokens/kick",
+            &admin_token,
+            Some(json!({"userId":user_id.to_string()})),
+        )
+        .await?;
+        ensure!(
+            status == StatusCode::OK && kicked["platformSessionsRevoked"].as_u64().unwrap_or(0) > 0,
+            "administrator kick did not revoke platform sessions"
+        );
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &after_change, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "kicked session remained active"
+        );
+        ensure!(
+            call(
+                &app,
+                Method::POST,
+                "/api/auth/context",
+                &ticket_after_change,
+                Some(json!({"organizationId":root.to_string()}))
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "credential ticket survived administrator kick"
+        );
+
+        ensure!(
+            call(
+                &app,
+                Method::POST,
+                &format!("/api/users/{user_id}/reset-password"),
+                &admin_token,
+                Some(json!({"newPassword":"ResetPass123"}))
+            )
+            .await?
+            .0 == StatusCode::OK,
+            "administrator password reset failed"
+        );
+        ensure!(
+            call(
+                &app,
+                Method::POST,
+                "/api/auth/login",
+                "",
+                Some(json!({"username":username,"password":"NextPass123"}))
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "old password survived administrator reset"
+        );
+        let (_, after_reset) = login_and_select(&app, &username, "ResetPass123", root).await?;
+        sqlx::query("DELETE FROM memberships WHERE user_id = $1 AND organization_id = $2")
+            .bind(user_id)
+            .bind(root)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &after_reset, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "member removal did not invalidate session"
+        );
+        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(root)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &after_reset, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "re-adding member revived old session"
+        );
+
+        let (org_token, _) = session(&pool, user_id, tenant_id, child, secret).await?;
+        sqlx::query("UPDATE organizations SET status = 'DISABLED' WHERE id = $1")
+            .bind(root)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &org_token, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "disabled ancestor organization did not invalidate child session"
+        );
+        sqlx::query("UPDATE organizations SET status = 'ENABLED' WHERE id = $1")
+            .bind(root)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &org_token, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "re-enabled organization revived old session"
+        );
+
+        let (org_expiry_token, _) = session(&pool, user_id, tenant_id, root, secret).await?;
+        sqlx::query(
+            "UPDATE organizations SET expires_at = now() - interval '1 second' WHERE id = $1",
+        )
+        .bind(root)
+        .execute(&pool)
+        .await?;
+        ensure!(
+            call(
+                &app,
+                Method::GET,
+                "/api/auth/profile",
+                &org_expiry_token,
+                None
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "expired organization did not invalidate session"
+        );
+        sqlx::query("UPDATE organizations SET expires_at = NULL WHERE id = $1")
+            .bind(root)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(
+                &app,
+                Method::GET,
+                "/api/auth/profile",
+                &org_expiry_token,
+                None
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "extending organization revived old session"
+        );
+
+        let (tenant_token, _) = session(&pool, user_id, tenant_id, root, secret).await?;
+        sqlx::query("UPDATE tenants SET status = 'DISABLED' WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &tenant_token, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "disabled tenant did not invalidate session"
+        );
+        sqlx::query("UPDATE tenants SET status = 'ENABLED' WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &tenant_token, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "re-enabled tenant revived old session"
+        );
+
+        let (tenant_expiry_token, _) = session(&pool, user_id, tenant_id, root, secret).await?;
+        sqlx::query("UPDATE tenants SET expires_at = now() - interval '1 second' WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(
+                &app,
+                Method::GET,
+                "/api/auth/profile",
+                &tenant_expiry_token,
+                None
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "expired tenant did not invalidate session"
+        );
+        sqlx::query("UPDATE tenants SET expires_at = NULL WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(
+                &app,
+                Method::GET,
+                "/api/auth/profile",
+                &tenant_expiry_token,
+                None
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "extending tenant revived old session"
+        );
+
+        let (user_status_token, _) = session(&pool, user_id, tenant_id, root, secret).await?;
+        sqlx::query("UPDATE users SET status = 'DISABLED' WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(
+                &app,
+                Method::GET,
+                "/api/auth/profile",
+                &user_status_token,
+                None
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "disabled user did not invalidate session"
+        );
+        sqlx::query("UPDATE users SET status = 'ENABLED' WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await?;
+        ensure!(
+            call(
+                &app,
+                Method::GET,
+                "/api/auth/profile",
+                &user_status_token,
+                None
+            )
+            .await?
+            .0 == StatusCode::UNAUTHORIZED,
+            "re-enabled user revived old session"
+        );
+
+        let legacy = jwt::sign(
+            &Claims {
+                sub: user_id.to_string(),
+                typ: "session".into(),
+                tenant: Some(tenant_id.to_string()),
+                org: Some(root.to_string()),
+                cid: None,
+                scope: None,
+                sid: None,
+                ver: None,
+                iat: chrono::Utc::now().timestamp(),
+                exp: chrono::Utc::now().timestamp() + 3600,
+            },
+            secret,
+        )?;
+        ensure!(
+            call(&app, Method::GET, "/api/auth/profile", &legacy, None)
+                .await?
+                .0
+                == StatusCode::UNAUTHORIZED,
+            "legacy session without sid/ver was accepted"
+        );
+        Ok(())
+    }
+    .await;
+
+    sqlx::query("DELETE FROM audit_logs WHERE user_id = $1 OR tenant_id = $2")
+        .bind(user_id)
+        .bind(tenant_id)
+        .execute(&pool)
+        .await?;
+    sqlx::query("DELETE FROM tenants WHERE id = $1")
+        .bind(tenant_id)
+        .execute(&pool)
+        .await?;
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(user_id)
+        .execute(&pool)
+        .await?;
+    sqlx::query("DELETE FROM platform_sessions WHERE id = $1")
+        .bind(admin_session_id)
         .execute(&pool)
         .await?;
     result

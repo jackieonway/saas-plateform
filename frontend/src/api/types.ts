@@ -146,6 +146,22 @@ export interface MySessionRecord {
 export interface MySessionsResp {
   sessions: MySessionRecord[]
   revokedTotal: number
+  platformSessions: PlatformSessionRecord[]
+}
+
+export interface PlatformSessionRecord {
+  id: string
+  tenantId: string
+  tenantName: string
+  organizationId: string
+  organizationName: string
+  issuedAt: string
+  expiresAt: string
+  revokedAt: string | null
+  ip: string
+  userAgent: string
+  active: boolean
+  isCurrent: boolean
 }
 
 /* ============ 2.1 租户 ============ */

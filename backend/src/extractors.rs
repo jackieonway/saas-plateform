@@ -5,6 +5,7 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::session;
 use crate::state::AppState;
 use crate::util::jwt;
 
@@ -18,6 +19,7 @@ pub struct CurrentUser {
     pub is_super_admin: bool,
     pub tenant_id: Uuid,
     pub org_id: Uuid,
+    pub session_id: Uuid,
 }
 
 /// 从 Header 取 Bearer Token
@@ -55,17 +57,13 @@ impl FromRequestParts<AppState> for CurrentUser {
             .as_deref()
             .and_then(|o| Uuid::parse_str(o).ok())
             .ok_or_else(|| AppError::unauthorized("凭证缺少组织上下文"))?;
-        let row = sqlx::query_as::<_, (String, String, bool, String)>(
-            "SELECT username, COALESCE(real_name, ''), is_super_admin, status FROM users WHERE id = $1",
-        )
-        .bind(user_id)
-        .fetch_optional(&state.pool)
-        .await?;
-        let (username, real_name, is_super_admin, status) =
-            row.ok_or_else(|| AppError::unauthorized("用户不存在"))?;
-        if status != "ENABLED" {
-            return Err(AppError::unauthorized("账号已被禁用"));
-        }
+        let session_id: Uuid = claims.sid.as_deref()
+            .and_then(|sid| Uuid::parse_str(sid).ok())
+            .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
+        let version = claims.ver.ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
+        let (username, real_name, is_super_admin) = session::active_user(
+            &state.pool, user_id, tenant_id, org_id, session_id, version,
+        ).await?;
         Ok(Self {
             user_id,
             username,
@@ -73,6 +71,7 @@ impl FromRequestParts<AppState> for CurrentUser {
             is_super_admin,
             tenant_id,
             org_id,
+            session_id,
         })
     }
 }

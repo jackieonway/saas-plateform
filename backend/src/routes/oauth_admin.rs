@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
 use crate::state::AppState;
+use crate::session;
 use crate::util::{audit, hash};
 
 pub fn routes() -> Router<AppState> {
@@ -597,6 +598,7 @@ async fn kick_sessions(
     ApiJson(body): ApiJson<KickBody>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:oauth").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let target: Uuid = body
         .user_id
         .parse()
@@ -606,6 +608,7 @@ async fn kick_sessions(
         .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::not_found("目标用户不存在"))?;
+    let platform_revoked = session::revoke_all(&state.pool, target, None).await?;
     let revoked = sqlx::query(
         "UPDATE oauth_tokens SET revoked = true WHERE user_id = $1 AND revoked = false",
     )
@@ -623,12 +626,12 @@ async fn kick_sessions(
             tenant_id: Some(user.tenant_id),
             organization_id: Some(user.org_id),
             action: "KICK_SESSIONS",
-            detail: &format!("会话踢出: {} ({}), 吊销 {} 个令牌", username, target, revoked),
+            detail: &format!("会话踢出: {} ({}), 吊销 {} 个平台会话及 {} 个 OAuth 令牌", username, target, platform_revoked, revoked),
             ip: &ip, user_agent: &ua,
         },
     )
     .await;
-    Ok(Json(json!({ "revoked": revoked })))
+    Ok(Json(json!({ "revoked": revoked, "platformSessionsRevoked": platform_revoked })))
 }
 
 type DeviceRowTuple = (Uuid, String, String, String, String, String, String, DateTime<Utc>, DateTime<Utc>);

@@ -512,6 +512,8 @@ async fn issue_tokens(
         org: org_id.map(|o| o.to_string()),
         cid: Some(client.client_id.clone()),
         scope: Some(scope.to_string()),
+        sid: None,
+        ver: None,
         exp: now + access_ttl,
         iat: now,
     };

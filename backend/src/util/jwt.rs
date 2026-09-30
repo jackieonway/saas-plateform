@@ -17,6 +17,10 @@ pub struct Claims {
     pub cid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub sid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub ver: Option<i64>,
     pub exp: i64,
     pub iat: i64,
 }

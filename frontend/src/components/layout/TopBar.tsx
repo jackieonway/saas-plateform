@@ -582,14 +582,16 @@ function UserMenu() {
   const displayName = user?.realName || user?.username || "用户"
 
   const handleLogout = async () => {
+    let serverRevoked = true
     try {
       await authApi.logout()
     } catch {
-      /* 尽力通知后端,失败不影响登出 */
+      serverRevoked = false
     }
     logout()
     queryClient.clear()
-    toast.success("已退出登录")
+    if (serverRevoked) toast.success("已退出登录")
+    else toast.warning("本机已退出，服务端会话撤销未确认")
     navigate("/login", { replace: true })
   }
 

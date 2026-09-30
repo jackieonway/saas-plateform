@@ -302,3 +302,7 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 ## 0013 结构约束补充
 
 后续迁移 [`0013_tenant_relationship_integrity.sql`](../backend/migrations/0013_tenant_relationship_integrity.sql) 在现有表上增加同租户组织父节点、同组织部门父节点、成员部门归属、角色租户/组织归属的复合外键，并用触发器阻止组织和部门树形成环路。存量库执行前请先运行[只读关系审计](./sql/tenant-relationship-audit.sql)，按[迁移说明](./tenant-relationship-migration.md)处理异常；本节不改变上面的初始结构 SQL。
+
+## 0014～0015 平台会话补充
+
+[`0014_platform_sessions.sql`](../backend/migrations/0014_platform_sessions.sql) 为 `users` 增加 `session_version`，并建立 `platform_sessions`（会话 ID、用户、租户、组织、签发/到期/撤销时间、IP、UA）。[`0015_platform_session_invalidation.sql`](../backend/migrations/0015_platform_session_invalidation.sql) 增加组织祖先链有效性函数及成员删除、用户禁用、租户/组织状态与到期时间变更的会话撤销或到期收紧触发器。旧迁移保持原样；详细语义见[平台会话生命周期](./platform-session-lifecycle.md)。
