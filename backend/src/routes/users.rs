@@ -7,6 +7,7 @@ use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -66,7 +67,93 @@ async fn ensure_user_in_scope(state: &AppState, user: &CurrentUser, target: Uuid
     if user_belongs_to_tenant(&state.pool, target, user.tenant_id).await {
         Ok(())
     } else {
-        Err(AppError::forbidden("目标用户不属于当前租户"))
+        Err(AppError::not_found("用户不存在"))
+    }
+}
+
+/// 锁住全局用户行并在同一事务内校验成员归属，避免成员关系并发变更与账号修改交错。
+async fn lock_global_user_mutation(
+    state: &AppState,
+    user: &CurrentUser,
+    target: Uuid,
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<Vec<Uuid>, AppError> {
+    let exists: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE id = $1 FOR UPDATE")
+    .bind(target)
+    .fetch_optional(&mut **tx)
+    .await?;
+    if exists.is_none() {
+        return Err(AppError::not_found("用户不存在"));
+    }
+    let tenants: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT o.tenant_id FROM memberships m \
+         JOIN organizations o ON o.id = m.organization_id WHERE m.user_id = $1",
+    )
+    .bind(target)
+    .fetch_all(&mut **tx)
+    .await?;
+    if !state.is_platform_context(user).await? {
+        if !tenants.contains(&user.tenant_id) {
+            return Err(AppError::not_found("用户不存在"));
+        }
+        if tenants.len() > 1 {
+            return Err(AppError::forbidden("此账号的全局资料仅平台可修改"));
+        }
+    }
+    Ok(tenants)
+}
+
+async fn user_tenant_ids(pool: &sqlx::PgPool, target: Uuid) -> Result<Vec<Uuid>, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT DISTINCT o.tenant_id FROM memberships m \
+         JOIN organizations o ON o.id = m.organization_id WHERE m.user_id = $1",
+    )
+    .bind(target)
+    .fetch_all(pool)
+    .await?)
+}
+
+async fn user_role_tenant_ids(pool: &sqlx::PgPool, target: Uuid) -> Result<Vec<Uuid>, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT DISTINCT r.tenant_id FROM user_roles ur \
+         JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1",
+    )
+    .bind(target)
+    .fetch_all(pool)
+    .await?)
+}
+
+fn merge_tenant_ids(mut before: Vec<Uuid>, after: Vec<Uuid>) -> Vec<Uuid> {
+    before.extend(after);
+    before.sort_unstable();
+    before.dedup();
+    before
+}
+
+async fn audit_user_change(
+    state: &AppState,
+    headers: &HeaderMap,
+    actor: &CurrentUser,
+    target_tenants: &[Uuid],
+    action: &'static str,
+    detail: &str,
+) {
+    let ip = audit::client_ip(headers);
+    let ua = audit::ua_of(headers);
+    if target_tenants.is_empty() {
+        audit::write(&state.pool, audit::AuditInfo {
+            user_id: Some(actor.user_id), username: &actor.username,
+            tenant_id: None, organization_id: None,
+            action, detail, ip: &ip, user_agent: &ua,
+        }).await;
+    } else {
+        for tenant_id in target_tenants {
+            audit::write(&state.pool, audit::AuditInfo {
+                user_id: Some(actor.user_id), username: &actor.username,
+                tenant_id: Some(*tenant_id), organization_id: None,
+                action, detail, ip: &ip, user_agent: &ua,
+            }).await;
+        }
     }
 }
 
@@ -97,7 +184,8 @@ async fn list(
     let rows: Vec<UserListRow> = sqlx::query_as(&format!(
         "SELECT u.id, u.username, COALESCE(u.real_name,'') AS real_name, COALESCE(u.email,'') AS email, \
          COALESCE(u.phone,'') AS phone, COALESCE(u.gender,'UNKNOWN') AS gender, u.status, u.last_login_at, u.created_at, \
-         (SELECT count(*) FROM user_roles ur WHERE ur.user_id = u.id) AS role_count \
+         (SELECT count(*) FROM user_roles ur JOIN roles r ON r.id = ur.role_id \
+          WHERE ur.user_id = u.id AND ($3::uuid IS NULL OR r.tenant_id = $3)) AS role_count \
          FROM users u WHERE {where_clause} ORDER BY u.created_at, u.id LIMIT $4 OFFSET $5"
     ))
     .bind(&kw)
@@ -120,9 +208,11 @@ async fn list(
         let mrows: Vec<(Uuid, Uuid, String, Option<Uuid>, Option<String>)> = sqlx::query_as(
             "SELECT m.user_id, m.organization_id, o.name, m.department_id, d.name \
              FROM memberships m JOIN organizations o ON o.id = m.organization_id \
-             LEFT JOIN departments d ON d.id = m.department_id WHERE m.user_id = ANY($1)",
+             LEFT JOIN departments d ON d.id = m.department_id \
+             WHERE m.user_id = ANY($1) AND ($2::uuid IS NULL OR o.tenant_id = $2)",
         )
         .bind(&user_ids)
+        .bind(tenant_filter)
         .fetch_all(&state.pool)
         .await?;
         for (uid, org_id, org_name, dept_id, dept_name) in mrows {
@@ -169,7 +259,7 @@ fn parse_gender(g: &str) -> Result<String, AppError> {
     }
 }
 
-/// POST /api/users — 创建后默认无 membership
+/// POST /api/users — 租户管理员创建的账号直接加入当前组织
 async fn create(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -183,6 +273,8 @@ async fn create(
     }
     let gender = parse_gender(&body.gender)?;
     let hash = pw::hash_password(&body.password)?;
+    let platform = state.is_platform_context(&user).await?;
+    let mut tx = state.pool.begin().await?;
     let row: (Uuid, String) = sqlx::query_as(
         "INSERT INTO users (username, password_hash, real_name, email, phone, gender) \
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username",
@@ -193,8 +285,16 @@ async fn create(
     .bind(&body.email)
     .bind(&body.phone)
     .bind(&gender)
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await?;
+    if !platform {
+        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+            .bind(row.0)
+            .bind(user.org_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
@@ -234,10 +334,11 @@ async fn update(
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:user").check(&state, &user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    ensure_user_in_scope(&state, &user, id).await?;
     if let Some(g) = &body.gender {
         parse_gender(g)?;
     }
+    let mut tx = state.pool.begin().await?;
+    let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
     let (username,): (String,) = sqlx::query_as(
         "UPDATE users SET real_name = COALESCE($2, real_name), email = COALESCE($3, email), \
          phone = COALESCE($4, phone), gender = COALESCE($5, gender), updated_at = now() \
@@ -248,16 +349,12 @@ async fn update(
     .bind(&body.email)
     .bind(&body.phone)
     .bind(&body.gender)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("用户不存在"))?;
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_USER", detail: &format!("更新用户资料: {}", username), ip: &ip, user_agent: &ua,
-    }).await;
+    tx.commit().await?;
+    audit_user_change(&state, &headers, &user, &target_tenants, "UPDATE_USER",
+        &format!("更新用户资料: {}", username)).await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -270,23 +367,20 @@ async fn delete(
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:user").check(&state, &user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    ensure_user_in_scope(&state, &user, id).await?;
     if id == user.user_id {
         return Err(AppError::bad_request("不能删除当前登录用户"));
     }
+    let mut tx = state.pool.begin().await?;
+    let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
     let (username,): (String,) = sqlx::query_as("DELETE FROM users WHERE id = $1 RETURNING username")
         .bind(id)
-        .fetch_optional(&state.pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| AppError::not_found("用户不存在"))?;
+    tx.commit().await?;
     state.invalidate_perm_cache();
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "DELETE_USER", detail: &format!("删除用户: {}", username), ip: &ip, user_agent: &ua,
-    }).await;
+    audit_user_change(&state, &headers, &user, &target_tenants, "DELETE_USER",
+        &format!("删除用户: {}", username)).await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -308,25 +402,22 @@ async fn update_status(
         return Err(AppError::bad_request("状态仅支持 ENABLED / DISABLED"));
     }
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    ensure_user_in_scope(&state, &user, id).await?;
     if id == user.user_id && body.status == "DISABLED" {
         return Err(AppError::bad_request("不能禁用当前登录用户"));
     }
+    let mut tx = state.pool.begin().await?;
+    let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
     let (username,): (String,) = sqlx::query_as(
         "UPDATE users SET status = $2, updated_at = now() WHERE id = $1 RETURNING username",
     )
     .bind(id)
     .bind(&body.status)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("用户不存在"))?;
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_USER", detail: &format!("用户状态变更为 {}: {}", body.status, username), ip: &ip, user_agent: &ua,
-    }).await;
+    tx.commit().await?;
+    audit_user_change(&state, &headers, &user, &target_tenants, "UPDATE_USER",
+        &format!("用户状态变更为 {}: {}", body.status, username)).await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -362,8 +453,7 @@ async fn batch_status(
         return Err(AppError::bad_request("userIds 数量必须在 1 到 100 之间"));
     }
     // 去重(保序) + 过滤自身(防止把自己禁用/启用, 计入 skipped)
-    // 跨租户目标(非平台上下文)直接计入 failed, 不执行不中断整批
-    let platform = state.is_platform_context(&user).await?;
+    // 跨租户目标和共享账号直接计入 failed, 不执行不中断整批
     let mut seen = std::collections::HashSet::new();
     let (mut targets, mut skipped, mut failed): (Vec<Uuid>, Vec<Uuid>, Vec<Uuid>) = (Vec::new(), Vec::new(), Vec::new());
     for id in body.user_ids {
@@ -372,35 +462,35 @@ async fn batch_status(
         }
         if id == user.user_id {
             skipped.push(id);
-        } else if !platform && !user_belongs_to_tenant(&state.pool, id, user.tenant_id).await {
-            failed.push(id);
         } else {
             targets.push(id);
         }
     }
     let mut succeeded: Vec<Uuid> = Vec::new();
     for id in &targets {
+        let mut tx = state.pool.begin().await?;
+        let target_tenants = match lock_global_user_mutation(&state, &user, *id, &mut tx).await {
+            Ok(tenants) => tenants,
+            Err(AppError::NotFound(_)) | Err(AppError::Forbidden(_)) => {
+                failed.push(*id);
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         let n = sqlx::query("UPDATE users SET status = $2, updated_at = now() WHERE id = $1")
             .bind(id)
             .bind(&body.status)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?
             .rows_affected();
+        tx.commit().await?;
         if n > 0 {
             succeeded.push(*id);
+            audit_user_change(&state, &headers, &user, &target_tenants, "UPDATE_USER",
+                &format!("批量用户状态变更为 {}: {}", body.status, id)).await;
         } else {
             failed.push(*id);
         }
-    }
-    if !succeeded.is_empty() {
-        let verb = if body.status == "ENABLED" { "启用" } else { "禁用" };
-        let ip = audit::client_ip(&headers);
-        let ua = audit::ua_of(&headers);
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-            action: "UPDATE_USER", detail: &format!("批量{} {} 个用户", verb, succeeded.len()), ip: &ip, user_agent: &ua,
-        }).await;
     }
     Ok(Json(json!({ "succeeded": succeeded, "failed": failed, "skipped": skipped })))
 }
@@ -424,22 +514,19 @@ async fn reset_password(
         return Err(AppError::bad_request("新密码长度不能少于 6 位"));
     }
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    ensure_user_in_scope(&state, &user, id).await?;
     let hash = pw::hash_password(&body.new_password)?;
+    let mut tx = state.pool.begin().await?;
+    let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
     let (username,): (String,) =
         sqlx::query_as("UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 RETURNING username")
             .bind(id)
             .bind(&hash)
-            .fetch_optional(&state.pool)
+            .fetch_optional(&mut *tx)
             .await?
             .ok_or_else(|| AppError::not_found("用户不存在"))?;
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "RESET_PASSWORD", detail: &format!("重置用户密码: {}", username), ip: &ip, user_agent: &ua,
-    }).await;
+    tx.commit().await?;
+    audit_user_change(&state, &headers, &user, &target_tenants, "RESET_PASSWORD",
+        &format!("重置用户密码: {}", username)).await;
     notify(
         &state.pool, id, "SECURITY",
         "密码已被管理员重置",
@@ -470,9 +557,10 @@ async fn get_memberships(
     let rows: Vec<MembershipTuple> = sqlx::query_as(
         "SELECT m.organization_id, o.tenant_id, m.department_id, m.position, o.name \
          FROM memberships m JOIN organizations o ON o.id = m.organization_id \
-         WHERE m.user_id = $1 ORDER BY m.created_at",
+         WHERE m.user_id = $1 AND ($2::uuid IS NULL OR o.tenant_id = $2) ORDER BY m.created_at",
     )
     .bind(id)
+    .bind(if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) })
     .fetch_all(&state.pool)
     .await?;
     let dept_ids: Vec<Uuid> = rows.iter().filter_map(|r| r.2).collect();
@@ -537,6 +625,8 @@ async fn put_memberships(
     if !exists {
         return Err(AppError::not_found("用户不存在"));
     }
+    let platform = state.is_platform_context(&user).await?;
+    let before_tenants = if platform { user_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
     let mut org_ids: Vec<Uuid> = Vec::new();
     let mut dept_ids: Vec<Option<Uuid>> = Vec::new();
     let mut positions: Vec<String> = Vec::new();
@@ -557,25 +647,15 @@ async fn put_memberships(
         positions.push(item.position.clone());
     }
     if !org_ids.is_empty() {
-        let n: i64 = sqlx::query_scalar("SELECT count(*) FROM organizations WHERE id = ANY($1)")
+        let unique_count = org_ids.iter().collect::<std::collections::HashSet<_>>().len();
+        let n: i64 = sqlx::query_scalar("SELECT count(*) FROM organizations WHERE id = ANY($1) \
+                                        AND ($2::uuid IS NULL OR tenant_id = $2)")
             .bind(&org_ids)
+            .bind(if platform { None } else { Some(user.tenant_id) })
             .fetch_one(&state.pool)
             .await?;
-        if n != org_ids.len() as i64 {
-            return Err(AppError::bad_request("存在无效的组织"));
-        }
-        // 非平台上下文: 成员组织必须全部属于当前租户 (防把用户迁入其他租户)
-        if !state.is_platform_context(&user).await? {
-            let n: i64 = sqlx::query_scalar(
-                "SELECT count(*) FROM organizations WHERE id = ANY($1) AND tenant_id = $2",
-            )
-            .bind(&org_ids)
-            .bind(user.tenant_id)
-            .fetch_one(&state.pool)
-            .await?;
-            if n != org_ids.len() as i64 {
-                return Err(AppError::forbidden("组织不属于当前租户"));
-            }
+        if n != unique_count as i64 {
+            return Err(AppError::not_found("组织不存在"));
         }
     }
     let flat_depts: Vec<Uuid> = dept_ids.iter().filter_map(|d| *d).collect();
@@ -584,15 +664,26 @@ async fn put_memberships(
             .bind(&flat_depts)
             .fetch_one(&state.pool)
             .await?;
-        if n != flat_depts.len() as i64 {
-            return Err(AppError::bad_request("存在无效的部门"));
+        if n != flat_depts.iter().collect::<std::collections::HashSet<_>>().len() as i64 {
+            return Err(AppError::not_found("部门不存在"));
+        }
+    }
+    for (org, dept) in org_ids.iter().zip(&dept_ids) {
+        if let Some(dept) = dept {
+            let valid: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM departments WHERE id = $1 AND organization_id = $2)",
+            ).bind(dept).bind(org).fetch_one(&state.pool).await?;
+            if !valid { return Err(AppError::not_found("部门不存在")); }
         }
     }
     // 去重 (同组织只保留第一条)
     let mut seen = std::collections::HashSet::new();
     let mut tx = state.pool.begin().await?;
-    sqlx::query("DELETE FROM memberships WHERE user_id = $1")
+    sqlx::query("DELETE FROM memberships m USING organizations o \
+                 WHERE m.organization_id = o.id AND m.user_id = $1 \
+                 AND ($2::uuid IS NULL OR o.tenant_id = $2)")
         .bind(uid)
+        .bind(if platform { None } else { Some(user.tenant_id) })
         .execute(&mut *tx)
         .await?;
     for (i, org) in org_ids.iter().enumerate() {
@@ -610,13 +701,9 @@ async fn put_memberships(
         .await?;
     }
     tx.commit().await?;
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_USER", detail: &format!("更新用户成员关系: {} 项", body.items.len()), ip: &ip, user_agent: &ua,
-    }).await;
+    let after_tenants = if platform { user_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
+    audit_user_change(&state, &headers, &user, &merge_tenant_ids(before_tenants, after_tenants),
+        "UPDATE_USER", &format!("更新用户 {} 成员关系: {} 项", uid, body.items.len())).await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -639,9 +726,12 @@ async fn get_roles(
         return Err(AppError::not_found("用户不存在"));
     }
     let rows: Vec<UserRoleTuple> = sqlx::query_as(
-        "SELECT ur.role_id, ur.organization_id FROM user_roles ur WHERE ur.user_id = $1",
+        "SELECT ur.role_id, ur.organization_id FROM user_roles ur \
+         JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1 \
+         AND ($2::uuid IS NULL OR r.tenant_id = $2)",
     )
     .bind(id)
+    .bind(if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) })
     .fetch_all(&state.pool)
     .await?;
     // 附带角色/组织名称(用户详情抽屉使用; 旧字段保持不变)
@@ -650,9 +740,10 @@ async fn get_roles(
          FROM user_roles ur \
          LEFT JOIN roles r ON r.id = ur.role_id \
          LEFT JOIN organizations o ON o.id = ur.organization_id \
-         WHERE ur.user_id = $1 ORDER BY r.name",
+         WHERE ur.user_id = $1 AND ($2::uuid IS NULL OR r.tenant_id = $2) ORDER BY r.name",
     )
     .bind(id)
+    .bind(if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) })
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();
@@ -708,6 +799,8 @@ async fn put_roles(
     if !exists {
         return Err(AppError::not_found("用户不存在"));
     }
+    let platform = state.is_platform_context(&user).await?;
+    let before_tenants = if platform { user_role_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
     let mut parsed: Vec<(Uuid, Uuid)> = Vec::new();
     for item in &body.items {
         let role: Uuid = item
@@ -731,11 +824,13 @@ async fn put_roles(
     }
     if !parsed.is_empty() {
         let role_ids: Vec<Uuid> = parsed.iter().map(|(r, _)| *r).collect();
-        let n: i64 = sqlx::query_scalar("SELECT count(*) FROM roles WHERE id = ANY($1)")
+        let n: i64 = sqlx::query_scalar("SELECT count(*) FROM roles WHERE id = ANY($1) \
+                                        AND ($2::uuid IS NULL OR tenant_id = $2)")
             .bind(&role_ids)
+            .bind(if platform { None } else { Some(user.tenant_id) })
             .fetch_one(&state.pool)
             .await?;
-        if n != role_ids.len() as i64 {
+        if n != role_ids.iter().collect::<std::collections::HashSet<_>>().len() as i64 {
             return Err(AppError::bad_request("存在无效的角色"));
         }
         // 校验角色组织 ∈ (membership 组织 ∪ 其祖先)
@@ -767,8 +862,11 @@ async fn put_roles(
         }
     }
     let mut tx = state.pool.begin().await?;
-    sqlx::query("DELETE FROM user_roles WHERE user_id = $1")
+    sqlx::query("DELETE FROM user_roles ur USING roles r \
+                 WHERE ur.role_id = r.id AND ur.user_id = $1 \
+                 AND ($2::uuid IS NULL OR r.tenant_id = $2)")
         .bind(uid)
+        .bind(if platform { None } else { Some(user.tenant_id) })
         .execute(&mut *tx)
         .await?;
     for (role, org) in &parsed {
@@ -783,13 +881,9 @@ async fn put_roles(
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_USER", detail: &format!("更新用户角色分配: {} 项", body.items.len()), ip: &ip, user_agent: &ua,
-    }).await;
+    let after_tenants = if platform { user_role_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
+    audit_user_change(&state, &headers, &user, &merge_tenant_ids(before_tenants, after_tenants),
+        "UPDATE_USER", &format!("更新用户 {} 角色分配: {} 项", uid, body.items.len())).await;
     notify(
         &state.pool, uid, "INFO",
         "您的角色分配已更新",

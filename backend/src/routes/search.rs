@@ -60,7 +60,8 @@ async fn search(
         let rows: Vec<(Uuid, String, String, Option<String>, String)> = sqlx::query_as(
             "SELECT u.id, u.username, COALESCE(u.real_name,'') AS real_name, \
              (SELECT o.name FROM memberships m JOIN organizations o ON o.id = m.organization_id \
-              WHERE m.user_id = u.id ORDER BY m.created_at, m.id LIMIT 1) AS organization_name, \
+              WHERE m.user_id = u.id AND ($3::uuid IS NULL OR o.tenant_id = $3) \
+              ORDER BY m.created_at, m.id LIMIT 1) AS organization_name, \
              u.status \
              FROM users u \
              WHERE (u.username ILIKE '%' || $1 || '%' OR u.real_name ILIKE '%' || $1 || '%') \

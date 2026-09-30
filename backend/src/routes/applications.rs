@@ -45,6 +45,7 @@ const LIST_SELECT: &str = "SELECT a.id, a.code, a.name, COALESCE(a.icon,'') AS i
 /// GET /api/applications — 全量列表
 async fn list(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
     RequirePermission("system:application").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let rows: Vec<ApplicationRow> =
         sqlx::query_as(&format!("{LIST_SELECT} FROM applications a ORDER BY a.sort_order, a.created_at"))
             .fetch_all(&state.pool)
@@ -59,6 +60,7 @@ async fn get_one(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:application").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let row: ApplicationRow = sqlx::query_as(&format!("{LIST_SELECT} FROM applications a WHERE a.id = $1"))
         .bind(id)
@@ -134,6 +136,7 @@ async fn create(
     ApiJson(body): ApiJson<ApplicationBody>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:application").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let name = body.name.trim().to_string();
     if name.is_empty() || body.code.trim().is_empty() {
         return Err(AppError::bad_request("应用名称与编码不能为空"));
@@ -240,6 +243,7 @@ async fn update(
     ApiJson(body): ApiJson<ApplicationUpdate>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:application").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(name) = &body.name {
         if name.trim().is_empty() {
@@ -315,6 +319,7 @@ async fn delete(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:application").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (name,): (String,) = sqlx::query_as("DELETE FROM applications WHERE id = $1 RETURNING name")
         .bind(id)

@@ -64,15 +64,12 @@ async fn tree_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:organization").check(&state, &user).await?;
-    let tenant_id: Uuid = if state.is_platform_context(&user).await? {
-        params
-            .get("tenantId")
-            .and_then(|v| Uuid::parse_str(v).ok())
-            .ok_or_else(|| AppError::bad_request("缺少 tenantId 参数"))?
-    } else {
-        // 非平台租户: 忽略传入 tenantId, 强制只能查看本租户组织树
-        user.tenant_id
+    let tenant_id: Uuid = match params.get("tenantId") {
+        Some(value) => value.parse().map_err(|_| AppError::bad_request("tenantId 格式错误"))?,
+        None if state.is_platform_context(&user).await? => return Err(AppError::bad_request("缺少 tenantId 参数")),
+        None => user.tenant_id,
     };
+    state.ensure_tenant_scope(&user, tenant_id, "租户").await?;
     let rows: Vec<OrgRowTuple> = sqlx::query_as(&format!(
         "{ORG_SELECT} FROM organizations o WHERE o.tenant_id = $1 ORDER BY o.sort_order, o.created_at"
     ))
@@ -144,9 +141,9 @@ async fn parse_parent(
                     .bind(pid)
                     .fetch_optional(pool)
                     .await?
-                    .ok_or_else(|| AppError::bad_request("父组织不存在"))?;
+                    .ok_or_else(|| AppError::not_found("父组织不存在"))?;
             if parent_tenant != tenant_id {
-                return Err(AppError::bad_request("父组织不属于该租户"));
+                return Err(AppError::not_found("父组织不存在"));
             }
             Ok(Some(pid))
         }
@@ -166,9 +163,7 @@ async fn create(
         .parse()
         .map_err(|_| AppError::bad_request("tenantId 格式错误"))?;
     // 非平台租户只能在本租户下建组织
-    if tenant_id != user.tenant_id {
-        state.require_platform(&user).await?;
-    }
+    state.ensure_tenant_scope(&user, tenant_id, "租户").await?;
     let tenant_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)")
         .bind(tenant_id)
         .fetch_one(&state.pool)
@@ -213,7 +208,7 @@ async fn create(
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(user.org_id),
+        tenant_id: Some(tenant_id), organization_id: Some(row.0),
         action: "CREATE_ORGANIZATION", detail: &format!("创建组织: {}", name), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(org_json(&row)))
@@ -290,7 +285,7 @@ async fn delete(
     RequirePermission("system:organization").check(&state, &user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, id).await?;
-    let (name,): (String,) = sqlx::query_as("DELETE FROM organizations WHERE id = $1 RETURNING name")
+    let (name, target_tenant): (String, Uuid) = sqlx::query_as("DELETE FROM organizations WHERE id = $1 RETURNING name, tenant_id")
         .bind(id)
         .fetch_optional(&state.pool)
         .await?
@@ -300,7 +295,7 @@ async fn delete(
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: None,
+        tenant_id: Some(target_tenant), organization_id: Some(id),
         action: "DELETE_ORGANIZATION", detail: &format!("删除组织(级联): {}", name), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(json!({"ok": true})))
@@ -325,8 +320,8 @@ async fn update_status(
     }
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, id).await?;
-    let (name,): (String,) = sqlx::query_as(
-        "UPDATE organizations SET status = $2, updated_at = now() WHERE id = $1 RETURNING name",
+    let (name, target_tenant): (String, Uuid) = sqlx::query_as(
+        "UPDATE organizations SET status = $2, updated_at = now() WHERE id = $1 RETURNING name, tenant_id",
     )
     .bind(id)
     .bind(&body.status)
@@ -337,7 +332,7 @@ async fn update_status(
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(id),
+        tenant_id: Some(target_tenant), organization_id: Some(id),
         action: "UPDATE_ORGANIZATION", detail: &format!("组织状态变更为 {}: {}", body.status, name), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(json!({"ok": true})))
@@ -392,8 +387,7 @@ async fn ensure_org_in_scope(state: &AppState, user: &CurrentUser, org_id: Uuid)
         .await?;
     match tenant {
         None => Ok(()),
-        Some(t) if t == user.tenant_id => Ok(()),
-        Some(_) => Err(AppError::forbidden("目标组织不属于当前租户")),
+        Some(t) => state.ensure_tenant_scope(user, t, "组织").await,
     }
 }
 

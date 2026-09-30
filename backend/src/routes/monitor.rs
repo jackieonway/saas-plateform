@@ -64,9 +64,8 @@ struct TenantInsightData {
 /// - users: users 表无 tenant_id 列, 按 memberships → organizations.tenant_id 归属去重统计;
 /// - organizations / roles: 表自带 tenant_id 直接过滤;
 /// - logins7d / logins_trend: audit_logs 自带 tenant_id (LOGIN 审计写入时均携带登录上下文租户);
-/// - active_tokens: oauth_tokens 中未吊销未过期的 access 令牌, 且 user_id 为该租户成员
-///   (与 /api/monitor/overview 的 activeTokenCount 同口径)。
-async fn load_tenant_insights(pool: &PgPool) -> Result<Vec<TenantInsightData>, AppError> {
+/// - active_tokens: oauth_tokens 中绑定该租户、未吊销且未过期的 access 令牌。
+async fn load_tenant_insights(pool: &PgPool, tenant_scope: Option<Uuid>) -> Result<Vec<TenantInsightData>, AppError> {
     let rows: Vec<InsightRow> = sqlx::query_as(
         "SELECT t.id, t.name, COALESCE(t.code, '') AS code, t.status, \
          (SELECT count(DISTINCT m.user_id) FROM memberships m \
@@ -76,11 +75,10 @@ async fn load_tenant_insights(pool: &PgPool) -> Result<Vec<TenantInsightData>, A
          (SELECT count(*) FROM audit_logs a WHERE a.action = 'LOGIN' AND a.tenant_id = t.id \
            AND a.created_at >= date_trunc('day', now()) - interval '6 days'), \
          (SELECT count(*) FROM oauth_tokens ot WHERE ot.token_type = 'access' \
-           AND ot.revoked = false AND ot.expires_at > now() \
-           AND ot.user_id IN (SELECT m.user_id FROM memberships m \
-           JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id)) \
-         FROM tenants t ORDER BY t.created_at",
+           AND ot.revoked = false AND ot.expires_at > now() AND ot.tenant_id = t.id) \
+         FROM tenants t WHERE ($1::uuid IS NULL OR t.id = $1) ORDER BY t.created_at",
     )
+    .bind(tenant_scope)
     .fetch_all(pool)
     .await?;
     let tenant_ids: Vec<Uuid> = rows.iter().map(|r| r.0).collect();
@@ -125,11 +123,10 @@ async fn tenant_insights(
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:monitor").check(&state, &user).await?;
-    let platform = state.is_platform_context(&user).await?;
-    let rows = load_tenant_insights(&state.pool).await?;
+    let tenant_scope = if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) };
+    let rows = load_tenant_insights(&state.pool, tenant_scope).await?;
     let insights: Vec<Value> = rows
         .into_iter()
-        .filter(|r| platform || r.id == user.tenant_id)
         .map(|r| {
             json!({
                 "tenantId": r.id, "tenantName": r.name, "tenantCode": r.code, "status": r.status,
@@ -150,9 +147,8 @@ async fn export_tenant_insights_csv(
     user: CurrentUser,
 ) -> Result<Response, AppError> {
     RequirePermission("system:monitor").check(&state, &user).await?;
-    let platform = state.is_platform_context(&user).await?;
-    let rows = load_tenant_insights(&state.pool).await?;
-    let rows: Vec<_> = rows.into_iter().filter(|r| platform || r.id == user.tenant_id).collect();
+    let tenant_scope = if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) };
+    let rows = load_tenant_insights(&state.pool, tenant_scope).await?;
     let mut csv = String::from(
         "\u{FEFF}租户名称,租户编码,状态,用户数,组织数,角色数,近7天登录,活跃令牌,近7天登录趋势\n",
     );
@@ -218,6 +214,7 @@ fn read_rss_mb() -> f64 {
 /// tables 的 rows 为 pg_class.reltuples 优化器统计估计值 (非实时精确计数, 负值归 0)。
 async fn system(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
     RequirePermission("system:monitor").check(&state, &user).await?;
+    state.require_platform(&user).await?;
 
     let uptime_seconds = (Utc::now() - state.started_at).num_seconds().max(0);
     let service = json!({
@@ -276,6 +273,7 @@ async fn system(State(state): State<AppState>, user: CurrentUser) -> Result<Json
 /// GET /api/monitor/overview — 平台总览
 async fn overview(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
     RequirePermission("system:monitor").check(&state, &user).await?;
+    state.require_platform(&user).await?;
 
     let stats = sqlx::query_as::<_, (
         i64, i64, i64, i64, i64, i64, i64, i64, i64,

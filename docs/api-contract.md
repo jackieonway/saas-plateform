@@ -78,13 +78,17 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 ### 2.8 用户 /users
 - GET `/api/users?page&size&keyword&organizationId&tenantId` → `{id,username,realName,email,phone,gender,status,lastLoginAt,createdAt,memberships:[{organizationId,organizationName,departmentId,departmentName}],roleCount}`
-- POST `/api/users` `{username,password,realName,email,phone,gender}` (创建后默认无 membership)
+- POST `/api/users` `{username,password,realName,email,phone,gender}` (普通租户管理员创建后直接加入当前会话组织；平台管理员创建时默认无 membership)
 - PUT `/api/users/:id` `{realName,email,phone,gender}` ; DELETE
 - PUT `/api/users/:id/status` ; POST `/api/users/:id/reset-password` `{"newPassword"}`
 - GET `/api/users/:id/memberships` → `[{organizationId,tenantId,departmentId,position}]`
 - PUT `/api/users/:id/memberships` `{"items":[{"organizationId","departmentId","position"}]}`
 - GET `/api/users/:id/roles` → `[{roleId,organizationId}]`
 - PUT `/api/users/:id/roles` `{"items":[{"roleId","organizationId"}]}` (角色所属组织需在用户 membership 组织或其祖先内)
+
+**管理 API 作用域（Phase 3）**：普通租户的用户列表、成员详情、角色详情和角色数量只包含当前租户；修改成员或角色的全量替换请求也只替换当前租户记录。普通租户管理员不能修改跨租户共享账号的全局资料、状态、密码或删除该账号；平台管理员可以执行跨租户操作。另一个租户的组织、部门、角色或用户 ID 与不存在的 ID 均返回 `404 NOT_FOUND`，以免暴露资源归属。平台跨租户修改会按目标租户写入审计记录。
+
+`/api/applications` 和 `/api/menus` 是全局目录管理接口，要求平台上下文及相应权限码。`/api/search` 返回的用户组织名按当前租户过滤，跨租户身份不会带出另一租户的组织名。
 
 ### 2.9 角色 /roles (基于授权菜单建立)
 - GET `/api/roles?page&size&keyword&tenantId&organizationId` → `{id,name,code,description,organizationId,organizationName,tenantId,status,builtIn,menuCount,userCount,createdAt}`
@@ -111,6 +115,8 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 ### 2.12 监控 /monitor
 - GET `/api/monitor/overview` → `{"tenantCount","organizationCount","userCount","roleCount","applicationCount","menuCount","oauthClientCount","activeTokenCount","todayLoginCount","recentLogins":[{username,organizationName,ip,createdAt}],"loginTrend7d":[{"date":"09-28","count":n}],"auditTrend7d":[...]}`
+
+`/api/monitor/overview` 和 `/api/monitor/system` 为平台级接口；普通租户可使用 `/api/monitor/tenant-insights` 及其 CSV 导出，仅返回当前租户的数据。审计列表和 CSV 导出同样由服务端限定当前租户。
 
 ## 3. 标准 OAuth2 对外服务 (前缀 /oauth,form-encoded,RFC 兼容)
 

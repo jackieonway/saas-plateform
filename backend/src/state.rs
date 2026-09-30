@@ -111,6 +111,20 @@ impl AppState {
         }
     }
 
+    /// 管理接口的资源归属检查。跨租户资源与不存在资源统一表现为 404。
+    pub async fn ensure_tenant_scope(
+        &self,
+        user: &CurrentUser,
+        tenant_id: Uuid,
+        resource: &'static str,
+    ) -> Result<(), AppError> {
+        if self.is_platform_context(user).await? || tenant_id == user.tenant_id {
+            Ok(())
+        } else {
+            Err(AppError::not_found(format!("{resource}不存在")))
+        }
+    }
+
     /// 用户在指定组织上下文中的生效角色 (角色所属组织 ∈ 组织祖先链)
     pub async fn effective_roles(&self, user_id: Uuid, org_id: Uuid) -> Result<Vec<RoleBrief>, AppError> {
         let sql = format!(

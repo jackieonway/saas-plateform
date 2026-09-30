@@ -112,14 +112,7 @@ async fn ensure_role_in_scope(
     user: &CurrentUser,
     role: (Uuid, Uuid, String),
 ) -> Result<(), AppError> {
-    if state.is_platform_context(user).await? {
-        return Ok(());
-    }
-    if role.1 == user.tenant_id {
-        Ok(())
-    } else {
-        Err(AppError::forbidden("目标角色不属于当前租户"))
-    }
+    state.ensure_tenant_scope(user, role.1, "角色").await
 }
 
 /// POST /api/roles
@@ -144,11 +137,9 @@ async fn create(
     .bind(org_id)
     .fetch_optional(&state.pool)
     .await?
-    .ok_or_else(|| AppError::bad_request("角色所属组织不存在"))?;
+    .ok_or_else(|| AppError::not_found("组织不存在"))?;
     // 非平台租户只能在本租户组织上建角色
-    if tenant_id != user.tenant_id {
-        state.require_platform(&user).await?;
-    }
+    state.ensure_tenant_scope(&user, tenant_id, "组织").await?;
     let row: RoleListRow = sqlx::query_as(
         "INSERT INTO roles (tenant_id, organization_id, name, code, description) VALUES ($1, $2, $3, $4, $5) \
          RETURNING id, name, COALESCE(code,'') AS code, COALESCE(description,'') AS description, \
@@ -410,27 +401,20 @@ async fn put_users(
         }
     }
     if !unique.is_empty() {
-        let n: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE id = ANY($1)")
-            .bind(&unique)
-            .fetch_one(&state.pool)
-            .await?;
-        if n != unique.len() as i64 {
-            return Err(AppError::bad_request("存在无效的用户"));
-        }
-        // 非平台上下文: 目标用户必须属于本租户 (防把其他租户用户拉进本租户角色造成跨租户提权)
-        if !state.is_platform_context(&user).await? {
-            let n: i64 = sqlx::query_scalar(
-                "SELECT count(DISTINCT m.user_id) FROM memberships m \
+        let platform = state.is_platform_context(&user).await?;
+        let n: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM users u WHERE u.id = ANY($1) \
+             AND ($2::bool OR EXISTS(SELECT 1 FROM memberships m \
                  JOIN organizations o ON o.id = m.organization_id \
-                 WHERE m.user_id = ANY($1) AND o.tenant_id = $2",
-            )
-            .bind(&unique)
-            .bind(user.tenant_id)
-            .fetch_one(&state.pool)
-            .await?;
-            if n != unique.len() as i64 {
-                return Err(AppError::forbidden("存在不属于当前租户的用户"));
-            }
+                 WHERE m.user_id = u.id AND o.tenant_id = $3))",
+        )
+        .bind(&unique)
+        .bind(platform)
+        .bind(tenant_id)
+        .fetch_one(&state.pool)
+        .await?;
+        if n != unique.len() as i64 {
+            return Err(AppError::not_found("用户不存在"));
         }
     }
     let mut tx = state.pool.begin().await?;

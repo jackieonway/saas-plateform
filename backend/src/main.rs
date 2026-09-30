@@ -7,6 +7,9 @@ mod seed;
 mod state;
 mod util;
 
+#[cfg(test)]
+mod scope_tests;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;

@@ -232,7 +232,7 @@ async fn delete(
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
-        tenant_id: None, organization_id: Some(user.org_id),
+        tenant_id: Some(id), organization_id: Some(user.org_id),
         action: "DELETE_TENANT", detail: &format!("删除租户(级联): {}", name), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(json!({"ok": true})))

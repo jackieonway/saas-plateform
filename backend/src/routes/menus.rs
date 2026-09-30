@@ -84,6 +84,7 @@ async fn tree_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:menu").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let app_id: Uuid = params
         .get("applicationId")
         .and_then(|v| Uuid::parse_str(v).ok())
@@ -148,6 +149,7 @@ async fn create(
     ApiJson(body): ApiJson<MenuBody>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:menu").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let app_id: Uuid = body
         .application_id
         .parse()
@@ -248,6 +250,7 @@ async fn update(
     ApiJson(body): ApiJson<MenuUpdate>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:menu").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(t) = &body.r#type {
         parse_menu_type(t)?;
@@ -319,6 +322,7 @@ async fn delete(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:menu").check(&state, &user).await?;
+    state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (title,): (String,) = sqlx::query_as("DELETE FROM menus WHERE id = $1 RETURNING title")
         .bind(id)
