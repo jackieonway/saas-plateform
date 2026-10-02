@@ -1,7 +1,7 @@
 # Dante Cloud — docker-compose 生产部署
 # 用法:
-#   1. (可选) 在项目根目录创建 .env.docker 设置 JWT_SECRET / PUBLIC_APP_URL / CADDY_DOMAIN
-#   2. docker compose up -d --build
+#   1. (可选) 在项目根目录创建 .env.docker 设置 JWT_SECRET / PUBLIC_APP_URL / 预检来源
+#   2. docker compose --env-file .env.docker up -d --build（没有该文件时省略 --env-file）
 #   3. 访问 http://<主机IP>/  (默认账号 admin / admin123, 请立即修改)
 #
 # 架构:
@@ -43,6 +43,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-use-random-32bytes}
       # 对外基础地址(影响 OAuth 发现文档 issuer 与 authorize 跳转), 留空则按请求 Host 推断
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      # 默认本地开发环境使用容器网络内的同源 web 网关预检。
+      # production 要求 HTTPS；部署到生产时必须设为外部可达的 HTTPS 网关 origin。
+      APPLICATION_ENVIRONMENT: ${APPLICATION_ENVIRONMENT:-development}
+      MICRO_GATEWAY_ORIGIN: ${MICRO_GATEWAY_ORIGIN:-http://web}
+      # 空值由后端按 MICRO_GATEWAY_ORIGIN 推导；追加 CDN 时填精确 origin 列表。
+      MICRO_ALLOWED_ORIGINS: ${MICRO_ALLOWED_ORIGINS:-}
       SESSION_TTL_HOURS: 12
       RUST_LOG: info
     depends_on:
@@ -58,6 +64,15 @@ services:
     container_name: dante-web
     ports:
       - "${HTTP_PORT:-80}:80"
+    volumes:
+      # 独立发布版本，不进入宿主镜像；web 容器只能读取。
+      - type: bind
+        source: ${MICRO_APPS_DIR:-./deploy/micro-apps}
+        target: /micro-apps
+        read_only: true
+        bind:
+          create_host_path: true
+      # Caddy 原生 HTTPS 时另加 443:443 端口与 /data、/config 持久卷。
     depends_on:
       - backend
     restart: unless-stopped

@@ -1,4 +1,4 @@
-# 微应用上下文与生命周期契约（Phase 8）
+# 微应用上下文与生命周期契约
 
 宿主只有取得当前应用的短期 token 和有效授权上下文后才挂载。应用必须关联已启用的机密 OAuth 客户端，并同时获得当前租户和组织授权。客户端密钥只在业务后端使用。旧版“没有 token 仍挂载”的行为已移除。
 
@@ -11,6 +11,7 @@
 | `appCode`, `basePath`, `routePath` | 应用和宿主路由上下文。 |
 | `token`, `tokenExpiresAt` | 本应用独立受众的短期令牌及到期时间。 |
 | `contextVersion`, `contextEpoch`, `expiresAt` | 后端内容版本、宿主单调推送序号和展示上下文到期时间。 |
+| `deploymentVersion`, `entryVersionId` | 当前不可变发布版本及记录 ID；未注册发布时为空。 |
 | `user`, `tenant`, `organization` | 服务端确认的当前身份、租户和组织。 |
 | `roles`, `permissions`, `menus` | 当前用户角色、操作权限码和可见菜单。 |
 | `dataGrants` | 独立绑定当前组织成员关系的资源/操作数据授权；不从角色推导。 |
@@ -19,6 +20,31 @@
 | `onNavigate`, `onNotify` | 宿主路由和界面 Toast；过期上下文的回调不再生效。 |
 
 这些值用于界面展示和发送业务请求。业务后端须按[后端参考组件](../examples/app-backend/authorize.mjs)逐请求内省、取得当前上下文，分别验证操作权限和数据授权；浏览器 props 不能成为资源归属的权威来源。
+
+## 运行模式与 iframe 接入
+
+应用缺省使用 `IFRAME`。只有平台管理员显式标记 `TRUSTED` 的自有代码，才能使用下文的宿主 HTML/ESM 生命周期。应用上下文返回实时 `application.runtimeMode`，宿主每次获取上下文时与 profile 配置核对；不一致时停止执行并刷新 profile。
+
+iframe 使用不含 `allow-same-origin` 的 sandbox 和独立 MessageChannel。子应用必须加载 classic 脚本 [`iframe-bridge.js`](../examples/micro-app-sdk/iframe-bridge.js)，声明允许的宿主 origin，并将自身生命周期接入 SDK：
+
+```html
+<div id="app"></div>
+<script src="./iframe-bridge.js"></script>
+<script src="./app.js"></script>
+```
+
+```js
+const bridge = DanteMicroIframe.connect({
+  appCode: "orders",
+  allowedHostOrigins: ["https://saas.example.com"],
+  container: document.getElementById("app"),
+  lifecycle: { mount, update, unmount },
+})
+```
+
+SDK 从宿主接收序列化 DTO，创建本地 `signal/onNavigate/onNotify`，并提供 `requestJson`。令牌只通过消息通道传递，不放入 URL；平台 session 和客户端密钥不进入子应用。导航限制在本应用路由，通知回调只弹 Toast。父页面移除 iframe 时浏览器销毁其整个执行环境；组织切换、授权到期和上下文替换同时取消旧请求。
+
+opaque iframe 的模块、fetch 等请求来源可能是 `Origin: null`。业务 API 应支持不携带 cookies 的应用 Bearer token，并为该模式明确配置 CORS；iframe 禁止访问宿主 DOM、localStorage 和 JavaScript 全局变量。具体发布、MIME、CORS 与预检规则见[应用独立发布 API](./application-release-api.md)。
 
 ## 请求取消与更新
 
@@ -50,7 +76,7 @@ window.__DANTE_MICRO_APP__ = {
 }
 ```
 
-SDK 会合并调用者信号与宿主取消信号，并在读取 JSON 后再次验证当前上下文。取消抛出 `AbortError`，应用应忽略该请求的界面结果。Vue/jQuery 无构建示例在各自 `app.js` 实现相同逻辑，并保留在 `frontend/public/sub-apps/` 的发布镜像。
+SDK 会合并调用者信号与宿主取消信号，并在读取 JSON 后再次验证当前上下文。宿主信号同时绑定当前授权和挂载实例，版本切换也会立即取消旧 props 与回调。取消抛出 `AbortError`，应用应忽略该请求的界面结果。Vue/jQuery 无构建示例在各自 `app.js` 实现相同逻辑，并保留在 `frontend/public/sub-apps/` 的发布镜像；现有示例走宿主模式时，升级后需平台管理员显式标记可信。
 
 ## 生命周期与资源归属
 

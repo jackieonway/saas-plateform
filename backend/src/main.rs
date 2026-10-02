@@ -1,4 +1,5 @@
 mod config;
+mod releases;
 mod app_token;
 mod authorization;
 mod database;
@@ -8,10 +9,14 @@ mod routes;
 mod seed;
 mod session;
 mod state;
+mod static_files;
 mod util;
 
 #[cfg(test)]
 mod scope_tests;
+
+#[cfg(test)]
+mod release_tests;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -19,7 +24,6 @@ use std::time::Duration;
 
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
-use tower_http::services::{ServeDir, ServeFile};
 
 use crate::config::Config;
 use crate::state::AppState;
@@ -113,13 +117,9 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state.clone())
         .layer(CorsLayer::permissive());
 
-    // 生产单进程模式: 托管前端静态文件 (SPA fallback → index.html)
+    // 生产单进程模式: 仅宿主 HTML 导航使用 SPA fallback，缺失资源/API 保留 404。
     if !config.static_dir.is_empty() {
-        let index = format!("{}/index.html", config.static_dir);
-        let serve = ServeDir::new(&config.static_dir)
-            .append_index_html_on_directories(true)
-            .not_found_service(ServeFile::new(&index));
-        app = app.fallback_service(serve);
+        app = app.fallback_service(static_files::service(&config.static_dir));
         tracing::info!("静态文件目录: {}", config.static_dir);
     }
 

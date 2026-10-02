@@ -31,6 +31,7 @@ struct ApplicationRow {
     entry_type: String,
     /// HTML 通道 = 子应用 HTML 入口(如 /sub/vue/); ESM 通道 = 模块 URL; 空 = 未配置
     entry_url: String,
+    runtime_mode: String,
     description: String,
     sort_order: i32,
     status: String,
@@ -39,7 +40,7 @@ struct ApplicationRow {
 }
 
 const LIST_SELECT: &str = "SELECT a.id, a.code, a.name, COALESCE(a.icon,'') AS icon, COALESCE(a.base_path,'') AS base_path, \
- a.entry_type, COALESCE(a.entry_url,'') AS entry_url, COALESCE(a.description,'') AS description, a.sort_order, a.status, a.created_at, \
+ a.entry_type, COALESCE(a.entry_url,'') AS entry_url, a.runtime_mode, COALESCE(a.description,'') AS description, a.sort_order, a.status, a.created_at, \
  (SELECT count(*) FROM menus m WHERE m.application_id = a.id) AS menu_count";
 
 /// GET /api/applications — 全量列表
@@ -83,6 +84,8 @@ struct ApplicationBody {
     entry_type: String,
     #[serde(default)]
     entry_url: String,
+    #[serde(default = "default_runtime_mode")]
+    runtime_mode: String,
     #[serde(default)]
     auto_create_menu: bool,
     #[serde(default)]
@@ -99,6 +102,19 @@ fn default_status() -> String {
 
 fn default_entry_type() -> String {
     "ESM".into()
+}
+
+fn default_runtime_mode() -> String {
+    "IFRAME".into()
+}
+
+async fn authorize_runtime_mode(state: &AppState, user: &CurrentUser, mode: &str) -> Result<(), AppError> {
+    if !["IFRAME", "TRUSTED"].contains(&mode) {
+        return Err(AppError::bad_request("runtimeMode 仅支持 IFRAME / TRUSTED"));
+    }
+    // Explicit trust approval requires a platform administrator with application permission.
+    RequirePermission("system:application").check(state, user).await?;
+    state.require_platform(user).await
 }
 
 /// 校验入口类型: 仅 ESM / HTML
@@ -137,6 +153,7 @@ async fn create(
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:application").check(&state, &user).await?;
     state.require_platform(&user).await?;
+    authorize_runtime_mode(&state, &user, &body.runtime_mode).await?;
     let name = body.name.trim().to_string();
     if name.is_empty() || body.code.trim().is_empty() {
         return Err(AppError::bad_request("应用名称与编码不能为空"));
@@ -173,10 +190,10 @@ async fn create(
     let entry_url = validate_entry_url(&entry_type, raw_entry_url)?;
     let mut tx = state.pool.begin().await?;
     let mut row: ApplicationRow = sqlx::query_as(
-        "INSERT INTO applications (code, name, icon, base_path, entry_type, entry_url, description, sort_order, status) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+        "INSERT INTO applications (code, name, icon, base_path, entry_type, entry_url, description, sort_order, status, runtime_mode) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
          RETURNING id, code, name, COALESCE(icon,'') AS icon, COALESCE(base_path,'') AS base_path, \
-         entry_type, COALESCE(entry_url,'') AS entry_url, COALESCE(description,'') AS description, \
+         entry_type, COALESCE(entry_url,'') AS entry_url, runtime_mode, COALESCE(description,'') AS description, \
          sort_order, status, created_at, 0::bigint AS menu_count",
     )
     .bind(code)
@@ -188,6 +205,7 @@ async fn create(
     .bind(&body.description)
     .bind(body.sort_order)
     .bind(&body.status)
+    .bind(&body.runtime_mode)
     .fetch_one(&mut *tx)
     .await?;
     if body.auto_create_menu {
@@ -208,7 +226,7 @@ async fn create(
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "CREATE_APPLICATION", detail: &format!("创建应用: {} ({})", row.name, row.code), ip: &ip, user_agent: &ua,
+        action: "CREATE_APPLICATION", detail: &format!("创建应用: {} ({}) runtimeMode={}", row.name, row.code, row.runtime_mode), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
@@ -226,6 +244,8 @@ struct ApplicationUpdate {
     entry_type: Option<String>,
     #[serde(default)]
     entry_url: Option<String>,
+    #[serde(default)]
+    runtime_mode: Option<String>,
     #[serde(default)]
     description: Option<String>,
     #[serde(default)]
@@ -245,6 +265,9 @@ async fn update(
     RequirePermission("system:application").check(&state, &user).await?;
     state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    if let Some(mode) = &body.runtime_mode {
+        authorize_runtime_mode(&state, &user, mode).await?;
+    }
     if let Some(name) = &body.name {
         if name.trim().is_empty() {
             return Err(AppError::bad_request("应用名称不能为空"));
@@ -283,9 +306,9 @@ async fn update(
         "UPDATE applications SET name = COALESCE($2, name), icon = COALESCE($3, icon), \
          base_path = COALESCE($4, base_path), entry_type = COALESCE($5, entry_type), \
          entry_url = COALESCE($6, entry_url), description = COALESCE($7, description), \
-         sort_order = COALESCE($8, sort_order), status = COALESCE($9, status), updated_at = now() \
+         sort_order = COALESCE($8, sort_order), status = COALESCE($9, status), runtime_mode = COALESCE($10, runtime_mode), updated_at = now() \
          WHERE id = $1 RETURNING id, code, name, COALESCE(icon,'') AS icon, COALESCE(base_path,'') AS base_path, \
-         entry_type, COALESCE(entry_url,'') AS entry_url, COALESCE(description,'') AS description, \
+         entry_type, COALESCE(entry_url,'') AS entry_url, runtime_mode, COALESCE(description,'') AS description, \
          sort_order, status, created_at, \
          (SELECT count(*) FROM menus m WHERE m.application_id = applications.id) AS menu_count"
     )
@@ -298,6 +321,7 @@ async fn update(
     .bind(&body.description)
     .bind(body.sort_order)
     .bind(&body.status)
+    .bind(&body.runtime_mode)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("应用不存在"))?;
@@ -306,7 +330,7 @@ async fn update(
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_APPLICATION", detail: &format!("更新应用: {}", row.name), ip: &ip, user_agent: &ua,
+        action: "UPDATE_APPLICATION", detail: &format!("更新应用: {} runtimeMode={}", row.name, row.runtime_mode), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }

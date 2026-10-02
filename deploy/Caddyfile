@@ -1,12 +1,14 @@
 # Dante Cloud 生产网关 (运行在 web 容器内的 Caddy)
 # - /api/* 与 /oauth/* 反向代理到 Rust 后端
+# - /sub-apps/<code>/versions/<version>/* 托管独立只读版本目录
+# - 存量 /sub-apps/* 托管镜像内文件，缺失资源始终 404
 # - 其余请求托管前端 SPA (history 路由 fallback 到 index.html)
-# 如需 HTTPS: 将 ':80' 块替换为 'example.com {' 并开放 443 端口, Caddy 自动签发证书
-
+# 如需 HTTPS: 将 ':80' 改为域名, 删除 auto_https off 并开放 443 端口
+# Compose 同时映射 443:443, 并持久化 Caddy /data 与 /config 证书状态目录
 {
 	admin off
 	auto_https off
-	logger {
+	log {
 		level WARN
 	}
 }
@@ -22,9 +24,41 @@
 		reverse_proxy backend:3001
 	}
 
+	# handle_path strips only /sub-apps/, matching the package output layout.
+	handle_path /sub-apps/* {
+		@versioned path_regexp microVersion ^/[a-z0-9-]+/versions/[A-Za-z0-9._-]+/
+		handle @versioned {
+			root * /micro-apps
+			route {
+				header Cache-Control "no-cache"
+				# Public static builds support opaque iframe module requests (Origin:null).
+				header Access-Control-Allow-Origin "*"
+				@moduleFiles path *.mjs *.cjs
+				header @moduleFiles Content-Type "application/javascript"
+				@immutable {
+					path_regexp microAsset ^/[a-z0-9-]+/versions/[A-Za-z0-9._-]+/.*[^/]$
+					not path_regexp microHtml (?i)\.html?$
+				}
+				header @immutable Cache-Control "public, max-age=31536000, immutable"
+				file_server
+			}
+		}
+		handle {
+			root * /srv/sub-apps
+			header Cache-Control "no-cache"
+			file_server
+		}
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html
+		header Cache-Control "no-cache"
 		file_server
+	}
+
+	handle_errors {
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}" {err.status_code}
 	}
 }

@@ -9,6 +9,9 @@
 /** 应用入口类型: ESM = 内置 ES 模块直挂; HTML = 微前端页面(沙箱执行) */
 export type MicroEntryType = "ESM" | "HTML"
 
+/** 只有平台管理员明确标记的自有代码可以在宿主页执行。 */
+export type MicroRuntimeMode = "IFRAME" | "TRUSTED"
+
 /** 主题通道: 主应用解析后的实际主题(system 跟随时已折叠为 light/dark) */
 export type MicroTheme = "light" | "dark"
 
@@ -55,7 +58,15 @@ export interface AppAuthorizationContext {
   contextVersion: string
   expiresAt: string
   appCode: string
-  application: { id: string; name: string }
+  application: {
+    id: string
+    name: string
+    runtimeMode?: MicroRuntimeMode
+    entryType?: MicroEntryType
+    entryUrl?: string
+    deploymentVersion?: string | null
+    entryVersionId?: string | null
+  }
   user: MicroUser
   tenant: MicroTenant
   organization: MicroOrganization
@@ -73,6 +84,9 @@ export interface MicroProps {
   contextEpoch: number
   expiresAt: string
   tokenExpiresAt: string
+  /** 不变发布版本；兼容期未注册发布时为空。 */
+  deploymentVersion?: string | null
+  entryVersionId?: string | null
   /** 上下文替换、过期、组织切换或卸载时中止；所有业务 fetch 都应绑定。 */
   signal: AbortSignal
   /** 应用编码(如 vue-workshop) */
@@ -135,6 +149,9 @@ export interface ApplicationEntryInfo {
   name: string
   icon: string
   entryType: MicroEntryType
+  runtimeMode: MicroRuntimeMode
+  deploymentVersion?: string | null
+  entryVersionId?: string | null
   /** HTML 入口 URL(如 /sub/vue/); ESM 入口为模块 URL(本轮无实际使用方) */
   entryUrl: string
 }

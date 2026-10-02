@@ -20,6 +20,8 @@ node_modules
 # production
 /build
 /frontend/dist/
+/deploy/micro-apps/
+/target/
 *.pid
 /.zscripts/
 

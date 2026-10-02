@@ -1,6 +1,8 @@
 # 微前端接入与上线指南
 
-本文依据当前实现整理。主应用支持 `HTML` 和 `ESM` 两种入口；独立开发、独立发布的子应用优先使用 `HTML`。`ESM` 是与主应用共享运行时的第一方模块通道。
+Phase 9 的推荐交付方式是[独立版本打包与部署](./application-independent-deployment.md)：版本文件置于 `/sub-apps/<code>/versions/<version>/`，由管理员手动登记、预检、激活或回滚，宿主按当前环境的部署指针加载入口。发布不会自动授予租户、组织或角色权限，也不需要重新构建宿主镜像。管理接口与 HTTPS、来源、CORS 规则见[发布 API](./application-release-api.md)。
+
+应用默认 `IFRAME`，隔离运行 HTML 页面；独立页面需要使用 iframe SDK 接收平台上下文。平台管理员明确标记 `TRUSTED` 的自有应用才可在宿主执行 HTML 生命周期或 ESM 模块。以下旧同步与未版本化路径保留作迁移兼容；Vue/jQuery 现有生命周期示例须显式标记可信，或改为独立页面并接入 iframe SDK，不能仅因使用 HTML 就获得宿主执行能力。
 
 ## 接入链路
 
@@ -9,6 +11,8 @@
 新建应用时选择 `HTML` 并保持“快速接入”开启，只需填写名称和编码。系统按编码生成 `basePath=/micro/{code}`、`entryUrl=/sub-apps/{code}/index.html`，并在同一数据库事务里创建首页 `MICRO` 菜单。接着按平台原有流程完成租户、组织、角色授权。关闭“快速接入”可自行填写入口和菜单；即使直接调用创建 API，HTML 类型留空的路径与入口也会采用相同约定。
 
 将已经构建好的子应用文件同步到主站静态目录：
+
+此同步方式覆盖未版本化目录，并在重建宿主时随镜像发布。生产新发布应使用独立版本打包；同步不提供不可覆盖版本或回滚归档。
 
 ```bash
 npm run micro:sync -- example ./path/to/example/dist
@@ -23,9 +27,9 @@ npm run micro:sync -- example ./path/to/example/dist
 
 快速接入只自动创建首页菜单，不会自动授予租户、组织和角色权限，也不会创建 OAuth 客户端。接入微应用时须关联已启用的机密客户端，确认所需 scope 与业务后端权限规则；客户端密钥只保存在业务后端。角色控制菜单和操作权限，数据范围按当前组织成员关系独立显式授权。
 
-## HTML 子应用契约
+## 自有可信 HTML 子应用契约
 
-入口返回 HTML，脚本和样式使用相对入口的资源地址，例如 `./app.js`、`./assets/main.css`。不要依赖开发服务器根路径 `/src/...`。主应用用 `import-html-entry` 拉取 HTML 与资源，在自定义 `window` Proxy 上执行脚本，随后调用以下生命周期：
+本节仅适用于平台管理员显式设置 `runtimeMode=TRUSTED` 的自有代码。默认 iframe 页面应按[iframe 桥接 SDK](../examples/micro-app-sdk/iframe-bridge.js)接入。可信入口返回 HTML，脚本和样式使用相对入口的资源地址，例如 `./app.js`、`./assets/main.css`。不要依赖开发服务器根路径 `/src/...`。主应用用 `import-html-entry` 拉取可信 HTML 与资源，在自定义 `window` Proxy 上执行脚本，随后调用以下生命周期：
 
 ```js
 window.__DANTE_MICRO_APP__ = {
@@ -45,7 +49,9 @@ window.__DANTE_MICRO_APP__ = {
 
 `update` 可选；实现后切换子路径或主题可保留子应用状态。宿主会在组织切换前停止旧工作，并串行等待旧生命周期卸载；无 `update` 的应用在授权变化后重挂。所有业务请求需使用 `props.signal` 并拒绝迟到结果。完整字段、请求 SDK、续期与资源清理规则见[MicroProps 2.0 接入契约](./micro-app-context-props.md)。
 
-## 推荐的生产部署方式：同源静态目录
+## 迁移期未版本化同源静态目录
+
+以下配置用于已有入口的兼容。新应用和新版本请使用[独立版本部署](./application-independent-deployment.md)及仓库的 [Caddy](../deploy/Caddyfile) / [Nginx](../deploy/nginx.conf) 示例，按版本目录保存文件、严格返回资源 404，并保留历史版本供回滚和已挂载用户使用。
 
 以应用编码 `example` 为例：
 
@@ -110,10 +116,10 @@ location ^~ /sub-apps/example/ {
 
 ## 当前仓库示例的上线差距
 
-- Vue 和 jQuery 子应用源码已复制到 `frontend/public/sub-apps/vue/`、`jquery/`；但迁移 `0011_micro_frontend.sql` 插入的数据库入口仍为 `/sub/vue/`、`/sub/jquery/`，依赖 Vite 开发代理和 3005/3006 端口。上线前应将现有数据库的 `entry_url` 更新为 `/sub-apps/vue/index.html`、`/sub-apps/jquery/index.html`，并重新构建前端。已执行的旧迁移不要直接修改；可使用新迁移或管理界面更新。
-- `report-center` 示例是 `ESM`，迁移中的入口为 `/src/micro-apps/report-center.tsx`。该地址只适用于 Vite 开发服务器；生产环境需把模块显式打包为浏览器可加载的 ESM 文件并改写入口，或改造为 HTML 子应用。
-- `frontend/Dockerfile` 已改为使用 `frontend/package-lock.json` 与 `npm ci`；发布时仍需实际执行镜像构建，并确认子应用已同步到 `frontend/public/sub-apps/`。
-- 本地重建后的 `frontend/dist/sub-apps/` 已包含 Vue、jQuery 示例；已运行的旧镜像不会自动获得新文件，仍需重新构建/发布或挂载静态目录。
+- Vue 和 jQuery 子应用源码已复制到 `frontend/public/sub-apps/vue/`、`jquery/`；但迁移 `0011_micro_frontend.sql` 插入的数据库入口仍为 `/sub/vue/`、`/sub/jquery/`，依赖 Vite 开发代理和 3005/3006 端口。上线时应按[版本打包命令](./application-independent-deployment.md)发布到独立目录，登记 `/sub-apps/<code>/versions/<version>/index.html` 并预检、激活。管理员须明确标记现有宿主生命周期示例为自有可信，或先接入 iframe SDK。已执行的旧迁移不要直接修改。
+- `report-center` 示例是 `ESM`，迁移中的入口为 `/src/micro-apps/report-center.tsx`。该地址只适用于 Vite 开发服务器；生产环境需显式打包为浏览器可加载的 ESM 文件、登记版本入口并由管理员确认 TRUSTED，或改造为 iframe HTML 页面。
+- `frontend/Dockerfile` 使用 `frontend/package-lock.json` 与 `npm ci`。首次启用版本网关需实际构建、发布宿主镜像；随后新版本写入独立只读挂载即可，无需重新构建宿主镜像。
+- 存量 `frontend/dist/sub-apps/` 中的 Vue、jQuery 示例仍可用于迁移兼容，旧镜像不会自动得到新的网关路由。独立版本使用 Compose 的 `MICRO_APPS_DIR` 挂载目录，须验证网关文件、缓存、MIME 与严格 404 行为。
 - Phase 5～8 已补齐应用 token 的租户/组织授权、受众、平台会话绑定和撤销检查，以及完整上下文、续期和生命周期。生产业务后端仍须接入[校验组件](../examples/app-backend/authorize.mjs)，不能只依赖前端菜单或数据授权展示。
 
 ## 上线核验

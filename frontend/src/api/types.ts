@@ -6,6 +6,9 @@ export type Status = "ENABLED" | "DISABLED"
 export type MenuType = "DIR" | "MENU" | "BUTTON"
 export type ClientType = "CONFIDENTIAL" | "PUBLIC"
 export type DeviceStatus = "PENDING" | "APPROVED" | "DENIED" | "EXPIRED"
+export type ApplicationRuntimeMode = "IFRAME" | "TRUSTED"
+export type ApplicationEntryType = "ESM" | "HTML"
+export type ApplicationEnvironment = "development" | "staging" | "production"
 
 export interface PageResp<T> {
   records: T[]
@@ -68,10 +71,14 @@ export interface AppBrief {
   name: string
   icon: string
   basePath: string
-  /** 微前端入口类型('ESM' 第一方直挂 | 'HTML' 沙箱执行; 内置路由应用为默认 'ESM') */
-  entryType?: "ESM" | "HTML"
-  /** 微前端入口地址(HTML=子应用入口如 /sub/vue/; ESM=模块 URL); 空串=未配置 */
+  /** 默认 iframe 隔离；仅显式标记的自有可信应用可在宿主内运行。 */
+  runtimeMode?: ApplicationRuntimeMode
+  /** 当前宿主环境的活动版本入口类型。 */
+  entryType?: ApplicationEntryType
+  /** 当前宿主环境的活动版本入口地址；未发布时使用应用配置。 */
   entryUrl?: string
+  deploymentVersion?: string | null
+  entryVersionId?: string | null
 }
 
 export interface ContextResp {
@@ -235,9 +242,9 @@ export interface ApplicationRecord {
   sortOrder: number
   status: Status
   menuCount: number
-  /** 入口类型(21-a 微前端契约): ESM = 内置 ES 模块直挂; HTML = 微前端页面(沙箱执行)。旧后端缺省时为 undefined */
-  entryType?: "ESM" | "HTML"
-  /** HTML 入口地址(如 /sub/vue/, 经 Vite 代理转发到子应用服务); ESM 入口为模块 URL */
+  runtimeMode?: ApplicationRuntimeMode
+  /** 应用基础入口类型，环境部署可通过版本指针选择活动入口。 */
+  entryType?: ApplicationEntryType
   entryUrl?: string | null
 }
 
@@ -249,12 +256,74 @@ export interface ApplicationPayload {
   description?: string
   sortOrder: number
   status: Status
-  /** 入口类型: ESM / HTML */
-  entryType?: "ESM" | "HTML"
+  runtimeMode?: ApplicationRuntimeMode
+  /** iframe 应用仅支持 HTML；可信应用支持 HTML / ESM。 */
+  entryType?: ApplicationEntryType
   /** HTML 入口留空时由后端推导为 /sub-apps/{code}/index.html */
   entryUrl?: string | null
   /** 新建 HTML 微应用时，一并创建 /micro/{code} 首页菜单 */
   autoCreateMenu?: boolean
+}
+
+export type ApplicationResourceKind = "SCRIPT" | "STYLE" | "ASSET"
+export type ApplicationValidationStatus = "DRAFT" | "PASSED" | "FAILED"
+
+export interface ApplicationReleaseResource {
+  url: string
+  kind: ApplicationResourceKind
+}
+
+export interface ApplicationReleaseCheck {
+  url: string
+  kind: string
+  passed: boolean
+  statusCode?: number | null
+  contentType?: string | null
+  bytes?: number | null
+  message: string
+}
+
+export interface ApplicationReleaseValidation {
+  /** 未预检时后端返回空对象，字段仅在完成预检后出现。 */
+  passed?: boolean
+  checkedAt?: string
+  checks?: ApplicationReleaseCheck[]
+}
+
+export interface ApplicationReleaseRecord {
+  id: string
+  applicationId: string
+  environment: ApplicationEnvironment
+  version: string
+  entryType: ApplicationEntryType
+  entryUrl: string
+  healthUrl: string | null
+  resources: ApplicationReleaseResource[]
+  validationStatus: ApplicationValidationStatus
+  validationResult: ApplicationReleaseValidation | null
+  checkedAt: string | null
+  active: boolean
+  createdAt: string
+}
+
+export interface ApplicationReleasePayload {
+  environment: ApplicationEnvironment
+  version: string
+  entryType: ApplicationEntryType
+  entryUrl: string
+  healthUrl?: string
+  resources?: ApplicationReleaseResource[]
+}
+
+export interface ApplicationDeploymentRecord {
+  applicationId: string
+  environment: ApplicationEnvironment
+  activeReleaseId: string
+  previousReleaseId: string | null
+  version: string
+  entryType: ApplicationEntryType
+  entryUrl: string
+  updatedAt: string
 }
 
 /* ============ 2.4 菜单 ============ */

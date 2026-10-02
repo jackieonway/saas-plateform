@@ -158,6 +158,7 @@ export class MicroLifecycleSession {
 export function microPropsSignature(props: MicroProps): string {
   return JSON.stringify([props.contractVersion, props.contextVersion, props.contextEpoch,
     props.expiresAt, props.tokenExpiresAt, props.token, props.appCode, props.user,
+    props.deploymentVersion, props.entryVersionId,
     props.tenant, props.organization, props.roles, props.permissions, props.dataGrants,
     props.menus, props.routePath, props.theme])
 }

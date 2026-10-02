@@ -15,6 +15,12 @@ pub struct Config {
     pub refresh_token_ttl_seconds: i64,
     /// 对外基础地址 (为空则使用相对路径)
     pub public_app_url: String,
+    /// 当前宿主使用的应用部署环境；发布版本和授权记录分别管理。
+    pub application_environment: String,
+    /// 相对微应用地址在服务端预检时使用的网关 origin。
+    pub micro_gateway_origin: String,
+    /// 允许预检 HTTP 请求（包括每一次 redirect）访问的精确 origin。
+    pub micro_allowed_origins: Vec<String>,
     /// 生产模式静态文件目录 (SPA fallback)
     pub static_dir: String,
 }
@@ -40,6 +46,15 @@ fn env_bool(key: &str, default: bool) -> bool {
 
 impl Config {
     pub fn from_env() -> Self {
+        let public_app_url = env_or("PUBLIC_APP_URL", "");
+        let gateway_default = if public_app_url.is_empty() {
+            "http://localhost:3000"
+        } else {
+            &public_app_url
+        };
+        let micro_gateway_origin = env_or("MICRO_GATEWAY_ORIGIN", gateway_default);
+        let micro_allowed_origins = env_or("MICRO_ALLOWED_ORIGINS", &micro_gateway_origin)
+            .split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect();
         Self {
             database_url: env_or("DATABASE_URL", "postgres://dante@127.0.0.1:5432/dante_cloud"),
             auto_create_database: env_bool("AUTO_CREATE_DATABASE", false),
@@ -49,7 +64,10 @@ impl Config {
             credential_ticket_ttl_minutes: env_i64("CREDENTIAL_TICKET_TTL_MINUTES", 10),
             access_token_ttl_seconds: env_i64("ACCESS_TOKEN_TTL_SECONDS", 7200),
             refresh_token_ttl_seconds: env_i64("REFRESH_TOKEN_TTL_SECONDS", 604800),
-            public_app_url: env_or("PUBLIC_APP_URL", ""),
+            public_app_url,
+            application_environment: env_or("APPLICATION_ENVIRONMENT", "development"),
+            micro_gateway_origin,
+            micro_allowed_origins,
             static_dir: env_or("STATIC_DIR", ""),
         }
     }

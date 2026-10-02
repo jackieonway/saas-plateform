@@ -53,6 +53,8 @@ import { asArray } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useAuthStore } from "@/stores/auth"
+import { ApplicationReleasesPanel } from "./ApplicationReleasesPanel"
 import type { ApplicationRecord } from "@/api/types"
 
 const appSchema = z
@@ -68,10 +70,14 @@ const appSchema = z
     description: z.string().max(255).optional(),
     sortOrder: z.coerce.number().int().min(0).max(9999),
     status: z.enum(["ENABLED", "DISABLED"]),
+    runtimeMode: z.enum(["IFRAME", "TRUSTED"]),
     entryType: z.enum(["ESM", "HTML"]),
     entryUrl: z.string().max(500).optional(),
   })
   .superRefine((v, ctx) => {
+    if (v.runtimeMode === "IFRAME" && v.entryType === "ESM") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryType"], message: "iframe 隔离应用仅支持 HTML 入口" })
+    }
     // HTML 入口留空时，后端按应用编码使用同源静态目录约定。
     if (v.entryType === "HTML") {
       const url = (v.entryUrl ?? "").trim()
@@ -85,6 +91,7 @@ type AppForm = z.infer<typeof appSchema>
 export default function ApplicationsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const canManageTrusted = useAuthStore((s) => !!(s.profile?.tenant.isPlatform || s.profile?.user.isSuperAdmin))
 
   const listQuery = useQuery({
     queryKey: ["applications"],
@@ -95,19 +102,21 @@ export default function ApplicationsPage() {
 
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<ApplicationRecord | null>(null)
+  const [releasesApplication, setReleasesApplication] = React.useState<ApplicationRecord | null>(null)
   const [quickSetup, setQuickSetup] = React.useState(true)
   const form = useForm<AppForm>({
     resolver: zResolver(appSchema),
-    defaultValues: { code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" },
+    defaultValues: { code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", runtimeMode: "IFRAME", entryType: "HTML", entryUrl: "" },
   })
   const entryTypeValue = form.watch("entryType")
+  const runtimeModeValue = form.watch("runtimeMode")
   const codeValue = form.watch("code")
   const useQuickSetup = !editing && entryTypeValue === "HTML" && quickSetup
 
   const openCreate = () => {
     setEditing(null)
     setQuickSetup(true)
-    form.reset({ code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" })
+    form.reset({ code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", runtimeMode: "IFRAME", entryType: "HTML", entryUrl: "" })
     setDialogOpen(true)
   }
   const openEdit = (a: ApplicationRecord) => {
@@ -121,6 +130,7 @@ export default function ApplicationsPage() {
       description: a.description ?? "",
       sortOrder: a.sortOrder ?? 0,
       status: a.status,
+      runtimeMode: a.runtimeMode ?? "IFRAME",
       entryType: a.entryType === "HTML" ? "HTML" : "ESM",
       entryUrl: a.entryUrl ?? "",
     })
@@ -138,6 +148,7 @@ export default function ApplicationsPage() {
         description: values.description || "",
         sortOrder: values.sortOrder,
         status: values.status,
+        runtimeMode: values.runtimeMode,
         entryType: values.entryType,
         entryUrl: quick ? `/sub-apps/${values.code}/index.html` : values.entryUrl?.trim() || "",
         autoCreateMenu: quick,
@@ -164,6 +175,7 @@ export default function ApplicationsPage() {
       }
       setDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ["applications"] })
+      queryClient.invalidateQueries({ queryKey: ["profile"] })
     },
     onError: (e: Error) => toast.error(e.message || "保存失败"),
   })
@@ -239,6 +251,7 @@ export default function ApplicationsPage() {
               <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t pt-3 text-xs text-muted-foreground">
                 <Badge variant="secondary" className="text-[11px] tabular-nums">{a.menuCount} 菜单</Badge>
                 <Badge variant="outline" className="text-[11px] tabular-nums">排序 {a.sortOrder}</Badge>
+                <Badge variant="outline" className="text-[11px]">{a.runtimeMode === "TRUSTED" ? "自有可信" : "iframe 隔离"}</Badge>
                 {/* 入口通道: ESM 灰 / HTML 紫 + entry_url truncate + title 悬停全量 */}
                 {a.entryType === "HTML" ? (
                   <Tooltip>
@@ -254,7 +267,7 @@ export default function ApplicationsPage() {
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-[20rem]">
-                      <span className="block text-xs">HTML 入口 · 微前端沙箱</span>
+                      <span className="block text-xs">HTML 入口 · {a.runtimeMode === "TRUSTED" ? "宿主内可信执行" : "iframe 隔离执行"}</span>
                       <span className="mt-0.5 block font-mono text-xs break-all">{a.entryUrl ?? "(未配置)"}</span>
                     </TooltipContent>
                   </Tooltip>
@@ -283,6 +296,10 @@ export default function ApplicationsPage() {
                   <TooltipContent>为该应用配置菜单</TooltipContent>
                 </Tooltip>
               </div>
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setReleasesApplication(a)}>
+                <Rocket className="size-3.5" />
+                发布版本
+              </Button>
 
               <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <DropdownMenu>
@@ -299,6 +316,10 @@ export default function ApplicationsPage() {
                     <DropdownMenuItem onClick={() => navigate(`/system/menus?applicationId=${a.id}`)}>
                       <ListTree className="size-4" />
                       配置菜单
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setReleasesApplication(a)}>
+                      <Rocket className="size-4" />
+                      发布版本
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onClick={() => setDeleting(a)}>
@@ -393,6 +414,35 @@ export default function ApplicationsPage() {
               </div>
 
               {/* 微前端入口: entry_type + entry_url (契约 21-a/21-c) */}
+              <FormField
+                control={form.control}
+                name="runtimeMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>运行方式</FormLabel>
+                    <Select
+                      value={field.value}
+                      disabled={!canManageTrusted}
+                      onValueChange={(value) => {
+                        field.onChange(value)
+                        if (value === "IFRAME") form.setValue("entryType", "HTML", { shouldValidate: true })
+                      }}
+                    >
+                      <FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="IFRAME">iframe · 默认隔离</SelectItem>
+                        <SelectItem value="TRUSTED">自有可信 · 宿主内执行</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      {runtimeModeValue === "TRUSTED"
+                        ? "仅适用于平台自有、已审查的可信应用，HTML / ESM 会在宿主内执行。"
+                        : "默认通过 iframe 隔离第三方 HTML 页面；平台管理员可显式标记自有可信应用。"}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               {entryTypeValue === "HTML" && !editing && (
                 <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-3 py-2.5">
                   <div>
@@ -416,11 +466,11 @@ export default function ApplicationsPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="ESM">ESM · 内置模块</SelectItem>
+                          <SelectItem value="ESM" disabled={runtimeModeValue !== "TRUSTED"}>ESM · 可信模块</SelectItem>
                           <SelectItem value="HTML">HTML · 微前端页面</SelectItem>
                         </SelectContent>
                       </Select>
-                      <FormDescription>HTML 入口由主应用微前端沙箱加载执行, 任意技术栈可接入</FormDescription>
+                      <FormDescription>{runtimeModeValue === "TRUSTED" ? "自有可信应用可接入 HTML 页面或 ESM 模块" : "iframe 隔离应用使用 HTML 页面入口"}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -501,6 +551,7 @@ export default function ApplicationsPage() {
                   )}
                 />
               </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">保存登记信息后，可通过“发布版本”注册环境版本并手动预检、激活。租户、组织和角色授权需另行配置。</p>
             </form>
           </Form>
           <DialogFooter>
@@ -514,6 +565,15 @@ export default function ApplicationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {releasesApplication && (
+        <ApplicationReleasesPanel
+          key={releasesApplication.id}
+          application={apps.find((app) => app.id === releasesApplication.id) ?? releasesApplication}
+          open
+          onOpenChange={(open) => !open && setReleasesApplication(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deleting}
@@ -534,7 +594,7 @@ export default function ApplicationsPage() {
 /* ============ 新应用接入四步曲引导卡 ============ */
 
 const ONBOARDING_STEPS: { title: string; desc: string; to: string | null }[] = [
-  { title: "创建应用", desc: "HTML 快速接入会自动填写入口并创建首页菜单", to: null },
+  { title: "登记 / 发布应用", desc: "登记应用，按环境注册、预检并手动激活版本", to: null },
   { title: "配置菜单树", desc: "按需增加子页面、目录与按钮", to: "/system/menus" },
   { title: "授权租户 / 组织", desc: "把应用授权给租户, 可细化到指定组织", to: "/system/authorizations" },
   { title: "角色绑定菜单", desc: "给角色分配菜单与按钮权限, 用户即见菜单", to: "/system/roles" },

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Isolated application protocol fixture</title></head>
+<body><main id="app"></main><script src="/sdk.js"></script><script>
+(function () {
+  if (new URLSearchParams(location.search).has('noBridge')) return
+  var parentBlocked = false, storageBlocked = false, state
+  try { parent.__parentMarker = 'compromised'; parent.document.body.innerHTML = 'compromised' } catch (_) { parentBlocked = true }
+  try { parent.localStorage.getItem('platform-session'); localStorage.getItem('platform-session') } catch (_) { storageBlocked = true }
+  window.__parentMarker = 'child only'
+  var bridge = DanteMicroIframe.connect({
+    appCode: 'orders', allowedHostOrigins: ['__HOST_ORIGIN__'], container: document.querySelector('#app'),
+    lifecycle: {
+      mount: function (container, props) {
+        container.innerHTML = '<div id="state"></div><input id="input"><button id="request">Request</button><button id="slow">Delayed request</button>'
+        state = container.querySelector('#state')
+        state.dataset.parentBlocked = String(parentBlocked)
+        state.dataset.storageBlocked = String(storageBlocked)
+        this.update(props)
+        container.querySelector('#request').onclick = async function () {
+          var result = await bridge.requestJson('__HOST_ORIGIN__/api/orders')
+          state.dataset.request = result.current ? 'current' : 'stale'
+        }
+        container.querySelector('#slow').onclick = async function () {
+          try { await bridge.requestJson('__HOST_ORIGIN__/api/orders?hold=1'); state.dataset.old = 'stale' }
+          catch (error) { state.dataset.old = error.name === 'AbortError' ? 'aborted' : 'failed' }
+        }
+      },
+      update: function (props) { state.dataset.epoch = String(props.contextEpoch); state.textContent = props.organization.name },
+      unmount: function () { document.querySelector('#app').replaceChildren() },
+    },
+  })
+})()
+</script></body></html>

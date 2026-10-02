@@ -113,11 +113,26 @@ pub(crate) async fn current_context(
         "menus": version_menus, "dataGrants": data_grants,
     });
     let version = hash::sha256_hex(&version_input.to_string());
+    // Live execution/deployment metadata is separate from the authorization hash.
+    // A new token cannot use a stale profile's TRUSTED mode after a downgrade.
+    let runtime: (String, String, String, Option<String>, Option<Uuid>) = sqlx::query_as(
+        "SELECT a.runtime_mode,COALESCE(r.entry_type,a.entry_type),COALESCE(r.entry_url,a.entry_url),r.version,r.id \
+         FROM applications a LEFT JOIN application_deployments d ON d.application_id=a.id AND d.environment=$2 \
+         LEFT JOIN application_releases r ON r.application_id=a.id AND r.environment=d.environment AND r.id=d.active_release_id \
+         WHERE a.id=$1",
+    ).bind(binding.application_id).bind(&state.config.application_environment)
+     .fetch_one(&state.pool).await?;
+    // The mode update may have happened while assembling the authorization context.
+    if app_token::inspect(&state.pool, &token, &claims).await?.is_none() {
+        return Err(AppError::unauthorized("应用令牌已在上下文计算期间撤销"));
+    }
     let expires_at = std::cmp::min(binding.expires_at, Utc::now() + chrono::Duration::seconds(30));
     Ok(json!({
         "contractVersion": "1.0", "contextVersion": version,
         "expiresAt": expires_at, "appCode": binding.audience,
-        "application": {"id": binding.application_id, "name": identity.6},
+        "application": {"id": binding.application_id, "name": identity.6,
+            "runtimeMode": runtime.0, "entryType": runtime.1, "entryUrl": runtime.2,
+            "deploymentVersion": runtime.3, "entryVersionId": runtime.4},
         "user": {"id": binding.user_id, "username": identity.0, "displayName": identity.1},
         "tenant": {"id": binding.tenant_id, "code": identity.2, "name": identity.3},
         "organization": {"id": binding.organization_id, "name": identity.4, "path": identity.5},

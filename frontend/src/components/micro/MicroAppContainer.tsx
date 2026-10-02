@@ -5,10 +5,8 @@
  *  1. 按 appCode 从用户已授权应用列表(profile.applications, GET /api/auth/profile)解析
  *     入口配置(entryType/entryUrl) — 不走 GET /api/applications(需 system:application
  *     管理权限, 普通用户 403); 未授权应用在此直接得到「未知微应用」空态。
- *  2. HTML 入口: MicroSandbox + loadHtmlEntry(import-html-entry) → 沙箱执行子应用脚本
- *     → 取 window.__DANTE_MICRO_APP__ 生命周期 → mount(container, props)
- *     ESM 入口: 动态 import(entryUrl) → module.mount/unmount(第一方直挂, 无沙箱,
- *     与主应用共享 React/组件/主题变量运行时)
+ *  2. 缺省 IFRAME: opaque sandbox + MessageChannel；TRUSTED 才允许 HTML 沙箱或 ESM
+ *     在宿主页执行。每次获取应用上下文重新校验服务端实时运行模式。
  *  3. 先取得应用 token 与受众限定的完整上下文，再挂载；定时刷新上下文并续期 token。
  *  4. MicroProps 2.0 完整授权内容变化走 update；没有 update 时串行卸载后重挂。
  *  5. 沙箱诊断(v1.1): HTML 通道挂载后状态条提供实时 getStats() 面板
@@ -32,6 +30,7 @@ import {
   Zap,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -58,6 +57,7 @@ import { EmptyState, ErrorState } from "@/components/states"
 import { MicroSandbox } from "./sandbox"
 import type { MicroSandboxStats } from "./sandbox"
 import { loadHtmlEntry, markEntryFailed } from "./loader"
+import { createIframeLifecycle } from "./iframe"
 import { MICRO_APP_GLOBAL } from "./types"
 import type {
   ApplicationEntryInfo,
@@ -140,10 +140,13 @@ export default function MicroAppContainer() {
     icon: app.icon || "LayoutGrid",
     entryType,
     entryUrl,
+    runtimeMode: app.runtimeMode === "TRUSTED" ? "TRUSTED" : "IFRAME",
+    deploymentVersion: app.deploymentVersion,
+    entryVersionId: app.entryVersionId,
   }
 
-  // key=appCode: 路由参数变化时整体重建挂载区(含全部内部状态)
-  return <MicroMountZone key={`${contextEpoch}:${app.code}`} entryInfo={entryInfo} sessionToken={sessionToken} />
+  // 组织、应用或信任模式改变时重新取得 token；版本变化只替换挂载实例。
+  return <MicroMountZone key={`${contextEpoch}:${app.code}:${entryInfo.runtimeMode}`} entryInfo={entryInfo} sessionToken={sessionToken} />
 }
 
 /* ============================ 内层: 挂载编排 + 状态条 UI ============================ */
@@ -153,12 +156,15 @@ interface ActiveEntry {
   session: MicroLifecycleSession
   controller: AbortController
   node: HTMLElement
+  contextSignal?: AbortSignal
+  propsSignal?: AbortSignal
 }
 
 // 旧异步挂载和卸载完成后，新实例才执行脚本或挂载，避免 ESM 单例及 document 记账重叠。
 let disposalBarrier: Promise<void> = Promise.resolve()
 
 function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEntryInfo; sessionToken: string }) {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const navigateRef = React.useRef(navigate)
   navigateRef.current = navigate
@@ -185,6 +191,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
   const [tokenState, setTokenState] = React.useState<MicroTokenState>("pending")
   const [tokenNote, setTokenNote] = React.useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = React.useState(0)
+  const [mountNonce, setMountNonce] = React.useState(0)
   const [supportsUpdate, setSupportsUpdate] = React.useState(false)
   const [stats, setStats] = React.useState<MicroSandboxStats | null>(null)
 
@@ -200,20 +207,29 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
 
   const buildProps = React.useCallback((path: string): MicroProps => {
     const value = snapshotRef.current
+    const active = activeRef.current
     if (!value || value.signal.aborted || Date.parse(value.context.expiresAt) <= Date.now() ||
-        Date.parse(value.tokenExpiresAt) <= Date.now()) throw new Error("应用授权上下文不可用")
+        Date.parse(value.tokenExpiresAt) <= Date.now() || !active || active.controller.signal.aborted) {
+      throw new DOMException("应用授权上下文不可用", "AbortError")
+    }
+    if (active.contextSignal !== value.signal) {
+      active.contextSignal = value.signal
+      active.propsSignal = AbortSignal.any([value.signal, active.controller.signal])
+    }
+    const signal = active.propsSignal!
     const context = value.context
     return {
       contractVersion: "2.0", contextVersion: context.contextVersion,
       contextEpoch: value.contextEpoch, expiresAt: context.expiresAt,
-      tokenExpiresAt: value.tokenExpiresAt, signal: value.signal,
+      tokenExpiresAt: value.tokenExpiresAt, signal,
+      deploymentVersion: entryInfo.deploymentVersion, entryVersionId: entryInfo.entryVersionId,
       token: value.token, appCode, basePath, routePath: path,
       user: context.user, tenant: context.tenant, organization: context.organization,
       roles: context.roles, permissions: context.permissions,
       dataGrants: context.dataGrants, menus: context.menus,
       theme: resolvedTheme,
       onNavigate: (path: string) => {
-        if (value.signal.aborted || typeof path !== "string" || !path) return
+        if (signal.aborted || typeof path !== "string" || !path) return
         if (/^https?:\/\//i.test(path)) {
           window.open(path, "_blank", "noopener,noreferrer")
           return
@@ -221,7 +237,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
         navigate(path.startsWith("/") ? path : "/" + path)
       },
       onNotify: (message: string, variant?: MicroNotifyVariant) => {
-        if (value.signal.aborted) return
+        if (signal.aborted) return
         const text = typeof message === "string" && message ? message : "(空消息)"
         switch (variant) {
           case "success": toast.success(text); break
@@ -232,7 +248,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
         }
       },
     }
-  }, [appCode, basePath, resolvedTheme, navigate])
+  }, [appCode, basePath, resolvedTheme, navigate, entryInfo.deploymentVersion, entryInfo.entryVersionId])
   const propsBuilderRef = React.useRef(buildProps)
   propsBuilderRef.current = buildProps
 
@@ -253,6 +269,12 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
         if (context.user.id !== profile?.user.id || context.tenant.id !== profile?.tenant.id ||
             context.organization.id !== profile?.organization.id) {
           throw new Error("应用授权上下文与平台会话不一致")
+        }
+        const mode = context.application.runtimeMode === "TRUSTED" ? "TRUSTED" : "IFRAME"
+        if (mode !== entryInfo.runtimeMode) {
+          // 签发新 token 后必须重新核对信任边界，不能用缓存 profile 决定宿主执行。
+          void queryClient.invalidateQueries({ queryKey: ["profile"] })
+          throw new Error("应用运行模式已变更，正在刷新入口配置")
         }
         return context
       },
@@ -280,7 +302,8 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
       runtime.stop()
       if (runtimeRef.current === runtime) runtimeRef.current = null
     }
-  }, [appCode, sessionToken, reloadNonce, profile?.user.id, profile?.tenant.id, profile?.organization.id])
+  }, [appCode, sessionToken, reloadNonce, profile?.user.id, profile?.tenant.id,
+    profile?.organization.id, entryInfo.runtimeMode, queryClient])
 
   const hasSnapshot = !!snapshot && !snapshot.signal.aborted &&
     Date.parse(snapshot.context.expiresAt) > Date.now() && Date.parse(snapshot.tokenExpiresAt) > Date.now()
@@ -307,10 +330,15 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
     setStats(null)
     const stale = () => controller.signal.aborted || sequence !== seqRef.current
     const check = () => { if (stale()) throw new DOMException("Unmounted", "AbortError") }
+    let mountedProps: MicroProps | null = null
 
     void session.mount(async () => {
       await previous
       check()
+      if (entryInfo.runtimeMode !== "TRUSTED") {
+        if (entryInfo.entryType !== "HTML") throw new Error("隔离 iframe 应用需要 HTML 入口，请联系平台管理员配置")
+        return createIframeLifecycle({ entryUrl: entryInfo.entryUrl, appCode, signal: controller.signal })
+      }
       if (entryInfo.entryType === "HTML") {
         sandbox = new MicroSandbox(appCode)
         active.sandbox = sandbox
@@ -333,6 +361,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
       return lifecycle
     }, node, () => {
       const props = propsBuilderRef.current(routeRef.current)
+      mountedProps = props
       lastPushSigRef.current = microPropsSignature(props)
       return props
     }).then(() => {
@@ -341,7 +370,13 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
       setStatus("mounted")
     }).catch((error) => {
       if (stale()) return
-      if (entryInfo.entryType === "HTML") markEntryFailed(entryInfo.entryUrl)
+      if (error instanceof Error && error.name === "AbortError" &&
+          (!mountedProps || mountedProps.signal.aborted)) {
+        // 续期可能取消初次握手；用最新有效上下文重建实例。
+        setMountNonce((value) => value + 1)
+        return
+      }
+      if (entryInfo.runtimeMode === "TRUSTED" && entryInfo.entryType === "HTML") markEntryFailed(entryInfo.entryUrl)
       runtimeRef.current?.stop()
       setStatus("error")
       setErrorMessage(error instanceof Error ? error.message : String(error))
@@ -354,12 +389,15 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
       void disposeEntry(active)
       if (document.title !== titleSnapshot) document.title = titleSnapshot
     }
-  }, [hasSnapshot, appCode, entryInfo.entryType, entryInfo.entryUrl, entryInfo.name, reloadNonce, disposeEntry])
+  }, [hasSnapshot, appCode, entryInfo.runtimeMode, entryInfo.entryType, entryInfo.entryUrl,
+    entryInfo.entryVersionId, entryInfo.deploymentVersion, entryInfo.name, reloadNonce, mountNonce, disposeEntry])
 
   React.useEffect(() => {
     if (status !== "mounted" || !hasSnapshot) return
     const active = activeRef.current
     if (!active || active.controller.signal.aborted) return
+    // 入口切换的同一 commit 中，旧 mounted 状态不能更新刚建立的新实例。
+    if (lastPushSigRef.current === null) return
     let props: MicroProps
     try { props = buildProps(routePath) } catch { return }
     const signature = microPropsSignature(props)
@@ -370,7 +408,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
       return
     }
     void active.session.update(props).catch((error) => {
-      if (active.controller.signal.aborted) return
+      if (active.controller.signal.aborted || (props.signal.aborted && error instanceof Error && error.name === "AbortError")) return
       runtimeRef.current?.stop()
       setStatus("error")
       setErrorMessage(error instanceof Error ? error.message : String(error))
@@ -380,7 +418,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
 
   /* ---------- 沙箱诊断(v1.1): HTML 通道挂载后 1s 轮询 getStats ---------- */
   React.useEffect(() => {
-    if (entryInfo.entryType !== "HTML" || status !== "mounted") {
+    if (entryInfo.runtimeMode !== "TRUSTED" || entryInfo.entryType !== "HTML" || status !== "mounted") {
       setStats(null)
       return
     }
@@ -391,7 +429,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
     read()
     const id = window.setInterval(read, 1000)
     return () => window.clearInterval(id)
-  }, [entryInfo.entryType, status, reloadNonce])
+  }, [entryInfo.runtimeMode, entryInfo.entryType, status, reloadNonce])
 
   const handleReload = () => setReloadNonce((n) => n + 1)
   const loading = status === "loading"
@@ -422,7 +460,12 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
         </div>
 
         {/* 通道徽章: HTML 入口·沙箱(紫) / ESM 模块·直挂(灰) */}
-        {entryInfo.entryType === "HTML" ? (
+        {entryInfo.runtimeMode === "IFRAME" ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            <ShieldQuestion className="size-3" />
+            隔离 iframe
+          </span>
+        ) : entryInfo.entryType === "HTML" ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[11px] font-medium text-purple-700 dark:text-purple-300">
             <Boxes className="size-3" />
             HTML 入口 · 沙箱
@@ -431,6 +474,12 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
             <Package className="size-3" />
             ESM 模块 · 直挂
+          </span>
+        )}
+
+        {entryInfo.deploymentVersion && (
+          <span className="font-mono text-[11px] text-muted-foreground" title={entryInfo.entryVersionId ?? undefined}>
+            v{entryInfo.deploymentVersion}
           </span>
         )}
 
@@ -632,7 +681,7 @@ function MountAreaSkeleton() {
       </div>
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <RotateCw className="size-3 animate-spin" />
-        正在拉取子应用入口并执行沙箱挂载...
+        正在加载应用入口与授权上下文...
       </p>
     </div>
   )

@@ -394,23 +394,28 @@ async fn profile(State(state): State<AppState>, user: CurrentUser) -> Result<Jso
     .fetch_one(&state.pool)
     .await?;
 
-    let apps = sqlx::query_as::<_, (Uuid, String, String, String, String, String, String)>(
+    let apps = sqlx::query_as::<_, (Uuid, String, String, String, String, String, String, Option<String>, Option<Uuid>, String)>(
         "SELECT a.id, a.code, a.name, COALESCE(a.icon,''), COALESCE(a.base_path,''), \
-         COALESCE(a.entry_type,'ESM'), COALESCE(a.entry_url,'') \
+         COALESCE(r.entry_type,a.entry_type,'ESM'), COALESCE(r.entry_url,a.entry_url,''), r.version, r.id, a.runtime_mode \
          FROM applications a \
          JOIN tenant_applications ta ON ta.application_id = a.id AND ta.tenant_id = $1 \
          JOIN organization_applications oa ON oa.application_id = a.id AND oa.organization_id = $2 \
+         LEFT JOIN application_deployments d ON d.application_id=a.id AND d.environment=$3 \
+         LEFT JOIN application_releases r ON r.application_id=a.id AND r.environment=d.environment AND r.id=d.active_release_id \
          WHERE a.status = 'ENABLED' ORDER BY a.sort_order, a.created_at",
     )
     .bind(user.tenant_id)
     .bind(user.org_id)
+    .bind(&state.config.application_environment)
     .fetch_all(&state.pool)
     .await?;
     let apps_json: Vec<Value> = apps
         .into_iter()
-        .map(|(id, code, name, icon, base_path, entry_type, entry_url)| {
+        .map(|(id, code, name, icon, base_path, entry_type, entry_url, deployment_version, entry_version_id, runtime_mode)| {
             json!({"id": id, "code": code, "name": name, "icon": icon, "basePath": base_path,
-                   "entryType": entry_type, "entryUrl": entry_url})
+                   "entryType": entry_type, "entryUrl": entry_url,
+                   "deploymentVersion": deployment_version, "entryVersionId": entry_version_id,
+                   "runtimeMode": runtime_mode})
         })
         .collect();
 
