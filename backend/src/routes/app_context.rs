@@ -20,11 +20,17 @@ pub fn routes() -> Router<AppState> {
 async fn context(
     State(state): State<AppState>, Path(app_code): Path<String>, headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let token = bearer_token(&headers)?;
+    Ok(Json(current_context(&state, &app_code, &headers).await?))
+}
+
+pub(crate) async fn current_context(
+    state: &AppState, app_code: &str, headers: &HeaderMap,
+) -> Result<Value, AppError> {
+    let token = bearer_token(headers)?;
     let claims = jwt::verify(&token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
     let binding = app_token::inspect(&state.pool, &token, &claims).await?
-        .ok_or_else(|| AppError::forbidden("应用令牌无效或未获授权"))?;
+        .ok_or_else(|| AppError::unauthorized("应用令牌无效或未获授权"))?;
     if binding.audience != app_code {
         return Err(AppError::forbidden("应用受众不匹配"));
     }
@@ -108,7 +114,7 @@ async fn context(
     });
     let version = hash::sha256_hex(&version_input.to_string());
     let expires_at = std::cmp::min(binding.expires_at, Utc::now() + chrono::Duration::seconds(30));
-    Ok(Json(json!({
+    Ok(json!({
         "contractVersion": "1.0", "contextVersion": version,
         "expiresAt": expires_at, "appCode": binding.audience,
         "application": {"id": binding.application_id, "name": identity.6},
@@ -119,5 +125,5 @@ async fn context(
         "permissions": permissions,
         "dataGrants": data_grants,
         "menus": authorization::menu_tree(menu_rows),
-    })))
+    }))
 }

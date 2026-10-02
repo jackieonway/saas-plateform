@@ -36,7 +36,7 @@
 | 会话退出 | `/api/auth/logout` 写审计，前端清除 token | 已签发的 session JWT 没有立即吊销机制；需支持登出、踢出、密码重置后的会话失效。见 [`auth.rs`](../backend/src/routes/auth.rs)。 |
 | 权限 | 角色菜单 ∩ 组织菜单 ∩ 租户菜单，30 秒进程内缓存 | 菜单显示、API 操作和业务数据范围尚未形成统一的授权结果；多实例缓存失效也需设计。见 [`state.rs`](../backend/src/state.rs)。 |
 | 应用令牌 | 微应用容器尝试向 `/api/oauth/session-token` 申请应用 access token | 签发端当前按 `appCode` 找客户端，没有再次校验用户在当前租户/组织是否获该应用授权；快速接入也不会自动建 OAuth 客户端。见 [`oauth2.rs`](../backend/src/routes/oauth2.rs)。 |
-| 对外数据 | `/api/external/menus`、`/roles` 可用 access token 调用 | 返回的是关联应用的启用菜单和获授权组织角色概览，不能作为当前用户的有效权限结果。见 [`external.rs`](../backend/src/routes/external.rs)。 |
+| 对外数据 | `/api/external/menus`、`/roles` 已收敛为应用令牌的当前用户视图 | 原全量应用菜单/跨组织角色概览已移除；新接入使用版本化 `/api/apps/{appCode}/context`。见 [`external.rs`](../backend/src/routes/external.rs) 与[迁移说明](./external-api-migration.md)。 |
 | 微应用宿主 | HTML 入口、沙箱、ESM 入口、生命周期和基础 props 已有 | props 缺租户、组织、有效权限和角色；组织切换后的 token/上下文刷新不完整；沙箱用于资源回收，不是安全边界。见 [`MicroAppContainer.tsx`](../frontend/src/components/micro/MicroAppContainer.tsx)和 [`sandbox.ts`](../frontend/src/components/micro/sandbox.ts)。 |
 | 通知 | 后端通知表和 `pg_notify`，独立 Socket.IO 服务；`onNotify` 可显示 Toast | `onNotify` 只是界面提示，不会入库；通知服务配置依赖原开发环境，当前 Compose 未编排它。见 [`notification-ws`](../mini-services/notification-ws/index.ts)。 |
 | 发布 | Compose 管理数据库、后端与 Caddy Web；前端静态子应用可随主站发布 | 独立应用的注册、版本、健康、发布和回滚尚无统一流程；示例数据库入口仍含开发代理或 Vite 源码路径。见 [`docker-compose.yml`](../docker-compose.yml)与 [`0011_micro_frontend.sql`](../backend/migrations/0011_micro_frontend.sql)。 |

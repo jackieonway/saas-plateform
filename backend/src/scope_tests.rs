@@ -1074,6 +1074,10 @@ async fn application_token_audience_and_revocation() -> Result<()> {
             "INSERT INTO menus (application_id, type, title, permission, path) \
              VALUES ($1, 'BUTTON', 'Read orders', 'order:read', '/orders') RETURNING id",
         ).bind(app_a).fetch_one(&pool).await?;
+        sqlx::query(
+            "INSERT INTO menus (application_id, type, title, permission, path) \
+             VALUES ($1, 'BUTTON', 'Hidden admin action', 'order:admin', '/orders/admin')",
+        ).bind(app_a).execute(&pool).await?;
         sqlx::query("INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3)")
             .bind(user_a).bind(role_id).bind(org_a).execute(&pool).await?;
         sqlx::query("INSERT INTO role_menus (role_id, menu_id) VALUES ($1, $2)")
@@ -1099,6 +1103,16 @@ async fn application_token_audience_and_revocation() -> Result<()> {
             &format!("/api/auth/menus?applicationId={app_a}"), &session_a, None).await?;
         ensure!(host_menus["menus"] == context_with_grant["menus"],
             "host menus and app context diverged");
+        let (_, external_user_menus) = call(&app, Method::GET, "/api/external/menus", &token_a, None).await?;
+        ensure!(external_user_menus["menus"] == context_with_grant["menus"],
+            "external menu path exposed full application configuration");
+        ensure!(external_user_menus["menus"].as_array().is_some_and(|v| v.len() == 1),
+            "external menu path included an ungranted application menu");
+        let (_, external_user_roles) = call(&app, Method::GET, "/api/external/roles", &token_a, None).await?;
+        ensure!(external_user_roles["organizations"].as_array().is_some_and(|v| v.len() == 1)
+            && external_user_roles["organizations"][0]["id"] == org_a.to_string()
+            && external_user_roles["organizations"][0]["roles"][0]["id"] == role_id.to_string(),
+            "external roles path exposed other organizations or missed current role");
         sqlx::query("DELETE FROM role_menus WHERE role_id = $1 AND menu_id = $2")
             .bind(role_id).bind(menu_id).execute(&pool).await?;
         let (_, context_without_role) = call(&app, Method::GET, &context_path, &token_a, None).await?;
@@ -1155,6 +1169,10 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(allowed_orgs.contains(&json!(child_org)) && allowed_orgs.contains(&json!(descendant))
             && !allowed_orgs.contains(&json!(org_a)) && !allowed_orgs.contains(&json!(org_b)),
             "subtree grant leaked parent or other tenant organization");
+        let (_, child_external_roles) = call(&app, Method::GET, "/api/external/roles", &child_token, None).await?;
+        ensure!(child_external_roles["organizations"].as_array().is_some_and(|v| v.len() == 1)
+            && child_external_roles["organizations"][0]["id"] == child_org.to_string(),
+            "child external roles enumerated ancestor or unrelated organizations");
 
         let (status, legacy) = call_form(&app, "/oauth/token", &client_a, &secret_a,
             "grant_type=client_credentials").await?;
@@ -1163,6 +1181,9 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         let (_, legacy_active) = call_form(&app, "/oauth/introspect", &client_a, &secret_a,
             &format!("token={legacy_token}")).await?;
         ensure!(legacy_active["active"] == true, "legacy OAuth token lost introspection compatibility");
+        ensure!(call(&app, Method::GET, "/api/external/menus", legacy_token, None).await?.0
+            == StatusCode::FORBIDDEN,
+            "client_credentials token accessed user menu view");
         ensure!(call_form(&app, "/oauth/introspect", &client_b, &secret_b,
             &format!("token={legacy_token}")).await?.1["active"] == false,
             "B backend introspected A legacy OAuth token");
@@ -1181,7 +1202,7 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(revoked["active"] == false, "revoked app token remained active");
         ensure!(call(&app, Method::GET, "/api/external/menus", &token_a, None).await?.0 == StatusCode::UNAUTHORIZED,
             "external API accepted revoked app token");
-        ensure!(call(&app, Method::GET, &context_path, &token_a, None).await?.0 == StatusCode::FORBIDDEN,
+        ensure!(call(&app, Method::GET, &context_path, &token_a, None).await?.0 == StatusCode::UNAUTHORIZED,
             "context API accepted revoked app token");
 
         sqlx::query("DELETE FROM organization_applications WHERE organization_id = $1 AND application_id = $2")
@@ -1290,7 +1311,7 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
             &format!("token={token_a8}")).await?.1["active"] == false,
             "app token survived member removal");
-        ensure!(call(&app, Method::GET, &context_path, &token_a8, None).await?.0 == StatusCode::FORBIDDEN,
+        ensure!(call(&app, Method::GET, &context_path, &token_a8, None).await?.0 == StatusCode::UNAUTHORIZED,
             "context API accepted removed member");
         ensure!(call(&app, Method::POST, "/api/oauth/session-token", &fresh_session,
             Some(json!({"appCode":code_a}))).await?.0 == StatusCode::UNAUTHORIZED,

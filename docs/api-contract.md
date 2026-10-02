@@ -170,3 +170,7 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 ### 应用授权上下文（Phase 6）
 
 `GET /api/apps/{appCode}/context` 仅接受受众等于路径 `appCode` 的有效应用专用令牌。响应提供 `contractVersion`、稳定的 `contextVersion`、`expiresAt`、当前用户/租户/组织/应用、有效角色、菜单、操作权限码和独立的 `dataGrants`。角色不决定数据范围；数据授权绑定当前组织的直接成员关系，按应用、资源和操作显式配置，未授权默认拒绝。业务 API 需同时验证操作权限和数据授权。字段和范围语义见[应用授权上下文契约](./app-authorization-context.md)。
+
+### 对外用户视图（Phase 7）
+
+`GET /api/external/menus` 和 `GET /api/external/roles` 保留旧路径，但仅接受应用专用令牌，分别返回当前用户菜单和当前组织角色。`client_credentials` 令牌访问返回 403；原全量配置视图不再由这两个接口提供。业务后端参考校验组件、旧客户端迁移顺序见[对外 API 迁移说明](./external-api-migration.md)。
