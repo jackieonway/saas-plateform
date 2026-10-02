@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
-use crate::routes::notifications::notify;
+use crate::notifications::system_in_tx;
 use crate::routes::{page_json, paging};
 use crate::session;
 use crate::state::AppState;
@@ -114,13 +114,41 @@ async fn user_tenant_ids(pool: &sqlx::PgPool, target: Uuid) -> Result<Vec<Uuid>,
     .await?)
 }
 
-async fn user_role_tenant_ids(pool: &sqlx::PgPool, target: Uuid) -> Result<Vec<Uuid>, AppError> {
+async fn user_role_tenant_ids_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    target: Uuid,
+) -> Result<Vec<Uuid>, AppError> {
     Ok(sqlx::query_scalar(
         "SELECT DISTINCT r.tenant_id FROM user_roles ur \
          JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1",
     )
     .bind(target)
-    .fetch_all(pool)
+    .fetch_all(&mut **tx)
+    .await?)
+}
+
+/// 全局账号事件只投递到明确受影响租户中的有效直接成员上下文。
+/// 没有有效成员关系时返回空集合，保留业务操作与审计而不猜测接收组织。
+async fn system_recipient_contexts(
+    tx: &mut Transaction<'_, Postgres>,
+    target: Uuid,
+    affected_tenants: &[Uuid],
+) -> Result<Vec<(Uuid, Uuid, Uuid)>, AppError> {
+    Ok(sqlx::query_as(
+        "SELECT m.user_id, o.tenant_id, o.id \
+         FROM memberships m \
+         JOIN users u ON u.id = m.user_id \
+         JOIN organizations o ON o.id = m.organization_id \
+         JOIN tenants t ON t.id = o.tenant_id \
+         WHERE m.user_id = $1 AND o.tenant_id = ANY($2) \
+           AND u.status = 'ENABLED' AND t.status = 'ENABLED' \
+           AND (t.expires_at IS NULL OR t.expires_at > now()) \
+           AND org_chain_active(o.id) \
+         ORDER BY o.tenant_id, o.id",
+    )
+    .bind(target)
+    .bind(affected_tenants)
+    .fetch_all(&mut **tx)
     .await?)
 }
 
@@ -267,10 +295,14 @@ async fn create(
     user: CurrentUser,
     ApiJson(body): ApiJson<UserBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:user").check(&state, &user).await?;
+    RequirePermission("system:user")
+        .check(&state, &user)
+        .await?;
     let username = body.username.trim().to_string();
     if username.is_empty() || body.password.len() < 6 {
-        return Err(AppError::bad_request("用户名不能为空且密码长度不能少于 6 位"));
+        return Err(AppError::bad_request(
+            "用户名不能为空且密码长度不能少于 6 位",
+        ));
     }
     let gender = parse_gender(&body.gender)?;
     let hash = pw::hash_password(&body.password)?;
@@ -294,21 +326,36 @@ async fn create(
             .bind(user.org_id)
             .execute(&mut *tx)
             .await?;
+        system_in_tx(
+            &mut tx,
+            &[(row.0, user.tenant_id, user.org_id)],
+            "INFO",
+            "欢迎加入 Dante Cloud",
+            &format!(
+                "管理员为您创建了账号「{}」。首次登录后建议前往个人中心修改初始密码。",
+                username
+            ),
+            "/profile",
+        )
+        .await?;
     }
     tx.commit().await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "CREATE_USER", detail: &format!("创建用户: {}", username), ip: &ip, user_agent: &ua,
-    }).await;
-    notify(
-        &state.pool, row.0, "INFO",
-        "欢迎加入 Dante Cloud",
-        &format!("管理员为您创建了账号「{}」。首次登录后建议前往个人中心修改初始密码。", username),
-        "/profile",
-    ).await;
+    audit::write(
+        &state.pool,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(user.tenant_id),
+            organization_id: Some(user.org_id),
+            action: "CREATE_USER",
+            detail: &format!("创建用户: {}", username),
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await;
     Ok(Json(json!({"id": row.0, "username": row.1})))
 }
 
@@ -510,26 +557,46 @@ async fn reset_password(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<ResetPasswordBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:user").check(&state, &user).await?;
+    RequirePermission("system:user")
+        .check(&state, &user)
+        .await?;
     if body.new_password.len() < 6 {
         return Err(AppError::bad_request("新密码长度不能少于 6 位"));
     }
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let hash = pw::hash_password(&body.new_password)?;
     let mut tx = state.pool.begin().await?;
     let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
     let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id = $1")
-        .bind(id).fetch_one(&mut *tx).await?;
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
     session::revoke_all_in_tx(&mut tx, id, Some(&hash)).await?;
-    tx.commit().await?;
-    audit_user_change(&state, &headers, &user, &target_tenants, "RESET_PASSWORD",
-        &format!("重置用户密码: {}", username)).await;
-    notify(
-        &state.pool, id, "SECURITY",
+    let contexts = system_recipient_contexts(&mut tx, id, &target_tenants).await?;
+    system_in_tx(
+        &mut tx,
+        &contexts,
+        "SECURITY",
         "密码已被管理员重置",
-        &format!("管理员 {} 刚刚重置了您的登录密码。若非您本人申请,请立即联系平台管理员。", user.username),
+        &format!(
+            "管理员 {} 刚刚重置了您的登录密码。若非您本人申请,请立即联系平台管理员。",
+            user.username
+        ),
         "/profile",
-    ).await;
+    )
+    .await?;
+    tx.commit().await?;
+    audit_user_change(
+        &state,
+        &headers,
+        &user,
+        &target_tenants,
+        "RESET_PASSWORD",
+        &format!("重置用户密码: {}", username),
+    )
+    .await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -786,8 +853,12 @@ async fn put_roles(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<RolesBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:user").check(&state, &user).await?;
-    let uid: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:user")
+        .check(&state, &user)
+        .await?;
+    let uid: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_user_in_scope(&state, &user, uid).await?;
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
         .bind(uid)
@@ -797,7 +868,6 @@ async fn put_roles(
         return Err(AppError::not_found("用户不存在"));
     }
     let platform = state.is_platform_context(&user).await?;
-    let before_tenants = if platform { user_role_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
     let mut parsed: Vec<(Uuid, Uuid)> = Vec::new();
     for item in &body.items {
         let role: Uuid = item
@@ -821,13 +891,19 @@ async fn put_roles(
     }
     if !parsed.is_empty() {
         let role_ids: Vec<Uuid> = parsed.iter().map(|(r, _)| *r).collect();
-        let n: i64 = sqlx::query_scalar("SELECT count(*) FROM roles WHERE id = ANY($1) \
-                                        AND ($2::uuid IS NULL OR tenant_id = $2)")
-            .bind(&role_ids)
-            .bind(if platform { None } else { Some(user.tenant_id) })
-            .fetch_one(&state.pool)
-            .await?;
-        if n != role_ids.iter().collect::<std::collections::HashSet<_>>().len() as i64 {
+        let n: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM roles WHERE id = ANY($1) \
+                                        AND ($2::uuid IS NULL OR tenant_id = $2)",
+        )
+        .bind(&role_ids)
+        .bind(if platform { None } else { Some(user.tenant_id) })
+        .fetch_one(&state.pool)
+        .await?;
+        if n != role_ids
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len() as i64
+        {
             return Err(AppError::bad_request("存在无效的角色"));
         }
         // 校验角色组织 ∈ (membership 组织 ∪ 其祖先)
@@ -838,7 +914,9 @@ async fn put_roles(
                     .fetch_one(&state.pool)
                     .await?;
             if role_org != *org {
-                return Err(AppError::bad_request("角色授权上下文组织与角色所属组织不一致"));
+                return Err(AppError::bad_request(
+                    "角色授权上下文组织与角色所属组织不一致",
+                ));
             }
             let valid: bool = sqlx::query_scalar(
                 "WITH RECURSIVE anc AS ( \
@@ -859,13 +937,27 @@ async fn put_roles(
         }
     }
     let mut tx = state.pool.begin().await?;
-    sqlx::query("DELETE FROM user_roles ur USING roles r \
-                 WHERE ur.role_id = r.id AND ur.user_id = $1 \
-                 AND ($2::uuid IS NULL OR r.tenant_id = $2)")
+    let locked: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE id = $1 FOR UPDATE")
         .bind(uid)
-        .bind(if platform { None } else { Some(user.tenant_id) })
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
+    if locked.is_none() {
+        return Err(AppError::not_found("用户不存在"));
+    }
+    let before_tenants = if platform {
+        user_role_tenant_ids_in_tx(&mut tx, uid).await?
+    } else {
+        vec![user.tenant_id]
+    };
+    sqlx::query(
+        "DELETE FROM user_roles ur USING roles r \
+                 WHERE ur.role_id = r.id AND ur.user_id = $1 \
+                 AND ($2::uuid IS NULL OR r.tenant_id = $2)",
+    )
+    .bind(uid)
+    .bind(if platform { None } else { Some(user.tenant_id) })
+    .execute(&mut *tx)
+    .await?;
     for (role, org) in &parsed {
         sqlx::query(
             "INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
@@ -876,16 +968,36 @@ async fn put_roles(
         .execute(&mut *tx)
         .await?;
     }
+    let after_tenants = if platform {
+        user_role_tenant_ids_in_tx(&mut tx, uid).await?
+    } else {
+        vec![user.tenant_id]
+    };
+    let affected_tenants = merge_tenant_ids(before_tenants, after_tenants);
+    let contexts = system_recipient_contexts(&mut tx, uid, &affected_tenants).await?;
+    system_in_tx(
+        &mut tx,
+        &contexts,
+        "INFO",
+        "您的角色分配已更新",
+        &format!(
+            "管理员 {} 更新了您的角色分配(共 {} 项)。新角色将在下次进入相应组织上下文时生效。",
+            user.username,
+            parsed.len()
+        ),
+        "/profile",
+    )
+    .await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
-    let after_tenants = if platform { user_role_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
-    audit_user_change(&state, &headers, &user, &merge_tenant_ids(before_tenants, after_tenants),
-        "UPDATE_USER", &format!("更新用户 {} 角色分配: {} 项", uid, body.items.len())).await;
-    notify(
-        &state.pool, uid, "INFO",
-        "您的角色分配已更新",
-        &format!("管理员 {} 更新了您的角色分配(共 {} 项)。新角色将在下次进入相应组织上下文时生效。", user.username, parsed.len()),
-        "/profile",
-    ).await;
+    audit_user_change(
+        &state,
+        &headers,
+        &user,
+        &affected_tenants,
+        "UPDATE_USER",
+        &format!("更新用户 {} 角色分配: {} 项", uid, body.items.len()),
+    )
+    .await;
     Ok(Json(json!({"ok": true})))
 }

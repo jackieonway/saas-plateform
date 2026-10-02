@@ -4,21 +4,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { CircleCheck, Info, ShieldAlert, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
-import { useAuthStore } from "@/stores/auth"
-import type { NotificationType } from "@/api/types"
+import type { NotificationSocketContext, NotificationType } from "@/api/types"
 import { notificationsApi, type NotificationPrefs } from "@/api/notifications"
 import { cn } from "@/lib/utils"
-
-/** pg_notify new_notification 通道推送的载荷 (后端 notify() 构造) */
-export interface RealtimeNotification {
-  userId?: string
-  id: string
-  type?: NotificationType
-  title?: string
-  content?: string | null
-  link?: string | null
-  createdAt?: string
-}
+import { notificationRequestOptions, useNotificationContext, type NotificationContext } from "./use-notification-context"
+import { isNotificationSocketContext, isRealtimeNotification, notificationLink } from "@/lib/notification-protocol"
+export type { RealtimeNotification } from "@/api/types"
 
 /** toast 四色:INFO 默认 / SUCCESS 成功 / WARNING 警告 / SECURITY 危险 */
 const TOAST_META: Record<NotificationType, { icon: typeof Info; cls: string }> = {
@@ -61,15 +52,9 @@ export function inDndWindow(start: string, end: string, now = new Date()): boole
 /**
  * 实时通知 WebSocket hook —— 整个应用只挂载一次 (TopBar)。
  *
- * - 仅在已登录 (zustand auth store 有 token) 时连接 io('/?XTransformPort=3003');
- * - 连接后 emit authenticate {token} → 监听 authenticated / notification;
- * - notification 处理顺序:
- *   ① invalidate ["notifications"] (铃铛计数/通知中心自动刷新,永远执行);
- *   ② 偏好抑制: 类型 ∈ mutedTypes → 不弹;免打扰开启且当前时间落在区间内 → 不弹;
- *   ③ toast 节流: 10s 内相同 title 只弹一次;10s 滑动窗口内最多 3 条;
- * - 偏好 (["notification-prefs"] 查询缓存) 保存后即时生效;
- * - connect_error 静默处理, 降级为现有 60s 轮询兜底;
- * - token 变化 / 组件卸载 / 登出时 socket.disconnect()。
+ * /socket.io/ 与网关同构；连接绑定捕获的 session、epoch 与完整 profile 身份。
+ * auth store 开始切换时 signal 同步中止，立即断开旧连接；每个回调再验捕获上下文。
+ * authenticated/reconnect 从数据库补拉列表、count、个人偏好，不补弹历史 Toast。
  */
 export function useNotificationSocket(): {
   connected: boolean
@@ -78,119 +63,156 @@ export function useNotificationSocket(): {
   /** 通知偏好 (免打扰 + 静音类型), 供铃铛等处共享缓存使用 */
   prefs: NotificationPrefs | undefined
 } {
-  const token = useAuthStore((s) => s.token)
+  const scope = useNotificationContext()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [connected, setConnected] = React.useState(false)
-  const [lastNotificationAt, setLastNotificationAt] = React.useState(0)
+  const navigateRef = React.useRef(navigate)
+  navigateRef.current = navigate
+  const [state, setState] = React.useState<{ scope: NotificationContext | null; connected: boolean; lastNotificationAt: number }>(
+    { scope: null, connected: false, lastNotificationAt: 0 })
 
   /* 通知偏好:与通知设置对话框同 key, 缓存共享无重复请求 */
   const prefsQuery = useQuery({
-    queryKey: ["notification-prefs"],
-    queryFn: () => notificationsApi.getPrefs(),
-    enabled: !!token,
+    queryKey: scope ? [...scope.key, "prefs"] : ["notifications", "inactive", "prefs"],
+    queryFn: ({ signal }) => notificationsApi.getPrefs(notificationRequestOptions(scope!, signal)),
+    enabled: !!scope,
     staleTime: 30_000,
     retry: 1,
   })
 
-  /* toast 节流状态(ref 持久, 重连后仍生效): title → 上次弹出时间 / 弹出时间戳滑动窗口 */
-  const toastTitleAt = React.useRef(new Map<string, number>())
-  const toastWindow = React.useRef<number[]>([])
-
   React.useEffect(() => {
-    if (!token) return
-
-    // 绝不写死端口, 必须经 XTransformPort 转发 (Caddy 网关 / vite dev 代理同构)
-    const socket: Socket = io("/?XTransformPort=3003", {
+    if (!scope || !scope.current()) return
+    const captured = scope
+    let stopped = false
+    let authenticated: NotificationSocketContext | null = null
+    let expiryTimer: ReturnType<typeof setTimeout> | null = null
+    let authTimer: ReturnType<typeof setTimeout> | null = null
+    const seenIds = new Set<string>()
+    const toastTitleAt = new Map<string, number>()
+    let toastWindow: number[] = []
+    const toastIds = new Set<string | number>()
+    setState({ scope: captured, connected: false, lastNotificationAt: 0 })
+    const socket: Socket = io(window.location.origin, {
+      path: import.meta.env.VITE_NOTIFICATION_SOCKET_PATH || "/socket.io/",
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 8,
       reconnectionDelay: 2000,
+      reconnectionDelayMax: 30_000,
       timeout: 10000,
     })
-
-    socket.on("connect", () => {
-      socket.emit("authenticate", { token })
-    })
-    socket.on("authenticated", (d: { userId?: string }) => {
-      console.debug("[notification-ws] 实时通知已连接", d)
-      setConnected(true)
-    })
-    socket.on("unauthorized", (d: { message?: string }) => {
-      // 令牌被拒 (过期/类型不对): 停止重连, 交给 60s 轮询兜底, 待重新登录后重建
-      console.debug("[notification-ws] 认证被拒", d)
-      setConnected(false)
+    const live = () => !stopped && captured.current()
+    const timers = () => {
+      if (expiryTimer !== null) clearTimeout(expiryTimer)
+      if (authTimer !== null) clearTimeout(authTimer)
+      expiryTimer = null; authTimer = null
+    }
+    const disconnected = () => setState((previous) => previous.scope === captured ? { ...previous, connected: false } : previous)
+    const stop = () => {
+      if (stopped) return
+      stopped = true
+      timers()
+      authenticated = null
+      captured.signal.removeEventListener("abort", stop)
       socket.io.reconnection(false)
+      socket.removeAllListeners()
+      socket.disconnect()
+      for (const id of toastIds) toast.dismiss(id)
+      toastIds.clear(); seenIds.clear()
+      void queryClient.cancelQueries({ queryKey: captured.key })
+      disconnected()
+    }
+    captured.signal.addEventListener("abort", stop, { once: true })
+    if (captured.signal.aborted) { stop(); return stop }
+    const recover = () => {
+      // 从 DB 恢复；fallback 列表即使铃铛未展开也补拉，绝不把这批记录转为 Toast。
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: captured.key, refetchType: "all" }),
+        queryClient.fetchQuery({ queryKey: [...captured.key, "unread-count"],
+          queryFn: ({ signal }) => notificationsApi.unreadCount(notificationRequestOptions(captured, signal)), staleTime: 0 }),
+        queryClient.fetchQuery({ queryKey: [...captured.key, "prefs"],
+          queryFn: ({ signal }) => notificationsApi.getPrefs(notificationRequestOptions(captured, signal)), staleTime: 0 }),
+        queryClient.fetchQuery({ queryKey: [...captured.key, "recovery-list"],
+          queryFn: ({ signal }) => notificationsApi.list({ filter: "ALL", page: 1, size: 5 }, notificationRequestOptions(captured, signal)), staleTime: 0 }),
+      ])
+    }
+    socket.on("connect", () => {
+      if (!live()) { stop(); return }
+      timers()
+      authenticated = null
+      disconnected()
+      authTimer = setTimeout(stop, 10_000)
+      socket.emit("authenticate", { token: captured.token })
     })
-    socket.on("disconnect", () => setConnected(false))
-    socket.on("connect_error", () => {
-      // 静默降级: 保持现有 60s 轮询兜底
-      setConnected(false)
+    socket.on("authenticated", (data: unknown) => {
+      if (!live()) return
+      if (!isNotificationSocketContext(data, captured)) { stop(); return }
+      timers()
+      authenticated = data
+      expiryTimer = setTimeout(stop, Math.max(1, Date.parse(data.expiresAt) - Date.now()))
+      setState((previous) => previous.scope === captured ? { ...previous, connected: true } : previous)
+      recover()
     })
+    socket.on("unauthorized", stop)
+    socket.on("disconnect", () => {
+      timers()
+      authenticated = null
+      disconnected()
+    })
+    socket.on("connect_error", disconnected)
 
-    socket.on("notification", (n: RealtimeNotification) => {
-      const type = normalizeType(n.type)
+    socket.on("notification", async (data: unknown) => {
+      if (!live() || !authenticated || Date.parse(authenticated.expiresAt) <= Date.now() || !isRealtimeNotification(data, captured)) return
+      const n = data
+      if (seenIds.has(n.id)) return
+      seenIds.add(n.id)
+      const type = n.type
       const meta = TOAST_META[type]
-      const title = n.title?.trim() || "新通知"
-      const link = n.link?.trim() || ""
-      const description = n.content?.trim() || undefined
+      const title = n.title.trim()
+      const link = notificationLink(n.link.trim(), window.location.origin)
+      const description = n.content.trim() || undefined
 
-      // ① 铃铛计数 / 通知中心列表自动刷新(无论是否弹 toast 都执行)
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] })
-      setLastNotificationAt(Date.now())
+      // count 由 DB 查询返回，不根据 websocket 事件自行加一。
+      void queryClient.invalidateQueries({ queryKey: captured.key, refetchType: "all" })
+      setState((previous) => previous.scope === captured ?
+        { ...previous, lastNotificationAt: Math.max(Date.now(), previous.lastNotificationAt + 1) } : previous)
 
-      /* ② 偏好抑制:从缓存实时读取(保存后 invalidate 即时生效) */
-      const prefs = queryClient.getQueryData<NotificationPrefs>(["notification-prefs"])
-      if (prefs?.mutedTypes?.includes(type)) {
-        console.debug(`[notification-ws] 类型 ${type} 已静音,不弹提醒:`, title)
-        return
+      let prefs = queryClient.getQueryData<NotificationPrefs>([...captured.key, "prefs"])
+      if (!prefs) {
+        try { prefs = await queryClient.fetchQuery({ queryKey: [...captured.key, "prefs"],
+          queryFn: ({ signal }) => notificationsApi.getPrefs(notificationRequestOptions(captured, signal)), staleTime: 30_000 }) }
+        catch { return }
       }
-      if (prefs?.dndEnabled && inDndWindow(prefs.dndStart, prefs.dndEnd)) {
-        console.debug(
-          `[notification-ws] 免打扰中(${prefs.dndStart}-${prefs.dndEnd}),不弹提醒:`,
-          title
-        )
-        return
-      }
+      if (!prefs || !live() || !authenticated || Date.parse(authenticated.expiresAt) <= Date.now() || prefs.mutedTypes.includes(type) ||
+          (prefs.dndEnabled && inDndWindow(prefs.dndStart, prefs.dndEnd))) return
 
       /* ---- ③ toast 节流 ---- */
       const now = Date.now()
-      // 过期清理: 相同标题去重表 + 滑动窗口
-      for (const [t, at] of toastTitleAt.current) {
-        if (now - at >= TOAST_DEDUP_MS) toastTitleAt.current.delete(t)
+      for (const [t, at] of toastTitleAt) {
+        if (now - at >= TOAST_DEDUP_MS) toastTitleAt.delete(t)
       }
-      toastWindow.current = toastWindow.current.filter((at) => now - at < TOAST_DEDUP_MS)
-
-      const dupTitle = toastTitleAt.current.has(title)
-      const overLimit = toastWindow.current.length >= TOAST_MAX_PER_WINDOW
-      if (dupTitle || overLimit) {
-        // 10s 内同标题已弹过 或 窗口内已达 3 条: 不再弹 toast
-        return
-      }
-      toastTitleAt.current.set(title, now)
-      toastWindow.current.push(now)
-
-      const go = link ? () => navigate(link) : undefined
+      toastWindow = toastWindow.filter((at) => now - at < TOAST_DEDUP_MS)
+      if (toastTitleAt.has(title) || toastWindow.length >= TOAST_MAX_PER_WINDOW) return
+      toastTitleAt.set(title, now)
+      toastWindow.push(now)
+      const go = link ? () => { if (live()) navigateRef.current(link) } : undefined
       const Icon = meta.icon
-      toast(title, {
+      let toastId: string | number
+      toastId = toast(title, {
         description,
         icon: <Icon className={cn("size-4", meta.cls)} />,
         duration: 6000,
-        // sonner: 点击 toast 上的「查看」按钮跳转 (有 link 时)
         action: go ? { label: "查看", onClick: go } : undefined,
+        onDismiss: () => toastIds.delete(toastId),
+        onAutoClose: () => toastIds.delete(toastId),
       })
+      toastIds.add(toastId)
     })
 
-    return () => {
-      socket.removeAllListeners()
-      socket.disconnect()
-      setConnected(false)
-    }
-  }, [token, queryClient, navigate])
+    return stop
+  }, [scope, queryClient])
 
-  return { connected, lastNotificationAt, prefs: prefsQuery.data }
-}
-
-function normalizeType(t: unknown): NotificationType {
-  return t === "SUCCESS" || t === "WARNING" || t === "SECURITY" || t === "INFO" ? t : "INFO"
+  const active = !!scope && scope.current() && state.scope === scope
+  return { connected: active && state.connected, lastNotificationAt: active ? state.lastNotificationAt : 0,
+    prefs: scope ? prefsQuery.data : undefined }
 }

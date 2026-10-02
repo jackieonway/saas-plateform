@@ -9,6 +9,8 @@
     "test:micro": "node --test ../tests/micro-context-runtime.mjs ../tests/micro-sandbox-lifecycle.mjs ../tests/micro-iframe-protocol.mjs ../tests/package-microapp.mjs ../mini-services/micro-vue/smoke-test.cjs ../mini-services/micro-jquery/smoke-test.cjs",
     "test:micro:gateways": "node --test ../tests/micro-release-gateways.mjs",
     "test:micro:browser": "node ../tests/micro-host-browser.mjs",
+    "test:notifications": "node --test ../tests/notification-context.mjs",
+    "test:notifications:browser": "node ../tests/notification-frontend-browser.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx"
   },

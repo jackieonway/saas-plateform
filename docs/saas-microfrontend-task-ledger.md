@@ -1,6 +1,6 @@
 # Project Task Ledger — Dante Cloud SaaS 与微前端改造
 
-> 台账版本：v1.3｜建立日期：2026-09-30｜状态来源：本文件
+> 台账版本：v1.4｜建立日期：2026-09-30｜状态来源：本文件
 > 需求基线：[SaaS 与微前端改造需求分析](./saas-microfrontend-requirements.md)
 > 初始代码基线：`main` 的 `edb9e34`（首次提交）；执行时应先读取实际工作区状态。
 > 本台账从 Phase 1 开始记录实施与验收；完成状态以本文件中的证据为准。
@@ -88,8 +88,8 @@ Dante Cloud 多租户 SaaS 与独立微前端改造。
 | 7 | 改造对外 API 与业务后端校验组件 | COMPLETED | 5, 6 | 旧路径收敛为当前用户视图、服务端校验组件和资源归属负向测试通过 |
 | 8 | 让宿主与示例微应用消费完整上下文 | COMPLETED | 5, 6 | MicroProps 2.0、续期/取消/串行生命周期，31 项 Node 和 11 个真实浏览器场景通过 |
 | 9 | 建立独立发布和资源接入链路 | COMPLETED | 8 | 0021 不可变版本、实际预检/回滚与默认 iframe；8 项真实 PG/HTTP、21 个浏览器及两网关 HTTP 验收通过 |
-| 10 | 实现持久通知的应用接入 | IN_PROGRESS | 5, 7 | 通知规则已确认，独立实时服务并行改造；平台发布接口及持久投递验收随后完成 |
-| 11 | 完成真实业务应用试点 | NOT_STARTED | 7, 8, 9, 10 | 独立部署试点、租户业务数据和端到端验收 |
+| 10 | 实现持久通知的应用接入 | COMPLETED | 5, 7 | 0022 归属/幂等、受权发布与收件箱、实时服务/宿主/两网关；7 项真实 PG 与 9 项真实平台联合验收通过 |
+| 11 | 完成真实业务应用试点 | IN_PROGRESS | 7, 8, 9, 10 | 用户确认独立工单试点、字段/状态、SELF 创建人、软删除保留及手动提醒；待实际业务实现与验收 |
 | 12 | 完成生产运行与交付验收 | NOT_STARTED | 3–11 | CI/CD、监控、备份恢复、安全和发布验收记录 |
 
 Allowed status values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `COMPLETED`.
@@ -476,7 +476,7 @@ Phase 8。
 ### Phase 10: 实现持久通知的应用接入
 
 #### Status
-IN_PROGRESS
+COMPLETED
 
 #### Goal
 让业务应用在授权范围内发布可追踪站内通知，同时保留 `onNotify` 作为纯界面 Toast。
@@ -513,13 +513,14 @@ Phase 5、Phase 7。
 用户已确认：发布同时要求 `notification:publish` 操作权限与 `notification/publish` 独立数据授权；目标必须是当前租户的有效成员且可访问该应用，组织目标默认只取直接成员。去重按租户、组织、应用、发布用户及键隔离；同键同内容返回原结果，同键不同内容返回 409。
 
 迁移实现采用保留并隔离旧无归属通知的策略，不推断其租户后混入新租户收件箱。
+已交付 0022、统一事务发布与五维幂等、严格收件归属和动态 APP 授权、SYSTEM 同业务事务通知、内部 session 校验、Node 24 实时服务、宿主恢复与统一 Socket.IO 网关。7/7 真实通知 PG、8/8 发布回归、9/9 最新 main/PG/SocketIO 联合、71 服务协议、5 LISTEN、9 前端 scope、10 浏览器、9 Vite 和两网关各 23 项通过，编译/TypeScript/生产构建/Compose 配置通过。最终契约、运维和证据见 `docs/notification-integration.md`、`docs/notification-operations.md`、`docs/phase10-validation.md`。Docker 镜像与生产 TLS 演练留 Phase 12。
 
 ---
 
 ### Phase 11: 完成真实业务应用试点
 
 #### Status
-NOT_STARTED
+IN_PROGRESS
 
 #### Goal
 以一个真实业务用例验证平台控制层、独立微应用和业务 API 的完整授权链。
@@ -553,6 +554,7 @@ Phase 7、Phase 8、Phase 9、Phase 10；Q8 的试点选择。
 
 #### Notes
 若 Q8 长期未答复，应完成可独立验证的准备工作；达到明确阻塞条件后按执行规则更新状态，不用静态演示替代真实试点。
+Q8 已解决：用户确认 `docs/business-pilot-proposal.md` 的工单试点（work-orders、Vue iframe、Node 24 独立业务 API、真实 CRUD/CSV、三种状态与重开、SELF 按创建人、软删除保留且不自动清理、手动发送提醒）。按该提案实施，不用原示例模拟数据替代业务数据。
 
 ---
 
@@ -598,12 +600,12 @@ Phase 3～11 通过验收；Q6/Q7 的运维决策。
 
 ## 5. Current Execution Pointer
 
-Current Phase: Phase 10
+Current Phase: Phase 11
 
 Current Objective:
-完成持久通知的应用接入：独立数据授权约束的发布 API、归属与幂等记录、平台会话校验、实时服务、宿主重连补拉及网关联调。
+实施已确认的工单业务试点：独立 Vue iframe、Node 24 业务 API、工单 PostgreSQL 模型、四级显式数据范围、CSV、手动提醒与两租户端到端发布/回滚验证。
 
-Phase 9 已通过全部阶段门禁。Phase 10 的独立实时服务已完成子项验证，尚需平台接口、真实授权和宿主/网关完整联调；其改动单独纳入 Phase 10 提交。
+Phase 9、10 已通过全部阶段门禁。Phase 11 依赖均完成，业务提案已经用户确认；正式保留期、生产环境与 SLO 仍属于后续开放运维问题。
 
 Current Restrictions:
 Q1 的直接成员/祖先角色规则、Q2 的四级数据范围与默认拒绝、角色和数据授权分离及按成员关系显式授权、Phase 4 的立即失效与多设备独立策略，以及 Phase 5 的每应用独立受众、5 分钟令牌和逐请求内省均已获用户确认。SELF 归属字段由业务资源接入时声明并在服务端验证，不得自行扩大。不得把测试用 `.env.test` 提交到 Git。
@@ -637,6 +639,8 @@ Q1 的直接成员/祖先角色规则、Q2 的四级数据范围与默认拒绝�
 | 2026-10-02 | 默认 IFRAME，平台管理员显式标记可信；首版人工预检、启用和回滚，提供两种网关配置。 | 用户确认应用信任与首版发布规则；存量代码不自动获信任。 | Phase 9 按此实现，旧 app token 保留最多 5 分钟兼容窗，显式运行模式变更立即撤销对应应用 token。 |
 | 2026-10-02 | Phase 9 完成独立发布和隔离接入。 | 8 个真实 PG/HTTP gate、21 个浏览器场景与两网关 HTTP、打包器等门禁通过；WSL 传输经局部 TCP 分段对照验证。 | 标为 `COMPLETED`，指针推进 Phase 10；实际生产容器、域名与网络留待交付阶段。 |
 | 2026-10-02 | 用户确认持久通知发布权限、目标和幂等规则。 | notification:publish 加独立 notification/publish 数据授权；当前租户有效且可访问应用的目标；五项命名空间同键同内容复用、不同内容 409。 | Phase 10 按确认规则实施；旧无归属通知采用保留隔离的迁移策略。 |
+| 2026-10-02 | Phase 10 完成持久通知全链路。 | 7 项真实 PG、9 项实际 main/PG/SocketIO 联合与客户端/服务/网关验收通过；全部自有测试资源已清理。 | 标为 `COMPLETED`，指针推进 Phase 11。 |
+| 2026-10-02 | 用户确认工单试点提案。 | 明确字段、状态重开、SELF 创建人、软删除保留、手动提醒以及独立 Vue iframe 和业务 API。 | Q8 解决，Phase 11 按 `docs/business-pilot-proposal.md` 实施。 |
 
 ---
 
@@ -651,7 +655,7 @@ Q1 的直接成员/祖先角色规则、Q2 的四级数据范围与默认拒绝�
 | Q5 | 已确认：新应用和存量升级默认 IFRAME；只有平台管理员明确标记的自有可信应用可用 HTML/ESM 在宿主页执行。 | Phase 8、9 的信任和发布边界 | 用户 | RESOLVED |
 | Q6 | 已确认首版人工预检、启用与回滚，提供 Caddy 和 Nginx 接入配置；实际生产网关及复杂审批/灰度需求仍待运维确认。 | Phase 9、12 的部署与回滚 | 产品/运维 | PARTIALLY_RESOLVED |
 | Q7 | 正式 SLA、权限时效、RPO/RTO、监控系统和生产域名/证书是什么？ | Phase 10、12 的验收指标 | 产品/运维 | OPEN |
-| Q8 | 哪个真实业务项目作为首个试点？可用的业务流程、数据和负责人是什么？ | Phase 11 的范围与验收 | 产品/用户 | OPEN |
+| Q8 | 已确认采用文档中的最小真实工单试点，流程／字段／SELF 和软删除及手动提醒按 `docs/business-pilot-proposal.md`；正式保留期仍待后续运维确认。 | Phase 11 的范围与验收 | 用户 | RESOLVED |
 | Q9 | 本机 Windows Rust/.NET/Nginx回环受限，Chromium IPv6与Caddy可用；WSL较大TCP分段丢失已由8KB SQL对照确认，测试进程TCP_MAXSEG=1000后完整gate通过。实际生产网络仍需单独验收。 | Phase 12 的网络与部署验收 | 技术负责人/运维 | PARTIALLY_RESOLVED |
 | Q10 | 平台会话行、IP/UA 与相关审计的留存期及清理批次是什么？ | Phase 12 的合规与容量运行 | 产品/运维 | OPEN |
 
@@ -674,3 +678,4 @@ Q1 的直接成员/祖先角色规则、Q2 的四级数据范围与默认拒绝�
 | v1.1 | 2026-10-02 | Phase 7 收敛旧对外菜单/角色接口，增加服务端校验示例及跨租户资源 ID 测试，指针推进 Phase 8。 |
 | v1.2 | 2026-10-02 | Phase 8 完成 MicroProps 2.0、取消与续期、串行生命周期及真实示例接入；31 项 Node、11 个浏览器场景通过，指针推进 Phase 9。 |
 | v1.3 | 2026-10-02 | Phase 9 完成不可变独立发布、真实预检、回滚、默认 iframe 和两网关实测，指针推进 Phase 10；记录用户已确认通知规则与独立实时服务子项并行进展。 |
+| v1.4 | 2026-10-02 | Phase 10 完成受权持久通知及实际平台联合验收；记录用户确认的工单提案，指针推进 Phase 11。 |

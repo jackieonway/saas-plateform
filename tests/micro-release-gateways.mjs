@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { spawn, spawnSync } from 'node:child_process'
 import { createServer, request } from 'node:http'
+import { createRequire } from 'node:module'
 import {
   existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync,
 } from 'node:fs'
@@ -22,6 +23,10 @@ const releaseEsm = 'export const gatewayRelease = "VERSION_1_0_0";\n'
 const releaseCommonJs = 'module.exports = { gatewayRelease: "VERSION_1_0_0" };\n'
 const releaseStyle = '.gateway-release { color: #123456; }\n'
 const legacyHtml = '<!doctype html><html><body>LEGACY_MICRO_FIXTURE</body></html>'
+const SOCKET_ORIGIN = 'https://gateway-socket-fixture.example.test'
+const SOCKET_PATH = '/socket.io/'
+const SOCKET_QUERY = 'versions/1.0.0?label=测试'
+const notificationRequire = createRequire(path.join(workspace, 'mini-services/notification-ws/package.json'))
 
 function toolPath(variable, fallback) {
   const binary = path.resolve(process.env[variable] || path.join(workspace, fallback))
@@ -86,6 +91,44 @@ async function unusedPort(host) {
   return port
 }
 
+function socketTransportFixture() {
+  // Independent echo transport fixture; no platform authentication or real
+  // notification authorization is exercised by these proxy tests.
+  const { Server } = notificationRequire('socket.io')
+  const { io: createClient } = notificationRequire('socket.io-client')
+  const httpServer = createServer((_, response) => { response.writeHead(404); response.end('TRANSPORT_FIXTURE_ONLY') })
+  const io = new Server(httpServer, {
+    path: SOCKET_PATH, serveClient: false,
+    cors: { origin: [SOCKET_ORIGIN], methods: ['GET', 'POST'], credentials: false },
+    allowRequest: (incoming, callback) => callback(null, incoming.headers.origin === SOCKET_ORIGIN),
+  })
+  const requests = []
+  const clients = new Set()
+  let connections = 0
+  const record = (incoming, kind) => requests.push({ kind, method: incoming.method, url: incoming.url, origin: incoming.headers.origin })
+  httpServer.prependListener('request', (incoming) => record(incoming, 'http'))
+  httpServer.prependListener('upgrade', (incoming, socket) => {
+    record(incoming, 'upgrade')
+    if (incoming.headers.origin !== SOCKET_ORIGIN) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+      socket.destroy()
+    }
+  })
+  io.on('connection', (socket) => {
+    connections++
+    socket.on('gateway:echo', (payload, acknowledge) => {
+      const packet = { fixture: 'SOCKET_IO_TRANSPORT_ONLY', payload, transport: socket.conn.transport.name }
+      if (typeof acknowledge === 'function') acknowledge(packet)
+      socket.emit('gateway:packet', packet)
+    })
+  })
+  return {
+    httpServer, io, createClient, clients, requests, connections: () => connections,
+    disconnectClients: () => { for (const client of clients) client.disconnect(); clients.clear() },
+    stop: () => new Promise((resolve) => io.close(resolve)),
+  }
+}
+
 async function stopChild(service) {
   if (!service) return
   const child = service.child
@@ -123,13 +166,17 @@ async function gatewayFixture(t, name) {
     outgoing.end(JSON.stringify({ method: incoming.method, url: incoming.url, fixture: 'FAKE_BACKEND' }))
   })
   let service
+  let socketFixture
   t.after(async () => {
+    socketFixture?.disconnectClients()
     try {
       await stopChild(service)
     } finally {
-      if (upstream.listening) {
-        upstream.closeAllConnections()
-        await new Promise((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()))
+      try { await socketFixture?.stop() } finally {
+        if (upstream.listening) {
+          upstream.closeAllConnections()
+          await new Promise((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()))
+        }
       }
     }
     safeCleanup(root)
@@ -138,6 +185,8 @@ async function gatewayFixture(t, name) {
   const host = name === 'Nginx' && process.platform === 'win32' ? '::1' : '127.0.0.1'
   const originHost = host.includes(':') ? `[${host}]` : host
   const backendPort = await listen(upstream, host)
+  socketFixture = socketTransportFixture()
+  const socketPort = await listen(socketFixture.httpServer, host)
   const gatewayPort = await unusedPort(host)
   const env = {
     ...process.env,
@@ -158,9 +207,11 @@ async function gatewayFixture(t, name) {
     assert.match(source, /^:80\s*\{/m, 'Caddy test must adapt the current production listener')
     assert.match(source, /root \* \/micro-apps/)
     assert.match(source, /root \* \/srv\/sub-apps/)
+    assert.match(source, /reverse_proxy notification-ws:3003/, 'Caddy must retain the Socket.IO proxy upstream')
     config = source
       .replace(/^:80\s*\{/m, `http://127.0.0.1:${gatewayPort} {`)
       .replaceAll('backend:3001', `127.0.0.1:${backendPort}`)
+      .replaceAll('notification-ws:3003', `127.0.0.1:${socketPort}`)
       .replaceAll('root * /micro-apps', `root * ${quotedPath(releaseRoot)}`)
       .replaceAll('root * /srv/sub-apps', `root * ${quotedPath(path.join(hostRoot, 'sub-apps'))}`)
       .replaceAll('root * /srv', `root * ${quotedPath(hostRoot)}`)
@@ -183,12 +234,14 @@ async function gatewayFixture(t, name) {
     assert.match(source, /listen 80;/)
     assert.match(source, /alias \/srv\/dante\/micro-apps\//)
     assert.match(source, /root \/srv\/dante\/frontend\/dist;/)
+    assert.match(source, /proxy_pass http:\/\/127\.0\.0\.1:3003;/, 'Nginx must retain the Socket.IO proxy upstream')
     config = `daemon off;\npid ${quotedPath(path.join(root, 'nginx.pid'))};\nerror_log ${quotedPath(path.join(root, 'nginx-error.log'))} notice;\n` + source
       .replace('worker_processes auto;', 'worker_processes 1;')
       .replace('listen 80;', `listen ${originHost}:${gatewayPort};`)
       .replace('include mime.types;', `include ${quotedPath(mimeFile)};`)
       .replace('http {', `http {\n    access_log ${quotedPath(path.join(root, 'nginx-access.log'))};\n${temporaryPaths}`)
       .replaceAll('http://127.0.0.1:3001', `http://${originHost}:${backendPort}`)
+      .replaceAll('http://127.0.0.1:3003', `http://${originHost}:${socketPort}`)
       .replaceAll('root /srv/dante/frontend/dist;', `root ${quotedPath(hostRoot)};`)
       .replaceAll('alias /srv/dante/micro-apps/$1/versions/$2/$3;', `alias "${slashPath(releaseRoot)}/$1/versions/$2/$3";`)
     const prefix = `${slashPath(root)}/`
@@ -222,7 +275,7 @@ async function gatewayFixture(t, name) {
     assert.ok(child.exitCode === null && child.signalCode === null, `${name} exited during startup:\n${logs}`)
     try {
       const response = await get(gatewayPort, '/', 400, host)
-      if (response.status === 200) return { port: gatewayPort, host, validation }
+      if (response.status === 200) return { port: gatewayPort, host, validation, socketFixture }
       lastError = new Error(`readiness returned HTTP ${response.status}`)
     } catch (error) { lastError = error }
     await delay(75)
@@ -318,12 +371,118 @@ async function checkHttpContracts(t, port, host) {
   }
 }
 
+async function socketUntil(predicate, message, timeout = 3000) {
+  const deadline = Date.now() + timeout
+  while (!predicate()) {
+    assert.ok(Date.now() < deadline, message)
+    await delay(10)
+  }
+}
+
+async function checkSocketProxyContracts(t, gateway) {
+  const fixture = gateway.socketFixture
+  const originHost = gateway.host.includes(':') ? `[${gateway.host}]` : gateway.host
+  const base = `http://${originHost}:${gateway.port}`
+  function open(caseName, options = {}) {
+    const socket = fixture.createClient(base, {
+      path: SOCKET_PATH, query: { gatewayCase: caseName, queryMarker: SOCKET_QUERY },
+      extraHeaders: { Origin: SOCKET_ORIGIN }, transports: ['websocket'],
+      reconnection: false, forceNew: true, timeout: 1500, autoConnect: false, ...options,
+    })
+    fixture.clients.add(socket)
+    const state = { socket, connectErrors: [], upgradeErrors: [], upgrades: [], packets: [] }
+    socket.on('connect_error', (error) => state.connectErrors.push(error))
+    socket.on('gateway:packet', (packet) => state.packets.push(packet))
+    socket.connect()
+    socket.io.engine.on('upgradeError', (error) => state.upgradeErrors.push(error))
+    socket.io.engine.on('upgrade', (transport) => state.upgrades.push(transport.name))
+    return state
+  }
+  const caseRequests = (caseName) => fixture.requests.filter((entry) => new URL(entry.url, base).searchParams.get('gatewayCase') === caseName)
+  function preservedRequests(caseName) {
+    const entries = caseRequests(caseName)
+    assert.ok(entries.length > 0, 'the transport fixture must observe the actual proxied requests')
+    for (const entry of entries) {
+      const url = new URL(entry.url, base)
+      assert.equal(url.pathname, SOCKET_PATH, 'proxy must retain the complete Socket.IO path')
+      assert.equal(url.searchParams.get('EIO'), '4')
+      assert.equal(url.searchParams.get('queryMarker'), SOCKET_QUERY, 'proxy must preserve encoded query parameters')
+      assert.equal(entry.origin, SOCKET_ORIGIN, 'proxy must preserve the exact browser Origin')
+    }
+    return entries
+  }
+  async function echo(state, caseName, transport) {
+    const payload = { caseName, text: '双向 packet', bytes: [0, 255], nested: { marker: SOCKET_QUERY } }
+    const reply = await new Promise((resolve, reject) => state.socket.timeout(1500).emit('gateway:echo', payload, (error, response) => error ? reject(error) : resolve(response)))
+    await socketUntil(() => state.packets.length === 1, 'the server-to-client packet must also traverse the gateway')
+    const expected = { fixture: 'SOCKET_IO_TRANSPORT_ONLY', payload, transport }
+    assert.deepEqual(reply, expected)
+    assert.deepEqual(state.packets, [expected])
+  }
+  for (const [caseName, transports, expectedTransport] of [
+    ['polling-upgrade', ['polling', 'websocket'], 'websocket'],
+    ['pure-polling', ['polling'], 'polling'],
+    ['pure-websocket', ['websocket'], 'websocket'],
+  ]) await t.test(`Socket.IO transport fixture: ${caseName} preserves path/query/Origin and duplex packets`, async () => {
+    const state = open(caseName, { transports })
+    try {
+      await socketUntil(() => state.socket.connected || state.connectErrors.length, 'the Socket.IO client must connect through the actual gateway')
+      assert.ok(state.socket.connected, state.connectErrors[0]?.message)
+      await socketUntil(() => state.socket.io.engine.transport.name === expectedTransport, 'polling must complete its real WebSocket upgrade')
+      if (caseName === 'polling-upgrade') assert.deepEqual(state.upgrades, ['websocket'])
+      await echo(state, caseName, expectedTransport)
+      const entries = preservedRequests(caseName)
+      if (transports.includes('polling')) {
+        assert.ok(entries.some((entry) => entry.kind === 'http' && entry.method === 'GET'))
+        assert.ok(entries.some((entry) => entry.kind === 'http' && entry.method === 'POST'), 'Socket.IO polling must proxy real client POST packets')
+      }
+      if (expectedTransport === 'websocket') assert.ok(entries.some((entry) => entry.kind === 'upgrade'), 'an actual HTTP Upgrade must reach the independent fixture')
+      const sid = state.socket.io.engine.id
+      if (transports.includes('polling')) assert.ok(entries.some((entry) => new URL(entry.url, base).searchParams.get('sid') === sid), 'polling session query must survive proxying')
+    } finally { state.socket.disconnect(); fixture.clients.delete(state.socket) }
+  })
+  await t.test('Socket.IO transport fixture: wrong polling Origin is rejected without public static CORS', async () => {
+    const response = await get(gateway.port, `${SOCKET_PATH}?EIO=4&transport=polling&gatewayCase=bad-polling`, 2000, gateway.host, { Origin: 'https://unapproved-origin.example.test' })
+    assert.equal(response.status, 403)
+    assert.equal(response.headers['access-control-allow-origin'], undefined)
+    assert.equal(response.headers['access-control-allow-credentials'], undefined)
+  })
+  await t.test('Socket.IO transport fixture: wrong WebSocket Origin cannot establish a namespace connection', async () => {
+    const before = fixture.connections()
+    const state = open('bad-websocket', { extraHeaders: { Origin: 'https://unapproved-origin.example.test' } })
+    try {
+      await socketUntil(() => state.connectErrors.length || state.socket.connected, 'the actual WebSocket handshake must reject an unapproved Origin')
+      assert.ok(!state.socket.connected)
+      assert.equal(fixture.connections(), before)
+    } finally { state.socket.disconnect(); fixture.clients.delete(state.socket) }
+  })
+  await t.test('Socket.IO transport fixture: unapproved upgrade Origin retains only the approved polling transport', async () => {
+    const state = open('bad-upgrade', {
+      transports: ['polling', 'websocket'],
+      transportOptions: {
+        polling: { extraHeaders: { Origin: SOCKET_ORIGIN } },
+        websocket: { extraHeaders: { Origin: 'https://unapproved-upgrade.example.test' } },
+      },
+    })
+    try {
+      await socketUntil(() => state.socket.connected && state.upgradeErrors.length, 'the proxied WebSocket upgrade with an unapproved Origin must fail')
+      assert.deepEqual(state.upgrades, [])
+      assert.equal(state.socket.io.engine.transport.name, 'polling')
+      await echo(state, 'bad-upgrade', 'polling')
+      const entries = caseRequests('bad-upgrade')
+      assert.ok(entries.some((entry) => entry.kind === 'upgrade' && entry.origin === 'https://unapproved-upgrade.example.test'), 'proxy must preserve the denied upgrade Origin for the upstream guard')
+      for (const entry of entries) assert.equal(new URL(entry.url, base).pathname, SOCKET_PATH)
+    } finally { state.socket.disconnect(); fixture.clients.delete(state.socket) }
+  })
+}
+
 test('Caddy validates and serves the production release gateway contract', {
   skip: caddyBinary ? false : 'Caddy binary unavailable; set CADDY_BIN to an installed binary path',
 }, async (t) => {
   const gateway = await gatewayFixture(t, 'Caddy')
   assert.match(`${gateway.validation.stdout}${gateway.validation.stderr}`, /valid configuration/i)
   await checkHttpContracts(t, gateway.port, gateway.host)
+  await checkSocketProxyContracts(t, gateway)
 })
 
 test('Nginx validates and serves the production release gateway contract', {
@@ -333,4 +492,5 @@ test('Nginx validates and serves the production release gateway contract', {
   assert.match(gateway.validation.stderr, /syntax is ok/i)
   assert.match(gateway.validation.stderr, /test is successful/i)
   await checkHttpContracts(t, gateway.port, gateway.host)
+  await checkSocketProxyContracts(t, gateway)
 })

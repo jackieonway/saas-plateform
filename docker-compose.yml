@@ -7,6 +7,7 @@
 # 架构:
 #   [ caddy(web) :80/:443 ] ──/api,/oauth──> [ backend(Rust/Axum) :3001 ] ──> [ postgres :5432 ]
 #        └── 静态托管前端 SPA (frontend/dist 构建产物)
+#        └──/socket.io/──> [ notification-ws(Node24) :3003 ] ──> PostgreSQL + 平台会话校验
 #
 # 备选「Rust 后端直接托管前端」单进程模式(不用 caddy):
 #   docker compose up -d --build postgres backend
@@ -57,6 +58,35 @@ services:
     # 数据库迁移与种子在启动时自动执行(幂等)
     restart: unless-stopped
 
+  notification-ws:
+    build:
+      context: ./mini-services/notification-ws
+      dockerfile: Dockerfile
+    container_name: dante-notification-ws
+    environment:
+      # 生产可用单独只读账号覆盖；此服务不接收或持有 JWT_SECRET。
+      DATABASE_URL: ${NOTIFICATION_DATABASE_URL:-postgres://dante:${POSTGRES_PASSWORD:-dante_cloud_2024}@postgres:5432/dante_cloud}
+      PLATFORM_API_BASE_URL: http://backend:3001
+      NOTIFICATION_PORT: 3003
+      NOTIFICATION_HOST: 0.0.0.0
+      NOTIFICATION_SOCKET_PATH: /socket.io/
+      # 精确浏览器 origin，端口/协议必须一致；生产应显式配置。
+      NOTIFICATION_ALLOWED_ORIGINS: ${NOTIFICATION_ALLOWED_ORIGINS:-${PUBLIC_APP_URL:-http://localhost}}
+      NOTIFICATION_AUTH_TIMEOUT_MS: ${NOTIFICATION_AUTH_TIMEOUT_MS:-2000}
+      NOTIFICATION_AUTH_RECHECK_MS: ${NOTIFICATION_AUTH_RECHECK_MS:-30000}
+      NOTIFICATION_AUTH_WAIT_MS: ${NOTIFICATION_AUTH_WAIT_MS:-10000}
+      NOTIFICATION_HEALTH_PROBE_MS: ${NOTIFICATION_HEALTH_PROBE_MS:-5000}
+      NOTIFICATION_DATABASE_RETRY_MS: ${NOTIFICATION_DATABASE_RETRY_MS:-1000}
+    expose:
+      - "3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    # Dockerfile /health 就绪探针检查 DB schema、LISTEN、平台保护路由。
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -75,6 +105,7 @@ services:
       # Caddy 原生 HTTPS 时另加 443:443 端口与 /data、/config 持久卷。
     depends_on:
       - backend
+      - notification-ws
     restart: unless-stopped
 
 volumes:

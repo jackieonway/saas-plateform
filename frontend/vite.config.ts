@@ -28,7 +28,7 @@ export default defineConfig({
       },
       // 微前端子应用服务(21-b): /sub/vue/* → 3005(Vue 工坊), /sub/jquery/* → 3006(legacy 工单)
       // 子应用 HTML 里引用 /app.js 等根绝对路径 → 同源加载, 同样命中这两条代理。
-      // 必须放在 "/" 键之前("/" 有 bypass 兜底, 键序即匹配优先级)。
+      // 各子应用使用明确前缀，与宿主 HMR 和通知连接互不重叠。
       "/sub/vue": {
         target: "http://127.0.0.1:3005",
         changeOrigin: true,
@@ -39,19 +39,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/sub\/jquery/, ""),
       },
-      // notification-ws 实时通知 (socket.io, 端口 3003) —— 与 Caddy 网关行为保持一致:
-      // 前端固定连 io('/?XTransformPort=3003'), dev 下经该代理转发到 3003 (含 ws upgrade)。
-      // bypass: 返回 undefined 走代理; 返回字符串则交还 vite 继续处理 (键序 '/' 必须放最后)。
-      // 已核对 vite 6.3.5 源码: ws upgrade 事件同样会调用 bypass, 返回字符串时不代理,
-      // vite 自身 HMR (sec-websocket-protocol: vite-hmr) 不受影响。
-      "/": {
-        target: "http://127.0.0.1:3003",
+      // 与生产网关相同的 Socket.IO 路径，保留路径、polling POST 和 WS Upgrade。
+      "/socket.io": {
+        target: process.env.NOTIFICATION_DEV_PROXY_TARGET || "http://127.0.0.1:3003",
+        changeOrigin: true,
         ws: true,
-        bypass: (req) => {
-          const u = req.url || ""
-          if (u.includes("XTransformPort=3003")) return undefined
-          return u
-        },
       },
     },
   },

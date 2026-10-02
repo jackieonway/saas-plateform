@@ -5,12 +5,10 @@ use crate::util::{hash, password};
 
 /// 幂等种子: 仅当 users 表为空时执行 (docs/db-schema.md 种子计划)
 pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
-    // 已有数据的库: 若通知表为空则补充演示通知 (迁移 0004 后的旧库)
     let existing: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(pool)
         .await?;
     if existing > 0 {
-        seed_notifications(pool).await;
         tracing::info!("种子数据已存在 (users={existing}), 跳过初始化");
         return Ok(());
     }
@@ -226,70 +224,10 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         "http://localhost:9000/callback", "authorization_code,password,refresh_token", "profile,email", 7200, 604800).await?;
 
     tx.commit().await?;
-    seed_notifications(pool).await;
     tracing::info!(
         "种子数据写入完成: 2 租户(含 1 平台租户) / 3 应用 / 25 菜单 / 7 组织 / 6 部门 / 6 用户 / 4 角色 / 4 OAuth 客户端"
     );
     Ok(())
-}
-
-/// 幂等: 通知表为空时写入演示通知 (用户名定位, 与种子用户对应)
-async fn seed_notifications(pool: &PgPool) {
-    let n: i64 = match sqlx::query_scalar("SELECT count(*) FROM notifications")
-        .fetch_one(pool)
-        .await
-    {
-        Ok(n) => n,
-        Err(e) => {
-            tracing::warn!("通知表向未就绪, 跳过演示通知: {e}");
-            return;
-        }
-    };
-    if n > 0 {
-        return;
-    }
-    let users: Vec<(Uuid, String)> =
-        match sqlx::query_as("SELECT id, username FROM users WHERE username IN ('admin','zhangsan','lisi','wangwu','tianqi','chenjiu')")
-            .fetch_all(pool)
-            .await
-        {
-            Ok(u) => u,
-            Err(_) => return,
-        };
-    let id_of = |name: &str| users.iter().find(|(_, u)| u == name).map(|(id, _)| *id);
-    let demo: Vec<(&str, &str, &str, &str, &str)> = vec![
-        ("admin", "INFO", "欢迎体验 Dante Cloud 通知中心", "这是一条演示通知。今后密码重置、角色变更、设备授权等关键事件都会在这里提醒您。", "/system/audit-logs"),
-        ("admin", "SECURITY", "平台已开启登录保护", "同一账号 + IP 连续 5 次登录失败将被锁定 10 分钟, 保护您的账号安全。", ""),
-        ("admin", "WARNING", "OAuth 令牌自动清理任务已启用", "后台每 10 分钟自动清理超过 1 天的过期令牌与过期设备码。", "/system/oauth/tokens"),
-        ("zhangsan", "INFO", "您被授予组织管理员角色", "您在「华东区分公司」被授予组织管理员角色, 可管理组织内的用户与角色。", "/system/roles"),
-        ("zhangsan", "INFO", "欢迎体验 Dante Cloud 通知中心", "今后密码重置、角色变更、设备授权等关键事件都会在这里提醒您。", ""),
-        ("lisi", "INFO", "角色分配已更新", "管理员为您分配了「普通用户」角色, 登录后可访问数据概览、报表中心与消息中心。", "/profile"),
-        ("wangwu", "INFO", "您拥有双重组织身份", "您同时属于「总公司」与「华北区分公司」。登录时选择组织, 可随时在顶部切换上下文。", ""),
-        ("wangwu", "INFO", "华北区分公司已接入消息中心", "当前组织上下文仅授权了「消息中心」应用, 切换到总公司可访问更多功能。", "/hermes/inbox"),
-        ("tianqi", "INFO", "上海办事处已接入数据分析", "您所在组织已授权「数据分析」与「消息中心」应用。", "/athena/overview"),
-        ("chenjiu", "INFO", "欢迎加入 Dante Cloud", "您是「星辰制造」租户的管理员。平台租户可管理所有租户, 而您仅能管理星辰制造租户内的数据。", "/dashboard"),
-    ];
-    let mut inserted = 0i64;
-    for (username, ntype, title, content, link) in demo {
-        if let Some(uid) = id_of(username) {
-            let ok = sqlx::query(
-                "INSERT INTO notifications (user_id, type, title, content, link) VALUES ($1, $2, $3, $4, $5)",
-            )
-            .bind(uid)
-            .bind(ntype)
-            .bind(title)
-            .bind(content)
-            .bind(link)
-            .execute(pool)
-            .await;
-            if ok.is_ok() {
-                inserted += 1;
-            }
-        }
-    }
-    if inserted > 0 {
-        tracing::info!("演示通知已写入: {inserted} 条");
-    }
 }
 
 async fn scalar_uuid(tx: &mut Transaction<'_, Postgres>, sql: &str) -> anyhow::Result<Uuid> {

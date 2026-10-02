@@ -44,6 +44,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAuthStore } from "@/stores/auth"
 import { useMenusQuery, usePermissionsQuery, useSwitchContext } from "@/hooks/use-auth-data"
 import { useNotificationSocket } from "@/hooks/use-notification-socket"
+import {
+  notificationRequestOptions,
+  useNotificationContext,
+  type NotificationContext,
+} from "@/hooks/use-notification-context"
 import { notificationsApi } from "@/api/notifications"
 import { authApi } from "@/api/auth"
 import { AppIcon } from "@/lib/icons"
@@ -91,6 +96,7 @@ export function TopBar({
 
   /* 实时通知 socket —— 整个应用只挂载一次 (TopBar 常驻) */
   const { connected: liveConnected, lastNotificationAt, prefs } = useNotificationSocket()
+  const notificationScope = useNotificationContext()
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 md:px-4">
@@ -175,9 +181,11 @@ export function TopBar({
         </Button>
 
         <NotificationBell
-          liveConnected={liveConnected}
-          lastNotificationAt={lastNotificationAt}
-          dndPrefs={prefs?.dndEnabled ? prefs : undefined}
+          key={JSON.stringify(notificationScope?.key ?? null)}
+          scope={notificationScope}
+          liveConnected={!!notificationScope && liveConnected}
+          lastNotificationAt={notificationScope ? lastNotificationAt : 0}
+          dndPrefs={notificationScope && prefs?.dndEnabled ? prefs : undefined}
         />
         <OrgContextChip />
         <UserMenu />
@@ -196,10 +204,12 @@ const NOTIFY_META: Record<NotificationType, { icon: typeof Info; chip: string }>
 }
 
 function NotificationBell({
+  scope,
   liveConnected,
   lastNotificationAt,
   dndPrefs,
 }: {
+  scope: NotificationContext | null
   liveConnected: boolean
   lastNotificationAt: number
   /** 免打扰开启时的偏好数据 (undefined = 未开启或未加载) */
@@ -208,8 +218,14 @@ function NotificationBell({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const countQuery = useQuery({
-    queryKey: ["notifications", "unread-count"],
-    queryFn: () => notificationsApi.unreadCount(),
+    queryKey: [...(scope?.key ?? ["notifications", "inactive"]), "unread-count"],
+    queryFn: async ({ signal }) => {
+      if (!scope?.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      const data = await notificationsApi.unreadCount(notificationRequestOptions(scope, signal))
+      if (!scope.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      return data
+    },
+    enabled: !!scope,
     staleTime: 15_000,
     refetchInterval: 60_000,
     retry: 1,
@@ -223,29 +239,47 @@ function NotificationBell({
   }, [lastNotificationAt])
 
   const listQuery = useQuery({
-    queryKey: ["notifications", "bell", 1, 5],
-    queryFn: () => notificationsApi.list({ filter: "ALL", page: 1, size: 5 }),
-    enabled: open,
+    queryKey: [...(scope?.key ?? ["notifications", "inactive"]), "bell", 1, 5],
+    queryFn: async ({ signal }) => {
+      if (!scope?.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      const data = await notificationsApi.list(
+        { filter: "ALL", page: 1, size: 5 },
+        notificationRequestOptions(scope, signal)
+      )
+      if (!scope.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      return data
+    },
+    enabled: !!scope && open,
     staleTime: 10_000,
     retry: 1,
   })
 
-  const unread = countQuery.data?.count ?? 0
-  const items: NotificationRecord[] = listQuery.data?.records ?? []
+  const unread = scope?.current() ? countQuery.data?.count ?? 0 : 0
+  const items: NotificationRecord[] = scope?.current() ? listQuery.data?.records ?? [] : []
 
   const readAllMutation = useMutation({
-    mutationFn: () => notificationsApi.readAll(),
-    onSuccess: (d) => {
+    mutationFn: async (requestScope: NotificationContext) => {
+      if (!requestScope.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      const data = await notificationsApi.readAll(notificationRequestOptions(requestScope))
+      if (!requestScope.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      return data
+    },
+    onSuccess: (d, requestScope) => {
+      if (!requestScope.current()) return
       if (d.updated > 0) toast.success(`已读 ${d.updated} 条`)
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+      void queryClient.invalidateQueries({ queryKey: requestScope.key })
     },
   })
 
   const openItem = (n: NotificationRecord) => {
+    if (!scope?.current()) return
     if (!n.isRead) {
       void notificationsApi
-        .markRead(n.id)
-        .then(() => queryClient.invalidateQueries({ queryKey: ["notifications"] }))
+        .markRead(n.id, notificationRequestOptions(scope))
+        .then(() => {
+          if (scope.current()) return queryClient.invalidateQueries({ queryKey: scope.key })
+        })
+        .catch(() => undefined)
     }
     if (n.link) {
       setOpen(false)
@@ -254,13 +288,16 @@ function NotificationBell({
   }
 
   return (
-    <Popover open={open} onOpenChange={(o) => setOpen(o)}>
+    <Popover open={open && !!scope} onOpenChange={(o) => {
+      if (!o || scope?.current()) setOpen(o)
+    }}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
           className="relative"
           aria-label={unread > 0 ? `${unread} 条未读通知` : "通知"}
+          disabled={!scope}
         >
           <Bell key={swingKey} className={cn("size-4.5", swingKey > 0 && "bell-swing")} />
           {unread > 0 && (
@@ -313,8 +350,10 @@ function NotificationBell({
             variant="ghost"
             size="sm"
             className="h-7 gap-1 px-2 text-xs text-muted-foreground"
-            onClick={() => readAllMutation.mutate()}
-            disabled={readAllMutation.isPending || unread === 0}
+            onClick={() => {
+              if (scope?.current()) readAllMutation.mutate(scope)
+            }}
+            disabled={!scope || readAllMutation.isPending || unread === 0}
           >
             {readAllMutation.isPending ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -340,7 +379,9 @@ function NotificationBell({
           ) : listQuery.isError ? (
             <div className="flex flex-col items-center gap-2 p-6 text-center text-xs text-muted-foreground">
               通知加载失败
-              <Button variant="outline" size="sm" onClick={() => listQuery.refetch()}>
+              <Button variant="outline" size="sm" disabled={!scope} onClick={() => {
+                if (scope?.current()) void listQuery.refetch()
+              }}>
                 重试
               </Button>
             </div>
@@ -354,6 +395,7 @@ function NotificationBell({
                   <li key={n.id}>
                     <button
                       type="button"
+                      disabled={!scope}
                       onClick={() => openItem(n)}
                       className={cn(
                         "flex w-full items-start gap-3 px-4 py-3 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:bg-accent",
@@ -392,8 +434,10 @@ function NotificationBell({
         </div>
         <button
           type="button"
+          disabled={!scope}
           className="flex w-full items-center justify-center gap-1 border-t px-3 py-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           onClick={() => {
+            if (!scope?.current()) return
             setOpen(false)
             navigate("/system/notifications")
           }}

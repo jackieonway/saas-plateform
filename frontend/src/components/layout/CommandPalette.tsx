@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/command"
 import { useAuthStore } from "@/stores/auth"
 import { useAuthorizedPaths } from "@/hooks/use-authorized-paths"
+import { notificationRequestOptions, useNotificationContext } from "@/hooks/use-notification-context"
 import { useTheme } from "@/components/theme-provider"
 import { authApi } from "@/api/auth"
 import { searchEntities, EMPTY_SEARCH_RESULT, type GlobalSearchResult } from "@/api/search"
@@ -197,6 +198,7 @@ export function CommandPalette({
   const setCurrentApplication = useAuthStore((s) => s.setCurrentApplication)
   const currentApplicationId = useAuthStore((s) => s.currentApplicationId)
   const logout = useAuthStore((s) => s.logout)
+  const notificationScope = useNotificationContext()
   const { resolvedTheme, setTheme } = useTheme()
   const apps = profile?.applications ?? []
 
@@ -244,25 +246,41 @@ export function CommandPalette({
 
   /* ---------- 通知搜索(后端 q 参数 ILIKE 搜索, 输入 <2 字符不调) ---------- */
   const notificationsQuery = useQuery({
-    queryKey: ["palette-notifications", debouncedQuery],
-    queryFn: () => notificationsApi.list({ q: debouncedQuery, filter: "ALL", page: 1, size: 5 }),
-    enabled: open && debouncedQuery.length >= 2,
+    queryKey: [...(notificationScope?.key ?? ["notifications", "inactive"]), "palette", debouncedQuery],
+    queryFn: async ({ signal }) => {
+      if (!notificationScope?.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      const data = await notificationsApi.list(
+        { q: debouncedQuery, filter: "ALL", page: 1, size: 5 },
+        notificationRequestOptions(notificationScope, signal)
+      )
+      if (!notificationScope.current()) throw new DOMException("通知上下文已失效", "AbortError")
+      return data
+    },
+    enabled: !!notificationScope && open && debouncedQuery.length >= 2,
     staleTime: 10_000,
     retry: 1,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) =>
+      notificationScope?.current() && notificationScope.key.every((part, i) => previousQuery?.queryKey[i] === part)
+        ? prev
+        : undefined,
   })
   const notificationHits: NotificationRecord[] = React.useMemo(
-    () => (debouncedQuery.length >= 2 ? notificationsQuery.data?.records ?? [] : []),
-    [debouncedQuery, notificationsQuery.data]
+    () => (notificationScope?.current() && debouncedQuery.length >= 2 ? notificationsQuery.data?.records ?? [] : []),
+    [notificationScope, debouncedQuery, notificationsQuery.data]
   )
 
   /** 点击通知:未读先标记已读再跳转(无 link 落到通知中心) */
   const openNotification = (n: NotificationRecord) => {
+    if (!notificationScope?.current()) return
     if (!n.isRead) {
       void notificationsApi
-        .markRead(n.id)
+        .markRead(n.id, notificationRequestOptions(notificationScope))
+        .then(() => {
+          if (notificationScope.current()) {
+            return queryClient.invalidateQueries({ queryKey: notificationScope.key })
+          }
+        })
         .catch(() => undefined)
-        .then(() => queryClient.invalidateQueries({ queryKey: ["notifications"] }))
     }
     goToPath(n.link?.trim() || "/system/notifications")
   }
@@ -432,7 +450,10 @@ export function CommandPalette({
                   key={n.id}
                   value={`${n.title} ${n.content ?? ""}`}
                   keywords={[n.type]}
-                  onSelect={() => selectWithHistory(rawInput, () => openNotification(n))}
+                  disabled={!notificationScope}
+                  onSelect={() => {
+                    if (notificationScope?.current()) selectWithHistory(rawInput, () => openNotification(n))
+                  }}
                 >
                   <Icon className={cn("size-4 shrink-0", meta.cls)} />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -491,7 +512,13 @@ export function CommandPalette({
         {/* ---------------- 无输入:快捷操作 ---------------- */}
         {!hasQuery && (
           <CommandGroup heading="快捷操作">
-            <CommandItem value="通知中心 notifications bell" onSelect={() => goToPath("/system/notifications")}>
+            <CommandItem
+              value="通知中心 notifications bell"
+              disabled={!notificationScope}
+              onSelect={() => {
+                if (notificationScope?.current()) goToPath("/system/notifications")
+              }}
+            >
               <Bell className="size-4 text-muted-foreground" />
               <span>通知中心</span>
               <span className="ml-auto pl-4 font-mono text-xs text-muted-foreground/60">/system/notifications</span>

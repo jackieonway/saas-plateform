@@ -15,17 +15,22 @@ pub struct AppTokenInfo {
     pub jti: Uuid,
     pub scope: String,
     pub expires_at: DateTime<Utc>,
+    pub session_id: Uuid,
 }
 
 /// 应用令牌必须同时满足数据库撤销状态、签发会话、成员和两级应用授权。
-pub async fn inspect(pool: &PgPool, token: &str, claims: &Claims) -> Result<Option<AppTokenInfo>, sqlx::Error> {
+pub async fn inspect(
+    pool: &PgPool,
+    token: &str,
+    claims: &Claims,
+) -> Result<Option<AppTokenInfo>, sqlx::Error> {
     if claims.typ != "access" {
         return Ok(None);
     }
-    let row: Option<(Uuid, String, Uuid, Uuid, Uuid, String, Uuid, String, DateTime<Utc>)> =
+    let row: Option<(Uuid, String, Uuid, Uuid, Uuid, String, Uuid, String, DateTime<Utc>, Uuid)> =
         sqlx::query_as(
             "SELECT tok.user_id, tok.client_id, tok.tenant_id, tok.organization_id, \
-             tok.application_id, tok.audience, tok.jti, COALESCE(tok.scope,''), tok.expires_at \
+             tok.application_id, tok.audience, tok.jti, COALESCE(tok.scope,''), tok.expires_at, tok.platform_session_id \
              FROM oauth_tokens tok \
              JOIN oauth_clients client ON client.client_id = tok.client_id \
                AND client.status = 'ENABLED' AND client.client_type = 'CONFIDENTIAL' \
@@ -54,7 +59,19 @@ pub async fn inspect(pool: &PgPool, token: &str, claims: &Claims) -> Result<Opti
         .bind(hash::sha256_hex(token))
         .fetch_optional(pool)
         .await?;
-    let Some((user_id, client_id, tenant_id, organization_id, application_id, audience, jti, scope, expires_at)) = row else {
+    let Some((
+        user_id,
+        client_id,
+        tenant_id,
+        organization_id,
+        application_id,
+        audience,
+        jti,
+        scope,
+        expires_at,
+        session_id,
+    )) = row
+    else {
         return Ok(None);
     };
     if claims.sub != user_id.to_string()
@@ -67,7 +84,15 @@ pub async fn inspect(pool: &PgPool, token: &str, claims: &Claims) -> Result<Opti
         return Ok(None);
     }
     Ok(Some(AppTokenInfo {
-        user_id, client_id, tenant_id, organization_id,
-        application_id, audience, jti, scope, expires_at,
+        user_id,
+        client_id,
+        tenant_id,
+        organization_id,
+        application_id,
+        audience,
+        jti,
+        scope,
+        expires_at,
+        session_id,
     }))
 }

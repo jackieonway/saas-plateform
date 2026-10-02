@@ -66,15 +66,17 @@ import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { EmptyState, ErrorState } from "@/components/states"
 import { Skeleton } from "@/components/ui/skeleton"
 import { notificationsApi, type NotificationPrefs } from "@/api/notifications"
-import { usersApi } from "@/api/users"
-import { organizationsApi } from "@/api/organizations"
-import { tenantsApi } from "@/api/tenants"
-import type { NotificationRecord, NotificationType } from "@/api/types"
+import type { NotificationRecord, NotificationSendBody, NotificationType } from "@/api/types"
 import { useAuthStore } from "@/stores/auth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
 import { useTableDensity } from "@/hooks/use-table-density"
 import { useNotificationHotkeys } from "@/hooks/use-notification-hotkeys"
-import { asArray, asPage } from "@/lib/api"
+import {
+  notificationRequestOptions,
+  useNotificationContext,
+  type NotificationContext,
+} from "@/hooks/use-notification-context"
+import { api, ApiError, asArray, asPage } from "@/lib/api"
 import { formatDateTime, formatRelative, useDebounced } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -123,6 +125,23 @@ const TYPE_FILTER_OPTIONS: { value: NotificationType | "ALL"; label: string }[] 
  */
 const VIRTUAL_THRESHOLD = 60
 
+function requireNotificationContext(context: NotificationContext | null): NotificationContext {
+  if (!context?.current()) throw new DOMException("通知上下文已失效", "AbortError")
+  return context
+}
+
+interface ScopedNotificationAction {
+  context: NotificationContext
+}
+
+interface ScopedNotificationIds extends ScopedNotificationAction {
+  ids: string[]
+}
+
+interface ScopedNotificationId extends ScopedNotificationAction {
+  id: string
+}
+
 /* ============ 搜索命中词高亮 ============ */
 
 /** 转义正则特殊字符, 保证 query 始终按字面量子串匹配 */
@@ -158,6 +177,8 @@ const Highlight = React.memo(function Highlight({ text, query }: { text: string;
 export default function NotificationsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const context = useNotificationContext()
+  const contextKey = context?.key.join(":") ?? "inactive"
   const [tab, setTab] = React.useState<"UNREAD" | "ALL">("UNREAD")
   const [typeFilter, setTypeFilter] = React.useState<NotificationType | "ALL">("ALL")
   const [keyword, setKeyword] = React.useState("")
@@ -177,25 +198,35 @@ export default function NotificationsPage() {
   const permissionsQuery = usePermissionsQuery()
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
   const isSuper = useAuthStore((s) => s.profile?.user.isSuperAdmin) ?? false
-  const canManage = isSuper || permissions.has("system:user")
+  const canManage = isSuper || permissions.has("notification:publish")
 
   const listQuery = useQuery({
-    queryKey: ["notifications", tab, typeFilter, debouncedQ, page, size],
-    queryFn: () =>
-      notificationsApi.list({
+    queryKey: [...(context?.key ?? ["notifications", "inactive"]), "list", tab, typeFilter, debouncedQ, page, size],
+    queryFn: ({ signal }) => {
+      const captured = requireNotificationContext(context)
+      return notificationsApi.list({
         filter: tab,
         type: typeFilter === "ALL" ? undefined : typeFilter,
         q: debouncedQ || undefined,
         page,
         size,
-      }),
+      }, notificationRequestOptions(captured, signal))
+    },
+    enabled: !!context,
     staleTime: 15_000,
     retry: 1,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) =>
+      context?.current() && context.key.every((part, i) => previousQuery?.queryKey[i] === part)
+        ? prev
+        : undefined,
   })
   const countQuery = useQuery({
-    queryKey: ["notifications", "unread-count"],
-    queryFn: () => notificationsApi.unreadCount(),
+    queryKey: [...(context?.key ?? ["notifications", "inactive"]), "unread-count"],
+    queryFn: ({ signal }) => {
+      const captured = requireNotificationContext(context)
+      return notificationsApi.unreadCount(notificationRequestOptions(captured, signal))
+    },
+    enabled: !!context,
     staleTime: 15_000,
     retry: 1,
   })
@@ -203,55 +234,87 @@ export default function NotificationsPage() {
   /* 翻页 / 切筛选 / 搜索时清空选择 */
   React.useEffect(() => {
     setSelected(new Set())
-  }, [page, tab, typeFilter, debouncedQ, size])
+  }, [page, tab, typeFilter, debouncedQ, size, contextKey])
+  React.useEffect(() => {
+    setPage(1)
+    setSendOpen(false)
+    setPrefsOpen(false)
+    setBatchDeleteOpen(false)
+  }, [contextKey])
 
   /* useCallback: 作为 memo 行组件 props 的回调链保持引用稳定, 避免整表 memo 失效 */
-  const invalidate = React.useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["notifications"] })
-  }, [queryClient])
+  const invalidate = React.useCallback((captured = context) => {
+    if (!captured?.current()) return
+    void queryClient.invalidateQueries({ queryKey: captured.key })
+  }, [queryClient, context])
 
   const readAllMutation = useMutation({
-    mutationFn: () => notificationsApi.readAll(),
-    onSuccess: (d) => {
+    mutationFn: ({ context: captured }: ScopedNotificationAction) =>
+      notificationsApi.readAll(notificationRequestOptions(requireNotificationContext(captured))),
+    onSuccess: (d, { context: captured }) => {
+      if (!captured.current()) return
       toast.success(d.updated > 0 ? `已将 ${d.updated} 条通知标记为已读` : "没有未读通知")
-      invalidate()
+      invalidate(captured)
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "操作失败"),
+    onError: (e, { context: captured }) => {
+      if (captured.current()) toast.error(e instanceof Error ? e.message : "操作失败")
+    },
   })
 
   const removeMutation = useMutation({
-    mutationFn: (id: string) => notificationsApi.remove(id),
-    onSuccess: () => {
+    mutationFn: ({ id, context: captured }: ScopedNotificationId) =>
+      notificationsApi.remove(id, notificationRequestOptions(requireNotificationContext(captured))),
+    onSuccess: (_, { context: captured }) => {
+      if (!captured.current()) return
       toast.success("通知已删除")
-      invalidate()
+      invalidate(captured)
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "删除失败"),
+    onError: (e, { context: captured }) => {
+      if (captured.current()) toast.error(e instanceof Error ? e.message : "删除失败")
+    },
+  })
+
+  const markReadMutation = useMutation({
+    mutationFn: ({ id, context: captured }: ScopedNotificationId) =>
+      notificationsApi.markRead(id, notificationRequestOptions(requireNotificationContext(captured))),
+    onSuccess: (_, { context: captured }) => invalidate(captured),
+    onError: (e, { context: captured }) => {
+      if (captured.current()) toast.error(e instanceof Error ? e.message : "操作失败")
+    },
   })
 
   /* ---- 批量已读 / 批量删除 ---- */
   const readBatchMutation = useMutation({
-    mutationFn: (ids: string[]) => notificationsApi.readBatch(ids),
-    onSuccess: (d) => {
+    mutationFn: ({ ids, context: captured }: ScopedNotificationIds) =>
+      notificationsApi.readBatch(ids, notificationRequestOptions(requireNotificationContext(captured))),
+    onSuccess: (d, { context: captured }) => {
+      if (!captured.current()) return
       toast.success(`已将 ${d.updated} 条通知标记为已读`)
       setSelected(new Set())
-      invalidate()
+      invalidate(captured)
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "操作失败"),
+    onError: (e, { context: captured }) => {
+      if (captured.current()) toast.error(e instanceof Error ? e.message : "操作失败")
+    },
   })
   const removeBatchMutation = useMutation({
-    mutationFn: (ids: string[]) => notificationsApi.removeBatch(ids),
-    onSuccess: (d) => {
+    mutationFn: ({ ids, context: captured }: ScopedNotificationIds) =>
+      notificationsApi.removeBatch(ids, notificationRequestOptions(requireNotificationContext(captured))),
+    onSuccess: (d, { context: captured }) => {
+      if (!captured.current()) return
       toast.success(`已删除 ${d.deleted} 条通知`)
       setSelected(new Set())
       setBatchDeleteOpen(false)
-      invalidate()
+      invalidate(captured)
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "删除失败"),
+    onError: (e, { context: captured }) => {
+      if (captured.current()) toast.error(e instanceof Error ? e.message : "删除失败")
+    },
   })
 
-  const records = listQuery.data?.records ?? []
-  const total = listQuery.data?.total ?? 0
-  const unread = countQuery.data?.count ?? 0
+  const records = context?.current() ? listQuery.data?.records ?? [] : []
+  const total = context?.current() ? listQuery.data?.total ?? 0 : 0
+  const unread = context?.current() ? countQuery.data?.count ?? 0 : 0
 
   /* 记录集变化时把选择裁剪到当前页(已读/被删的行自动移出选择) */
   React.useEffect(() => {
@@ -261,7 +324,7 @@ export default function NotificationsPage() {
       const next = new Set([...prev].filter((id) => ids.has(id)))
       return next.size === prev.size ? prev : next
     })
-  }, [listQuery.data])
+  }, [listQuery.data, contextKey])
 
   const pageIds = records.map((n) => n.id)
   const selectedOnPage = pageIds.filter((id) => selected.has(id))
@@ -270,35 +333,39 @@ export default function NotificationsPage() {
   const pageUnread = records.filter((n) => !n.isRead).length
 
   const toggleOne = React.useCallback((id: string) => {
+    if (!context?.current()) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }, [])
-  const selectAllOnPage = () => setSelected(new Set(pageIds))
+  }, [context])
+  const selectAllOnPage = () => context?.current() && setSelected(new Set(pageIds))
   const clearSelection = () => setSelected(new Set())
 
   /** 批量已读:仅未读行参与;若过滤后为空提示 */
   const doBatchRead = () => {
+    if (!context?.current()) return
     const unreadIds = records.filter((n) => selected.has(n.id) && !n.isRead).map((n) => n.id)
     if (unreadIds.length === 0) {
       toast.info("所选均已是已读状态")
       return
     }
-    readBatchMutation.mutate(unreadIds)
+    readBatchMutation.mutate({ ids: unreadIds, context })
   }
   const doBatchDelete = () => {
+    if (!context?.current()) return
     const ids = records.filter((n) => selected.has(n.id)).map((n) => n.id)
     if (ids.length === 0) return
-    removeBatchMutation.mutate(ids)
+    removeBatchMutation.mutate({ ids, context })
   }
 
   /* ---- 键盘快捷键(J/K 移动 · Space 选择 · X 批量已读 · Esc 取消 · ? 帮助;仅桌面生效) ---- */
   const { focusIndex, resetFocus } = useNotificationHotkeys({
     // 不含 records.length > 0: 空列表时仍允许 ? 打开帮助(行操作类按键由 hook 内 count 早退拦截)
     enabled:
+      !!context &&
       !listQuery.isLoading &&
       !listQuery.isError &&
       !sendOpen &&
@@ -312,15 +379,16 @@ export default function NotificationsPage() {
         if (id !== undefined) toggleOne(id)
       },
       onMarkSelectedRead: (focusedIndex) => {
+        if (!context?.current()) return
         // 优先批量已读当前选中的未读行(复用 readBatch);无选中时对焦点行单条已读
         const unreadIds = records.filter((n) => selected.has(n.id) && !n.isRead).map((n) => n.id)
         if (unreadIds.length > 0) {
-          readBatchMutation.mutate(unreadIds)
+          readBatchMutation.mutate({ ids: unreadIds, context })
           return
         }
         const focused = records[focusedIndex]
         if (focused && !focused.isRead) {
-          void notificationsApi.markRead(focused.id).then(invalidate)
+          markReadMutation.mutate({ id: focused.id, context })
           return
         }
         toast.info(selected.size > 0 ? "所选均已是已读状态" : "焦点行已是已读状态")
@@ -362,32 +430,33 @@ export default function NotificationsPage() {
   /* 翻页 / 切筛选 / 搜索时焦点复位(与选择清空同步) */
   React.useEffect(() => {
     resetFocus()
-  }, [page, tab, typeFilter, debouncedQ, size, resetFocus])
+  }, [page, tab, typeFilter, debouncedQ, size, resetFocus, contextKey])
 
   const openItem = React.useCallback(
     (n: NotificationRecord) => {
+      if (!context?.current()) return
       if (!n.isRead) {
-        void notificationsApi.markRead(n.id).then(invalidate)
+        markReadMutation.mutate({ id: n.id, context })
       }
       if (n.link) navigate(n.link)
     },
-    [invalidate, navigate]
+    [context, markReadMutation.mutate, navigate]
   )
 
-  /** 行内「标记已读」(沿用原内联 onClick 语义: 静默吞错) */
+  /** 行内操作捕获发起时的 session, 迟到响应不能影响新上下文。 */
   const markReadOne = React.useCallback(
     (id: string) => {
-      notificationsApi.markRead(id).then(invalidate).catch(() => undefined)
+      if (context?.current()) markReadMutation.mutate({ id, context })
     },
-    [invalidate]
+    [context, markReadMutation.mutate]
   )
 
   /** 行内「删除」(react-query 的 mutate 引用稳定, 行组件 memo 不因此失效) */
   const removeOne = React.useCallback(
     (id: string) => {
-      removeMutation.mutate(id)
+      if (context?.current()) removeMutation.mutate({ id, context })
     },
-    [removeMutation.mutate]
+    [context, removeMutation.mutate]
   )
 
   const typeFilterLabel = TYPE_FILTER_OPTIONS.find((o) => o.value === typeFilter)?.label ?? "全部"
@@ -401,14 +470,14 @@ export default function NotificationsPage() {
         actions={
           <>
             {canManage && (
-              <Button size="sm" onClick={() => setSendOpen(true)}>
+              <Button size="sm" onClick={() => setSendOpen(true)} disabled={!context}>
                 <Megaphone className="size-4" />
                 发送通知
               </Button>
             )}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={() => setPrefsOpen(true)}>
+                <Button variant="outline" size="sm" onClick={() => setPrefsOpen(true)} disabled={!context}>
                   <Settings2 className="size-4" />
                   通知设置
                 </Button>
@@ -418,8 +487,8 @@ export default function NotificationsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => readAllMutation.mutate()}
-              disabled={readAllMutation.isPending || unread === 0}
+              onClick={() => context?.current() && readAllMutation.mutate({ context })}
+              disabled={!context || readAllMutation.isPending || unread === 0}
             >
               {readAllMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -509,10 +578,12 @@ export default function NotificationsPage() {
           size="icon"
           className="size-8 text-muted-foreground"
           onClick={() => {
+            if (!context?.current()) return
             void listQuery.refetch()
             void countQuery.refetch()
           }}
           aria-label="刷新"
+          disabled={!context}
         >
           {listQuery.isFetching ? (
             <Loader2 className="size-4 animate-spin" />
@@ -555,7 +626,7 @@ export default function NotificationsPage() {
             variant="outline"
             size="sm"
             onClick={doBatchRead}
-            disabled={readBatchMutation.isPending}
+            disabled={!context || readBatchMutation.isPending}
           >
             {readBatchMutation.isPending ? (
               <Loader2 className="size-4 animate-spin" />
@@ -568,7 +639,7 @@ export default function NotificationsPage() {
             variant="destructive"
             size="sm"
             onClick={() => setBatchDeleteOpen(true)}
-            disabled={removeBatchMutation.isPending}
+            disabled={!context || removeBatchMutation.isPending}
           >
             <Trash2 className="size-4" />
             批量删除
@@ -588,7 +659,7 @@ export default function NotificationsPage() {
 
       {/* 通知列表 */}
       <div className="overflow-hidden rounded-xl border bg-card">
-        {listQuery.isLoading ? (
+        {!context || listQuery.isLoading ? (
           <div className="space-y-1 p-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3.5 py-2.5">
@@ -774,10 +845,10 @@ export default function NotificationsPage() {
       />
 
       {canManage && (
-        <SendNotificationDialog open={sendOpen} onOpenChange={setSendOpen} onSent={invalidate} />
+        <SendNotificationDialog key={`send:${contextKey}`} open={sendOpen} onOpenChange={setSendOpen} onSent={() => invalidate()} />
       )}
 
-      <NotificationPrefsDialog open={prefsOpen} onOpenChange={setPrefsOpen} />
+      <NotificationPrefsDialog key={`prefs:${contextKey}`} open={prefsOpen} onOpenChange={setPrefsOpen} />
 
       {/* ? 键 / 提示条入口打开的快捷键帮助 */}
       <HotkeyHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
@@ -918,6 +989,7 @@ const NotificationRow = React.memo(function NotificationRow({
           <Highlight text={n.content || "—"} query={query} />
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground/70">
+          <span>{n.sourceKind === "APP" ? n.applicationName || "业务应用" : "平台通知"}</span>
           <span title={formatDateTime(n.createdAt)}>{formatRelative(n.createdAt)}</span>
           {n.link && (
             <button
@@ -1104,10 +1176,14 @@ function NotificationPrefsDialog({
   onOpenChange: (o: boolean) => void
 }) {
   const queryClient = useQueryClient()
+  const context = useNotificationContext()
   const prefsQuery = useQuery({
-    queryKey: ["notification-prefs"],
-    queryFn: () => notificationsApi.getPrefs(),
-    enabled: open,
+    queryKey: [...(context?.key ?? ["notifications", "inactive"]), "prefs"],
+    queryFn: ({ signal }) => {
+      const captured = requireNotificationContext(context)
+      return notificationsApi.getPrefs(notificationRequestOptions(captured, signal))
+    },
+    enabled: open && !!context,
     staleTime: 30_000,
     retry: 1,
   })
@@ -1122,7 +1198,7 @@ function NotificationPrefsDialog({
     }
   }, [open])
   React.useEffect(() => {
-    if (open && prefsQuery.data && !hydrated) {
+    if (open && context?.current() && prefsQuery.data && !hydrated) {
       setDraft({
         dndEnabled: !!prefsQuery.data.dndEnabled,
         dndStart: prefsQuery.data.dndStart || DEFAULT_PREFS.dndStart,
@@ -1131,7 +1207,7 @@ function NotificationPrefsDialog({
       })
       setHydrated(true)
     }
-  }, [open, prefsQuery.data, hydrated])
+  }, [open, prefsQuery.data, hydrated, context])
 
   const dirty = React.useMemo(() => {
     const src = prefsQuery.data ?? DEFAULT_PREFS
@@ -1145,23 +1221,23 @@ function NotificationPrefsDialog({
   }, [draft, prefsQuery.data])
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      notificationsApi.savePrefs({
-        dndEnabled: draft.dndEnabled,
-        dndStart: draft.dndStart,
-        dndEnd: draft.dndEnd,
-        mutedTypes: draft.mutedTypes,
-      }),
-    onSuccess: () => {
+    mutationFn: ({ context: captured, prefs }: ScopedNotificationAction & { prefs: NotificationPrefs }) =>
+      notificationsApi.savePrefs(prefs, notificationRequestOptions(requireNotificationContext(captured))),
+    onSuccess: (saved, { context: captured }) => {
+      if (!captured.current()) return
       toast.success("通知偏好已保存")
       /* 即时生效:socket 钩子与铃铛共享该缓存 */
-      void queryClient.invalidateQueries({ queryKey: ["notification-prefs"] })
+      queryClient.setQueryData([...captured.key, "prefs"], saved)
+      void queryClient.invalidateQueries({ queryKey: [...captured.key, "prefs"] })
       onOpenChange(false)
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "保存失败"),
+    onError: (e, { context: captured }) => {
+      if (captured.current()) toast.error(e instanceof Error ? e.message : "保存失败")
+    },
   })
 
   const toggleMuted = (t: NotificationType) => {
+    if (!context?.current()) return
     setDraft((d) => ({
       ...d,
       mutedTypes: d.mutedTypes.includes(t)
@@ -1184,7 +1260,7 @@ function NotificationPrefsDialog({
           <DialogDescription>免打扰时段与类型静音,仅影响桌面提醒,角标与列表照常实时更新</DialogDescription>
         </DialogHeader>
 
-        {prefsQuery.isLoading ? (
+        {!context || prefsQuery.isLoading ? (
           <div className="space-y-4 py-2">
             <Skeleton className="h-16 w-full rounded-xl" />
             <Skeleton className="h-24 w-full rounded-xl" />
@@ -1220,6 +1296,7 @@ function NotificationPrefsDialog({
                   </p>
                 </div>
                 <Switch
+                  disabled={!context || saveMutation.isPending}
                   checked={draft.dndEnabled}
                   onCheckedChange={(v) => setDraft((d) => ({ ...d, dndEnabled: v }))}
                   aria-label="开启免打扰"
@@ -1244,7 +1321,7 @@ function NotificationPrefsDialog({
                     step={600}
                     value={draft.dndStart}
                     onChange={(e) => setDraft((d) => ({ ...d, dndStart: e.target.value || "22:00" }))}
-                    disabled={!draft.dndEnabled}
+                    disabled={!context || !draft.dndEnabled || saveMutation.isPending}
                     aria-label="免打扰开始时间"
                     className="[color-scheme:light] font-mono tabular-nums dark:[color-scheme:dark]"
                   />
@@ -1260,7 +1337,7 @@ function NotificationPrefsDialog({
                     step={600}
                     value={draft.dndEnd}
                     onChange={(e) => setDraft((d) => ({ ...d, dndEnd: e.target.value || "07:00" }))}
-                    disabled={!draft.dndEnabled}
+                    disabled={!context || !draft.dndEnabled || saveMutation.isPending}
                     aria-label="免打扰结束时间"
                     className="[color-scheme:light] font-mono tabular-nums dark:[color-scheme:dark]"
                   />
@@ -1293,6 +1370,7 @@ function NotificationPrefsDialog({
                       type="button"
                       role="checkbox"
                       aria-checked={muted}
+                      disabled={!context || saveMutation.isPending}
                       onClick={() => toggleMuted(t)}
                       title={muted ? `已静音${meta.label}通知,点击取消` : `点击静音${meta.label}通知`}
                       className={cn(
@@ -1332,7 +1410,7 @@ function NotificationPrefsDialog({
             size="sm"
             className="mr-auto text-muted-foreground"
             onClick={() => setDraft({ ...DEFAULT_PREFS, mutedTypes: [] })}
-            disabled={!hydrated || saveMutation.isPending}
+            disabled={!context || !hydrated || saveMutation.isPending}
           >
             <RotateCcw className="size-3.5" />
             恢复默认
@@ -1340,7 +1418,10 @@ function NotificationPrefsDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button onClick={() => saveMutation.mutate()} disabled={!dirty || saveMutation.isPending}>
+          <Button
+            onClick={() => context?.current() && saveMutation.mutate({ context, prefs: { ...draft, mutedTypes: [...draft.mutedTypes] } })}
+            disabled={!context || !hydrated || !dirty || saveMutation.isPending}
+          >
             {saveMutation.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -1356,11 +1437,11 @@ function NotificationPrefsDialog({
 
 /* ============ 发送通知对话框 ============ */
 
-type TargetKind = "USER" | "ORG" | "TENANT"
+type TargetKind = "USER" | "ORGANIZATION" | "TENANT"
 
 const TARGET_OPTIONS: { v: TargetKind; label: string; icon: typeof User }[] = [
   { v: "USER", label: "单个用户", icon: User },
-  { v: "ORG", label: "组织成员", icon: Building2 },
+  { v: "ORGANIZATION", label: "组织成员", icon: Building2 },
   { v: "TENANT", label: "租户全员", icon: Landmark },
 ]
 
@@ -1373,73 +1454,118 @@ function SendNotificationDialog({
   onOpenChange: (o: boolean) => void
   onSent: () => void
 }) {
+  const context = useNotificationContext()
+  const profile = useAuthStore((s) => s.profile)
+  const permissionsQuery = usePermissionsQuery()
+  const permissions = new Set(permissionsQuery.data?.permissions ?? [])
+  const canListUsers = !!profile?.user.isSuperAdmin || permissions.has("system:user")
+  const canListOrganizations = !!profile?.user.isSuperAdmin || permissions.has("system:organization")
   const [kind, setKind] = React.useState<TargetKind>("USER")
+  const [applicationId, setApplicationId] = React.useState("")
+  const [idempotencyKey, setIdempotencyKey] = React.useState<string>(() => crypto.randomUUID())
   const [userId, setUserId] = React.useState("")
   const [orgId, setOrgId] = React.useState<string | null>(null)
-  const [tenantId, setTenantId] = React.useState<string | null>(null)
   const [title, setTitle] = React.useState("")
   const [content, setContent] = React.useState("")
   const [type, setType] = React.useState<NotificationType>("INFO")
   const [link, setLink] = React.useState("")
-
-  const currentTenantId = useAuthStore((s) => s.profile?.tenant.id) ?? null
+  const [retryBody, setRetryBody] = React.useState<NotificationSendBody | null>(null)
+  const selectedApplication = profile?.applications.find((app) => app.id === applicationId)
 
   const usersQuery = useQuery({
-    queryKey: ["send-notify-users", currentTenantId],
-    queryFn: async () =>
-      asPage<{ id: string; username: string; realName: string }>(
-        await usersApi.list({ page: 1, size: 100, tenantId: currentTenantId ?? undefined })
-      ),
-    enabled: open && kind === "USER",
+    queryKey: [...(context?.key ?? ["notifications", "inactive"]), "send-users", orgId],
+    queryFn: async ({ signal }) => {
+      const captured = requireNotificationContext(context)
+      const options = notificationRequestOptions(captured, signal)
+      const params = new URLSearchParams({ page: "1", size: "100", tenantId: captured.tenantId,
+        organizationId: orgId ?? "" })
+      const data = await api.get<unknown>(`/api/users?${params}`, options)
+      options.signal.throwIfAborted()
+      requireNotificationContext(captured)
+      return asPage<{ id: string; username: string; realName: string }>(data)
+    },
+    enabled: open && !!context && kind === "USER" && !!orgId && canListUsers,
     staleTime: 60_000,
     retry: 1,
   })
   const orgTreeQuery = useQuery({
-    queryKey: ["send-notify-orgs", currentTenantId],
-    queryFn: async () =>
-      asArray<PickerNode>(await organizationsApi.tree(currentTenantId ?? "")),
-    enabled: open && kind === "ORG" && !!currentTenantId,
+    queryKey: [...(context?.key ?? ["notifications", "inactive"]), "send-orgs"],
+    queryFn: async ({ signal }) => {
+      const captured = requireNotificationContext(context)
+      const options = notificationRequestOptions(captured, signal)
+      const data = await api.get<unknown>(`/api/organizations/tree?tenantId=${encodeURIComponent(captured.tenantId)}`, options)
+      options.signal.throwIfAborted()
+      requireNotificationContext(captured)
+      return asArray<PickerNode>(data)
+    },
+    enabled: open && !!context && kind !== "TENANT" && canListOrganizations,
     staleTime: 60_000,
     retry: 1,
   })
-  const tenantsQuery = useQuery({
-    queryKey: ["send-notify-tenants"],
-    queryFn: async () =>
-      asPage<{ id: string; name: string }>(await tenantsApi.list({ page: 1, size: 50 })),
-    enabled: open && kind === "TENANT",
-    staleTime: 60_000,
-    retry: 1,
-  })
-
+  // 已验证 profile 的本人及当前组织可作为请求目标，无需授予管理目录的枚举权限。
+  // 这些候选不声明 notification/publish grant；每次发送仍由后端独立校验范围。
+  const organizationCandidates = React.useMemo(() => {
+    const candidates = orgTreeQuery.data ?? []
+    if (!context?.current() || profile?.organization.id !== context.organizationId) return []
+    const contains = (nodes: PickerNode[]): boolean => nodes.some((node) => node.id === context.organizationId || contains(node.children ?? []))
+    return contains(candidates) ? candidates : [{ id: context.organizationId, name: profile.organization.name }, ...candidates]
+  }, [orgTreeQuery.data, context, profile?.organization])
+  const userCandidates = React.useMemo(() => {
+    const candidates = usersQuery.data?.records ?? []
+    if (!context?.current() || profile?.user.id !== context.userId) return []
+    if (orgId !== context.organizationId || candidates.some((user) => user.id === context.userId)) return candidates
+    return [{ id: context.userId, username: profile.user.username, realName: profile.user.realName || profile.user.username }, ...candidates]
+  }, [usersQuery.data, context, orgId, profile?.user])
   const sendMutation = useMutation({
-    mutationFn: () =>
-      notificationsApi.send({
-        title: title.trim(),
-        content: content.trim(),
-        type,
-        link: link.trim() || undefined,
-        userId: kind === "USER" ? userId : undefined,
-        orgId: kind === "ORG" ? (orgId ?? undefined) : undefined,
-        tenantId: kind === "TENANT" ? (tenantId ?? undefined) : undefined,
-      }),
-    onSuccess: (d) => {
-      toast.success(`通知已发送给 ${d.sent} 位用户`)
+    mutationFn: ({ context: captured, body }: ScopedNotificationAction & { body: NotificationSendBody }) =>
+      notificationsApi.send(body, notificationRequestOptions(requireNotificationContext(captured))),
+    onSuccess: (d, { context: captured }) => {
+      if (!captured.current()) return
+      toast.success(`${d.duplicate ? "通知发布已确认" : "通知已发送"}，共 ${d.recipientCount} 位用户、${d.deliveryCount} 条投递`)
       onOpenChange(false)
       onSent()
+      setRetryBody(null)
+      setIdempotencyKey(crypto.randomUUID())
       setTitle("")
       setContent("")
       setLink("")
       setUserId("")
       setOrgId(null)
-      setTenantId(null)
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "发送失败"),
+    onError: (e, { context: captured }) => {
+      if (!captured.current()) return
+      // 无响应或服务错误无法证明事务未提交；沿用原键与正文重试。
+      if (e instanceof ApiError && e.status > 0 && e.status < 500) setRetryBody(null)
+      toast.error(e instanceof Error ? e.message : "发送失败")
+    },
   })
 
   const targetReady =
-    (kind === "USER" && !!userId) ||
-    (kind === "ORG" && !!orgId) ||
-    (kind === "TENANT" && !!tenantId)
+    (kind === "USER" && !!userId && !!orgId) ||
+    (kind === "ORGANIZATION" && !!orgId) ||
+    kind === "TENANT"
+  const draftReady = !!selectedApplication && !!title.trim() && targetReady &&
+    /^[A-Za-z0-9._:-]{1,128}$/.test(idempotencyKey)
+  const formLocked = !context || sendMutation.isPending || !!retryBody
+  const send = () => {
+    if (!context?.current() || sendMutation.isPending) return
+    if (!retryBody && !draftReady) return
+    const body = retryBody ?? {
+      applicationId,
+      idempotencyKey,
+      target: kind === "USER"
+        ? { kind: "USER" as const, userId, organizationId: orgId ?? "" }
+        : kind === "ORGANIZATION"
+          ? { kind: "ORGANIZATION" as const, organizationId: orgId ?? "" }
+          : { kind: "TENANT" as const },
+      title: title.trim(),
+      content: content.trim(),
+      type,
+      link: link.trim() || undefined,
+    }
+    setRetryBody(body)
+    sendMutation.mutate({ context, body })
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1449,16 +1575,32 @@ function SendNotificationDialog({
             <Megaphone className="size-5 text-primary" />
             发送通知
           </DialogTitle>
-          <DialogDescription>向指定用户、组织或租户的全体成员发送站内通知</DialogDescription>
+          <DialogDescription>使用所选应用向当前租户发布通知，收件范围由服务端权限与数据授权校验</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>发布应用</Label>
+            <Select value={applicationId} onValueChange={setApplicationId} disabled={formLocked}>
+              <SelectTrigger aria-label="发布应用"><SelectValue placeholder="选择当前可用应用" /></SelectTrigger>
+              <SelectContent>
+                {profile?.applications.map((app) => <SelectItem key={app.id} value={app.id}>{app.name}（{app.code}）</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="notification-idempotency-key">幂等键</Label>
+            <Input id="notification-idempotency-key" value={idempotencyKey} onChange={(e) => setIdempotencyKey(e.target.value)}
+              maxLength={128} disabled={formLocked} className="font-mono text-xs" />
+            {retryBody && !sendMutation.isPending && <p role="status" className="text-xs text-muted-foreground">上次请求尚未确认，重试将沿用相同内容和幂等键。</p>}
+          </div>
           {/* 目标范围 */}
           <div className="space-y-2">
             <Label>目标范围</Label>
             <RadioGroup
               value={kind}
               onValueChange={(v) => setKind(v as TargetKind)}
+              disabled={formLocked}
               className="grid grid-cols-3 gap-2"
             >
               {TARGET_OPTIONS.map((o) => (
@@ -1479,21 +1621,30 @@ function SendNotificationDialog({
             </RadioGroup>
           </div>
 
+          {kind !== "TENANT" && (
+            <div className="space-y-2">
+              <Label>{kind === "USER" ? "接收组织" : "选择组织（仅直接成员）"}</Label>
+              <EntityTreePicker nodes={organizationCandidates} value={orgId}
+                onSelect={(id) => { setOrgId(id); setUserId("") }} placeholder="选择目标组织"
+                disabled={formLocked || (orgTreeQuery.isLoading && organizationCandidates.length === 0)} />
+              {orgTreeQuery.isError && <p role="alert" className="text-xs text-destructive">{orgTreeQuery.error instanceof Error ? orgTreeQuery.error.message : "组织加载失败"}</p>}
+            </div>
+          )}
           {kind === "USER" && (
             <div className="space-y-2">
               <Label>选择用户</Label>
-              <Select value={userId} onValueChange={setUserId}>
+              <Select value={userId} onValueChange={setUserId} disabled={formLocked || !orgId}>
                 <SelectTrigger aria-label="选择用户">
-                  <SelectValue placeholder="选择接收用户" />
+                  <SelectValue placeholder={orgId ? "选择接收用户" : "请先选择接收组织"} />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
-                  {usersQuery.isLoading ? (
+                  {usersQuery.isLoading && userCandidates.length === 0 ? (
                     <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
                       <Loader2 className="size-4 animate-spin" />
                       加载用户中...
                     </div>
                   ) : (
-                    usersQuery.data?.records.map((u) => (
+                    userCandidates.map((u) => (
                       <SelectItem key={u.id} value={u.id}>
                         {u.realName || u.username}({u.username})
                       </SelectItem>
@@ -1501,34 +1652,13 @@ function SendNotificationDialog({
                   )}
                 </SelectContent>
               </Select>
-            </div>
-          )}
-          {kind === "ORG" && (
-            <div className="space-y-2">
-              <Label>选择组织(广播给全部成员)</Label>
-              <EntityTreePicker
-                nodes={orgTreeQuery.data ?? []}
-                value={orgId}
-                onSelect={(id) => setOrgId(id)}
-                placeholder="选择目标组织"
-              />
+              {usersQuery.isError && <p role="alert" className="text-xs text-destructive">{usersQuery.error instanceof Error ? usersQuery.error.message : "用户加载失败"}</p>}
             </div>
           )}
           {kind === "TENANT" && (
             <div className="space-y-2">
-              <Label>选择租户(广播给全部成员)</Label>
-              <Select value={tenantId ?? ""} onValueChange={setTenantId}>
-                <SelectTrigger aria-label="选择租户">
-                  <SelectValue placeholder="选择目标租户" />
-                </SelectTrigger>
-                <SelectContent className="max-h-64">
-                  {tenantsQuery.data?.records.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>当前租户</Label>
+              <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">{profile?.tenant.name ?? "会话切换中"}</p>
             </div>
           )}
 
@@ -1536,7 +1666,7 @@ function SendNotificationDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>通知类型</Label>
-              <Select value={type} onValueChange={(v) => setType(v as NotificationType)}>
+              <Select value={type} onValueChange={(v) => setType(v as NotificationType)} disabled={formLocked}>
                 <SelectTrigger aria-label="通知类型">
                   <SelectValue />
                 </SelectTrigger>
@@ -1562,7 +1692,9 @@ function SendNotificationDialog({
               <Input
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
-                placeholder="如 /system/audit-logs"
+                placeholder={selectedApplication ? `/micro/${selectedApplication.code}/…` : "所选应用内的 /micro 路由"}
+                maxLength={300}
+                disabled={formLocked}
                 className="font-mono text-xs"
               />
             </div>
@@ -1575,6 +1707,7 @@ function SendNotificationDialog({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="一句话说明通知主题"
               maxLength={200}
+              disabled={formLocked}
             />
           </div>
           <div className="space-y-2">
@@ -1584,6 +1717,8 @@ function SendNotificationDialog({
               onChange={(e) => setContent(e.target.value)}
               placeholder="通知正文,支持换行"
               rows={4}
+              maxLength={8192}
+              disabled={formLocked}
               className="resize-none"
             />
           </div>
@@ -1594,15 +1729,15 @@ function SendNotificationDialog({
             取消
           </Button>
           <Button
-            onClick={() => sendMutation.mutate()}
-            disabled={sendMutation.isPending || !title.trim() || !targetReady}
+            onClick={send}
+            disabled={!context || sendMutation.isPending || (!retryBody && !draftReady)}
           >
             {sendMutation.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <Send className="size-4" />
             )}
-            发送
+            {retryBody && !sendMutation.isPending ? "重试发送" : "发送"}
           </Button>
         </DialogFooter>
       </DialogContent>

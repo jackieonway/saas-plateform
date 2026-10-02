@@ -1,5 +1,6 @@
 mod config;
 mod releases;
+mod notifications;
 mod app_token;
 mod authorization;
 mod database;
@@ -17,6 +18,9 @@ mod scope_tests;
 
 #[cfg(test)]
 mod release_tests;
+
+#[cfg(test)]
+mod notification_tests;
 
 use std::net::SocketAddr;
 use std::sync::Arc;

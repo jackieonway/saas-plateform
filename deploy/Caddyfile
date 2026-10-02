@@ -1,5 +1,6 @@
 # Dante Cloud 生产网关 (运行在 web 容器内的 Caddy)
 # - /api/* 与 /oauth/* 反向代理到 Rust 后端
+# - /socket.io/* 保留路径转发 notification-ws 的 polling 和 WebSocket
 # - /sub-apps/<code>/versions/<version>/* 托管独立只读版本目录
 # - 存量 /sub-apps/* 托管镜像内文件，缺失资源始终 404
 # - 其余请求托管前端 SPA (history 路由 fallback 到 index.html)
@@ -22,6 +23,10 @@
 
 	handle /oauth/* {
 		reverse_proxy backend:3001
+	}
+
+	handle /socket.io/* {
+		reverse_proxy notification-ws:3003
 	}
 
 	# handle_path strips only /sub-apps/, matching the package output layout.

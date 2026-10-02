@@ -656,6 +656,13 @@ export type NotificationType = "INFO" | "SUCCESS" | "WARNING" | "SECURITY"
 
 export interface NotificationRecord {
   id: string
+  userId: string
+  tenantId: string
+  organizationId: string
+  sourceKind: "APP" | "SYSTEM"
+  applicationId: string | null
+  publicationId: string | null
+  applicationName: string | null
   type: NotificationType
   title: string
   content: string
@@ -666,11 +673,39 @@ export interface NotificationRecord {
 }
 
 export interface NotificationSendBody {
+  applicationId: string
+  idempotencyKey: string
+  target: NotificationTarget
   title: string
   content: string
   type: NotificationType
   link?: string
-  userId?: string
-  orgId?: string
-  tenantId?: string
 }
+
+export type NotificationTarget =
+  | { kind: "USER"; userId: string; organizationId: string }
+  | { kind: "ORGANIZATION"; organizationId: string }
+  | { kind: "TENANT" }
+
+export interface NotificationPublishResponse {
+  publicationId: string
+  recipientCount: number
+  deliveryCount: number
+  duplicate: boolean
+  createdAt: string
+}
+
+export interface NotificationSendResponse extends NotificationPublishResponse { sent: number }
+
+/** Public Socket.IO acknowledgment; sessionId is validated only inside the realtime service. */
+export interface NotificationSocketContext {
+  contractVersion: "1.0"
+  userId: string
+  tenantId: string
+  organizationId: string
+  expiresAt: string
+}
+
+export interface RealtimeNotification extends Pick<NotificationRecord,
+  "id" | "userId" | "tenantId" | "organizationId" | "applicationId" | "publicationId" |
+  "type" | "title" | "content" | "link" | "createdAt"> { contractVersion: "1.0" }

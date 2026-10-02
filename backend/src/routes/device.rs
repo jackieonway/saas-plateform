@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser};
-use crate::routes::notifications::notify;
+use crate::notifications::system_in_tx;
 use crate::state::AppState;
 use crate::util::audit;
 
@@ -62,11 +62,12 @@ async fn decide_device(
     ApiJson(body): ApiJson<DecisionBody>,
 ) -> Result<Json<Value>, AppError> {
     let code = user_code.trim().to_uppercase();
+    let mut tx = state.pool.begin().await?;
     let row = sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>)>(
-        "SELECT id, client_id, status, expires_at FROM oauth_device_codes WHERE UPPER(user_code) = $1",
+        "SELECT id, client_id, status, expires_at FROM oauth_device_codes WHERE UPPER(user_code) = $1 FOR UPDATE",
     )
     .bind(&code)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("设备码不存在"))?;
     let (id, client_id, status, expires_at) = row;
@@ -76,8 +77,9 @@ async fn decide_device(
     if expires_at < Utc::now() {
         sqlx::query("UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1")
             .bind(id)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
+        tx.commit().await?;
         return Err(AppError::conflict("该设备授权请求已过期"));
     }
     let ip = audit::client_ip(&headers);
@@ -90,29 +92,55 @@ async fn decide_device(
         .bind(user.user_id)
         .bind(user.tenant_id)
         .bind(user.org_id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-            action: "DEVICE_APPROVE", detail: &format!("批准设备授权: 客户端 {} ({})", client_id, code), ip: &ip, user_agent: &ua,
-        }).await;
-        notify(
-            &state.pool, user.user_id, "SECURITY",
+        system_in_tx(
+            &mut tx,
+            &[(user.user_id, user.tenant_id, user.org_id)],
+            "SECURITY",
             "新的设备授权已批准",
-            &format!("您批准了客户端 {} 的设备授权请求(设备码 {})。若非本人操作,请立即联系管理员。", client_id, code),
+            &format!(
+                "您批准了客户端 {} 的设备授权请求(设备码 {})。若非本人操作,请立即联系管理员。",
+                client_id, code
+            ),
             "/system/oauth/tokens",
-        ).await;
+        )
+        .await?;
+        tx.commit().await?;
+        audit::write(
+            &state.pool,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "DEVICE_APPROVE",
+                detail: &format!("批准设备授权: 客户端 {} ({})", client_id, code),
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await;
     } else {
         sqlx::query("UPDATE oauth_device_codes SET status = 'DENIED' WHERE id = $1")
             .bind(id)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-            action: "DEVICE_DENY", detail: &format!("拒绝设备授权: 客户端 {} ({})", client_id, code), ip: &ip, user_agent: &ua,
-        }).await;
+        tx.commit().await?;
+        audit::write(
+            &state.pool,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "DEVICE_DENY",
+                detail: &format!("拒绝设备授权: 客户端 {} ({})", client_id, code),
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await;
     }
     Ok(Json(json!({"ok": true})))
 }
