@@ -1,4 +1,5 @@
 pub mod applications;
+pub mod app_context;
 pub mod audit;
 pub mod auth;
 pub mod departments;
@@ -30,6 +31,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(auth::routes())
         .merge(tenants::routes())
         .merge(applications::routes())
+        .merge(app_context::routes())
         .merge(menus::routes())
         .merge(organizations::routes())
         .merge(departments::routes())

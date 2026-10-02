@@ -10,11 +10,12 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::authorization;
 use crate::extractors::{bearer_token, ApiJson, CurrentUser};
 use crate::routes::page_json;
 use crate::session;
-use crate::state::{AppState, ORG_ANCESTORS_SQL};
-use crate::util::{audit, jwt, password as pw, tree};
+use crate::state::AppState;
+use crate::util::{audit, jwt, password as pw};
 
 /// 登录限流: 同一 用户名+IP 在 10 分钟窗口内最多 5 次失败尝试 (内存态, 进程重启即清零)
 static LOGIN_ATTEMPTS: std::sync::OnceLock<
@@ -427,8 +428,6 @@ async fn profile(State(state): State<AppState>, user: CurrentUser) -> Result<Jso
     })))
 }
 
-type MenuTuple = (Uuid, Option<Uuid>, String, String, String, String, String, String, String, i32, bool, DateTime<Utc>);
-
 /// GET /api/auth/menus?applicationId= — 角色 ∩ 组织授权 ∩ 租户授权 的可见菜单树
 async fn menus(
     State(state): State<AppState>,
@@ -440,51 +439,14 @@ async fn menus(
         .and_then(|v| Uuid::parse_str(v).ok())
         .ok_or_else(|| AppError::bad_request("缺少 applicationId 参数"))?;
 
-    let (sql, is_super) = if user.is_super_admin {
-        ("SELECT m.id, m.parent_id, m.type, m.title, COALESCE(m.path,'') AS path, COALESCE(m.icon,'') AS icon, \
-         COALESCE(m.permission,'') AS permission, m.link_url, m.link_target, m.sort_order, m.visible, m.created_at \
-         FROM menus m WHERE m.application_id = $1 AND m.status = 'ENABLED' \
-         ORDER BY m.sort_order, m.created_at"
-            .to_string(), true)
+    let rows = if user.is_super_admin {
+        authorization::all_app_menu_rows(&state.pool, app_id).await?
     } else {
-        (format!(
-            "{ORG_ANCESTORS_SQL} SELECT DISTINCT m.id, m.parent_id, m.type, m.title, \
-             COALESCE(m.path,'') AS path, COALESCE(m.icon,'') AS icon, COALESCE(m.permission,'') AS permission, \
-             m.link_url, m.link_target, m.sort_order, m.visible, m.created_at FROM menus m \
-             WHERE m.application_id = $2 AND m.status = 'ENABLED' \
-             AND m.id IN (SELECT rm.menu_id FROM role_menus rm \
-                          JOIN user_roles ur ON ur.role_id = rm.role_id \
-                          JOIN roles r ON r.id = rm.role_id \
-                          JOIN anc ON anc.id = r.organization_id \
-                          WHERE ur.user_id = $3 AND r.status = 'ENABLED') \
-             AND m.id IN (SELECT menu_id FROM organization_menus WHERE organization_id = $1) \
-             AND m.id IN (SELECT menu_id FROM tenant_menus WHERE tenant_id = $4) \
-             ORDER BY m.sort_order, m.created_at"
-        ), false)
+        authorization::effective_menu_rows(
+            &state.pool, user.user_id, user.tenant_id, user.org_id, Some(app_id),
+        ).await?
     };
-    let query = sqlx::query_as::<_, MenuTuple>(&sql);
-    let query = if is_super {
-        query.bind(app_id)
-    } else {
-        query
-            .bind(user.org_id)
-            .bind(app_id)
-            .bind(user.user_id)
-            .bind(user.tenant_id)
-    };
-    let rows: Vec<MenuTuple> = query.fetch_all(&state.pool).await?;
-
-    let items: Vec<Value> = rows
-        .into_iter()
-        .map(|(id, parent, mtype, title, path, icon, permission, link_url, link_target, sort, visible, _created)| {
-            json!({
-                "id": id, "parentId": parent, "type": mtype, "title": title, "path": path,
-                "icon": icon, "permission": permission, "sortOrder": sort, "visible": visible,
-                "linkUrl": link_url, "linkTarget": link_target,
-            })
-        })
-        .collect();
-    Ok(Json(json!({"menus": tree::build_tree(items)})))
+    Ok(Json(json!({"menus": authorization::menu_tree(rows)})))
 }
 
 /// GET /api/auth/permissions

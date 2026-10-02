@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::CurrentUser;
+use crate::authorization;
 
 /// OAuth 端点 IP 限流参数: 滑动窗口 60 秒内最多 30 次
 const OAUTH_RATE_WINDOW_SECS: i64 = 60;
@@ -16,14 +17,13 @@ pub const ORG_ANCESTORS_SQL: &str = "WITH RECURSIVE anc AS ( \
 SELECT o.id, o.parent_id FROM organizations o WHERE o.id = $1 \
 UNION ALL SELECT o.id, o.parent_id FROM organizations o JOIN anc ON o.id = anc.parent_id )";
 
-/// 应用共享状态: 连接池 + 配置 + 权限缓存 (30s TTL) + OAuth 端点限流窗口 + 进程启动时刻
+/// 应用共享状态: 连接池 + 配置 + OAuth 端点限流窗口 + 进程启动时刻
 #[derive(Clone)]
 pub struct AppState {
     pub pool: sqlx::PgPool,
     pub config: Arc<crate::config::Config>,
     /// 进程启动时刻 (GET /api/monitor/system 的 startedAt/uptimeSeconds 数据源)
     pub started_at: chrono::DateTime<chrono::Utc>,
-    perm_cache: Arc<Mutex<HashMap<(Uuid, Uuid), (HashSet<String>, i64)>>>,
     oauth_rate: Arc<Mutex<HashMap<String, Vec<i64>>>>,
 }
 
@@ -33,47 +33,20 @@ impl AppState {
             pool,
             config,
             started_at: chrono::Utc::now(),
-            perm_cache: Arc::new(Mutex::new(HashMap::new())),
             oauth_rate: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    /// 计算用户在指定组织上下文中的权限码集合 (30 秒内存缓存)
+    /// 从与菜单展示相同的授权结果计算权限码，逐请求读取以保证多实例下一请求一致。
     ///
     /// 权限口径与 GET /api/auth/menus 的非超管分支完全一致:
     /// 角色 ∩ 组织授权 ∩ 租户授权 —— 菜单(含 BUTTON 型操作权限码)必须同时被
     /// 当前组织与所属租户授权, 角色菜单才生效, 保证「组织只能看到/操作被授权的菜单与按钮」。
     pub async fn permissions_of(&self, user_id: Uuid, org_id: Uuid) -> Result<HashSet<String>, AppError> {
-        let now = chrono::Utc::now().timestamp();
-        {
-            let cache = self.perm_cache.lock().unwrap();
-            if let Some((perms, exp)) = cache.get(&(user_id, org_id)) {
-                if *exp > now {
-                    return Ok(perms.clone());
-                }
-            }
-        }
-        let sql = format!(
-            "{} SELECT DISTINCT m.permission FROM user_roles ur \
-             JOIN roles r ON r.id = ur.role_id \
-             JOIN anc ON anc.id = r.organization_id \
-             JOIN role_menus rm ON rm.role_id = r.id \
-             JOIN menus m ON m.id = rm.menu_id \
-             WHERE ur.user_id = $2 AND r.status = 'ENABLED' AND m.status = 'ENABLED' AND m.permission <> '' \
-             AND m.id IN (SELECT menu_id FROM organization_menus WHERE organization_id = $1) \
-             AND m.id IN (SELECT menu_id FROM tenant_menus \
-                          WHERE tenant_id = (SELECT tenant_id FROM organizations WHERE id = $1))",
-            ORG_ANCESTORS_SQL
-        );
-        let rows: Vec<(String,)> = sqlx::query_as(&sql)
-            .bind(org_id)
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
-        let perms: HashSet<String> = rows.into_iter().map(|(p,)| p).collect();
-        let mut cache = self.perm_cache.lock().unwrap();
-        cache.insert((user_id, org_id), (perms.clone(), now + 30));
-        Ok(perms)
+        let tenant_id: Uuid = sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
+            .bind(org_id).fetch_one(&self.pool).await?;
+        let rows = authorization::effective_menu_rows(&self.pool, user_id, tenant_id, org_id, None).await?;
+        Ok(authorization::permissions_of(&rows))
     }
 
     /// 权限校验 (超管直通)
@@ -143,9 +116,8 @@ impl AppState {
         Ok(rows.into_iter().map(|(id, name, code)| RoleBrief { id, name, code }).collect())
     }
 
-    /// 清空权限缓存 (授权/角色变更后调用)
+    /// 兼容现有写入调用；权限现在逐请求读取，不再有进程内正向缓存。
     pub fn invalidate_perm_cache(&self) {
-        self.perm_cache.lock().unwrap().clear();
     }
 
     /// OAuth 端点滑动窗口限流: 清理该 IP 过期时间戳后检查长度,

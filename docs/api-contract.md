@@ -166,3 +166,7 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 `POST /api/oauth/session-token`：以平台 session Bearer 认证，请求 `{"appCode":"your-app"}`。租户和组织均获应用授权、应用及关联机密客户端启用时返回 `201 {"accessToken":"...","tokenType":"Bearer","expiresIn":<=300,"audience":"your-app"}`；否则返回 404。JWT 含 `sub/tenant/org/cid/aud/jti/iat/exp`，同秒重签也有不同 `jti`。
 
 业务后端用关联应用的机密客户端凭据调用 `POST /oauth/introspect`，只接受 `active:true` 且 `aud` 等于本应用 code 的 access token。应用令牌的活跃性还依赖当前平台 session、直接成员关系、租户/组织状态与两级应用授权。其他应用客户端内省返回 `active:false`；过期、撤销和 refresh token 也返回 `active:false`。详情见[应用令牌接入契约](./application-token-contract.md)。
+
+### 应用授权上下文（Phase 6）
+
+`GET /api/apps/{appCode}/context` 仅接受受众等于路径 `appCode` 的有效应用专用令牌。响应提供 `contractVersion`、稳定的 `contextVersion`、`expiresAt`、当前用户/租户/组织/应用、有效角色、菜单、操作权限码和独立的 `dataGrants`。角色不决定数据范围；数据授权绑定当前组织的直接成员关系，按应用、资源和操作显式配置，未授权默认拒绝。业务 API 需同时验证操作权限和数据授权。字段和范围语义见[应用授权上下文契约](./app-authorization-context.md)。

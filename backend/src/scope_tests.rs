@@ -986,9 +986,13 @@ async fn application_token_audience_and_revocation() -> Result<()> {
     let mut config = Config::from_env();
     config.database_url = url;
     config.jwt_secret = secret.into();
+    let config = Arc::new(config);
     let app = Router::new().merge(routes::api_router())
         .nest("/oauth", routes::oauth2::oauth_router())
-        .with_state(AppState::new(pool.clone(), Arc::new(config)));
+        .with_state(AppState::new(pool.clone(), config.clone()));
+    let peer = Router::new().merge(routes::api_router())
+        .nest("/oauth", routes::oauth2::oauth_router())
+        .with_state(AppState::new(pool.clone(), config));
     let (session_a, _) = session(&pool, user_a, tenant_a, org_a, secret).await?;
     let (session_b, _) = session(&pool, user_b, tenant_b, org_b, secret).await?;
 
@@ -1026,9 +1030,11 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(call(&app, Method::POST, "/api/oauth/session-token", &session_b,
             Some(json!({"appCode":code_a}))).await?.0 == StatusCode::NOT_FOUND,
             "B obtained A application token");
-        let (status, _) = call(&app, Method::POST, "/api/oauth/session-token", &session_b,
+        let (status, issued_b) = call(&app, Method::POST, "/api/oauth/session-token", &session_b,
             Some(json!({"appCode":code_b}))).await?;
         ensure!(status == StatusCode::CREATED, "B legitimate application token failed");
+        let token_b = issued_b["accessToken"].as_str()
+            .ok_or_else(|| anyhow::anyhow!("missing B app token"))?.to_string();
 
         let (status, active_a) = call_form(&app, "/oauth/introspect", &client_a, &secret_a,
             &format!("token={token_a}")).await?;
@@ -1043,6 +1049,112 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         let (status, external) = call(&app, Method::GET, "/api/external/menus", &token_a, None).await?;
         ensure!(status == StatusCode::OK && external["application"]["id"] == app_a.to_string(),
             "authorized app token broke external menu compatibility");
+
+        let context_path = format!("/api/apps/{code_a}/context");
+        let (status, empty_context) = call(&app, Method::GET, &context_path, &token_a, None).await?;
+        ensure!(status == StatusCode::OK && empty_context["contractVersion"] == "1.0"
+            && empty_context["dataGrants"].as_array().is_some_and(Vec::is_empty),
+            "app context did not default deny data access: {status} {empty_context}");
+        ensure!(call(&app, Method::GET, &format!("/api/apps/{code_b}/context"), &token_a, None)
+            .await?.0 == StatusCode::FORBIDDEN, "A token accessed B context");
+        let (_, context_b) = call(&app, Method::GET, &format!("/api/apps/{code_b}/context"),
+            &token_b, None).await?;
+        ensure!(context_b["tenant"]["id"] == tenant_b.to_string()
+            && context_b["organization"]["id"] == org_b.to_string()
+            && context_b["dataGrants"].as_array().is_some_and(Vec::is_empty),
+            "B context leaked A tenant or data grants");
+        ensure!(call(&app, Method::GET, &context_path, &token_b, None).await?.0 == StatusCode::FORBIDDEN,
+            "B token accessed A context");
+        let role_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO roles (tenant_id, organization_id, name, code) \
+             VALUES ($1, $2, $3, 'APP_TEST') RETURNING id",
+        ).bind(tenant_a).bind(org_a).bind(format!("app-test-{suffix}"))
+         .fetch_one(&pool).await?;
+        let menu_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus (application_id, type, title, permission, path) \
+             VALUES ($1, 'BUTTON', 'Read orders', 'order:read', '/orders') RETURNING id",
+        ).bind(app_a).fetch_one(&pool).await?;
+        sqlx::query("INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3)")
+            .bind(user_a).bind(role_id).bind(org_a).execute(&pool).await?;
+        sqlx::query("INSERT INTO role_menus (role_id, menu_id) VALUES ($1, $2)")
+            .bind(role_id).bind(menu_id).execute(&pool).await?;
+        sqlx::query("INSERT INTO tenant_menus (tenant_id, menu_id) VALUES ($1, $2)")
+            .bind(tenant_a).bind(menu_id).execute(&pool).await?;
+        sqlx::query("INSERT INTO organization_menus (organization_id, menu_id) VALUES ($1, $2)")
+            .bind(org_a).bind(menu_id).execute(&pool).await?;
+        let member_id: Uuid = sqlx::query_scalar(
+            "SELECT id FROM memberships WHERE user_id = $1 AND organization_id = $2",
+        ).bind(user_a).bind(org_a).fetch_one(&pool).await?;
+        sqlx::query(
+            "INSERT INTO membership_data_grants \
+             (membership_id, application_id, resource_code, action_code, scope_type) \
+             VALUES ($1, $2, 'order', 'read', 'ORG')",
+        ).bind(member_id).bind(app_a).execute(&pool).await?;
+        let (_, context_with_grant) = call(&app, Method::GET, &context_path, &token_a, None).await?;
+        ensure!(context_with_grant["permissions"] == json!(["order:read"])
+            && context_with_grant["dataGrants"][0]["scope"] == "ORG"
+            && context_with_grant["contextVersion"] != empty_context["contextVersion"],
+            "independent menu and data grant missing from context");
+        let (_, host_menus) = call(&app, Method::GET,
+            &format!("/api/auth/menus?applicationId={app_a}"), &session_a, None).await?;
+        ensure!(host_menus["menus"] == context_with_grant["menus"],
+            "host menus and app context diverged");
+        sqlx::query("DELETE FROM role_menus WHERE role_id = $1 AND menu_id = $2")
+            .bind(role_id).bind(menu_id).execute(&pool).await?;
+        let (_, context_without_role) = call(&app, Method::GET, &context_path, &token_a, None).await?;
+        ensure!(context_without_role["permissions"].as_array().is_some_and(Vec::is_empty)
+            && context_without_role["dataGrants"][0]["scope"] == "ORG"
+            && context_without_role["contextVersion"] != context_with_grant["contextVersion"],
+            "role change altered independent data grant or failed to invalidate context");
+        let (_, peer_context) = call(&peer, Method::GET, &context_path, &token_a, None).await?;
+        ensure!(peer_context["permissions"] == context_without_role["permissions"]
+            && peer_context["contextVersion"] == context_without_role["contextVersion"],
+            "second backend instance retained stale permissions");
+        sqlx::query("DELETE FROM membership_data_grants WHERE membership_id = $1 AND application_id = $2")
+            .bind(member_id).bind(app_a).execute(&pool).await?;
+        let (_, context_without_grant) = call(&app, Method::GET, &context_path, &token_a, None).await?;
+        ensure!(context_without_grant["dataGrants"].as_array().is_some_and(Vec::is_empty),
+            "data grant deletion was not visible on next request");
+
+        let child_org: Uuid = sqlx::query_scalar(
+            "INSERT INTO organizations (tenant_id, parent_id, name) \
+             VALUES ($1, $2, $3) RETURNING id",
+        ).bind(tenant_a).bind(org_a).bind(format!("child-{suffix}"))
+         .fetch_one(&pool).await?;
+        let descendant: Uuid = sqlx::query_scalar(
+            "INSERT INTO organizations (tenant_id, parent_id, name) \
+             VALUES ($1, $2, $3) RETURNING id",
+        ).bind(tenant_a).bind(child_org).bind(format!("descendant-{suffix}"))
+         .fetch_one(&pool).await?;
+        let child_member: Uuid = sqlx::query_scalar(
+            "INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2) RETURNING id",
+        ).bind(user_a).bind(child_org).fetch_one(&pool).await?;
+        sqlx::query("INSERT INTO organization_applications (organization_id, application_id) VALUES ($1, $2)")
+            .bind(child_org).bind(app_a).execute(&pool).await?;
+        sqlx::query("INSERT INTO organization_menus (organization_id, menu_id) VALUES ($1, $2)")
+            .bind(child_org).bind(menu_id).execute(&pool).await?;
+        sqlx::query("INSERT INTO role_menus (role_id, menu_id) VALUES ($1, $2)")
+            .bind(role_id).bind(menu_id).execute(&pool).await?;
+        let (child_session, _) = session(&pool, user_a, tenant_a, child_org, secret).await?;
+        let (_, child_issue) = call(&app, Method::POST, "/api/oauth/session-token", &child_session,
+            Some(json!({"appCode":code_a}))).await?;
+        let child_token = child_issue["accessToken"].as_str()
+            .ok_or_else(|| anyhow::anyhow!("missing child app token"))?.to_string();
+        let (_, inherited) = call(&app, Method::GET, &context_path, &child_token, None).await?;
+        ensure!(inherited["permissions"] == json!(["order:read"])
+            && inherited["dataGrants"].as_array().is_some_and(Vec::is_empty),
+            "ancestor role was not inherited or implicitly granted data access");
+        sqlx::query(
+            "INSERT INTO membership_data_grants \
+             (membership_id, application_id, resource_code, action_code, scope_type) \
+             VALUES ($1, $2, 'order', 'read', 'ORG_SUBTREE')",
+        ).bind(child_member).bind(app_a).execute(&pool).await?;
+        let (_, child_context) = call(&app, Method::GET, &context_path, &child_token, None).await?;
+        let allowed_orgs = child_context["dataGrants"][0]["organizationIds"].as_array()
+            .ok_or_else(|| anyhow::anyhow!("missing subtree organization IDs"))?;
+        ensure!(allowed_orgs.contains(&json!(child_org)) && allowed_orgs.contains(&json!(descendant))
+            && !allowed_orgs.contains(&json!(org_a)) && !allowed_orgs.contains(&json!(org_b)),
+            "subtree grant leaked parent or other tenant organization");
 
         let (status, legacy) = call_form(&app, "/oauth/token", &client_a, &secret_a,
             "grant_type=client_credentials").await?;
@@ -1069,6 +1181,8 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(revoked["active"] == false, "revoked app token remained active");
         ensure!(call(&app, Method::GET, "/api/external/menus", &token_a, None).await?.0 == StatusCode::UNAUTHORIZED,
             "external API accepted revoked app token");
+        ensure!(call(&app, Method::GET, &context_path, &token_a, None).await?.0 == StatusCode::FORBIDDEN,
+            "context API accepted revoked app token");
 
         sqlx::query("DELETE FROM organization_applications WHERE organization_id = $1 AND application_id = $2")
             .bind(org_a).bind(app_a).execute(&pool).await?;
@@ -1176,6 +1290,8 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
             &format!("token={token_a8}")).await?.1["active"] == false,
             "app token survived member removal");
+        ensure!(call(&app, Method::GET, &context_path, &token_a8, None).await?.0 == StatusCode::FORBIDDEN,
+            "context API accepted removed member");
         ensure!(call(&app, Method::POST, "/api/oauth/session-token", &fresh_session,
             Some(json!({"appCode":code_a}))).await?.0 == StatusCode::UNAUTHORIZED,
             "user without membership obtained app token");

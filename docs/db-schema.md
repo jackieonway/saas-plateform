@@ -310,3 +310,7 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 ## 0016～0019 应用令牌补充
 
 [`0016_application_token_binding.sql`](../backend/migrations/0016_application_token_binding.sql) 为 `oauth_tokens` 增加 `token_use`、`audience`、唯一 `jti`、`application_id` 和 `platform_session_id`；专用应用令牌均需完整绑定，明文 `jwt` 列保持空值。[`0017_application_token_revocation.sql`](../backend/migrations/0017_application_token_revocation.sql) 在两级应用授权删除及应用/客户端禁用时撤销旧令牌。[`0018_revoke_legacy_app_tokens.sql`](../backend/migrations/0018_revoke_legacy_app_tokens.sql) 撤销缺少受众声明的历史应用用户 access token；服务 `client_credentials` 令牌保留。[`0019_application_token_config_revocation.sql`](../backend/migrations/0019_application_token_config_revocation.sql) 在应用 code 或客户端绑定、类型、scope、TTL 变更时撤销旧应用令牌，配置恢复不会复活旧令牌。接入语义见[应用令牌契约](./application-token-contract.md)。
+
+## 0020 独立数据授权
+
+[`0020_membership_data_grants.sql`](../backend/migrations/0020_membership_data_grants.sql) 创建 `membership_data_grants`：按成员关系、应用、资源和操作显式授予 `SELF/ORG/ORG_SUBTREE/TENANT` 范围，缺失即拒绝。数据授权不引用角色，删除成员时级联删除。授权上下文与业务资源边界见[应用授权上下文契约](./app-authorization-context.md)。

@@ -1,5 +1,6 @@
 mod config;
 mod app_token;
+mod authorization;
 mod database;
 mod error;
 mod extractors;
