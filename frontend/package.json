@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --port 3000 --strictPort --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "test:micro": "node --test ../tests/micro-context-runtime.mjs ../tests/micro-sandbox-lifecycle.mjs ../mini-services/micro-vue/smoke-test.cjs ../mini-services/micro-jquery/smoke-test.cjs",
+    "test:micro:browser": "node ../tests/micro-host-browser.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx"
   },

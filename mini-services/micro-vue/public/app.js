@@ -5,10 +5,10 @@
  *   window.__DANTE_MICRO_APP__ = {
  *     name: string,
  *     mount(container: HTMLElement, props: MicroProps): Promise<void>,
- *     unmount(): Promise<void>
+ *     update(props: MicroProps): Promise<void>, unmount(): Promise<void>
  *   }
- *   MicroProps = { appCode, basePath, routePath, token?, user:{id,username,displayName},
- *                  theme, menus, onNavigate(path), onNotify(message, variant?) }
+ *   MicroProps 2.0 包含应用 token、租户、组织、角色、操作权限、独立 dataGrants、
+ *   contextVersion/contextEpoch、两个到期时间和宿主 AbortSignal；详见接入文档。
  *
  * 视图: props.routePath === '/micro/vue-workshop/security' → 「权限与沙箱」, 否则「总览」。
  *
@@ -23,7 +23,8 @@
  * - 样式全部手写、选择器一律 .mf-vue- 前缀, 以 <style> 渲染进 mount 容器内,
  *   随 app.unmount() 一并清理, 不向 document.head 泄漏。
  * - fetch('/api/external/menus' | '/api/external/roles') 为同源主应用请求
- *   (Vite 代理 → Rust 后端), Authorization 使用主应用注入的 props.token。
+ *   (Vite 代理 → Rust 后端), Authorization 只使用 props.token 中的应用专用令牌。
+ *   本地控制器联动 props.signal；上下文更换/卸载会中止旧请求并拒绝迟到响应。
  * - mount 时向 window 写入 __VUE_APP_MARKER (沙箱清理探针), 卸载时
  *   刻意不清除 —— 该痕迹应由主应用沙箱负责回收, 供其验证「真实 window 无残留」。
  */
@@ -42,6 +43,11 @@
   var currentProps = null
   var app = null
   var mountedContainer = null
+  var rootVm = null
+  var contextController = null
+  var hostSignal = null
+  var hostAbort = null
+  var requestEpoch = 0
   /* 响应式 props 视图: lifecycle.update 增量写入 → 组件自动重渲染(不重挂) */
   var propsState = null
 
@@ -54,6 +60,18 @@
         routePath: '',
         theme: '—',
         token: '',
+        contractVersion: '',
+        contextVersion: '',
+        contextEpoch: 0,
+        expiresAt: '',
+        tokenExpiresAt: '',
+        tenant: {},
+        organization: {},
+        roles: [],
+        permissions: [],
+        dataGrants: [],
+        menus: [],
+        contextAvailable: false,
         menusCount: null,
         updates: 0,
         lastUpdateAt: '',
@@ -76,15 +94,96 @@
     s.routePath = props.routePath || ''
     s.theme = props.theme || '—'
     s.token = typeof props.token === 'string' ? props.token : ''
+    s.contractVersion = props.contractVersion
+    s.contextVersion = props.contextVersion
+    s.contextEpoch = props.contextEpoch
+    s.expiresAt = props.expiresAt
+    s.tokenExpiresAt = props.tokenExpiresAt
+    s.tenant = props.tenant || {}
+    s.organization = props.organization || {}
+    s.roles = Array.isArray(props.roles) ? props.roles : []
+    s.permissions = Array.isArray(props.permissions) ? props.permissions : []
+    s.dataGrants = Array.isArray(props.dataGrants) ? props.dataGrants : []
+    s.menus = Array.isArray(props.menus) ? props.menus : []
+    s.contextAvailable = contextUsable()
     s.menusCount = Array.isArray(props.menus) ? props.menus.length : null
   }
-  function prop(name, fallback) {
-    if (currentProps && currentProps[name] !== undefined && currentProps[name] !== null) {
-      return currentProps[name]
-    }
-    return fallback
+
+  function emptyResult() {
+    return { loading: false, fired: false, status: '', ok: false, message: '', data: null }
   }
 
+  function clearResults() {
+    if (rootVm) {
+      rootVm.menus = emptyResult()
+      rootVm.roles = emptyResult()
+    }
+  }
+
+  function contextUsable() {
+    var p = currentProps
+    return !!(p && p.contractVersion === '2.0' && p.token && contextController &&
+      !contextController.signal.aborted && Date.parse(p.expiresAt) > Date.now() &&
+      Date.parse(p.tokenExpiresAt) > Date.now())
+  }
+
+  function stopContext() {
+    requestEpoch += 1
+    if (contextController) contextController.abort()
+    contextController = null
+    if (hostSignal && hostAbort) hostSignal.removeEventListener('abort', hostAbort)
+    hostSignal = null
+    hostAbort = null
+    if (propsState) propsState.contextAvailable = false
+    clearResults()
+  }
+
+  function applyContext(props) {
+    if (!props || props.contractVersion !== '2.0' || !props.signal || !props.tenant || !props.organization || !props.user) {
+      throw new Error('微应用需要 MicroProps 2.0 完整上下文和 AbortSignal')
+    }
+    var old = currentProps
+    var changed = !old || ['token', 'contextVersion', 'contextEpoch', 'expiresAt', 'tokenExpiresAt', 'signal', 'appCode'].some(function (key) {
+      return old[key] !== props[key]
+    }) || old.tenant.id !== props.tenant.id || old.organization.id !== props.organization.id || old.user.id !== props.user.id
+    if (changed) {
+      stopContext()
+      currentProps = props
+      contextController = new AbortController()
+      hostSignal = props.signal
+      hostAbort = function () {
+        requestEpoch += 1
+        if (contextController) contextController.abort()
+        if (propsState) propsState.contextAvailable = false
+        clearResults()
+      }
+      hostSignal.addEventListener('abort', hostAbort, { once: true })
+      if (hostSignal.aborted) hostAbort()
+    } else {
+      currentProps = props
+    }
+    syncPropsState(props)
+  }
+
+  function requestExternal(endpoint) {
+    if (!contextUsable()) return Promise.resolve({ epoch: requestEpoch, ok: false, status: '—', body: { message: '应用上下文已失效，等待宿主更新' } })
+    var epoch = requestEpoch
+    var controller = contextController
+    var token = currentProps.token
+    function isCurrent() {
+      return epoch === requestEpoch && controller === contextController && contextUsable()
+    }
+    return fetch(endpoint, { signal: controller.signal, headers: { Authorization: 'Bearer ' + token } })
+      .then(function (res) {
+        return res.json().catch(function () { return {} }).then(function (body) {
+          return isCurrent() ? { epoch: epoch, ok: res.ok, status: String(res.status), body: body } : null
+        })
+      })
+      .catch(function (err) {
+        if (!isCurrent() || (err && err.name === 'AbortError')) return null
+        return { epoch: epoch, ok: false, status: '—', body: { message: '网络错误: ' + (err && err.message ? err.message : String(err)) } }
+      })
+  }
   function normalizePath(p) {
     var s = String(p || '')
     if (s.length > 1) s = s.replace(/\/+$/, '')
@@ -224,6 +323,10 @@
         // 沙箱自检计时器: 每秒 +1; 用 window.setInterval 便于主应用沙箱跟踪/回收
         this._timer = window.setInterval(function () {
           vm.seconds += 1
+          if (!contextUsable()) {
+            propsState.contextAvailable = false
+            clearResults()
+          }
         }, 1000)
       },
       beforeUnmount: function () {
@@ -244,28 +347,13 @@
           return parts.join(' · ')
         },
         requestExternal: function (endpoint) {
-          var token = prop('token', '')
-          return fetch(endpoint, {
-            headers: { Authorization: 'Bearer ' + (token || '') },
-          })
-            .then(function (res) {
-              return res
-                .json()
-                .catch(function () {
-                  return {}
-                })
-                .then(function (body) {
-                  return { ok: res.ok, status: String(res.status), body: body }
-                })
-            })
-            .catch(function (err) {
-              return { ok: false, status: '—', body: { message: '网络错误: ' + (err && err.message ? err.message : String(err)) } }
-            })
+          return requestExternal(endpoint)
         },
         loadMenus: function () {
           var vm = this
           vm.menus = { loading: true, fired: true, status: '', ok: false, message: '', data: null }
-          vm.requestExternal('/api/external/menus').then(function (r) {
+          return vm.requestExternal('/api/external/menus').then(function (r) {
+            if (!r || r.epoch !== requestEpoch || !mountedContainer) return
             vm.menus = {
               loading: false,
               fired: true,
@@ -279,7 +367,8 @@
         loadRoles: function () {
           var vm = this
           vm.roles = { loading: true, fired: true, status: '', ok: false, message: '', data: null }
-          vm.requestExternal('/api/external/roles').then(function (r) {
+          return vm.requestExternal('/api/external/roles').then(function (r) {
+            if (!r || r.epoch !== requestEpoch || !mountedContainer) return
             vm.roles = {
               loading: false,
               fired: true,
@@ -329,10 +418,33 @@
               kv('routePath', this.routePath),
               kv('theme', [this.p.theme, h('i', { class: 'mf-vue-muted' }, '（本子应用不做暗色适配）')]),
               kv('token', tokenValue),
+              kv('contractVersion', this.p.contractVersion),
+              kv('contextVersion', this.p.contextVersion),
+              kv('contextEpoch', String(this.p.contextEpoch)),
+              kv('tenant', this.p.tenant.name + ' · ' + this.p.tenant.code),
+              kv('organization', this.p.organization.name + ' · ' + this.p.organization.path),
+              kv('expiresAt', this.p.expiresAt),
+              kv('tokenExpiresAt', this.p.tokenExpiresAt),
+              kv('context', this.p.contextAvailable ? '有效' : '已失效，等待宿主更新'),
               this.p.menusCount !== null ? kv('menus', '注入 ' + this.p.menusCount + ' 项') : null,
             ]),
           ])
         )
+
+        cards.push(h('section', { class: 'mf-vue-card' }, [
+          h('div', { class: 'mf-vue-card-title' }, '当前用户的角色与操作权限'),
+          h('p', { class: 'mf-vue-note' }, this.p.contextAvailable ? this.p.roles.map(function (role) { return role.name + ' (' + role.code + ')' }).join('、') || '没有应用角色' : '上下文已失效'),
+          h('p', { class: 'mf-vue-note' }, this.p.contextAvailable ? this.p.permissions.join('、') || '没有操作权限' : ''),
+          h('div', { class: 'mf-vue-card-title' }, '独立数据授权'),
+          h('ul', { class: 'mf-vue-role-list' }, this.p.contextAvailable ? this.p.dataGrants.map(function (grant) {
+            return h('li', { key: grant.resource + ':' + grant.action }, [
+              h('b', null, grant.resource + ':' + grant.action + ' · ' + grant.scope),
+              h('span', { class: 'mf-vue-muted' }, '用户 ' + grant.subjectUserId + ' · 租户 ' + grant.tenantId + ' · 组织 ' + (grant.organizationIds || []).join(', ')),
+            ])
+          }) : []),
+          h('p', { class: 'mf-vue-note' }, '没有显式数据授权时默认拒绝。业务后端必须同时校验操作权限和资源对应的数据范围。'),
+          this.p.contextAvailable ? h(MenuTree, { nodes: this.p.menus, depth: 0 }) : null,
+        ]))
 
         /* ② 拉取本应用菜单 */
         var m = this.menus
@@ -341,7 +453,7 @@
             h('div', { class: 'mf-vue-card-title' }, '② 拉取本应用菜单'),
             h(
               'button',
-              { class: 'mf-vue-btn', type: 'button', disabled: m.loading, onClick: function () { vm.loadMenus() } },
+              { class: 'mf-vue-btn', type: 'button', disabled: m.loading || !this.p.contextAvailable, onClick: function () { vm.loadMenus() } },
               m.loading ? '请求中…' : 'GET /api/external/menus'
             ),
           ]),
@@ -354,7 +466,7 @@
         }
         if (m.fired && !m.loading && !m.ok) {
           var mErr = [m.message || '请求失败']
-          if (!this.token) mErr.push(h('i', { class: 'mf-vue-muted' }, '（主应用未注入 token，空 Bearer 调用被 401 拒绝属预期）'))
+          if (!this.p.token) mErr.push(h('i', { class: 'mf-vue-muted' }, '（主应用未注入应用 token）'))
           menusChildren.push(h('p', { class: 'mf-vue-error' }, mErr))
         }
         if (m.ok && m.data && m.data.menus && m.data.menus.length) {
@@ -371,7 +483,7 @@
             h('div', { class: 'mf-vue-card-title' }, '③ 拉取本应用角色'),
             h(
               'button',
-              { class: 'mf-vue-btn', type: 'button', disabled: r.loading, onClick: function () { vm.loadRoles() } },
+              { class: 'mf-vue-btn', type: 'button', disabled: r.loading || !this.p.contextAvailable, onClick: function () { vm.loadRoles() } },
               r.loading ? '请求中…' : 'GET /api/external/roles'
             ),
           ]),
@@ -383,7 +495,7 @@
         }
         if (r.fired && !r.loading && !r.ok) {
           var rErr = [r.message || '请求失败']
-          if (!this.token) rErr.push(h('i', { class: 'mf-vue-muted' }, '（主应用未注入 token，空 Bearer 调用被 401 拒绝属预期）'))
+          if (!this.p.token) rErr.push(h('i', { class: 'mf-vue-muted' }, '（主应用未注入应用 token）'))
           rolesChildren.push(h('p', { class: 'mf-vue-error' }, rErr))
         }
         if (r.ok && r.data) {
@@ -392,21 +504,20 @@
             var roleLis = (org.roles || []).map(function (role) {
               return h('li', { key: role.id }, [
                 h('b', null, role.name),
-                role.builtIn ? h('span', { class: 'mf-vue-badge mf-vue-badge-muted' }, '内置') : null,
-                h('span', { class: 'mf-vue-muted' }, role.menuCount + ' 个菜单'),
+                h('span', { class: 'mf-vue-muted' }, role.code),
               ])
             })
             if (!roleLis.length) roleLis.push(h('li', { class: 'mf-vue-muted' }, '（无启用中的角色）'))
             return h('div', { class: 'mf-vue-org', key: org.id }, [
               h('div', { class: 'mf-vue-org-name' }, [
                 org.name + ' ',
-                h('span', { class: 'mf-vue-muted' }, '· ' + org.tenantName),
+                h('span', { class: 'mf-vue-muted' }, '· ' + this.p.tenant.name),
               ]),
               h('ul', { class: 'mf-vue-role-list' }, roleLis),
             ])
-          })
+          }, this)
           if (!orgNodes.length) {
-            orgNodes.push(h('p', { class: 'mf-vue-note mf-vue-muted' }, '该应用暂无已授权组织。'))
+            orgNodes.push(h('p', { class: 'mf-vue-note mf-vue-muted' }, '当前用户在当前组织没有应用角色。'))
           }
           rolesChildren.push(h('div', null, orgNodes))
         }
@@ -493,14 +604,8 @@
             reject(new Error('Vue 全局库未加载 (缺少 /vendor/vue.global.prod.js)'))
             return
           }
-          currentProps = props || {}
-          // 响应式 props 视图同步(增量更新契约的挂载基线)
-          ensurePropsState()
-          syncPropsState(props)
-          if (propsState) {
-            propsState.updates = 0
-            propsState.lastUpdateAt = ''
-          }
+          stopContext()
+          currentProps = null
           // 沙箱清理探针: 刻意写在 window 上(沙箱内即代理自有表), 卸载时不由本应用删除
           window.__VUE_APP_MARKER = 'written-by-vue-subapp'
           if (app) {
@@ -511,29 +616,47 @@
             }
             app = null
           }
+          rootVm = null
+          applyContext(props)
+          if (propsState) {
+            propsState.updates = 0
+            propsState.lastUpdateAt = ''
+          }
           app = VueLib.createApp(makeRootComponent())
-          app.mount(container)
+          rootVm = app.mount(container)
           mountedContainer = container
           resolve()
         } catch (err) {
+          stopContext()
+          currentProps = null
+          if (app) { try { app.unmount() } catch (e) {} }
+          app = null
+          rootVm = null
+          if (container) container.innerHTML = ''
+          mountedContainer = null
           reject(err)
         }
       })
     },
     unmount: function () {
       return new Promise(function (resolve) {
+        stopContext()
+        if (rootVm && rootVm._timer) {
+          window.clearInterval(rootVm._timer)
+          rootVm._timer = null
+        }
         try {
           if (app) {
             app.unmount() // beforeUnmount 钩子中清理 setInterval
             app = null
           }
-          if (mountedContainer) {
-            mountedContainer.innerHTML = '' // 清 container
-            mountedContainer = null
-          }
         } catch (e) {
           /* 卸载容错: 无论如何都 resolve, 不阻塞主应用 */
         }
+        app = null
+        rootVm = null
+        if (mountedContainer) mountedContainer.innerHTML = ''
+        mountedContainer = null
         currentProps = null
         resolve()
       })
@@ -541,17 +664,20 @@
     /* 增量更新契约: 路由/主题/菜单/令牌变化时由容器调用, 不重挂。
        写入响应式 propsState → 组件自动重渲染; seconds/notifyLog 等组件内部状态保留。 */
     update: function (props) {
-      return new Promise(function (resolve) {
+      return new Promise(function (resolve, reject) {
         try {
-          currentProps = props || {}
-          syncPropsState(props)
+          if (!mountedContainer) { resolve(); return }
+          applyContext(props)
           if (propsState) {
             propsState.updates += 1
             var d = new Date()
             propsState.lastUpdateAt = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds())
           }
         } catch (e) {
-          /* 增量更新容错: 不抛错, 退化为展示旧值 */
+          stopContext()
+          currentProps = null
+          reject(e)
+          return
         }
         resolve()
       })

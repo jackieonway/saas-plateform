@@ -21,12 +21,12 @@ export const authApi = {
   switchContext: (organizationId: string, token: string) =>
     api.post<ContextResp>("/api/auth/context", { organizationId }, { bearer: token, suppress401: true }),
 
-  profile: () => api.get<ProfileResp>("/api/auth/profile"),
+  profile: (bearer?: string, signal?: AbortSignal) => api.get<ProfileResp>("/api/auth/profile", { bearer, signal }),
 
-  menus: (applicationId: string) =>
-    api.get<unknown>(`/api/auth/menus?applicationId=${encodeURIComponent(applicationId)}`),
+  menus: (applicationId: string, bearer?: string, signal?: AbortSignal) =>
+    api.get<unknown>(`/api/auth/menus?applicationId=${encodeURIComponent(applicationId)}`, { bearer, signal }),
 
-  permissions: () => api.get<PermissionsResp>("/api/auth/permissions"),
+  permissions: (bearer?: string, signal?: AbortSignal) => api.get<PermissionsResp>("/api/auth/permissions", { bearer, signal }),
 
   logout: () => api.post<{ ok: boolean }>("/api/auth/logout"),
 

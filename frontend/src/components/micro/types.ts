@@ -33,21 +33,63 @@ export interface MicroMenuItem {
   icon: string | null
   sortOrder: number
   visible: boolean
+  permission?: string
   children?: MicroMenuItem[]
+}
+
+export interface MicroTenant { id: string; code: string; name: string }
+export interface MicroOrganization { id: string; name: string; path: string }
+export interface MicroRole { id: string; name: string; code: string }
+export interface MicroDataGrant {
+  resource: string
+  action: string
+  scope: "SELF" | "ORG" | "ORG_SUBTREE" | "TENANT"
+  subjectUserId: string
+  tenantId: string
+  organizationIds: string[]
+}
+
+/** 平台 GET /api/apps/{appCode}/context 的用户视图。 */
+export interface AppAuthorizationContext {
+  contractVersion: "1.0"
+  contextVersion: string
+  expiresAt: string
+  appCode: string
+  application: { id: string; name: string }
+  user: MicroUser
+  tenant: MicroTenant
+  organization: MicroOrganization
+  roles: MicroRole[]
+  permissions: string[]
+  dataGrants: MicroDataGrant[]
+  menus: MicroMenuItem[]
 }
 
 /** 注入子应用的 Props(共享契约,字段名与 21-b 子应用实现精确一致) */
 export interface MicroProps {
+  contractVersion: "2.0"
+  contextVersion: string
+  /** 宿主单调递增推送序号；用它拒绝旧请求结果。 */
+  contextEpoch: number
+  expiresAt: string
+  tokenExpiresAt: string
+  /** 上下文替换、过期、组织切换或卸载时中止；所有业务 fetch 都应绑定。 */
+  signal: AbortSignal
   /** 应用编码(如 vue-workshop) */
   appCode: string
   /** 主应用内挂载基路径, 恒为 /micro/{appCode} */
   basePath: string
   /** 当前完整路由路径(如 /micro/vue-workshop/security), 子应用自行减去 basePath 得子路径 */
   routePath: string
-  /** 会话令牌(POST /api/oauth/session-token 获取; 获取失败时缺省, 子应用不应硬依赖) */
-  token?: string
+  /** 短期应用令牌；未取得有效令牌和上下文时宿主不会挂载。 */
+  token: string
   /** 当前用户 */
   user: MicroUser
+  tenant: MicroTenant
+  organization: MicroOrganization
+  roles: MicroRole[]
+  permissions: string[]
+  dataGrants: MicroDataGrant[]
   /** 主应用当前主题 */
   theme: MicroTheme
   /** 该应用的菜单树(用户可见菜单; 无授权/拉取失败为空数组) */

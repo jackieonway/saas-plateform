@@ -2,6 +2,7 @@ import * as React from "react"
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { AnimatePresence, motion } from "framer-motion"
 import { Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -55,6 +56,7 @@ function BrandMark({ className }: { className?: string }) {
 
 export default function AppLayout() {
   const token = useAuthStore((s) => s.token)
+  const contextEpoch = useAuthStore((s) => s.contextEpoch)
   const profile = useAuthStore((s) => s.profile)
   const setProfile = useAuthStore((s) => s.setProfile)
   const currentApplicationId = useAuthStore((s) => s.currentApplicationId)
@@ -71,8 +73,8 @@ export default function AppLayout() {
 
   // 同步 profile 到 store
   React.useEffect(() => {
-    if (profileQuery.data) setProfile(profileQuery.data)
-  }, [profileQuery.data, setProfile])
+    if (profileQuery.data) setProfile(profileQuery.data, contextEpoch)
+  }, [profileQuery.data, setProfile, contextEpoch])
 
   // 应用可用列表变化时校正当前应用
   React.useEffect(() => {
@@ -99,18 +101,28 @@ export default function AppLayout() {
   /** 切换应用:若当前页面不属于新应用,则跳转到该应用首个可导航菜单 */
   const handleSelectApp = React.useCallback(
     (appId: string) => {
+      const selection = useAuthStore.getState()
+      if (selection.contextSwitching || !selection.token) return
+      const selectedToken = selection.token
+      const selectedEpoch = selection.contextEpoch
       setCurrentApplication(appId)
       const app = (profile?.applications ?? []).find((a) => a.id === appId)
-      if (!app?.basePath || app.basePath === "/") return
+      if (!app?.basePath || app.basePath === "/") {
+        if (pathname.startsWith("/micro/")) navigate("/")
+        return
+      }
       if (pathname === app.basePath || pathname.startsWith(`${app.basePath}/`)) return
       void (async () => {
         try {
           const menus = await queryClient.fetchQuery({
-            queryKey: ["auth-menus", appId],
-            queryFn: async () =>
-              sortMenuTree(asArray<MenuNode>(await authApi.menus(appId), "menus")),
-            staleTime: 30_000,
+            queryKey: ["auth-menus", appId, selectedEpoch],
+            queryFn: async ({ signal }) =>
+              sortMenuTree(asArray<MenuNode>(await authApi.menus(appId, selectedToken, signal), "menus")),
+            staleTime: 20_000,
           })
+          const current = useAuthStore.getState()
+          if (current.contextSwitching || current.contextEpoch !== selectedEpoch ||
+              current.token !== selectedToken || current.currentApplicationId !== appId) return
           const firstPath = (function walk(nodes: MenuNode[]): string | null {
             for (const n of nodes) {
               // 外链菜单无对应路由(BLANK 新窗口/SELF 走 /embed), 切换应用时跳过
@@ -122,9 +134,14 @@ export default function AppLayout() {
             }
             return null
           })(menus)
-          if (firstPath) navigate(firstPath)
+          navigate(firstPath ?? app.basePath)
         } catch {
-          /* 菜单拉取失败时仅切换侧栏,不跳转 */
+          const current = useAuthStore.getState()
+          if (!current.contextSwitching && current.contextEpoch === selectedEpoch &&
+              current.token === selectedToken && current.currentApplicationId === appId) {
+            toast.error("应用菜单获取失败，已退出旧应用")
+            navigate("/")
+          }
         }
       })()
     },

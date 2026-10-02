@@ -6,10 +6,10 @@
  *   window.__DANTE_MICRO_APP__ = {
  *     name: string,
  *     mount(container: HTMLElement, props: MicroProps): Promise<void>,
- *     unmount(): Promise<void>
+ *     update(props: MicroProps): Promise<void>, unmount(): Promise<void>
  *   }
- *   MicroProps = { appCode, basePath, routePath, token?, user:{id,username,displayName},
- *                  theme, menus, onNavigate(path), onNotify(message, variant?) }
+ *   MicroProps 2.0 包含应用 token、租户、组织、角色、操作权限、独立 dataGrants、
+ *   contextVersion/contextEpoch、两个到期时间和宿主 AbortSignal；详见接入文档。
  *
  * 实现说明:
  * - jQuery 来自 /vendor/jquery.min.js (先于本文件加载)。jQuery UMD 会显式把
@@ -32,11 +32,68 @@
 
   /* ===== 模块级挂载状态 ===== */
   var currentProps = null
+  var contextController = null
+  var hostSignal = null
+  var hostAbort = null
+  var requestEpoch = 0
   var mountContainer = null
   var tickTimer = null
   var tickSeconds = 0
   var updateCount = 0
   var state = { sortKey: 'id', sortDir: 'asc', keyword: '', status: '' }
+
+  function find(selector) {
+    return mountContainer ? mountContainer.querySelector(selector) : null
+  }
+
+  function contextUsable() {
+    var p = currentProps
+    return !!(p && p.contractVersion === '2.0' && p.token && contextController &&
+      !contextController.signal.aborted && Date.parse(p.expiresAt) > Date.now() &&
+      Date.parse(p.tokenExpiresAt) > Date.now())
+  }
+
+  function clearResults() {
+    var list = find('#mf-jq-menu-list')
+    if (list) list.innerHTML = ''
+    setStatus('#mf-jq-menu-status', '上下文已更新，旧请求和结果已清理', null)
+  }
+
+  function stopContext() {
+    requestEpoch += 1
+    if (contextController) contextController.abort()
+    contextController = null
+    if (hostSignal && hostAbort) hostSignal.removeEventListener('abort', hostAbort)
+    hostSignal = null
+    hostAbort = null
+    clearResults()
+  }
+
+  function applyContext(props) {
+    if (!props || props.contractVersion !== '2.0' || !props.signal || !props.tenant || !props.organization || !props.user) {
+      throw new Error('微应用需要 MicroProps 2.0 完整上下文和 AbortSignal')
+    }
+    var old = currentProps
+    var changed = !old || ['token', 'contextVersion', 'contextEpoch', 'expiresAt', 'tokenExpiresAt', 'signal', 'appCode'].some(function (key) {
+      return old[key] !== props[key]
+    }) || old.tenant.id !== props.tenant.id || old.organization.id !== props.organization.id || old.user.id !== props.user.id
+    if (changed) {
+      stopContext()
+      currentProps = props
+      contextController = new AbortController()
+      hostSignal = props.signal
+      hostAbort = function () {
+        requestEpoch += 1
+        if (contextController) contextController.abort()
+        clearResults()
+        renderContext()
+      }
+      hostSignal.addEventListener('abort', hostAbort, { once: true })
+      if (hostSignal.aborted) hostAbort()
+    } else {
+      currentProps = props
+    }
+  }
 
   /* ===== mock 工单数据 (2018 年存档风格) ===== */
   var TICKETS = [
@@ -205,7 +262,7 @@
   }
 
   function setStatus(selector, text, ok) {
-    var el = document.querySelector(selector)
+    var el = find(selector)
     if (!el) return
     el.textContent = text
     if (ok === true) el.setAttribute('data-ok', '1')
@@ -215,11 +272,21 @@
 
   /* ===== 外部权限 API (遗留栈接新链路) ===== */
   function fetchMenus() {
+    if (!contextUsable()) {
+      setStatus('#mf-jq-menu-status', '应用上下文已失效，等待宿主更新', false)
+      return Promise.resolve()
+    }
+    var epoch = requestEpoch
+    var controller = contextController
+    function isCurrent() {
+      return epoch === requestEpoch && controller === contextController && contextUsable() && !!mountContainer
+    }
     var token = (currentProps && currentProps.token) || ''
-    var list = document.getElementById('mf-jq-menu-list')
+    var list = find('#mf-jq-menu-list')
     if (list) list.innerHTML = ''
     setStatus('#mf-jq-menu-status', '请求中…', null)
-    fetch('/api/external/menus', {
+    return fetch('/api/external/menus', {
+      signal: controller.signal,
       headers: { Authorization: 'Bearer ' + (token || '') },
     })
       .then(function (res) {
@@ -233,6 +300,7 @@
           })
       })
       .then(function (r) {
+        if (!isCurrent()) return
         if (r.ok && r.body && r.body.menus) {
           var appName = r.body.application ? r.body.application.name : ''
           var clientId = r.body.client ? r.body.client.clientId : ''
@@ -245,8 +313,34 @@
         }
       })
       .catch(function (err) {
+        if (!isCurrent() || (err && err.name === 'AbortError')) return
         setStatus('#mf-jq-menu-status', '网络错误: ' + (err && err.message ? err.message : err), false)
       })
+  }
+
+  function renderContext() {
+    var panel = find('#mf-jq-context')
+    if (!panel) return
+    var p = currentProps || {}
+    var available = contextUsable()
+    panel.innerHTML = '<div class="mf-jq-card-title">当前租户与组织</div>' +
+      '<ul class="mf-jq-kv"><li>租户: <b>' + esc(p.tenant && p.tenant.name) + '</b> · ' + esc(p.tenant && p.tenant.code) + '</li>' +
+      '<li>组织: <b>' + esc(p.organization && p.organization.name) + '</b> · ' + esc(p.organization && p.organization.path) + '</li>' +
+      '<li>契约: ' + esc(p.contractVersion) + ' · 上下文序号 ' + esc(p.contextEpoch) + '</li>' +
+      '<li>主题: ' + esc(p.theme) + '</li>' +
+      '<li>上下文版本: <code>' + esc(p.contextVersion) + '</code></li>' +
+      '<li>上下文到期: ' + esc(p.expiresAt) + '</li><li>令牌到期: ' + esc(p.tokenExpiresAt) + '</li></ul>' +
+      '<div class="mf-jq-card-title">角色与操作权限</div>' +
+      '<p class="mf-jq-note">' + (available ? esc((p.roles || []).map(function (r) { return r.name + ' (' + r.code + ')' }).join('、') || '没有应用角色') : '上下文已失效，等待宿主更新') + '</p>' +
+      '<p class="mf-jq-note">' + (available ? esc((p.permissions || []).join('、') || '没有操作权限') : '') + '</p>' +
+      '<div class="mf-jq-card-title">独立数据授权</div>' +
+      '<ul class="mf-jq-kv">' + (available ? (p.dataGrants || []).map(function (g) {
+        return '<li><b>' + esc(g.resource + ':' + g.action + ' · ' + g.scope) + '</b><br>用户 ' + esc(g.subjectUserId) + ' · 租户 ' + esc(g.tenantId) + ' · 组织 ' + esc((g.organizationIds || []).join(', ')) + '</li>'
+      }).join('') : '') + '</ul>' +
+      '<p class="mf-jq-note">没有显式数据授权时默认拒绝。业务后端必须同时校验操作权限和资源对应的数据范围。</p>' +
+      '<ul class="mf-jq-menu-list">' + (available ? renderMenuFlat(p.menus, 0) : '') + '</ul>'
+    var button = find('#mf-jq-btn-menus')
+    if (button) button.disabled = !available
   }
 
   /* ===== 渲染整体骨架 ===== */
@@ -304,6 +398,7 @@
       '</table>' +
       '</div>' +
       '<div class="mf-jq-cards">' +
+      '<div id="mf-jq-context" class="mf-jq-card"></div>' +
       '<div class="mf-jq-card">' +
       '<div class="mf-jq-card-title">外部权限 API（新链路）</div>' +
       '<p class="mf-jq-note">遗留栈同样可携带主应用注入的令牌调用对外菜单接口：</p>' +
@@ -389,7 +484,12 @@
             reject(new Error('jQuery 全局库未加载 (缺少 /vendor/jquery.min.js)'))
             return
           }
-          currentProps = props || {}
+          stopContext()
+          currentProps = null
+          if ($) $(document).off('.mfjq')
+          if (tickTimer) { window.clearInterval(tickTimer); tickTimer = null }
+          if (mountContainer) mountContainer.innerHTML = ''
+          applyContext(props)
           // 沙箱清理探针: 刻意写在真实 window 上, 卸载时不由本应用删除
           window.__JQ_APP_MARKER = 'written-by-jq-subapp'
           mountContainer = container
@@ -398,22 +498,34 @@
           updateCount = 0
           container.innerHTML = '' // 清空重建
           renderShell()
+          renderContext()
           renderRows()
           bindEvents()
           // 沙箱自检计时器: 用 window.setInterval 便于主应用沙箱跟踪/回收
           tickTimer = window.setInterval(function () {
             tickSeconds += 1
-            var el = document.getElementById('mf-jq-tick')
+            var el = find('#mf-jq-tick')
             if (el) el.textContent = tickSeconds + ' 秒'
+            if (!contextUsable()) {
+              clearResults()
+              renderContext()
+            }
           }, 1000)
           resolve()
         } catch (err) {
+          stopContext()
+          currentProps = null
+          if ($) $(document).off('.mfjq')
+          if (tickTimer) { window.clearInterval(tickTimer); tickTimer = null }
+          if (mountContainer) mountContainer.innerHTML = ''
+          mountContainer = null
           reject(err)
         }
       })
     },
     unmount: function () {
       return new Promise(function (resolve) {
+        stopContext()
         try {
           if ($) $(document).off('.mfjq') // 解绑全部命名空间事件
           if (tickTimer) {
@@ -435,13 +547,17 @@
        遗留系统无响应式框架 —— 手术式只刷新头部路由/令牌 chip 与更新徽章,
        表格/筛选/排序/滚动状态全部保留(即「未重挂」的行为学证据)。 */
     update: function (props) {
-      return new Promise(function (resolve) {
+      return new Promise(function (resolve, reject) {
         try {
-          currentProps = props || {}
           if (!mountContainer) {
             resolve()
             return
           }
+          applyContext(props)
+          renderContext()
+          var user = currentProps.user
+          var sub = find('.mf-jq-sub')
+          if (sub) sub.textContent = '运维工单 · 2018 存档演示数据 · 接入用户 ' + user.username + '（' + user.displayName + '）'
           updateCount += 1
           var badge = mountContainer.querySelector('.mf-jq-upd-badge')
           if (badge) {
@@ -472,7 +588,11 @@
             tokenBox.innerHTML = '令牌: ' + chip
           }
         } catch (e) {
-          /* 增量更新容错: 不抛错, 退化为展示旧值 */
+          stopContext()
+          currentProps = null
+          renderContext()
+          reject(e)
+          return
         }
         resolve()
       })

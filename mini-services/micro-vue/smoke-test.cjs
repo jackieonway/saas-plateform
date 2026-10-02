@@ -1,123 +1,123 @@
-// 运行时判定: 沙箱执行 app.js + Vue 桩, 验证组件结构与 lifecycle.update 增量更新
-const fs = require("node:fs")
-const vm = require("node:vm")
-
-const code = fs.readFileSync("public/app.js", "utf8")
-
-let capturedComponent = null
-const vueStub = {
-  version: "3.5.13-stub",
-  h: function (tag, props, children) {
-    return { tag, props, children } // 最小 vnode 桩
-  },
-  reactive: function (o) {
-    return o // 测试环境直通(真实 Vue 由响应式代理驱动重渲染)
-  },
-  createApp: function (component) {
-    capturedComponent = component
-    return {
-      mount() {},
-      unmount() {},
-    }
-  },
+// Exercise actual lifecycle and request handlers; fetch deliberately ignores AbortSignal.
+const fs = require('node:fs')
+const path = require('node:path')
+const vm = require('node:vm')
+const assert = require('node:assert/strict')
+const { test } = require('node:test')
+const code = fs.readFileSync(path.join(__dirname, 'public/app.js'), 'utf8')
+function deferred() { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
+function trackedSignal() {
+  const controller = new AbortController(), signal = controller.signal, listeners = new Set()
+  const add = signal.addEventListener.bind(signal), remove = signal.removeEventListener.bind(signal)
+  signal.addEventListener = (type, fn, opts) => { if (type === 'abort') listeners.add(fn); add(type, fn, opts) }
+  signal.removeEventListener = (type, fn, opts) => { listeners.delete(fn); remove(type, fn, opts) }
+  return { controller, signal, listeners }
 }
-
-const fakeWindow = { __DANTE_MICRO_APP__: undefined }
-Object.defineProperty(fakeWindow, "__DANTE_MICRO_APP__", {
-  set(v) { this._lifec = v },
-  get() { return this._lifec },
-  configurable: true,
-})
-fakeWindow._lifec = undefined
-
-const sandbox = new Proxy(
-  { window: fakeWindow, Vue: vueStub, console },
-  {
-    get(t, k) {
-      if (k === "window") return fakeWindow
-      if (k === "Vue") return vueStub
-      if (k === "console") return console
-      if (k in t) return t[k]
-      return globalThis[k]
+function setup() {
+  let clockNow = Date.now(), component, instance, id = 0
+  class Clock extends Date { static now() { return clockNow } }
+  const timers = new Map(), requests = [], notifications = [], mounted = [], signal = trackedSignal()
+  const vue = {
+    version: '3.5-test', h: (tag, props, children) => ({ tag, props, children }), reactive: o => o,
+    createApp(definition) {
+      component = definition
+      let ownInstance
+      return {
+        mount() {
+          ownInstance = definition.data()
+          for (const [key, fn] of Object.entries(definition.methods)) ownInstance[key] = fn.bind(ownInstance)
+          for (const [key, fn] of Object.entries(definition.computed)) Object.defineProperty(ownInstance, key, { get: () => fn.call(ownInstance) })
+          instance = ownInstance; mounted.push(instance); definition.mounted.call(instance); return instance
+        },
+        unmount() { definition.beforeUnmount.call(ownInstance) },
+      }
     },
-    set(t, k, v) { t[k] = v; return true },
-    has() { return true },
   }
-)
-
-vm.createContext(sandbox)
-vm.runInContext(code, sandbox)
-
-const lifec = fakeWindow._lifec || fakeWindow.__DANTE_MICRO_APP__
-console.log("lifecycle 暴露:", !!lifec, lifec && Object.keys(lifec))
-if (!lifec || typeof lifec.mount !== "function" || typeof lifec.unmount !== "function" || typeof lifec.update !== "function") {
-  console.log("FAIL: 生命周期契约不完整(需 mount/unmount/update)")
-  process.exit(1)
-}
-const baseProps = {
-  appCode: "vue-workshop",
-  basePath: "/micro/vue-workshop",
-  routePath: "/micro/vue-workshop",
-  token: "stub-token",
-  user: { id: "1", username: "admin", displayName: "Admin" },
-  theme: "light",
-  menus: [],
-}
-const fakeContainer = { innerHTML: "" }
-lifec.mount(fakeContainer, baseProps)
-console.log("capturedComponent:", !!capturedComponent)
-if (capturedComponent) {
-  const m = capturedComponent.methods || {}
-  console.log("methods keys:", Object.keys(m).join(", "))
-  console.log("renderOverview:", typeof m.renderOverview)
-  console.log("renderSecurity:", typeof m.renderSecurity)
-  console.log("render:", typeof capturedComponent.render)
-  if (typeof capturedComponent.render !== "function") {
-    console.log("FAIL: render 缺失")
-    process.exit(1)
-  }
-  const data = capturedComponent.data()
-  if (!data.p || typeof data.p !== "object") {
-    console.log("FAIL: data().p(响应式 propsState)缺失")
-    process.exit(1)
-  }
-  const makeCtx = () => ({
-    ...m,
-    ...data,
-    view: "overview",
-    routePath: data.p.routePath || "(空)",
-    tokenPreview: data.p.token ? data.p.token.slice(0, 8) + "…" : "",
-    seconds: 0,
-    menus: { loading: false, fired: false, status: "", ok: false, message: "", data: null },
-    roles: { loading: false, fired: false, status: "", ok: false, message: "", data: null },
-    notifyLog: [],
-    _timer: null,
+  const window = { Vue: vue, setInterval(fn) { timers.set(++id, fn); return id }, clearInterval(timerId) { timers.delete(timerId) } }
+  vm.runInNewContext(code, {
+    window, Vue: vue, AbortController, Date: Clock, console,
+    fetch(url, options) { const result = deferred(); requests.push({ url, options, ...result }); return result.promise },
   })
-  try {
-    const vnode = capturedComponent.render.call(makeCtx())
-    console.log("render(overview) 调用成功, vnode.tag =", vnode && vnode.tag)
-    const ctxSec = makeCtx()
-    ctxSec.view = "security"
-    const vnode2 = capturedComponent.render.call(ctxSec)
-    console.log("render(security) 调用成功, vnode2.tag =", vnode2 && vnode2.tag)
-  } catch (e) {
-    console.log("render 调用失败:", e.message)
-    process.exit(1)
+  const props = {
+    contractVersion: '2.0', appCode: 'vue-workshop', contextVersion: 'context-a', contextEpoch: 1,
+    expiresAt: new Date(clockNow + 30000).toISOString(), tokenExpiresAt: new Date(clockNow + 300000).toISOString(),
+    basePath: '/micro/vue-workshop', routePath: '/micro/vue-workshop', token: 'application-token-a',
+    user: { id: 'user-1', username: 'admin', displayName: 'Admin' }, tenant: { id: 'tenant-1', code: 'alpha', name: 'Alpha' },
+    organization: { id: 'org-a', name: 'Organization A', path: '/a' },
+    roles: [{ id: 'role-1', name: 'Viewer', code: 'viewer' }], permissions: ['ticket:read'],
+    dataGrants: [{ resource: 'ticket', action: 'read', scope: 'SELF', subjectUserId: 'user-1', tenantId: 'tenant-1', organizationIds: [] }],
+    theme: 'light', menus: [{ id: 'menu-1', type: 'MENU', title: 'Ticket overview' }], signal: signal.signal,
+    onNotify: (...args) => notifications.push(args), onNavigate() {},
   }
-
-  // ---- update 契约验证: 增量写入 propsState, 组件数据引用同一对象 ----
-  lifec.update({ ...baseProps, routePath: "/micro/vue-workshop/security", theme: "dark" })
-  if (data.p.routePath !== "/micro/vue-workshop/security" || data.p.theme !== "dark") {
-    console.log("FAIL: update 未写入 propsState(routePath/theme)", data.p.routePath, data.p.theme)
-    process.exit(1)
+  return {
+    lifecycle: window.__DANTE_MICRO_APP__, props, requests, signal, timers, mounted, notifications, container: { innerHTML: '' },
+    get instance() { return instance }, render() { return component.render.call(instance) },
+    advance(ms) { clockNow += ms; for (const tick of timers.values()) tick() },
   }
-  if (data.p.updates !== 1) {
-    console.log("FAIL: update 计数错误", data.p.updates)
-    process.exit(1)
-  }
-  console.log("update 契约: propsState.routePath =", data.p.routePath, "· updates =", data.p.updates, "· lastUpdateAt =", data.p.lastUpdateAt || "(未记录)")
-
-  lifec.unmount()
-  console.log("unmount 调用成功")
-  console.log("ALL GREEN")
 }
+function response(body, status = 200) { return { ok: status < 400, status, json: async () => body } }
+const settle = () => new Promise(resolve => setImmediate(resolve))
+
+test('MicroProps 2.0 displays separate roles, operations and independent data grants', async () => {
+  const t = setup(); await t.lifecycle.mount(t.container, t.props)
+  const output = JSON.stringify(t.render())
+  for (const value of ['Alpha', 'Organization A', 'Viewer', 'ticket:read', 'SELF', 'Ticket overview']) assert.ok(output.includes(value), value)
+  assert.equal(t.instance.p.dataGrants[0].scope, 'SELF')
+  t.instance.sendNotify(); assert.deepEqual(t.notifications[0], ['来自 Vue 子应用的消息', 'success'])
+  await t.lifecycle.update({ ...t.props, routePath: '/micro/vue-workshop/security', theme: 'dark' })
+  assert.equal(t.instance.p.theme, 'dark'); assert.equal(t.mounted.length, 1)
+  assert.ok(JSON.stringify(t.render()).includes('沙箱计时器')); await t.lifecycle.unmount()
+})
+test('renewed token aborts old work, refuses late fetch and uses new Bearer token', async () => {
+  const t = setup(); await t.lifecycle.mount(t.container, t.props)
+  const oldRequest = t.instance.loadMenus()
+  assert.equal(t.requests[0].options.headers.Authorization, 'Bearer application-token-a')
+  await t.lifecycle.update({ ...t.props, token: 'application-token-b', contextEpoch: 2 })
+  assert.equal(t.requests[0].options.signal.aborted, true); assert.equal(t.instance.menus.loading, false)
+  t.requests[0].resolve(response({ menus: [{ title: 'old organization' }] })); await oldRequest
+  assert.equal(t.instance.menus.data, null)
+  const newRequest = t.instance.loadMenus()
+  assert.equal(t.requests[1].options.headers.Authorization, 'Bearer application-token-b')
+  t.requests[1].resolve(response({ menus: [{ title: 'fresh menu' }] })); await newRequest
+  assert.equal(t.instance.menus.data.menus[0].title, 'fresh menu'); await t.lifecycle.unmount()
+})
+test('organization update refuses delayed JSON and clears prior roles and permissions', async () => {
+  const t = setup(); await t.lifecycle.mount(t.container, t.props)
+  const pending = t.instance.loadRoles(), json = deferred()
+  t.requests[0].resolve({ ok: true, status: 200, json: () => json.promise }); await settle()
+  await t.lifecycle.update({ ...t.props, contextVersion: 'context-b', contextEpoch: 2,
+    organization: { id: 'org-b', name: 'Organization B', path: '/b' }, roles: [], permissions: [], dataGrants: [], menus: [] })
+  json.resolve({ organizations: [{ roles: [{ name: 'old privileged role' }] }] }); await pending
+  assert.equal(t.instance.roles.data, null); assert.equal(t.instance.p.organization.id, 'org-b')
+  assert.equal(t.instance.p.permissions.length, 0); assert.equal(t.instance.p.dataGrants.length, 0)
+  assert.ok(!JSON.stringify(t.render()).includes('old privileged role')); await t.lifecycle.unmount()
+})
+test('host abort and context expiry block new requests and late responses', async () => {
+  const t = setup(); await t.lifecycle.mount(t.container, t.props)
+  const pending = t.instance.loadMenus(); t.signal.controller.abort()
+  assert.equal(t.requests[0].options.signal.aborted, true)
+  t.requests[0].resolve(response({ menus: [{ title: 'late' }] })); await pending
+  assert.equal(t.instance.menus.data, null); assert.equal(t.instance.p.contextAvailable, false)
+  await t.instance.loadMenus(); assert.equal(t.requests.length, 1)
+  const fresh = trackedSignal(); await t.lifecycle.update({ ...t.props, signal: fresh.signal, contextEpoch: 2 })
+  t.advance(31000); assert.equal(t.instance.p.contextAvailable, false)
+  await t.instance.loadMenus(); assert.equal(t.requests.length, 1); await t.lifecycle.unmount()
+})
+test('repeated mount/unmount cleans timers and host listeners, ignores late unmounted work', async () => {
+  const t = setup(); await t.lifecycle.mount(t.container, t.props); assert.equal(t.timers.size, 1)
+  await t.lifecycle.mount(t.container, t.props); assert.equal(t.timers.size, 1); assert.equal(t.signal.listeners.size, 1)
+  const instance = t.instance, pending = instance.loadMenus()
+  await t.lifecycle.unmount(); await t.lifecycle.unmount()
+  assert.equal(t.timers.size, 0); assert.equal(t.signal.listeners.size, 0); assert.equal(t.container.innerHTML, '')
+  t.requests[0].resolve(response({ menus: [{ title: 'unmounted' }] })); await pending; assert.equal(instance.menus.data, null)
+  await t.lifecycle.update(t.props); assert.equal(t.signal.listeners.size, 0)
+  await t.lifecycle.mount(t.container, t.props); assert.equal(t.timers.size, 1); await t.lifecycle.unmount()
+})
+test('rejects legacy contract and malformed updates; public mirror stays identical', async () => {
+  const t = setup()
+  await assert.rejects(t.lifecycle.mount(t.container, { ...t.props, contractVersion: '1.0' }), /MicroProps 2.0/)
+  await t.lifecycle.mount(t.container, t.props)
+  await assert.rejects(t.lifecycle.update({ ...t.props, signal: undefined }), /MicroProps 2.0/)
+  assert.equal(t.instance.p.contextAvailable, false); await t.lifecycle.unmount()
+  assert.equal(fs.readFileSync(path.join(__dirname, '../../frontend/public/sub-apps/vue/app.js'), 'utf8'), code)
+})

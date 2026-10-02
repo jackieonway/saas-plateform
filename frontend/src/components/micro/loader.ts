@@ -36,6 +36,8 @@ const DEFAULT_TIMEOUT_MS = 15_000
 
 /** 入口历史失败次数(用于重试时的缓存穿透) */
 const failedEntries = new Map<string, number>()
+/** 成功代次保持缓存复用；失败/取消同时更换 HTML 和资源缓存键，永不退回已拒绝的 Promise。 */
+const entryGenerations = new Map<string, number>()
 
 const BUSTER_KEY = "_dmr"
 
@@ -43,7 +45,7 @@ function withBuster(url: string, attempt: number): string {
   try {
     const u = new URL(url, window.location.origin)
     u.searchParams.set(BUSTER_KEY, String(attempt))
-    return u.pathname + u.search
+    return u.toString()
   } catch {
     return url
   }
@@ -61,38 +63,93 @@ function normalizeMessage(e: unknown, entryUrl: string): string {
  * @param entryUrl 入口地址(如 /sub/vue/); 同源相对路径经 Vite 代理转发到子应用服务
  * @param opts.timeoutMs 整体超时(默认 15s), 超时中止全部子请求
  */
-export async function loadHtmlEntry(entryUrl: string, opts?: { timeoutMs?: number }): Promise<HtmlEntryResult> {
+export async function loadHtmlEntry(entryUrl: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<HtmlEntryResult> {
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const failures = failedEntries.get(entryUrl) ?? 0
+  const generation = entryGenerations.get(entryUrl) ?? 0
+  const importUrl = generation > 0 ? withBuster(entryUrl, generation) : entryUrl
+  let invalidated = false
+  const invalidate = () => {
+    if (invalidated) return
+    invalidated = true
+    entryGenerations.set(entryUrl, Math.max(generation + 1, entryGenerations.get(entryUrl) ?? 0))
+    failedEntries.set(entryUrl, failures + 1)
+  }
 
   const controller = new AbortController()
-  const timerId = window.setTimeout(() => controller.abort(), timeoutMs)
+  const abortFromParent = () => { controller.abort(); cleanup() }
+  opts?.signal?.addEventListener("abort", abortFromParent, { once: true })
+  if (opts?.signal?.aborted) controller.abort()
+  const timerId = window.setTimeout(() => { controller.abort(); cleanup() }, timeoutMs)
+  let abortListener: () => void
   const abortPromise = new Promise<never>((_resolve, reject) => {
-    controller.signal.addEventListener("abort", () =>
-      reject(new Error(`子应用加载超时(${Math.round(timeoutMs / 1000)}s): ${entryUrl}`))
-    )
+    abortListener = () => reject(opts?.signal?.aborted
+      ? new DOMException("应用加载已取消", "AbortError")
+      : new Error(`子应用加载超时(${Math.round(timeoutMs / 1000)}s): ${entryUrl}`))
+    controller.signal.addEventListener("abort", abortListener, { once: true })
+    if (controller.signal.aborted) abortListener()
   })
+  const cleanup = () => {
+    window.clearTimeout(timerId)
+    opts?.signal?.removeEventListener("abort", abortFromParent)
+    controller.signal.removeEventListener("abort", abortListener!)
+  }
+  if (controller.signal.aborted) cleanup()
 
-  /** 全部子请求(入口 HTML/外链脚本/样式)统一走带中止信号的 fetch; 重试轮追加亡缓存参数 */
+  /** 只覆盖当前调用的 fetch；资源 URL 的缓存键必须在 import-html-entry 查缓存之前改变。 */
   const trackedFetch: typeof fetch = (input, init) => {
-    const raw =
-      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
-    const url = failures > 0 ? withBuster(raw, failures) : raw
-    return fetch(url, { ...init, signal: controller.signal })
+    return fetch(input, { ...init, signal: controller.signal })
+  }
+  const check = () => {
+    if (opts?.signal?.aborted) throw new DOMException("应用加载已取消", "AbortError")
+    if (controller.signal.aborted) throw new Error(`子应用加载超时: ${entryUrl}`)
   }
 
   try {
-    const entry = await Promise.race([importEntry(entryUrl, { fetch: trackedFetch }), abortPromise])
-    failedEntries.delete(entryUrl)
+    check()
+    const entry = await Promise.race([importEntry(importUrl, {
+      fetch: trackedFetch,
+      getTemplate: (html) => {
+        if (generation === 0) return html
+        const doc = new DOMParser().parseFromString(html, "text/html")
+        const base = new URL(entryUrl, window.location.href)
+        for (const script of doc.querySelectorAll<HTMLScriptElement>("script[src]")) {
+          script.setAttribute("src", withBuster(new URL(script.getAttribute("src")!, base).toString(), generation))
+        }
+        for (const link of doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"][href]')) {
+          link.setAttribute("href", withBuster(new URL(link.getAttribute("href")!, base).toString(), generation))
+        }
+        return doc.documentElement.outerHTML
+      },
+      postProcessTemplate: (template) => ({
+        ...template,
+        // 生命周期挂载前按声明顺序等待全部脚本，防止 async 脚本在卸载后才执行。
+        scripts: template.scripts.map((script) => typeof script === "string" ? script : script.src),
+        entry: typeof template.entry === "string" ? template.entry : template.entry?.src,
+      }),
+    }), abortPromise])
     return {
       templateProcessed: entry.template,
-      execScripts: (proxy: object) => entry.execScripts(proxy, true),
+      execScripts: async (proxy: object) => {
+        try {
+          check()
+          const execOptions = {
+            fetch: trackedFetch,
+            beforeExec: () => { check() },
+          }
+          const result = await Promise.race([entry.execScripts(proxy, true, execOptions), abortPromise])
+          check()
+          failedEntries.delete(entryUrl)
+          return result
+        } catch (error) { invalidate(); throw error }
+        finally { cleanup() }
+      },
     }
   } catch (e) {
-    failedEntries.set(entryUrl, failures + 1)
+    cleanup()
+    invalidate()
+    if (opts?.signal?.aborted) throw new DOMException("应用加载已取消", "AbortError")
     throw new Error(normalizeMessage(e, entryUrl))
-  } finally {
-    window.clearTimeout(timerId)
   }
 }
 
@@ -103,6 +160,7 @@ export async function loadHtmlEntry(entryUrl: string, opts?: { timeoutMs?: numbe
  */
 export function markEntryFailed(entryUrl: string): void {
   failedEntries.set(entryUrl, (failedEntries.get(entryUrl) ?? 0) + 1)
+  entryGenerations.set(entryUrl, (entryGenerations.get(entryUrl) ?? 0) + 1)
 }
 
 /** 诊断: 当前处于失败缓存穿透态的入口(重试将走全新缓存键) */

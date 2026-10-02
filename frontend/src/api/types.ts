@@ -464,6 +464,7 @@ export interface OAuthSessionTokenResp {
   accessToken: string
   expiresIn: number
   tokenType: string
+  audience: string
 }
 
 /** OAuth 会话视图:按用户聚合的令牌概览 (GET /api/oauth/tokens/sessions) */

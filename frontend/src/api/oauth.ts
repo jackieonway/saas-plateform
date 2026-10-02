@@ -33,9 +33,9 @@ export const oauthApi = {
   purgeTokens: () =>
     api.post<{ tokensDeleted: number; devicesDeleted: number }>("/api/oauth/tokens/purge"),
 
-  /** 微前端会话令牌: 会话鉴权, 为指定 appCode 签发子应用可用访问令牌 (契约 21-a/21-c; 失败 4xx, 容器置 undefined 不阻塞挂载) */
-  sessionToken: (appCode: string) =>
-    api.post<OAuthSessionTokenResp>("/api/oauth/session-token", { appCode }, { suppress401: true }),
+  /** 微应用短期受众令牌；宿主在令牌和完整上下文就绪后才挂载。 */
+  sessionToken: (appCode: string, bearer?: string, signal?: AbortSignal) =>
+    api.post<OAuthSessionTokenResp>("/api/oauth/session-token", { appCode }, { bearer, signal, suppress401: true }),
 
   discovery: () => api.get<unknown>("/oauth/.well-known/openid-configuration", { skipAuth: true }),
 }

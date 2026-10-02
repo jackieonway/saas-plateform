@@ -19,9 +19,9 @@ npm run micro:sync -- example ./path/to/example/dist
 1. 管理员在应用管理创建应用。使用快速接入时填写名称、编码并选择 `HTML`；自定义模式可以指定 `basePath` 和 `entryUrl`。
 2. 快速接入会自动创建首页菜单。自定义模式需要在菜单管理创建菜单，`path` 填 `/micro/{code}` 或其子路径，`linkTarget` 选 `MICRO`，`linkUrl` 留空。
 3. 完成租户应用/菜单、组织应用/菜单、角色菜单授权，并为用户分配该角色。`/api/auth/profile` 只返回当前租户和组织均已授权的启用应用；`/api/auth/menus` 再按角色与菜单授权过滤导航。
-4. 用户打开 `/micro/{code}/*`，`MicroAppContainer` 从个人应用列表读取入口配置，获取该应用菜单，尝试申请应用关联 OAuth 客户端的 access token，再加载子应用。没有关联客户端时，token 为空但挂载继续。
+4. 用户打开 `/micro/{code}/*`，`MicroAppContainer` 从个人应用列表读取入口配置，申请应用专用短期 token，再调用 `/api/apps/{code}/context` 获取完整上下文。只有两步成功才加载子应用；关联客户端缺失、授权失效或上下文过期时停止挂载。
 
-快速接入只自动创建首页菜单，不会自动授予租户、组织和角色权限，也不会创建 OAuth 客户端。子应用需要调用 `/api/external/*` 等 OAuth 资源接口时，再给应用关联启用的 OAuth 客户端，并确认所需 scope 和后端权限规则。
+快速接入只自动创建首页菜单，不会自动授予租户、组织和角色权限，也不会创建 OAuth 客户端。接入微应用时须关联已启用的机密客户端，确认所需 scope 与业务后端权限规则；客户端密钥只保存在业务后端。角色控制菜单和操作权限，数据范围按当前组织成员关系独立显式授权。
 
 ## HTML 子应用契约
 
@@ -31,19 +31,19 @@ npm run micro:sync -- example ./path/to/example/dist
 window.__DANTE_MICRO_APP__ = {
   name: "example",
   async mount(container, props) {
-    // 渲染到 container；props 有 appCode、basePath、routePath、
-    // token?、user、theme、menus、onNavigate、onNotify
+    // 渲染到 container；MicroProps 2.0 有 token、租户/组织、角色、
+    // 操作权限、独立 dataGrants、菜单、版本/到期时间和 AbortSignal。
   },
   async update(props) {
-    // 可选：路由、主题、菜单变化时增量更新
+    // 可选：token、授权内容、主题、路由变化时更新；取消旧请求并接收新 signal。
   },
   async unmount() {
-    // 清理框架实例、document 事件、外部订阅等
+    // 清理框架实例、document 事件、外部订阅等，实际结束后再完成 Promise。
   },
 }
 ```
 
-`update` 可选；实现后切换子路径或主题可保留子应用状态。`unmount` 必须清理自身在 `document` 上绑定的监听器。宿主沙箱会回收经代理注册的 window 定时器和监听器，以及部分动态插入的样式/脚本节点，但它不是安全隔离边界：子应用脚本可访问真实 `document`，也会得到注入的 token。只接入可信代码；不可信应用使用独立域名的 iframe/外链模式。
+`update` 可选；实现后切换子路径或主题可保留子应用状态。宿主会在组织切换前停止旧工作，并串行等待旧生命周期卸载；无 `update` 的应用在授权变化后重挂。所有业务请求需使用 `props.signal` 并拒绝迟到结果。完整字段、请求 SDK、续期与资源清理规则见[MicroProps 2.0 接入契约](./micro-app-context-props.md)。
 
 ## 推荐的生产部署方式：同源静态目录
 
@@ -114,7 +114,7 @@ location ^~ /sub-apps/example/ {
 - `report-center` 示例是 `ESM`，迁移中的入口为 `/src/micro-apps/report-center.tsx`。该地址只适用于 Vite 开发服务器；生产环境需把模块显式打包为浏览器可加载的 ESM 文件并改写入口，或改造为 HTML 子应用。
 - `frontend/Dockerfile` 已改为使用 `frontend/package-lock.json` 与 `npm ci`；发布时仍需实际执行镜像构建，并确认子应用已同步到 `frontend/public/sub-apps/`。
 - 本地重建后的 `frontend/dist/sub-apps/` 已包含 Vue、jQuery 示例；已运行的旧镜像不会自动获得新文件，仍需重新构建/发布或挂载静态目录。
-- 当前 `/api/oauth/session-token` 仅要求有效 session，并按 `appCode` 查找应用和关联客户端，未再核对该用户在当前租户、组织是否获该应用授权。前端容器只从授权应用列表加载，但不能替代后端授权；生产使用注入 token 前应补上服务端授权检查。
+- Phase 5～8 已补齐应用 token 的租户/组织授权、受众、平台会话绑定和撤销检查，以及完整上下文、续期和生命周期。生产业务后端仍须接入[校验组件](../examples/app-backend/authorize.mjs)，不能只依赖前端菜单或数据授权展示。
 
 ## 上线核验
 

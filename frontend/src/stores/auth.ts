@@ -8,8 +8,12 @@ interface AuthState {
   token: string | null
   profile: ProfileResp | null
   currentApplicationId: string | null
+  contextEpoch: number
+  contextSwitching: boolean
+  beginContextSwitch: () => void
+  endContextSwitch: () => void
   setToken: (token: string) => void
-  setProfile: (profile: ProfileResp | null) => void
+  setProfile: (profile: ProfileResp | null, epoch?: number) => void
   setCurrentApplication: (appId: string | null) => void
   /** 确保当前应用在可用列表内,返回有效应用 id */
   ensureApplication: (apps: AppBrief[]) => string | null
@@ -27,6 +31,8 @@ function readToken(): string | null {
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: readToken(),
   profile: null,
+  contextEpoch: 0,
+  contextSwitching: false,
   currentApplicationId: (() => {
     try {
       return localStorage.getItem(APP_KEY)
@@ -41,10 +47,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       /* ignore */
     }
-    set({ token })
+    set((state) => ({ token, profile: null, contextSwitching: false, contextEpoch: state.contextEpoch + 1 }))
   },
 
-  setProfile: (profile) => set({ profile }),
+  beginContextSwitch: () => set((state) => ({
+    contextSwitching: true, profile: null, contextEpoch: state.contextEpoch + 1,
+  })),
+  endContextSwitch: () => set({ contextSwitching: false }),
+
+  setProfile: (profile, epoch) => {
+    if (get().contextSwitching || (epoch !== undefined && get().contextEpoch !== epoch)) return
+    set({ profile })
+  },
 
   setCurrentApplication: (appId) => {
     try {
@@ -77,7 +91,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       /* ignore */
     }
-    set({ token: null, profile: null, currentApplicationId: null })
+    set((state) => ({ token: null, profile: null, currentApplicationId: null,
+      contextSwitching: false, contextEpoch: state.contextEpoch + 1 }))
   },
 }))
 

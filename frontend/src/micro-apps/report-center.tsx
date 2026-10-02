@@ -40,6 +40,8 @@ import type {
 let root: Root | null = null
 let containerEl: HTMLElement | null = null
 let latestProps: MicroProps | null = null
+let rolesRequest: AbortController | null = null
+let teardownTask: Promise<void> | null = null
 /** update 推送计数(「未重挂」证据之一) */
 let updateCount = 0
 let lastUpdateAt = ""
@@ -54,19 +56,53 @@ function pad2(n: number) {
   return (n < 10 ? "0" : "") + n
 }
 
+function authorizationKey(props: MicroProps) {
+  return JSON.stringify([
+    props.contextEpoch, props.contextVersion, props.token,
+    props.user.id, props.tenant.id, props.organization.id,
+  ])
+}
+
+function isCurrentContext(props: MicroProps) {
+  return Boolean(
+    latestProps && !props.signal.aborted &&
+    authorizationKey(latestProps) === authorizationKey(props) &&
+    Date.parse(props.expiresAt) > Date.now() &&
+    Date.parse(props.tokenExpiresAt) > Date.now(),
+  )
+}
+
+function cancelRolesRequest() {
+  rolesRequest?.abort()
+  rolesRequest = null
+}
+
 /* ============================ 对外 API 类型 ============================ */
 
 interface ExternalRoleOrg {
   id: string
   name: string
   tenantName: string
-  roles: Array<{ id: string; name: string; code: string; builtIn: boolean; menuCount: number }>
+  roles: MicroProps["roles"]
 }
 
 interface ExternalRolesResp {
   application?: { code: string; name: string }
-  client?: { clientId: string; tokenType: string; username?: string }
   organizations?: ExternalRoleOrg[]
+}
+
+interface RolesState {
+  contextKey: string
+  loading: boolean
+  fired: boolean
+  status: string
+  ok: boolean
+  message: string
+  data: ExternalRolesResp | null
+}
+
+function emptyRolesState(contextKey: string): RolesState {
+  return { contextKey, loading: false, fired: false, status: "", ok: false, message: "", data: null }
 }
 
 /* ============================ 子应用根组件 ============================ */
@@ -76,19 +112,14 @@ function ReportApp() {
   const [, force] = React.useReducer((x: number) => x + 1, 0)
   const [seconds, setSeconds] = React.useState(0)
   const [clicks, setClicks] = React.useState(0)
-  const [rolesState, setRolesState] = React.useState<{
-    loading: boolean
-    fired: boolean
-    status: string
-    ok: boolean
-    message: string
-    data: ExternalRolesResp | null
-  }>({ loading: false, fired: false, status: "", ok: false, message: "", data: null })
+  const [rolesState, setRolesState] = React.useState<RolesState>(() => emptyRolesState(""))
+  const contextKey = props ? authorizationKey(props) : ""
 
   // props 模块变量 → React 状态桥: update() 时强制重渲染
   React.useEffect(() => {
     bumpListeners.push(force)
     return () => {
+      cancelRolesRequest()
       bumpListeners = bumpListeners.filter((fn) => fn !== force)
     }
   }, [force])
@@ -99,20 +130,38 @@ function ReportApp() {
     return () => window.clearInterval(id)
   }, [])
 
+  // 同一 React 根保留演示计时器；授权上下文或令牌替换时清除旧业务结果。
+  React.useEffect(() => {
+    setRolesState(emptyRolesState(contextKey))
+  }, [contextKey])
+
   if (!props) return null
 
   const isSharedView = props.routePath === `${props.basePath}/shared`
   const theme = props.theme
-  const token = props.token ?? ""
+  // 先按 key 屏蔽旧结果，避免 effect 清理前的一帧暴露旧组织数据。
+  const currentRolesState = rolesState.contextKey === contextKey
+    ? rolesState
+    : emptyRolesState(contextKey)
 
   const loadRoles = async () => {
-    setRolesState((s) => ({ ...s, loading: true, fired: true }))
+    if (!isCurrentContext(props)) return
+    cancelRolesRequest()
+    const controller = new AbortController()
+    rolesRequest = controller
+    const abort = () => controller.abort()
+    props.signal.addEventListener("abort", abort, { once: true })
+    const canApply = () => !controller.signal.aborted && rolesRequest === controller && isCurrentContext(props)
+    setRolesState({ ...emptyRolesState(contextKey), loading: true, fired: true })
     try {
       const res = await fetch("/api/external/roles", {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${props.token}` },
+        signal: controller.signal,
       })
       const body = (await res.json().catch(() => ({}))) as ExternalRolesResp & { message?: string }
+      if (!canApply()) return
       setRolesState({
+        contextKey,
         loading: false,
         fired: true,
         status: String(res.status),
@@ -121,7 +170,9 @@ function ReportApp() {
         data: res.ok ? body : null,
       })
     } catch (e) {
+      if (!canApply()) return
       setRolesState({
+        contextKey,
         loading: false,
         fired: true,
         status: "—",
@@ -129,15 +180,15 @@ function ReportApp() {
         message: e instanceof Error ? e.message : String(e),
         data: null,
       })
+    } finally {
+      props.signal.removeEventListener("abort", abort)
+      if (rolesRequest === controller) rolesRequest = null
     }
   }
 
   const sendNotify = (variant: MicroNotifyVariant) => {
-    props.onNotify(`来自 ESM 报表中心的消息 (${variant})`, variant)
+    if (isCurrentContext(props)) props.onNotify(`来自 ESM 报表中心的消息 (${variant})`, variant)
   }
-
-  const orgs = rolesState.data?.organizations ?? []
-  const maxRoles = Math.max(1, ...orgs.map((o) => o.roles.length))
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
@@ -174,9 +225,8 @@ function ReportApp() {
           seconds={seconds}
           updateCount={updateCount}
           lastUpdateAt={lastUpdateAt}
-          rolesState={rolesState}
+          rolesState={currentRolesState}
           onLoadRoles={loadRoles}
-          maxRoles={maxRoles}
           onNotify={sendNotify}
         />
       )}
@@ -194,7 +244,6 @@ function OverviewView({
   lastUpdateAt,
   rolesState,
   onLoadRoles,
-  maxRoles,
   onNotify,
 }: {
   props: MicroProps
@@ -202,16 +251,8 @@ function OverviewView({
   seconds: number
   updateCount: number
   lastUpdateAt: string
-  rolesState: {
-    loading: boolean
-    fired: boolean
-    status: string
-    ok: boolean
-    message: string
-    data: ExternalRolesResp | null
-  }
+  rolesState: RolesState
   onLoadRoles: () => void
-  maxRoles: number
   onNotify: (v: MicroNotifyVariant) => void
 }) {
   const orgs = rolesState.data?.organizations ?? []
@@ -228,20 +269,24 @@ function OverviewView({
         <dl className="grid gap-2 text-xs">
           <Kv k="user.username" v={props.user.username} />
           <Kv k="user.displayName" v={props.user.displayName} />
+          <Kv k="tenant" v={`${props.tenant.name} (${props.tenant.code})`} />
+          <Kv k="organization" v={props.organization.name} />
           <Kv k="appCode" v={props.appCode} />
           <Kv k="basePath" v={props.basePath} />
           <Kv k="routePath" v={props.routePath} mono />
           <Kv k="theme" v={theme} />
-          <Kv
-            k="token"
-            v={props.token ? `${props.token.slice(0, 10)}…` : "(未携带)"}
-            mono={Boolean(props.token)}
-          />
+          <Kv k="contractVersion" v={props.contractVersion} />
+          <Kv k="contextVersion" v={props.contextVersion} mono />
+          <Kv k="contextEpoch" v={String(props.contextEpoch)} />
+          <Kv k="token" v="应用专用令牌已注入" />
+          <Kv k="tokenExpiresAt" v={props.tokenExpiresAt} />
+          <Kv k="expiresAt" v={props.expiresAt} />
           <Kv k="menus" v={`注入 ${props.menus.length} 项`} />
+          <Kv k="permissions" v={props.permissions.join(", ") || "无操作权限"} />
         </dl>
         <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-          会话令牌由 POST /api/oauth/session-token 按应用编码签发, 与 HTML 通道完全同源 ——
-          通道只决定「如何渲染」, 权限链路对所有通道一致。
+          宿主同时注入应用上下文和最多 5 分钟有效的应用令牌。角色控制菜单和操作，
+          数据范围由独立的成员关系授权决定；业务后端须再次校验两类授权。
         </p>
       </section>
 
@@ -268,16 +313,31 @@ function OverviewView({
         </p>
       </section>
 
-      {/* ③ 组织角色分布(external API) */}
+      {/* ③ 当前用户授权与对外 API 演示 */}
       <section className="rounded-lg border bg-card p-4 lg:col-span-2">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <BarChart3 className="size-4 text-primary" />
-            ③ 组织角色分布 · GET /api/external/roles
+            ③ 当前用户角色 · GET /api/external/roles
           </h3>
           <Button size="sm" variant="outline" onClick={onLoadRoles} disabled={rolesState.loading}>
-            {rolesState.loading ? "请求中…" : "拉取角色数据"}
+            {rolesState.loading ? "请求中…" : "请求当前用户角色"}
           </Button>
+        </div>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {props.roles.map((role) => (
+            <Badge key={role.id} variant="secondary">{role.name} · {role.code}</Badge>
+          ))}
+          {props.roles.length === 0 && <span className="text-xs text-muted-foreground">当前组织没有可用角色</span>}
+        </div>
+        <p className="mb-2 text-xs font-medium">独立数据授权</p>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {props.dataGrants.map((grant, index) => (
+            <Badge key={`${grant.resource}:${grant.action}:${grant.scope}:${index}`} variant="outline">
+              {grant.resource}:{grant.action} · {grant.scope}
+            </Badge>
+          ))}
+          {props.dataGrants.length === 0 && <span className="text-xs text-muted-foreground">未授予业务数据访问范围</span>}
         </div>
         {rolesState.fired && (
           <p className="mb-3 text-xs text-muted-foreground">
@@ -286,8 +346,7 @@ function OverviewView({
               {rolesState.status}
             </b>
             {rolesState.ok && rolesState.data?.application && ` · 应用「${rolesState.data.application.name}」`}
-            {rolesState.ok && rolesState.data?.client && ` · ${rolesState.data.client.clientId} · 用户: ${props.user.username}`}
-            {rolesState.ok && ` · ${orgs.length} 组织 / ${totalRoles} 角色`}
+            {rolesState.ok && ` · 当前组织 / ${totalRoles} 个有效角色`}
           </p>
         )}
         {rolesState.loading && (
@@ -311,23 +370,12 @@ function OverviewView({
                   <span className="text-muted-foreground">· {org.tenantName}</span>
                   <span className="ml-auto font-mono text-muted-foreground">{org.roles.length} 角色</span>
                 </div>
-                <div
-                  className="h-4 overflow-hidden rounded-md border bg-muted/50"
-                  role="img"
-                  aria-label={`${org.name} ${org.roles.length} 个角色`}
-                >
-                  <div
-                    className="h-full rounded-[3px] bg-primary/70 transition-[width] duration-500"
-                    style={{ width: `${Math.max(4, (org.roles.length / maxRoles) * 100)}%` }}
-                  />
-                </div>
                 {org.roles.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {org.roles.map((role) => (
                       <Badge key={role.id} variant="secondary" className="gap-1 text-[10px] font-normal">
                         {role.name}
-                        {role.builtIn && <span className="text-muted-foreground">内置</span>}
-                        <span className="text-muted-foreground">{role.menuCount}菜单</span>
+                        <span className="text-muted-foreground">{role.code}</span>
                       </Badge>
                     ))}
                   </div>
@@ -335,13 +383,14 @@ function OverviewView({
               </div>
             ))}
             <p className="text-[11px] text-muted-foreground">
-              角色条宽按各组织角色数等比渲染, 主题色取自主应用 CSS 变量(切主题即变色)。
+              接口只返回当前用户在当前组织的有效角色，包含继承的祖先组织角色。
             </p>
           </div>
         )}
         {!rolesState.fired && !rolesState.loading && (
           <p className="text-xs text-muted-foreground">
-            点击「拉取角色数据」: 子应用以 props.token 调用对外 API, 数据按应用隔离(仅 report-center 关联的授权)。
+            上方直接展示宿主注入的当前用户上下文。点击按钮可使用 props.token 调用对外 API；
+            上下文切换会取消请求并丢弃迟到响应。
           </p>
         )}
       </section>
@@ -477,31 +526,48 @@ function Kv({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
 
 /* ============================ 生命周期契约 ============================ */
 
+function teardown(): Promise<void> {
+  if (teardownTask) return teardownTask
+  const retiringRoot = root
+  const retiringContainer = containerEl
+  cancelRolesRequest()
+  root = null
+  containerEl = null
+  latestProps = null
+  bumpListeners = []
+  updateCount = 0
+  // 在宿主 React commit 后卸载另一棵根；Promise 完成前禁止下一次 mount。
+  const task = Promise.resolve().then(() => {
+    retiringRoot?.unmount()
+    if (retiringContainer) retiringContainer.replaceChildren()
+  }).finally(() => {
+    if (teardownTask === task) teardownTask = null
+  })
+  teardownTask = task
+  return task
+}
+
 export const __DANTE_MICRO_APP__: MicroLifecycle = {
   name: "report-center",
 
-  mount(container: HTMLElement, props: MicroProps) {
-    return new Promise<void>((resolve, reject) => {
-      try {
-        if (!container) {
-          reject(new Error("mount 需要一个 container HTMLElement"))
-          return
-        }
-        latestProps = props
-        updateCount = 0
-        lastUpdateAt = ""
-        containerEl = container
-        container.innerHTML = ""
-        root = createRoot(container)
-        root.render(<ReportApp />)
-        resolve()
-      } catch (err) {
-        reject(err)
-      }
-    })
+  async mount(container: HTMLElement, props: MicroProps) {
+    if (teardownTask) await teardownTask
+    if (root) await teardown()
+    if (!container) throw new Error("mount 需要一个 container HTMLElement")
+    if (props.signal.aborted) throw new Error("应用上下文已失效")
+    latestProps = props
+    updateCount = 0
+    lastUpdateAt = ""
+    containerEl = container
+    container.replaceChildren()
+    root = createRoot(container)
+    root.render(<ReportApp />)
   },
 
   update(props: MicroProps) {
+    if (!root || !latestProps || props.signal.aborted) return
+    if (props.contextEpoch < latestProps.contextEpoch) return
+    if (authorizationKey(props) !== authorizationKey(latestProps)) cancelRolesRequest()
     latestProps = props
     updateCount += 1
     const d = new Date()
@@ -509,42 +575,7 @@ export const __DANTE_MICRO_APP__: MicroLifecycle = {
     notifyUpdate()
   },
 
-  unmount() {
-    return new Promise<void>((resolve) => {
-      try {
-        const r = root
-        const el = containerEl
-        root = null
-        containerEl = null
-        latestProps = null
-        bumpListeners = []
-        updateCount = 0
-        if (r || el) {
-          // ① 容器的 effect cleanup 在主应用 React commit 阶段同步执行, 在此处同步
-          //    unmount 另一个 React root 会触发 "synchronously unmount a root while
-          //    React was already rendering" 竞态错误 → 延迟到微任务;
-          // ② root.unmount() 必须先于 innerHTML 清空: React 卸载时要按自己的宿主
-          //    节点回收 DOM, 若先清空会报 "node to be removed is not a child" 并
-          //    触发 <div> 组件错误告警(两步一并延迟, 顺序保证)。
-          void Promise.resolve().then(() => {
-            try {
-              r?.unmount()
-            } catch {
-              /* 已脱离文档的 root 卸载容错 */
-            }
-            try {
-              if (el && el.isConnected) el.innerHTML = ""
-            } catch {
-              /* ignore */
-            }
-          })
-        }
-      } catch {
-        /* 卸载容错: 无论如何 resolve */
-      }
-      resolve()
-    })
-  },
+  unmount: teardown,
 }
 
 /** 兼容容器 3b 通道的裸导出形状(mod.mount / mod.unmount / mod.update) */

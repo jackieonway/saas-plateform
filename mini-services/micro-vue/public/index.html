@@ -15,7 +15,7 @@
       → /sub-apps/vue/vendor/...), 根绝对路径会被 new URL 压过基址打到主应用根,
       被 Vite SPA fallback 吞掉(乾坤生态同款约定: publicPath 用 './');
     - 生命周期契约 window.__DANTE_MICRO_APP__ = { name, mount(container, props), unmount() }
-      实现在 app.js (可选 update(props) 为 v1.1 增量契约);
+      实现在 app.js，消费 MicroProps 2.0，update(props) 更新完整上下文并取消旧请求;
     - 子应用在主应用 realm 内执行, fetch('/api/...') 即同源主应用请求。
   -->
 </head>

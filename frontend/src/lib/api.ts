@@ -37,6 +37,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (body !== undefined) headers["Content-Type"] = "application/json"
 
   const storeToken = authStore.getState().token
+  const contextEpoch = authStore.getState().contextEpoch
   const token = bearer !== undefined ? bearer : skipAuth ? null : storeToken
   if (token) headers["Authorization"] = `Bearer ${token}`
 
@@ -73,7 +74,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       const c = (data as Record<string, unknown>).code
       if (typeof c === "string") code = c
     }
-    if (resp.status === 401 && !skipAuth && !suppress401 && !bearer) {
+    if (resp.status === 401 && !skipAuth && !suppress401 && token === storeToken &&
+        authStore.getState().token === storeToken && authStore.getState().contextEpoch === contextEpoch &&
+        !authStore.getState().contextSwitching) {
       authStore.getState().logout()
       redirectToLogin()
     }
