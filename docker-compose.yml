@@ -8,6 +8,8 @@
 #   [ caddy(web) :80/:443 ] ──/api,/oauth──> [ backend(Rust/Axum) :3001 ] ──> [ postgres :5432 ]
 #        └── 静态托管前端 SPA (frontend/dist 构建产物)
 #        └──/socket.io/──> [ notification-ws(Node24) :3003 ] ──> PostgreSQL + 平台会话校验
+#        └──/work-orders-api/──> [ work-orders-api(Node24) :3004 ] ──> 独立业务 PostgreSQL
+# 工单服务显式启用 --profile work-orders；本地业务库另启用 --profile work-orders-local-db。
 #
 # 备选「Rust 后端直接托管前端」单进程模式(不用 caddy):
 #   docker compose up -d --build postgres backend
@@ -87,6 +89,50 @@ services:
     # Dockerfile /health 就绪探针检查 DB schema、LISTEN、平台保护路由。
     restart: unless-stopped
 
+  work-orders-postgres:
+    profiles: ["work-orders-local-db"]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: work_orders
+      # 没有演示密码；启用此 profile 前必须提供独立数据库密码。
+      POSTGRES_PASSWORD: ${WORK_ORDERS_POSTGRES_PASSWORD:-}
+      POSTGRES_DB: work_orders
+      TZ: Asia/Shanghai
+    volumes:
+      - work_orders_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U work_orders -d work_orders"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  work-orders-api:
+    profiles: ["work-orders"]
+    build:
+      context: ./business-apps/work-orders/backend
+      dockerfile: Dockerfile
+    environment:
+      # 必须是独立业务库。缺少配置时服务启动失败，不复用平台库。
+      WORK_ORDERS_DATABASE_URL: ${WORK_ORDERS_DATABASE_URL:-}
+      # production 强制 HTTPS；使用实际平台 HTTPS 网关，不绕过 TLS 内省。
+      PLATFORM_API_ORIGIN: ${WORK_ORDERS_PLATFORM_API_ORIGIN:-}
+      PLATFORM_CLIENT_ID: ${WORK_ORDERS_PLATFORM_CLIENT_ID:-}
+      PLATFORM_CLIENT_SECRET: ${WORK_ORDERS_PLATFORM_CLIENT_SECRET:-}
+      NODE_ENV: production
+      WORK_ORDERS_HOST: 0.0.0.0
+      WORK_ORDERS_PORT: 3004
+      # opaque iframe 的字面 Origin:null；不启用 cookie/credentialed CORS。
+      WORK_ORDERS_ALLOWED_ORIGINS: "${WORK_ORDERS_ALLOWED_ORIGINS:-null}"
+      PLATFORM_AUTH_TIMEOUT_MS: ${WORK_ORDERS_PLATFORM_AUTH_TIMEOUT_MS:-3000}
+    expose:
+      - "3004"
+    depends_on:
+      work-orders-postgres:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -110,3 +156,4 @@ services:
 
 volumes:
   pgdata:
+  work_orders_pgdata:

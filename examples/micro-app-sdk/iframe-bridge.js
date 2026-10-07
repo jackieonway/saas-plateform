@@ -19,6 +19,16 @@
     var container = options.container || document.body
     var port = null, nonce = null, context = null, sequence = 0, mounted = false, stopped = false
     var expiryTimer = null, chain = Promise.resolve()
+    var nextDownload = 0, pendingDownloads = new Map()
+    function settleDownload(id, error) {
+      var pending = pendingDownloads.get(id)
+      if (!pending) return
+      pendingDownloads.delete(id)
+      clearTimeout(pending.timer)
+      pending.snapshot.signal.removeEventListener('abort', pending.abort)
+      if (error) pending.reject(error)
+      else pending.resolve()
+    }
     function usable(snapshot) {
       return !stopped && context === snapshot && snapshot && !snapshot.signal.aborted &&
         Date.parse(snapshot.expiresAt) > Date.now() && Date.parse(snapshot.tokenExpiresAt) > Date.now()
@@ -28,6 +38,7 @@
     }
     function abortContext() {
       if (context) context.controller.abort()
+      pendingDownloads.forEach(function (_, id) { settleDownload(id, abortError()) })
       if (expiryTimer !== null) clearTimeout(expiryTimer)
       expiryTimer = null
     }
@@ -71,6 +82,13 @@
     function receive(event) {
       var data = event.data
       if (stopped || !data || typeof data !== 'object' || data.nonce !== nonce || !Number.isSafeInteger(data.contextEpoch)) return
+      if (data.kind === 'DANTE_MICRO_DOWNLOAD_RESULT') {
+        var pending = pendingDownloads.get(data.requestId)
+        if (pending && usable(pending.snapshot) && data.contextEpoch === pending.snapshot.contextEpoch) {
+          settleDownload(data.requestId, data.ok === true ? undefined : new Error('CSV download denied'))
+        }
+        return
+      }
       if (data.kind === 'DANTE_MICRO_UNMOUNT') {
         if (!context || data.contextEpoch === context.contextEpoch) dispose()
         return
@@ -128,6 +146,26 @@
     return {
       dispose: dispose,
       current: function () { return usable(context) ? context : null },
+      /** 只有当前资源的 export 功能权限与数据 grant 都允许时，宿主才发起 CSV 下载。 */
+      downloadCsv: function (file) {
+        var snapshot = context
+        if (!usable(snapshot)) return Promise.reject(abortError())
+        if (!file || typeof file.resource !== 'string' || typeof file.filename !== 'string' || typeof file.content !== 'string' ||
+            file.content.length > 4 * 1024 * 1024 || new TextEncoder().encode(file.content).byteLength > 4 * 1024 * 1024) {
+          return Promise.reject(new Error('Invalid CSV download'))
+        }
+        if (pendingDownloads.size >= 4) return Promise.reject(new Error('Too many pending CSV downloads'))
+        var id = ++nextDownload
+        return new Promise(function (resolve, reject) {
+          var abort = function () { settleDownload(id, abortError()) }
+          var timer = setTimeout(function () { settleDownload(id, new Error('CSV download timed out')) }, 15000)
+          pendingDownloads.set(id, { snapshot: snapshot, resolve: resolve, reject: reject, abort: abort, timer: timer })
+          snapshot.signal.addEventListener('abort', abort, { once: true })
+          if (!usable(snapshot)) { abort(); return }
+          send('DANTE_MICRO_DOWNLOAD', snapshot.contextEpoch, { requestId: id,
+            resource: file.resource, filename: file.filename, content: file.content })
+        })
+      },
       /** 应用业务 fetch 必须用此 helper 或直接绑定 props.signal，并校验响应仍属当前 context。 */
       requestJson: async function (url, requestOptions) {
         var snapshot = context

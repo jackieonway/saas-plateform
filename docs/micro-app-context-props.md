@@ -46,6 +46,12 @@ SDK 从宿主接收序列化 DTO，创建本地 `signal/onNavigate/onNotify`，�
 
 opaque iframe 的模块、fetch 等请求来源可能是 `Origin: null`。业务 API 应支持不携带 cookies 的应用 Bearer token，并为该模式明确配置 CORS；iframe 禁止访问宿主 DOM、localStorage 和 JavaScript 全局变量。具体发布、MIME、CORS 与预检规则见[应用独立发布 API](./application-release-api.md)。
 
+### CSV 导出
+
+隔离页面先通过业务 API 取得服务端按权限和范围过滤的 CSV，再调用 `bridge.downloadCsv({ resource: "ticket", filename: "工单.csv", content: csv })`。宿主通过同一专属 MessagePort 的 nonce、epoch 和 requestId 检查当前授权，要求 `${resource}:export` 操作权限和同资源 `export` 数据 grant，校验当前 subject／tenant、到期与取消信号；文件仅支持安全的 `.csv` 名称和最多 4 MiB UTF-8 内容。消息重放、旧上下文和缺授权不会启动下载。
+
+该方法返回的 Promise 表示宿主已发起下载，不表示浏览器已保存文件。iframe 的 sandbox 保持 `allow-scripts allow-forms`，不添加下载标志。宿主临时 Blob URL 自动回收，卸载立即清理；所有导出记录的实际数据范围仍须由业务 API 校验，消息通道不代替服务端过滤。
+
 ## 请求取消与更新
 
 宿主至多约 20 秒刷新一次上下文，使用上下文到期计时器立即取消旧展示工作；令牌在到期前续签。续期 token、权限、同数量菜单内容、身份、独立数据授权、主题或子路由变化都会触发 `update(props)`。没有 `update` 的应用会在旧生命周期清理完成后重挂。

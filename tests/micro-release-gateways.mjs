@@ -57,9 +57,11 @@ function writeTree(root, files) {
   }
 }
 
-function get(port, url, timeout = 2000, host = '127.0.0.1', headers = {}) {
+function upstreamRequest(port, url, { timeout = 2000, host = '127.0.0.1', headers = {}, method = 'GET', body } = {}) {
   return new Promise((resolve, reject) => {
-    const outgoing = request({ host, port, path: url, method: 'GET', agent: false, headers }, (response) => {
+    const bytes = body === undefined ? undefined : Buffer.from(body)
+    const outgoing = request({ host, port, path: url, method, agent: false,
+      headers: bytes ? { ...headers, 'Content-Length': bytes.length } : headers }, (response) => {
       const chunks = []
       response.on('data', (chunk) => chunks.push(chunk))
       response.on('error', reject)
@@ -70,9 +72,11 @@ function get(port, url, timeout = 2000, host = '127.0.0.1', headers = {}) {
     })
     outgoing.on('error', reject)
     outgoing.setTimeout(timeout, () => outgoing.destroy(new Error(`HTTP ${url} timed out`)))
-    outgoing.end()
+    outgoing.end(bytes)
   })
 }
+
+const get = (port, url, timeout = 2000, host = '127.0.0.1', headers = {}) => upstreamRequest(port, url, { timeout, host, headers })
 
 function listen(server, host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
@@ -165,6 +169,17 @@ async function gatewayFixture(t, name) {
     outgoing.writeHead(200, { 'Content-Type': 'application/json' })
     outgoing.end(JSON.stringify({ method: incoming.method, url: incoming.url, fixture: 'FAKE_BACKEND' }))
   })
+  // Transport-only fixture, independent from the platform and notification
+  // upstreams; actual business authorization is tested by its platform E2E.
+  const businessUpstream = createServer(async (incoming, outgoing) => {
+    const chunks = []
+    for await (const chunk of incoming) chunks.push(chunk)
+    const missing = incoming.url === '/work-orders-api' || incoming.url.startsWith('/work-orders-api/missing')
+    outgoing.writeHead(missing ? 404 : 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+    outgoing.end(JSON.stringify({ fixture: 'WORK_ORDERS_TRANSPORT_ONLY', method: incoming.method,
+      url: incoming.url, body: Buffer.concat(chunks).toString('utf8'), authorization: incoming.headers.authorization,
+      origin: incoming.headers.origin }))
+  })
   let service
   let socketFixture
   t.after(async () => {
@@ -173,6 +188,10 @@ async function gatewayFixture(t, name) {
       await stopChild(service)
     } finally {
       try { await socketFixture?.stop() } finally {
+        if (businessUpstream.listening) {
+          businessUpstream.closeAllConnections()
+          await new Promise((resolve, reject) => businessUpstream.close((error) => error ? reject(error) : resolve()))
+        }
         if (upstream.listening) {
           upstream.closeAllConnections()
           await new Promise((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()))
@@ -185,6 +204,7 @@ async function gatewayFixture(t, name) {
   const host = name === 'Nginx' && process.platform === 'win32' ? '::1' : '127.0.0.1'
   const originHost = host.includes(':') ? `[${host}]` : host
   const backendPort = await listen(upstream, host)
+  const businessPort = await listen(businessUpstream, host)
   socketFixture = socketTransportFixture()
   const socketPort = await listen(socketFixture.httpServer, host)
   const gatewayPort = await unusedPort(host)
@@ -208,10 +228,12 @@ async function gatewayFixture(t, name) {
     assert.match(source, /root \* \/micro-apps/)
     assert.match(source, /root \* \/srv\/sub-apps/)
     assert.match(source, /reverse_proxy notification-ws:3003/, 'Caddy must retain the Socket.IO proxy upstream')
+    assert.match(source, /reverse_proxy work-orders-api:3004/, 'Caddy must retain the independent business API upstream')
     config = source
       .replace(/^:80\s*\{/m, `http://127.0.0.1:${gatewayPort} {`)
       .replaceAll('backend:3001', `127.0.0.1:${backendPort}`)
       .replaceAll('notification-ws:3003', `127.0.0.1:${socketPort}`)
+      .replaceAll('work-orders-api:3004', `127.0.0.1:${businessPort}`)
       .replaceAll('root * /micro-apps', `root * ${quotedPath(releaseRoot)}`)
       .replaceAll('root * /srv/sub-apps', `root * ${quotedPath(path.join(hostRoot, 'sub-apps'))}`)
       .replaceAll('root * /srv', `root * ${quotedPath(hostRoot)}`)
@@ -235,6 +257,7 @@ async function gatewayFixture(t, name) {
     assert.match(source, /alias \/srv\/dante\/micro-apps\//)
     assert.match(source, /root \/srv\/dante\/frontend\/dist;/)
     assert.match(source, /proxy_pass http:\/\/127\.0\.0\.1:3003;/, 'Nginx must retain the Socket.IO proxy upstream')
+    assert.match(source, /proxy_pass http:\/\/127\.0\.0\.1:3004;/, 'Nginx must retain the independent business API upstream')
     config = `daemon off;\npid ${quotedPath(path.join(root, 'nginx.pid'))};\nerror_log ${quotedPath(path.join(root, 'nginx-error.log'))} notice;\n` + source
       .replace('worker_processes auto;', 'worker_processes 1;')
       .replace('listen 80;', `listen ${originHost}:${gatewayPort};`)
@@ -242,6 +265,7 @@ async function gatewayFixture(t, name) {
       .replace('http {', `http {\n    access_log ${quotedPath(path.join(root, 'nginx-access.log'))};\n${temporaryPaths}`)
       .replaceAll('http://127.0.0.1:3001', `http://${originHost}:${backendPort}`)
       .replaceAll('http://127.0.0.1:3003', `http://${originHost}:${socketPort}`)
+      .replaceAll('http://127.0.0.1:3004', `http://${originHost}:${businessPort}`)
       .replaceAll('root /srv/dante/frontend/dist;', `root ${quotedPath(hostRoot)};`)
       .replaceAll('alias /srv/dante/micro-apps/$1/versions/$2/$3;', `alias "${slashPath(releaseRoot)}/$1/versions/$2/$3";`)
     const prefix = `${slashPath(root)}/`
@@ -379,6 +403,36 @@ async function socketUntil(predicate, message, timeout = 3000) {
   }
 }
 
+async function checkBusinessProxyContracts(t, gateway) {
+  const authorization = 'Bearer WORK_ORDERS_TRANSPORT_FIXTURE_ONLY'
+  const headers = { Authorization: authorization, Origin: 'null', 'Content-Type': 'application/json' }
+  for (const [method, uri, body] of [
+    ['GET', '/work-orders-api/health', undefined],
+    ['GET', '/work-orders-api/tickets?status=OPEN&search=%E5%B7%A5%E5%8D%95%2Fone', undefined],
+    ['POST', '/work-orders-api/tickets?source=iframe', '{"title":"实际前缀代理","priority":"HIGH"}'],
+    ['PATCH', '/work-orders-api/tickets/fixture-id?version=2', '{"version":2,"status":"IN_PROGRESS"}'],
+    ['DELETE', '/work-orders-api/tickets/fixture-id', '{"version":3}'],
+  ]) await t.test(`work-orders transport fixture: ${method} ${uri} preserves prefix/query/body and application Bearer`, async () => {
+    const response = await upstreamRequest(gateway.port, uri, { host: gateway.host, method, headers, body })
+    assert.equal(response.status, 200)
+    assert.deepEqual(JSON.parse(response.body), { fixture: 'WORK_ORDERS_TRANSPORT_ONLY', method, url: uri,
+      body: body ?? '', authorization, origin: 'null' })
+    assert.equal(response.headers['access-control-allow-origin'], undefined, 'public version CORS must not extend to the business API')
+    assert.equal(response.headers['access-control-allow-credentials'], undefined)
+    assert.equal(cacheHeader(response), 'no-store')
+  })
+  for (const uri of ['/work-orders-api', '/work-orders-api/missing?source=iframe']) {
+    await t.test(`work-orders transport fixture: missing ${uri} remains an API 404`, async () => {
+      const response = await upstreamRequest(gateway.port, uri, { host: gateway.host, headers })
+      assert.equal(response.status, 404)
+      assert.equal(JSON.parse(response.body).fixture, 'WORK_ORDERS_TRANSPORT_ONLY')
+      assert.ok(!response.body.includes('HOST_SPA_FIXTURE'))
+      assert.equal(response.headers['access-control-allow-origin'], undefined)
+      assert.equal(cacheHeader(response), 'no-store')
+    })
+  }
+}
+
 async function checkSocketProxyContracts(t, gateway) {
   const fixture = gateway.socketFixture
   const originHost = gateway.host.includes(':') ? `[${gateway.host}]` : gateway.host
@@ -482,6 +536,7 @@ test('Caddy validates and serves the production release gateway contract', {
   const gateway = await gatewayFixture(t, 'Caddy')
   assert.match(`${gateway.validation.stdout}${gateway.validation.stderr}`, /valid configuration/i)
   await checkHttpContracts(t, gateway.port, gateway.host)
+  await checkBusinessProxyContracts(t, gateway)
   await checkSocketProxyContracts(t, gateway)
 })
 
@@ -492,5 +547,6 @@ test('Nginx validates and serves the production release gateway contract', {
   assert.match(gateway.validation.stderr, /syntax is ok/i)
   assert.match(gateway.validation.stderr, /test is successful/i)
   await checkHttpContracts(t, gateway.port, gateway.host)
+  await checkBusinessProxyContracts(t, gateway)
   await checkSocketProxyContracts(t, gateway)
 })

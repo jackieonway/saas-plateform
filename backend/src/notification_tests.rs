@@ -1,4 +1,4 @@
-//! Phase 10 regressions: real PostgreSQL, an independently migrated random database per test.
+//! Phase 10 notifications and Phase 11 scoped app-member regressions on isolated PostgreSQL.
 //! Run explicitly with `cargo test notification_tests -- --ignored --nocapture`.
 //! TEST_DATABASE_URL is read from the environment or ignored root .env.test; never printed.
 use std::borrow::Cow;
@@ -1035,5 +1035,147 @@ async fn notification_seed_does_not_create_new_unowned_messages() -> Result<()> 
         Ok(())
     }
     .await;
+    db.finish(result).await
+}
+
+// Phase 11 reuses the isolated context/app-token fixtures above; no platform directory
+// data can be fetched solely because a user holds a role or enters an application.
+async fn app_members_setup(h: &Harness) -> Result<Vec<Uuid>> {
+    let mut menus = Vec::new();
+    for action in ["create", "update"] {
+        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON',$2,$3) RETURNING id")
+            .bind(h.main_app).bind(format!("工单 {action}")).bind(format!("ticket:{action}")).fetch_one(&h.pool).await?;
+        sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
+            .bind(h.tenant_a)
+            .bind(menu)
+            .execute(&h.pool)
+            .await?;
+        for org in [h.root, h.child, h.peer] {
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+                .bind(org)
+                .bind(menu)
+                .execute(&h.pool)
+                .await?;
+        }
+        sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)")
+            .bind(h.root_role)
+            .bind(menu)
+            .execute(&h.pool)
+            .await?;
+        menus.push(menu);
+    }
+    Ok(menus)
+}
+
+async fn app_members_grant(h: &Harness, org: Uuid, action: &str, scope: &str) -> Result<()> {
+    let changed = sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) SELECT id,$3,'ticket',$4,$5 FROM memberships WHERE user_id=$1 AND organization_id=$2 ON CONFLICT(membership_id,application_id,resource_code,action_code) DO UPDATE SET scope_type=EXCLUDED.scope_type")
+        .bind(h.publisher).bind(org).bind(h.main_app).bind(action).bind(scope).execute(&h.pool).await?.rows_affected();
+    ensure!(changed == 1, "ticket grant needs direct membership");
+    Ok(())
+}
+
+fn app_members_path(org: Uuid, action: &str, user: Option<Uuid>) -> String {
+    let suffix = user.map(|id| format!("/{id}")).unwrap_or_default();
+    format!(
+        "/api/apps/{APP_CODE}/members{suffix}?resource=ticket&action={action}&organizationId={org}"
+    )
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn app_members_scopes_minimal_dto_and_recipient_validity() -> Result<()> {
+    let db = Database::create(false).await?;
+    let result:Result<()>=async {
+        let h=Harness::create(&db.pool).await?;
+        app_members_setup(&h).await?;
+        let token=h.app_token(&h.publisher_session.token,APP_CODE).await?;
+        let root_path=app_members_path(h.root,"create",None);
+        rejected(&h.router,Method::GET,&root_path,&token,None,&[StatusCode::FORBIDDEN]).await?;
+        for scope in ["SELF","ORG","ORG_SUBTREE","TENANT"] {
+            app_members_grant(&h,h.root,"create",scope).await?;
+            let list=ok(&h.router,Method::GET,&root_path,&token,None).await?;
+            ensure!(list["total"]==4,"candidate list did not include exactly enabled direct members");
+            for item in list["records"].as_array().ok_or_else(||anyhow!("missing members"))? {
+                let keys:std::collections::BTreeSet<_>=item.as_object().ok_or_else(||anyhow!("invalid member"))?.keys().map(String::as_str).collect();
+                ensure!(keys==["displayName","id","organizationId"].into_iter().collect(),"member helper leaked private profile fields");
+                ensure!(id_of(item,"organizationId")?==h.root,"candidate row has wrong organization");
+            }
+            let member=ok(&h.router,Method::GET,&app_members_path(h.root,"create",Some(h.recipient)),&token,None).await?;
+            ensure!(id_of(&member,"id")?==h.recipient,"minimal single-member validation returned another identity");
+            rejected(&h.router,Method::GET,&app_members_path(h.root,"create",Some(h.disabled_user)),&token,None,&[StatusCode::NOT_FOUND]).await?;
+            rejected(&h.router,Method::GET,&app_members_path(h.root,"create",Some(h.child_user)),&token,None,&[StatusCode::NOT_FOUND]).await?;
+            let child_path=app_members_path(h.child,"create",None);
+            if ["SELF","ORG"].contains(&scope) {
+                rejected(&h.router,Method::GET,&child_path,&token,None,&[StatusCode::NOT_FOUND]).await?;
+            } else { ok(&h.router,Method::GET,&child_path,&token,None).await?; }
+            let peer_path=app_members_path(h.peer,"create",None);
+            if scope=="TENANT" { ok(&h.router,Method::GET,&peer_path,&token,None).await?; }
+            else { rejected(&h.router,Method::GET,&peer_path,&token,None,&[StatusCode::NOT_FOUND]).await?; }
+            rejected(&h.router,Method::GET,&app_members_path(h.remote,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+            rejected(&h.router,Method::GET,&app_members_path(h.no_app_org,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        }
+        // Inherited role permissions never supply the child direct membership's grant.
+        let child_token=h.app_token(&h.child_session.token,APP_CODE).await?;
+        rejected(&h.router,Method::GET,&app_members_path(h.child,"create",None),&child_token,None,&[StatusCode::FORBIDDEN]).await?;
+        app_members_grant(&h,h.child,"create","SELF").await?;
+        ok(&h.router,Method::GET,&app_members_path(h.child,"create",None),&child_token,None).await?;
+        rejected(&h.router,Method::GET,&app_members_path(h.root,"create",None),&child_token,None,&[StatusCode::NOT_FOUND]).await?;
+        rejected(&h.router,Method::GET,&app_members_path(h.root,"update",None),&token,None,&[StatusCode::FORBIDDEN]).await?;
+        app_members_grant(&h,h.root,"update","ORG").await?;
+        ok(&h.router,Method::GET,&app_members_path(h.root,"update",None),&token,None).await?;
+        sqlx::query("UPDATE users SET real_name='处理人 % _ 字面量' WHERE id=$1").bind(h.recipient).execute(&db.pool).await?;
+        let filtered=ok(&h.router,Method::GET,&format!("{root_path}&q=%25"),&token,None).await?;
+        ensure!(filtered["total"]==1 && filtered["records"][0]["displayName"]=="处理人 % _ 字面量","member search treated wildcard as pattern");
+        let page=ok(&h.router,Method::GET,&format!("{root_path}&page=2&size=2"),&token,None).await?;
+        ensure!(page["total"]==4 && page["page"]==2 && page["size"]==2 && page["records"].as_array().unwrap().len()==2,"member pagination changed");
+        sqlx::query("UPDATE organizations SET status='DISABLED' WHERE id=$1").bind(h.child).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&app_members_path(h.child,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        sqlx::query("UPDATE organizations SET status='ENABLED',expires_at=now()-interval '1 second' WHERE id=$1").bind(h.child).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&app_members_path(h.child,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2").bind(h.peer).bind(h.main_app).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&app_members_path(h.peer,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        Ok(())
+    }.await;
+    db.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn app_members_authorization_and_next_request_revocation() -> Result<()> {
+    let db = Database::create(false).await?;
+    let result:Result<()>=async {
+        let h=Harness::create(&db.pool).await?;
+        let menus=app_members_setup(&h).await?;
+        app_members_grant(&h,h.root,"create","TENANT").await?;
+        let token=h.app_token(&h.publisher_session.token,APP_CODE).await?;
+        let path=app_members_path(h.root,"create",None);
+        ok(&h.router,Method::GET,&path,&token,None).await?;
+        rejected(&h.router,Method::GET,&path,&h.publisher_session.token,None,&[StatusCode::UNAUTHORIZED]).await?;
+        let wrong=h.app_token(&h.publisher_session.token,OTHER_CODE).await?;
+        rejected(&h.router,Method::GET,&path,&wrong,None,&[StatusCode::FORBIDDEN]).await?;
+        for extra in ["&size=51","&page=0","&tenantId=forged","&userId=forged"] {
+            rejected(&h.router,Method::GET,&format!("{path}{extra}"),&token,None,&[StatusCode::BAD_REQUEST]).await?;
+        }
+        for operation in ["read","export","publish"] {
+            rejected(&h.router,Method::GET,&app_members_path(h.root,operation,None),&token,None,&[StatusCode::BAD_REQUEST]).await?;
+        }
+        rejected(&h.router,Method::GET,&path.replace("resource=ticket","resource=user"),&token,None,&[StatusCode::BAD_REQUEST]).await?;
+        let super_token=h.app_token(&h.super_session.token,APP_CODE).await?;
+        rejected(&h.router,Method::GET,&path,&super_token,None,&[StatusCode::FORBIDDEN]).await?;
+        sqlx::query("DELETE FROM role_menus WHERE role_id=$1 AND menu_id=$2").bind(h.root_role).bind(menus[0]).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&path,&token,None,&[StatusCode::FORBIDDEN]).await?;
+        sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)").bind(h.root_role).bind(menus[0]).execute(&db.pool).await?;
+        sqlx::query("DELETE FROM membership_data_grants WHERE membership_id IN(SELECT id FROM memberships WHERE user_id=$1 AND organization_id=$2) AND application_id=$3 AND resource_code='ticket' AND action_code='create'").bind(h.publisher).bind(h.root).bind(h.main_app).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&path,&token,None,&[StatusCode::FORBIDDEN]).await?;
+        app_members_grant(&h,h.root,"create","ORG").await?;
+        ok(&h.router,Method::GET,&path,&token,None).await?;
+        sqlx::query("UPDATE roles SET status='DISABLED' WHERE id=$1").bind(h.root_role).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&path,&token,None,&[StatusCode::FORBIDDEN]).await?;
+        sqlx::query("UPDATE roles SET status='ENABLED' WHERE id=$1").bind(h.root_role).execute(&db.pool).await?;
+        ok(&h.router,Method::GET,&path,&token,None).await?;
+        sqlx::query("DELETE FROM memberships WHERE user_id=$1 AND organization_id=$2").bind(h.publisher).bind(h.root).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&path,&token,None,&[StatusCode::UNAUTHORIZED]).await?;
+        Ok(())
+    }.await;
     db.finish(result).await
 }

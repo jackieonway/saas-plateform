@@ -47,18 +47,8 @@ export default defineConfig({
       },
     },
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("recharts") || id.includes("d3-")) return "charts";
-            if (id.includes("react") || id.includes("scheduler")) return "react-vendor";
-            if (id.includes("@radix-ui") || id.includes("cmdk") || id.includes("vaul")) return "ui-vendor";
-            return "vendor";
-          }
-        },
-      },
-    },
-  },
+  // Let Rollup derive shared chunks from the actual module graph. Splitting
+  // React, its UI consumers and their helpers by package-name substrings made
+  // circular vendor chunks: Sonner accessed React before its wrapper initialized.
+  // Route-level dynamic imports still keep business pages loaded on demand.
 });

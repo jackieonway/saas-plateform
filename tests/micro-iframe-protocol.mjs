@@ -36,7 +36,7 @@ function child(options = {}) {
   const window = { parent, fetch: options.fetch || (async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) })),
     addEventListener: (name, listener) => { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(listener) },
     removeEventListener: (name, listener) => listeners.get(name)?.delete(listener) }
-  vm.runInNewContext(sdkSource, { window, document: { body: {} }, URL, AbortController, DOMException, Headers,
+  vm.runInNewContext(sdkSource, { window, document: { body: {} }, URL, AbortController, DOMException, Headers, TextEncoder,
     setTimeout: (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, at: now + delay }); return id },
     clearTimeout: (id) => timers.delete(id), Date: clockDate })
   const calls = []
@@ -88,6 +88,93 @@ function harness(options = {}) {
     cleanup: async () => { lifecycle.unmount(); app.bridge.dispose(); await turns();
       for (const [name, descriptor] of originals) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name] } } }
 }
+
+const csvGrant = () => ({ resource: 'orders', action: 'export', scope: 'TENANT', subjectUserId: 'u', tenantId: 't', organizationIds: [] })
+const csvFile = { resource: 'orders', filename: '订单.csv', content: 'id,title\n1,hello\n' }
+
+test('CSV broker validates export permission and data grant without changing iframe isolation', async () => {
+  const saved = []
+  const h = harness({ props: { permissions: ['orders:export'], dataGrants: [csvGrant()] },
+    parent: { saveCsv: (filename, content) => saved.push({ filename, content }) } })
+  try {
+    await h.mount()
+    await h.app.bridge.downloadCsv(csvFile)
+    assert.deepEqual(saved, [{ filename: csvFile.filename, content: csvFile.content }])
+    assert.equal(h.frames[0].attributes.sandbox, 'allow-scripts allow-forms')
+    assert.equal(h.outbound.find((message) => message.kind === 'DANTE_MICRO_DOWNLOAD_RESULT').ok, true)
+  } finally { await h.cleanup() }
+})
+
+test('CSV broker denies missing operation, missing grant and forged grant identities', async () => {
+  for (const value of [
+    { permissions: [], dataGrants: [csvGrant()] },
+    { permissions: ['orders:export'], dataGrants: [] },
+    { permissions: ['orders:export'], dataGrants: [{ ...csvGrant(), tenantId: 'another-tenant' }] },
+    { permissions: ['orders:export'], dataGrants: [{ ...csvGrant(), subjectUserId: 'another-user' }] },
+    { permissions: ['orders:export'], dataGrants: [{ ...csvGrant(), scope: 'ALL' }] },
+  ]) {
+    const saved = []
+    const h = harness({ props: value, parent: { saveCsv: (...args) => saved.push(args) } })
+    try {
+      await h.mount()
+      await assert.rejects(h.app.bridge.downloadCsv(csvFile), /denied/)
+      assert.equal(saved.length, 0)
+    } finally { await h.cleanup() }
+  }
+})
+
+test('CSV host independently rejects unsafe filename, wrong resource and oversized UTF-8 payloads', async () => {
+  const saved = []
+  const h = harness({ props: { permissions: ['orders:export'], dataGrants: [csvGrant()] },
+    parent: { saveCsv: (...args) => saved.push(args) } })
+  try {
+    await h.mount()
+    const nonce = h.bootstraps[0].data.nonce
+    let id = 0
+    for (const file of [{ ...csvFile, filename: '../orders.csv' }, { ...csvFile, filename: 'orders.csv.exe' },
+      { ...csvFile, filename: 'orders\u0000.csv' }, { ...csvFile, resource: 'another' },
+      { ...csvFile, content: '汉'.repeat(2 * 1024 * 1024) }]) {
+      const requestId = ++id
+      h.channels[0].port2.postMessage({ kind: 'DANTE_MICRO_DOWNLOAD', nonce, contextEpoch: 1, requestId, ...file })
+      await until(() => h.outbound.some((message) => message.kind === 'DANTE_MICRO_DOWNLOAD_RESULT' && message.requestId === requestId))
+      assert.equal(h.outbound.find((message) => message.kind === 'DANTE_MICRO_DOWNLOAD_RESULT' && message.requestId === requestId).ok, false)
+    }
+    assert.equal(saved.length, 0)
+    await assert.rejects(h.app.bridge.downloadCsv({ ...csvFile, content: '汉'.repeat(2 * 1024 * 1024) }), /Invalid CSV/)
+  } finally { await h.cleanup() }
+})
+
+test('CSV command replay, wrong nonce and old epoch cannot trigger extra host downloads', async () => {
+  const saved = []
+  const h = harness({ props: { permissions: ['orders:export'], dataGrants: [csvGrant()] },
+    parent: { saveCsv: (...args) => saved.push(args) } })
+  try {
+    await h.mount()
+    await h.app.bridge.downloadCsv(csvFile)
+    const nonce = h.bootstraps[0].data.nonce
+    for (const extra of [{ requestId: 1 }, { requestId: 2, nonce: 'forged' }, { requestId: 3, contextEpoch: 0 }]) {
+      h.channels[0].port2.postMessage({ kind: 'DANTE_MICRO_DOWNLOAD', nonce, contextEpoch: 1, requestId: 4, ...csvFile, ...extra })
+    }
+    await turns()
+    assert.equal(saved.length, 1)
+    await assert.rejects(h.app.bridge.downloadCsv(csvFile), /denied/)
+    assert.equal(saved.length, 1)
+  } finally { await h.cleanup() }
+})
+
+test('unmount cancels an in-flight CSV promise before host IO and stale callbacks stay unusable', async () => {
+  const saved = []
+  const h = harness({ props: { permissions: ['orders:export'], dataGrants: [csvGrant()] },
+    parent: { saveCsv: (...args) => saved.push(args) } })
+  try {
+    await h.mount()
+    const request = h.app.bridge.downloadCsv(csvFile)
+    h.scope.abort()
+    await assert.rejects(request, { name: 'AbortError' })
+    assert.equal(saved.length, 0)
+    await assert.rejects(h.app.bridge.downloadCsv(csvFile), { name: 'AbortError' })
+  } finally { await h.cleanup() }
+})
 
 test('child bootstrap authenticates browser source, exact configured origin, nonce, application and single port', async () => {
   const app = child(), channel = new MessageChannel(), received = []

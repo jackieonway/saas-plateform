@@ -7,6 +7,8 @@ interface IframeOptions {
   signal?: AbortSignal
   handshakeTimeoutMs?: number
   operationTimeoutMs?: number
+  /** 宿主保存适配；仅由宿主代码提供，子 frame 无法覆盖。 */
+  saveCsv?: (filename: string, content: string) => void
 }
 
 type PropsDTO = Omit<MicroProps, "signal" | "onNavigate" | "onNotify">
@@ -58,6 +60,13 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
   let handshake: { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | null = null
   const pending = new Map<number, Pending>()
   let chain: Promise<void> = Promise.resolve()
+  let lastDownloadId = 0
+  let lastDownloadAt = Number.NEGATIVE_INFINITY
+  const downloads = new Map<string, ReturnType<typeof setTimeout>>()
+  const clearDownloads = () => {
+    for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url) }
+    downloads.clear()
+  }
   const deadline = (props: MicroProps) => Math.min(Date.parse(props.expiresAt), Date.parse(props.tokenExpiresAt))
   const attached = () => !!frame && !!container && container.isConnected && container.contains(frame)
   const usable = (epoch: number) => !stopped && attached() && !!current && current.contextEpoch === epoch &&
@@ -87,6 +96,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
       try { send("DANTE_MICRO_UNMOUNT", current.contextEpoch) } catch { /* already closed */ }
     }
     clearContext()
+    clearDownloads()
     current = null
     options.signal?.removeEventListener("abort", onScopeAbort)
     observer?.disconnect()
@@ -140,6 +150,41 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
     current.onNavigate(url.pathname + url.search + url.hash)
   }
 
+  const downloadCsv = (data: Record<string, unknown>) => {
+    const id = data.requestId
+    if (!Number.isSafeInteger(id) || (id as number) <= 0) return
+    const acknowledge = (ok: boolean) => send("DANTE_MICRO_DOWNLOAD_RESULT", data.contextEpoch as number,
+      { requestId: id, ok, ...(ok ? {} : { code: "CSV_DOWNLOAD_DENIED" }) })
+    if ((id as number) <= lastDownloadId) { acknowledge(false); return }
+    lastDownloadId = id as number
+    const { resource, filename, content } = data
+    if (!current || typeof resource !== "string" || !resource || resource.length > 100 ||
+        typeof filename !== "string" || !filename || filename.length > 128 || !/\.csv$/i.test(filename) ||
+        /[\\/:*?"<>|\u0000-\u001f\u007f]/.test(filename) || filename.startsWith(".") ||
+        typeof content !== "string" || !content || content.length > 4 * 1024 * 1024 ||
+        new TextEncoder().encode(content).byteLength > 4 * 1024 * 1024 ||
+        !current.permissions.includes(`${resource}:export`) || !current.dataGrants.some((grant) =>
+          grant.resource === resource && grant.action === "export" && grant.subjectUserId === current!.user.id &&
+          grant.tenantId === current!.tenant.id && ["SELF", "ORG", "ORG_SUBTREE", "TENANT"].includes(grant.scope)) ||
+        performance.now() - lastDownloadAt < 1000) { acknowledge(false); return }
+    try {
+      if (options.saveCsv) options.saveCsv(filename, content)
+      else {
+        const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }))
+        const timer = setTimeout(() => { URL.revokeObjectURL(url); downloads.delete(url) }, 30_000)
+        downloads.set(url, timer)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = filename
+        link.style.display = "none"
+        document.body.appendChild(link)
+        try { link.click() } finally { link.remove() }
+      }
+      lastDownloadAt = performance.now()
+      acknowledge(true)
+    } catch { acknowledge(false) }
+  }
+
   const receive = (event: MessageEvent) => {
     const data = event.data
     if (!data || typeof data !== "object" || data.nonce !== nonce || !usable(data.contextEpoch)) return
@@ -154,6 +199,8 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
       settle(data.requestId, data.kind === "DANTE_MICRO_ERROR" ? new Error("Iframe application lifecycle failed") : undefined)
     } else if (ready && data.kind === "DANTE_MICRO_NAVIGATE") {
       navigate(data.path)
+    } else if (ready && mounted && data.kind === "DANTE_MICRO_DOWNLOAD") {
+      downloadCsv(data)
     } else if (ready && data.kind === "DANTE_MICRO_NOTIFY" && typeof data.message === "string" &&
         data.message.length > 0 && data.message.length <= 1000 && variants.has(data.variant)) {
       current!.onNotify(data.message, data.variant)
@@ -197,7 +244,10 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
       frame.title = `${appCode} application`
       frame.setAttribute("sandbox", "allow-scripts allow-forms")
       frame.referrerPolicy = "no-referrer"
-      frame.style.cssText = "display:block;width:100%;min-height:480px;height:100%;border:0"
+      // The mount zone has an automatic height, so height:100% collapsed to the
+      // minimum and left desktop dialogs in a 480px viewport. Reserve room for
+      // the host navigation while letting the frame follow viewport resizing.
+      frame.style.cssText = "display:block;width:100%;min-height:480px;height:max(480px, calc(100dvh - 220px));border:0"
       const channel = new MessageChannel()
       port = channel.port1
       port.onmessage = receive
