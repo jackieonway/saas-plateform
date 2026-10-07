@@ -86,7 +86,7 @@ const userSchema = z.object({
     .min(3, "用户名至少 3 位")
     .max(32)
     .regex(/^[a-z0-9_-]+$/i, "仅支持字母、数字、下划线与中划线"),
-  password: z.string().min(8, "密码至少 8 位").max(64),
+  password: z.string().min(12, "密码至少 12 位").max(64),
   realName: z.string().min(1, "请输入姓名").max(64),
   email: z.string().email("邮箱格式不正确").optional().or(z.literal("")),
   phone: z.string().regex(/^1\d{10}$/, "手机号格式不正确").optional().or(z.literal("")),
@@ -181,7 +181,7 @@ export default function UsersPage() {
     setEditing(u)
     form.reset({
       username: u.username,
-      password: "________",
+      password: "____________",
       realName: u.realName ?? "",
       email: u.email ?? "",
       phone: u.phone ?? "",

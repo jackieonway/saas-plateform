@@ -76,9 +76,10 @@ impl IntoResponse for AppError {
             AppError::Server(_) => (StatusCode::INTERNAL_SERVER_ERROR, "SERVER_ERROR"),
         };
         let message = match &self {
-            AppError::Server(e) => {
-                tracing::error!("服务器内部错误: {:?}", e);
-                format!("服务器内部错误: {}", e)
+            AppError::Server(_) => {
+                tracing::error!(event = "server_error", code = "SERVER_ERROR",
+                    request_id = ?crate::observability::request_id());
+                "服务器内部错误，请凭请求编号联系管理员".to_string()
             }
             other => other.to_string(),
         };

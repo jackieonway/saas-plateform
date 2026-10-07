@@ -399,12 +399,13 @@ pub async fn publish(
         notify_hint(&mut tx, id, actor.tenant_id, organization_id, user_id).await?;
     }
     sqlx::query(
-        "INSERT INTO audit_logs(user_id,username,tenant_id,tenant_name,organization_id,organization_name,action,detail,ip,user_agent) \
+        "INSERT INTO audit_logs(user_id,username,tenant_id,tenant_name,organization_id,organization_name,action,detail,ip,user_agent,request_id,application_id) \
          VALUES($1,$2,$3,(SELECT name FROM tenants WHERE id=$3),$4,(SELECT name FROM organizations WHERE id=$4), \
-         'PUBLISH_NOTIFICATION',$5,$6,$7)"
+         'PUBLISH_NOTIFICATION',$5,$6,$7,$8,$9)"
     ).bind(actor.user_id).bind(&username).bind(actor.tenant_id).bind(actor.organization_id)
         .bind(format!("发布通知 {publication_id}: {recipient_count} 人 / {delivery_count} 条"))
-        .bind(ip).bind(ua).execute(&mut *tx).await?;
+        .bind(ip).bind(ua).bind(crate::observability::request_id()).bind(actor.application_id)
+        .execute(&mut *tx).await?;
     tx.commit().await?;
     Ok(Publication {
         publication_id,

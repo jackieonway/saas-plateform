@@ -1,0 +1,29 @@
+# Private runner only. Render these paths for this installation; files contain
+# each service's independent METRICS_TOKEN (no Bearer prefix), mode 0600.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 3s
+rule_files:
+  - /etc/rust-saas/monitor/alerts.yml
+scrape_configs:
+  - job_name: platform
+    metrics_path: /api/internal/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/rust-saas/secrets/platform-metrics-token
+    static_configs:
+      - targets: ['127.0.0.1:3001']
+  - job_name: work-orders
+    metrics_path: /work-orders-api/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/rust-saas/secrets/work-orders-metrics-token
+    static_configs:
+      - targets: ['127.0.0.1:3004']
+  - job_name: notification
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/rust-saas/secrets/notification-metrics-token
+    static_configs:
+      - targets: ['127.0.0.1:3003']

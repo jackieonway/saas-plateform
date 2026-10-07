@@ -1,0 +1,52 @@
+groups:
+  - name: saas-runtime
+    rules:
+      - alert: SaaSPrivateScrapeUnavailable
+        expr: up{job=~"platform|work-orders|notification"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Private SaaS service scrape is unavailable'
+      - alert: SaaSNodeDependencyUnavailable
+        expr: saas_health_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: 'A SaaS service dependency is unavailable'
+      - alert: SaaSPlatformDatabaseUnavailable
+        expr: dante_database_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: 'The SaaS platform database is unavailable'
+      - alert: SaaSPlatformRequestErrors
+        expr: sum(rate(dante_http_requests_total{status=~"5.."}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'SaaS platform requests are returning server errors'
+      - alert: SaaSNotificationListenUnavailable
+        expr: saas_notification_listen_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Persistent notification LISTEN channel is unavailable'
+      - alert: SaaSNodeRequestErrors
+        expr: sum by (service) (rate(saas_http_errors_total[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'SaaS Node requests are returning server errors'
+      - alert: SaaSNotificationBacklog
+        expr: saas_notification_pending_hints > 800
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Realtime notification hint backlog is approaching capacity'

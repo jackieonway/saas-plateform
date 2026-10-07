@@ -1,16 +1,50 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
+use crate::authorization;
 use crate::error::AppError;
 use crate::extractors::CurrentUser;
-use crate::authorization;
 
 /// OAuth 端点 IP 限流参数: 滑动窗口 60 秒内最多 30 次
-const OAUTH_RATE_WINDOW_SECS: i64 = 60;
+const OAUTH_RATE_WINDOW_SECS: u64 = 60;
 const OAUTH_RATE_MAX_REQUESTS: usize = 30;
 /// 限流表超过该 IP 数量时触发一次全量过期清理 (防内存膨胀, 均摊开销)
-const OAUTH_RATE_MAP_GC_THRESHOLD: usize = 1024;
+const OAUTH_RATE_MAP_GC_THRESHOLD: usize = 4096;
+
+type RateMap = Arc<Mutex<HashMap<String, Vec<Instant>>>>;
+
+/// All lanes are bounded and use monotonic time. No active identity is evicted to
+/// make room for an attacker; a saturated table or poisoned lock fails closed.
+fn record_rate(map: &RateMap, key: &str, limit: usize) -> Option<i64> {
+    let now = Instant::now();
+    let period = Duration::from_secs(OAUTH_RATE_WINDOW_SECS);
+    let Ok(mut map) = map.lock() else {
+        return Some(60);
+    };
+    if map.len() >= OAUTH_RATE_MAP_GC_THRESHOLD && !map.contains_key(key) {
+        map.retain(|_, entries| {
+            entries
+                .iter()
+                .any(|instant| now.duration_since(*instant) < period)
+        });
+        if map.len() >= OAUTH_RATE_MAP_GC_THRESHOLD {
+            return Some(60);
+        }
+    }
+    let entries = map.entry(key.to_owned()).or_default();
+    entries.retain(|instant| now.duration_since(*instant) < period);
+    if entries.len() >= limit {
+        let elapsed = entries
+            .first()
+            .map(|oldest| now.duration_since(*oldest).as_secs())
+            .unwrap_or(0);
+        return Some(OAUTH_RATE_WINDOW_SECS.saturating_sub(elapsed).max(1) as i64);
+    }
+    entries.push(now);
+    None
+}
 
 /// 组织祖先链 (含自身) 的 WITH RECURSIVE 片段, 以 $1 为当前组织 (含 parent_id 列供递归)
 pub const ORG_ANCESTORS_SQL: &str = "WITH RECURSIVE anc AS ( \
@@ -24,7 +58,11 @@ pub struct AppState {
     pub config: Arc<crate::config::Config>,
     /// 进程启动时刻 (GET /api/monitor/system 的 startedAt/uptimeSeconds 数据源)
     pub started_at: chrono::DateTime<chrono::Utc>,
-    oauth_rate: Arc<Mutex<HashMap<String, Vec<i64>>>>,
+    oauth_rate: RateMap,
+    introspection_clients: RateMap,
+    introspection_failures: RateMap,
+    introspection_attempts: RateMap,
+    pub introspection_auth_slots: Arc<tokio::sync::Semaphore>,
 }
 
 impl AppState {
@@ -34,6 +72,10 @@ impl AppState {
             config,
             started_at: chrono::Utc::now(),
             oauth_rate: Arc::new(Mutex::new(HashMap::new())),
+            introspection_clients: Arc::new(Mutex::new(HashMap::new())),
+            introspection_failures: Arc::new(Mutex::new(HashMap::new())),
+            introspection_attempts: Arc::new(Mutex::new(HashMap::new())),
+            introspection_auth_slots: Arc::new(tokio::sync::Semaphore::new(32)),
         }
     }
 
@@ -42,15 +84,26 @@ impl AppState {
     /// 权限口径与 GET /api/auth/menus 的非超管分支完全一致:
     /// 角色 ∩ 组织授权 ∩ 租户授权 —— 菜单(含 BUTTON 型操作权限码)必须同时被
     /// 当前组织与所属租户授权, 角色菜单才生效, 保证「组织只能看到/操作被授权的菜单与按钮」。
-    pub async fn permissions_of(&self, user_id: Uuid, org_id: Uuid) -> Result<HashSet<String>, AppError> {
-        let tenant_id: Uuid = sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
-            .bind(org_id).fetch_one(&self.pool).await?;
-        let rows = authorization::effective_menu_rows(&self.pool, user_id, tenant_id, org_id, None).await?;
+    pub async fn permissions_of(
+        &self,
+        user_id: Uuid,
+        org_id: Uuid,
+    ) -> Result<HashSet<String>, AppError> {
+        let tenant_id: Uuid =
+            sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
+                .bind(org_id)
+                .fetch_one(&self.pool)
+                .await?;
+        let rows = authorization::effective_menu_rows(&self.pool, user_id, tenant_id, org_id, None)
+            .await?;
         Ok(authorization::permissions_of(&rows))
     }
 
     /// 权限校验 (超管直通)
     pub async fn require(&self, user: &CurrentUser, perm: &'static str) -> Result<(), AppError> {
+        // OAuth clients and token administration are global platform resources;
+        // a tenant menu/role grant cannot make them tenant-owned resources.
+        if perm == "system:oauth" { self.require_platform(user).await?; }
         if user.is_super_admin {
             return Ok(());
         }
@@ -68,10 +121,11 @@ impl AppState {
         if user.is_super_admin {
             return Ok(true);
         }
-        let platform: Option<bool> = sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
-            .bind(user.tenant_id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let platform: Option<bool> =
+            sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
+                .bind(user.tenant_id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(platform.unwrap_or(false))
     }
 
@@ -99,7 +153,11 @@ impl AppState {
     }
 
     /// 用户在指定组织上下文中的生效角色 (角色所属组织 ∈ 组织祖先链)
-    pub async fn effective_roles(&self, user_id: Uuid, org_id: Uuid) -> Result<Vec<RoleBrief>, AppError> {
+    pub async fn effective_roles(
+        &self,
+        user_id: Uuid,
+        org_id: Uuid,
+    ) -> Result<Vec<RoleBrief>, AppError> {
         let sql = format!(
             "{} SELECT DISTINCT r.id, r.name, COALESCE(r.code, '') FROM user_roles ur \
              JOIN roles r ON r.id = ur.role_id \
@@ -113,30 +171,44 @@ impl AppState {
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
-        Ok(rows.into_iter().map(|(id, name, code)| RoleBrief { id, name, code }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|(id, name, code)| RoleBrief { id, name, code })
+            .collect())
     }
 
     /// 兼容现有写入调用；权限现在逐请求读取，不再有进程内正向缓存。
-    pub fn invalidate_perm_cache(&self) {
-    }
+    pub fn invalidate_perm_cache(&self) {}
 
     /// OAuth 端点滑动窗口限流: 清理该 IP 过期时间戳后检查长度,
     /// 未超限则记录本次请求返回 None; 超限不记录, 返回建议的 Retry-After 秒数。
-    /// 锁粒度仅为一次内存操作, 持有时间极短; 锁中毒时放行 (fail-open)。
+    /// 锁中毒或达到身份数量上限时拒绝请求。
     pub fn record_oauth_request(&self, ip: &str) -> Option<i64> {
-        let now = chrono::Utc::now().timestamp();
-        let Ok(mut map) = self.oauth_rate.lock() else { return None };
-        let window = map.entry(ip.to_string()).or_default();
-        window.retain(|t| now - *t < OAUTH_RATE_WINDOW_SECS);
-        if window.len() >= OAUTH_RATE_MAX_REQUESTS {
-            let oldest = window.first().copied().unwrap_or(now);
-            return Some((oldest + OAUTH_RATE_WINDOW_SECS - now).max(1));
-        }
-        window.push(now);
-        if map.len() > OAUTH_RATE_MAP_GC_THRESHOLD {
-            map.retain(|_, v| v.iter().any(|t| now - *t < OAUTH_RATE_WINDOW_SECS));
-        }
-        None
+        record_rate(&self.oauth_rate, ip, OAUTH_RATE_MAX_REQUESTS)
+    }
+
+    pub fn record_introspection_attempt(&self, ip: &str) -> Option<i64> {
+        record_rate(
+            &self.introspection_attempts,
+            ip,
+            self.config.oauth_introspection_attempts_per_minute,
+        )
+    }
+
+    pub fn record_introspection_failure(&self, ip: &str) -> Option<i64> {
+        record_rate(
+            &self.introspection_failures,
+            ip,
+            self.config.oauth_auth_failure_requests_per_minute,
+        )
+    }
+
+    pub fn record_introspection_client(&self, client_id: &str) -> Option<i64> {
+        record_rate(
+            &self.introspection_clients,
+            client_id,
+            self.config.oauth_introspection_client_requests_per_minute,
+        )
     }
 }
 

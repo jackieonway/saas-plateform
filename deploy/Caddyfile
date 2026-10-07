@@ -19,20 +19,36 @@
 	encode zstd gzip
 
 	handle /api/* {
-		reverse_proxy backend:3001
+		reverse_proxy backend:3001 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	handle /oauth/* {
-		reverse_proxy backend:3001
+		reverse_proxy backend:3001 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	handle /socket.io/* {
-		reverse_proxy notification-ws:3003
+		reverse_proxy notification-ws:3003 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	@workOrdersApi path /work-orders-api /work-orders-api/*
 	handle @workOrdersApi {
-		reverse_proxy work-orders-api:3004
+		reverse_proxy work-orders-api:3004 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	# handle_path strips only /sub-apps/, matching the package output layout.

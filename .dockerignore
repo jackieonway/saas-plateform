@@ -12,5 +12,10 @@ upload
 download
 .zscripts
 *.log
+**/.env*
+**/*.pem
+**/*.key
+outputs
+deploy/micro-apps
 db
 prisma

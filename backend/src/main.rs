@@ -1,11 +1,12 @@
-mod config;
-mod releases;
-mod notifications;
 mod app_token;
 mod authorization;
+mod config;
 mod database;
 mod error;
 mod extractors;
+mod notifications;
+mod observability;
+mod releases;
 mod routes;
 mod seed;
 mod session;
@@ -22,10 +23,17 @@ mod release_tests;
 #[cfg(test)]
 mod notification_tests;
 
+#[cfg(test)]
+mod production_security_tests;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::extract::{ConnectInfo, Request, State};
+use axum::http::{header, HeaderValue, Method};
+use axum::middleware::Next;
+use axum::response::Response;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
 
@@ -34,15 +42,18 @@ use crate::state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // .env 值优先于环境变量 (沙箱中存在遗留的全局 DATABASE_URL, 必须以 backend/.env 为准)
-    dotenvy::dotenv_override().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
-
-    let config = Arc::new(Config::from_env());
+    config::load_environment()?;
+    let config = Arc::new(Config::try_from_env()?);
+    let filter =
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    if config.is_production() {
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(filter)
+            .init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(filter).init();
+    }
 
     // PostgreSQL 连接 (失败重试, 最多 30 次 × 2s)
     let mut attempt = 0u32;
@@ -56,14 +67,20 @@ async fn main() -> anyhow::Result<()> {
             Ok(pool) => break pool,
             Err(e) => {
                 if config.auto_create_database && database::is_database_missing(&e) {
-                    database::create_missing_database(&config.database_url).await?;
+                    database::create_missing_database(&config.database_url)
+                        .await
+                        .map_err(|_| anyhow::anyhow!("DATABASE_AUTO_CREATE_FAILED"))?;
                     continue;
                 }
                 attempt += 1;
                 if attempt >= 30 {
-                    anyhow::bail!("数据库连接失败: {e}");
+                    anyhow::bail!("DATABASE_CONNECTION_FAILED");
                 }
-                tracing::warn!("数据库未就绪 ({e}), 2 秒后重试 ({attempt}/30)");
+                tracing::warn!(
+                    error_code = "DATABASE_NOT_READY",
+                    attempt,
+                    "Database not ready; retrying"
+                );
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
@@ -71,11 +88,22 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("PostgreSQL 连接成功");
 
     // 迁移
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .map_err(|_| anyhow::anyhow!("DATABASE_MIGRATION_FAILED"))?;
     tracing::info!("数据库迁移完成");
 
     // 种子 (幂等)
-    seed::run(&pool).await?;
+    seed::initialize(&pool, &config).await.map_err(|error| {
+        // Preserve documented action codes; no SQL/URL/password error chains.
+        let message = error.to_string();
+        if message.starts_with("PRODUCTION_DEMO_") || message.starts_with("BOOTSTRAP_ADMIN_") {
+            anyhow::anyhow!(message)
+        } else {
+            anyhow::anyhow!("DATABASE_INITIALIZATION_FAILED")
+        }
+    })?;
 
     let state = AppState::new(pool, config.clone());
 
@@ -85,30 +113,34 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(600)).await;
-                if let Err(e) = sqlx::query(
+                if sqlx::query(
                     "UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE expires_at < now() AND status = 'PENDING'",
                 )
                 .execute(&maintenance_pool)
                 .await
-                {
-                    tracing::warn!("设备码过期标记失败: {e}");
+                .is_err() {
+                    tracing::warn!(error_code="DEVICE_EXPIRY_MAINTENANCE_FAILED", "Device expiry maintenance failed");
                 }
             }
         });
     }
 
-    // 每小时清理: 已过期超 7 天的 OAuth 令牌与终态设备码 (启动先跑一次即生效;
-    // 与 POST /api/oauth/tokens/purge 共用 purge_stale_oauth_data, 语义见该函数文档;
-    // 取代原先「过期 1 天即删」的激进清理, 保留 7 天排查窗口)
-    {
+    // Historical deletion is opt-in. The default preserves OAuth history;
+    // operators may explicitly invoke the audited administrative purge endpoint.
+    if config.oauth_auto_purge {
         let purge_pool = state.pool.clone();
         tokio::spawn(async move {
             loop {
                 match routes::oauth_admin::purge_stale_oauth_data(&purge_pool).await {
                     Ok((tokens, devices)) => {
-                        tracing::info!("OAuth 历史数据清理完成: 删除令牌 {tokens} 行, 设备码 {devices} 行");
+                        tracing::info!(
+                            "OAuth 历史数据清理完成: 删除令牌 {tokens} 行, 设备码 {devices} 行"
+                        );
                     }
-                    Err(e) => tracing::warn!("OAuth 历史数据清理失败: {e}"),
+                    Err(_) => tracing::warn!(
+                        error_code = "OAUTH_PURGE_FAILED",
+                        "OAuth historical purge failed"
+                    ),
                 }
                 tokio::time::sleep(Duration::from_secs(3600)).await;
             }
@@ -118,18 +150,121 @@ async fn main() -> anyhow::Result<()> {
     let mut app = axum::Router::new()
         .merge(routes::api_router())
         .nest("/oauth", routes::oauth2::oauth_router())
-        .with_state(state.clone())
-        .layer(CorsLayer::permissive());
+        .with_state(state.clone());
 
     // 生产单进程模式: 仅宿主 HTML 导航使用 SPA fallback，缺失资源/API 保留 404。
     if !config.static_dir.is_empty() {
         app = app.fallback_service(static_files::service(&config.static_dir));
-        tracing::info!("静态文件目录: {}", config.static_dir);
+        tracing::info!(
+            event = "STATIC_FILES_ENABLED",
+            "Static file hosting enabled"
+        );
     }
 
     let addr: SocketAddr = config.bind_addr.parse()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("Dante Cloud 后端已启动: http://{}", addr);
-    axum::serve(listener, app).await?;
+    let app = app
+        .layer(cors_layer(&config))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            observability::observe,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            normalize_client_ip,
+        ));
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
+    state.pool.close().await;
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let control_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        if let Ok(mut signal) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
+            signal.recv().await;
+        } else {
+            std::future::pending::<()>().await;
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! { _=control_c=>{}, _=terminate=>{} }
+    tracing::info!(event = "SHUTDOWN_REQUESTED", "Graceful shutdown requested");
+}
+
+pub(crate) fn cors_layer(config: &Config) -> CorsLayer {
+    let origins: Vec<HeaderValue> = config
+        .cors_allowed_origins
+        .iter()
+        .map(|origin| HeaderValue::from_str(origin).expect("validated origin"))
+        .collect();
+    CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            axum::http::HeaderName::from_static("x-request-id"),
+        ])
+        .expose_headers([axum::http::HeaderName::from_static("x-request-id")])
+}
+
+/// Normalize before all route handlers and observability. Headers supplied by an
+/// untrusted peer cannot choose the audit or OAuth rate identity.
+pub(crate) async fn normalize_client_ip(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let peer = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|peer| peer.0.ip());
+    let forwarded = if peer.is_some_and(|peer| state.config.trusted_proxy_ips.contains(&peer)) {
+        request
+            .headers()
+            .get("x-real-ip")
+            .and_then(|header| header.to_str().ok())
+            .and_then(|raw| raw.trim().parse::<std::net::IpAddr>().ok())
+            .or_else(|| {
+                request
+                    .headers()
+                    .get("x-forwarded-for")
+                    .and_then(|header| header.to_str().ok())
+                    .and_then(|raw| raw.split(',').next())
+                    .and_then(|raw| raw.trim().parse::<std::net::IpAddr>().ok())
+            })
+    } else {
+        None
+    };
+    let identity = forwarded
+        .or(peer)
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "unknown".into());
+    request.headers_mut().remove("x-real-ip");
+    request.headers_mut().remove("x-forwarded-for");
+    request.headers_mut().insert(
+        "x-real-ip",
+        HeaderValue::from_str(&identity).expect("valid normalized IP"),
+    );
+    next.run(request).await
 }

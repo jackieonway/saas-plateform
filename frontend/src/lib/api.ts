@@ -3,11 +3,13 @@ import { authStore } from "@/stores/auth"
 export class ApiError extends Error {
   code: string
   status: number
-  constructor(message: string, code: string, status: number) {
+  requestId?: string
+  constructor(message: string, code: string, status: number, requestId?: string) {
     super(message)
     this.name = "ApiError"
     this.code = code
     this.status = status
+    this.requestId = requestId
   }
 }
 
@@ -80,7 +82,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       authStore.getState().logout()
       redirectToLogin()
     }
-    throw new ApiError(message, code, resp.status)
+    const candidate = resp.headers.get("x-request-id")
+    const requestId = candidate && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate) ? candidate : undefined
+    throw new ApiError(requestId ? `${message}（请求编号：${requestId}）` : message, code, resp.status, requestId)
   }
 
   return data as T

@@ -1,0 +1,70 @@
+name: Production build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            mini-services/notification-ws/package-lock.json
+            business-apps/work-orders/backend/package-lock.json
+            business-apps/work-orders/frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Check backend and migration tests
+        working-directory: backend
+        run: |
+          cargo check --locked --tests
+          cargo test --locked --bin dante-cloud-backend
+
+      - name: Check production authorization against isolated PostgreSQL
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgres://postgres:isolated-ci-password@127.0.0.1:5432/postgres
+        run: cargo test --locked production_security_tests -- --ignored --test-threads=1
+
+      - name: Check runtime policy and recovery tools
+        run: node --test tests/production-native-config.mjs deploy/monitoring/tests/monitor.mjs deploy/recovery/tests/envelope.test.mjs deploy/recovery/tests/schedule.test.mjs deploy/recovery/tests/systemd.test.mjs
+
+      - name: Build clean immutable release
+        run: node deploy/native/build.mjs --out-dir "$RUNNER_TEMP/dante-release" --cargo "$HOME/.cargo/bin/cargo"
+
+      - name: Upload build manifest and deployable artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dante-release-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/dante-release/build-result.json
+            ${{ runner.temp }}/dante-release/source-manifest.json
+            ${{ runner.temp }}/dante-release/artifacts/
+          if-no-files-found: error
+          retention-days: 14

@@ -47,11 +47,20 @@ pub struct AuditInfo<'a> {
 
 /// 写审计日志 (失败仅记录错误, 不影响主流程)
 pub async fn write(pool: &PgPool, info: AuditInfo<'_>) {
+    write_with_application(pool, info, None).await;
+}
+
+pub async fn write_for_app(pool: &PgPool, info: AuditInfo<'_>, application_id: Uuid) {
+    write_with_application(pool, info, Some(application_id)).await;
+}
+
+async fn write_with_application(pool: &PgPool, info: AuditInfo<'_>, application_id: Option<Uuid>) {
     let result = sqlx::query(
         "INSERT INTO audit_logs \
-         (user_id, username, tenant_id, tenant_name, organization_id, organization_name, action, detail, ip, user_agent) \
+         (user_id, username, tenant_id, tenant_name, organization_id, organization_name, action, detail, ip, user_agent, request_id, application_id) \
          VALUES ($1, $2, $3, (SELECT name FROM tenants WHERE id = $3), \
-                 $4, (SELECT name FROM organizations WHERE id = $4), $5, $6, $7, $8)",
+                 $4, (SELECT name FROM organizations WHERE id = $4), $5, $6, $7, $8, $9, \
+                 COALESCE($11,(SELECT id FROM applications WHERE code=$10)))",
     )
     .bind(info.user_id)
     .bind(info.username)
@@ -61,9 +70,12 @@ pub async fn write(pool: &PgPool, info: AuditInfo<'_>) {
     .bind(info.detail)
     .bind(info.ip)
     .bind(info.user_agent)
+    .bind(crate::observability::request_id())
+    .bind(crate::observability::app_code())
+    .bind(application_id)
     .execute(pool)
     .await;
-    if let Err(e) = result {
-        tracing::error!("审计日志写入失败: {e}");
+    if result.is_err() {
+        tracing::error!(event = "audit_write_failed", request_id = ?crate::observability::request_id());
     }
 }

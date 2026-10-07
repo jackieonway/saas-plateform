@@ -503,9 +503,7 @@ async fn change_password(
     user: CurrentUser,
     ApiJson(body): ApiJson<PasswordBody>,
 ) -> Result<Json<Value>, AppError> {
-    if body.new_password.len() < 6 {
-        return Err(AppError::bad_request("新密码长度不能少于 6 位"));
-    }
+    pw::validate_for_config(&body.new_password, &state.config)?;
     let (hash,): (String,) = sqlx::query_as("SELECT password_hash FROM users WHERE id = $1")
         .bind(user.user_id)
         .fetch_one(&state.pool)

@@ -3,6 +3,258 @@ use uuid::Uuid;
 
 use crate::util::{hash, password};
 
+const DEMO_USERS: &[(&str, &str)] = &[
+    ("admin", "admin123"),
+    ("zhangsan", "Zs@12345"),
+    ("lisi", "Ls@12345"),
+    ("wangwu", "Ww@12345"),
+    ("tianqi", "Tq@12345"),
+    ("chenjiu", "Cj@12345"),
+];
+const DEMO_CLIENT_SECRETS: &[&str] = &[
+    "dante-web-secret",
+    "api-service-secret",
+    "resource-portal-secret",
+    "micro-vue-shell-secret",
+    "micro-jquery-shell-secret",
+    "micro-report-shell-secret",
+];
+
+pub fn is_demo_password(candidate: &str) -> bool {
+    DEMO_USERS
+        .iter()
+        .any(|(_, password)| *password == candidate)
+}
+
+/// A read-only startup gate for upgraded installations. Operators rotate or disable
+/// known credentials explicitly; startup never changes existing users or grants.
+pub async fn check_production_credentials(pool: &PgPool) -> anyhow::Result<()> {
+    let mut after: Option<Uuid> = None;
+    loop {
+        let users: Vec<(Uuid, String)> = sqlx::query_as("SELECT id,password_hash FROM users WHERE status='ENABLED' AND ($1::uuid IS NULL OR id>$1) ORDER BY id LIMIT 500")
+            .bind(after).fetch_all(pool).await?;
+        if users.is_empty() {
+            break;
+        }
+        after = users.last().map(|row| row.0);
+        for (_, encoded) in users {
+            if DEMO_USERS
+                .iter()
+                .any(|(_, candidate)| password::verify_password(&encoded, candidate))
+            {
+                anyhow::bail!("PRODUCTION_DEMO_USER_CREDENTIAL: rotate or disable enabled documented demonstration accounts before startup");
+            }
+        }
+    }
+    let hashes: Vec<String> = DEMO_CLIENT_SECRETS
+        .iter()
+        .map(|secret| hash::sha256_hex(secret))
+        .collect();
+    let unsafe_clients: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM oauth_clients WHERE status='ENABLED' AND client_secret_hash=ANY($1))")
+        .bind(&hashes).fetch_one(pool).await?;
+    anyhow::ensure!(!unsafe_clients, "PRODUCTION_DEMO_CLIENT_CREDENTIAL: rotate or disable enabled documented demonstration clients before startup");
+    Ok(())
+}
+
+pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow::Result<()> {
+    if !config.is_production() {
+        return run(pool).await;
+    }
+    let mut tx = pool.begin().await?;
+    // Serialize first bootstrap across platform processes without deleting history.
+    sqlx::query("SELECT pg_advisory_xact_lock(764351204988213)")
+        .execute(&mut *tx)
+        .await?;
+    let existing: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
+        .fetch_one(&mut *tx)
+        .await?;
+    if existing > 0 {
+        tx.rollback().await?;
+        return check_production_credentials(pool).await;
+    }
+    let username = config.bootstrap_admin_username.as_deref().ok_or_else(|| {
+        anyhow::anyhow!("BOOTSTRAP_ADMIN_USERNAME is required for an empty production database")
+    })?;
+    let admin_password = config.bootstrap_admin_password.as_deref().ok_or_else(|| {
+        anyhow::anyhow!("BOOTSTRAP_ADMIN_PASSWORD is required for an empty production database")
+    })?;
+    anyhow::ensure!(
+        admin_password.chars().count() >= 12 && !is_demo_password(admin_password),
+        "production bootstrap password does not satisfy requirements"
+    );
+    password::validate_for_config(admin_password, config)?;
+    // Historical migrations contain examples. Only on the first empty-user
+    // bootstrap, quarantine those exact artifacts; never grant them to production.
+    sqlx::query("UPDATE applications SET status='DISABLED' WHERE code IN ('vue-workshop','legacy-jquery','report-center')")
+        .execute(&mut *tx).await?;
+    let hashes: Vec<String> = DEMO_CLIENT_SECRETS
+        .iter()
+        .map(|secret| hash::sha256_hex(secret))
+        .collect();
+    sqlx::query("UPDATE oauth_clients SET status='DISABLED' WHERE client_secret_hash=ANY($1)")
+        .bind(&hashes)
+        .execute(&mut *tx)
+        .await?;
+    let tenant = scalar_uuid(&mut tx, "INSERT INTO tenants(name,code,description,is_platform) VALUES('Dante 云平台','dante','平台控制层',true) RETURNING id").await?;
+    let root = insert_org(&mut tx, tenant, None, "平台总部", "HQ", 1, "平台管理组织").await?;
+    let system = insert_app(&mut tx, "system", "系统管理", "LayoutGrid", "/system", 1).await?;
+    let hermes = insert_app(&mut tx, "hermes", "消息中心", "MessageSquare", "/hermes", 2).await?;
+    let administrator = insert_user(
+        &mut tx,
+        username,
+        admin_password,
+        "平台管理员",
+        "",
+        "",
+        "UNKNOWN",
+        true,
+    )
+    .await?;
+    insert_membership(&mut tx, administrator, root, None, "平台管理员").await?;
+    let role = insert_role(
+        &mut tx,
+        tenant,
+        root,
+        "平台管理员",
+        "super_admin",
+        "平台内置管理角色",
+        true,
+    )
+    .await?;
+    grant_user_role(&mut tx, administrator, role, root).await?;
+    for app in [system, hermes] {
+        grant_tenant_app(&mut tx, tenant, app).await?;
+        grant_org_app(&mut tx, root, app).await?;
+    }
+    let core = [
+        (system, "仪表盘", "/dashboard", "Gauge", "dashboard:view"),
+        (
+            system,
+            "租户管理",
+            "/system/tenants",
+            "Building",
+            "system:tenant",
+        ),
+        (
+            system,
+            "组织管理",
+            "/system/organizations",
+            "Network",
+            "system:organization",
+        ),
+        (
+            system,
+            "部门管理",
+            "/system/departments",
+            "FolderTree",
+            "system:department",
+        ),
+        (
+            system,
+            "授权管理",
+            "/system/authorizations",
+            "ShieldCheck",
+            "system:authorization",
+        ),
+        (system, "用户管理", "/system/users", "User", "system:user"),
+        (system, "角色管理", "/system/roles", "Shield", "system:role"),
+        (
+            system,
+            "应用管理",
+            "/system/applications",
+            "Grid3x3",
+            "system:application",
+        ),
+        (
+            system,
+            "菜单管理",
+            "/system/menus",
+            "ListTree",
+            "system:menu",
+        ),
+        (
+            system,
+            "OAuth 客户端",
+            "/system/oauth/clients",
+            "Key",
+            "system:oauth",
+        ),
+        (
+            system,
+            "设备与会话",
+            "/system/oauth/tokens",
+            "MonitorSmartphone",
+            "system:oauth",
+        ),
+        (
+            system,
+            "审计日志",
+            "/system/audit-logs",
+            "ScrollText",
+            "system:audit",
+        ),
+        (
+            system,
+            "平台监控",
+            "/system/monitor",
+            "Activity",
+            "system:monitor",
+        ),
+        (hermes, "收件箱", "/hermes/inbox", "Inbox", "hermes:inbox"),
+        (
+            hermes,
+            "通知设置",
+            "/hermes/notifications",
+            "Bell",
+            "hermes:notification",
+        ),
+    ];
+    for (sort, (app, title, path, icon, permission)) in core.into_iter().enumerate() {
+        let menu = insert_menu(
+            &mut tx,
+            app,
+            None,
+            "MENU",
+            title,
+            path,
+            icon,
+            "",
+            permission,
+            sort as i32 + 1,
+            true,
+        )
+        .await?;
+        grant_role_menu(&mut tx, role, menu).await?;
+        grant_tenant_menu(&mut tx, tenant, menu).await?;
+        grant_org_menu(&mut tx, root, menu).await?;
+        if permission == "system:tenant" {
+            let button = insert_menu(
+                &mut tx,
+                system,
+                Some(menu),
+                "BUTTON",
+                "授权",
+                "",
+                "",
+                "",
+                "system:tenant:auth",
+                1,
+                false,
+            )
+            .await?;
+            grant_role_menu(&mut tx, role, button).await?;
+            grant_tenant_menu(&mut tx, tenant, button).await?;
+            grant_org_menu(&mut tx, root, button).await?;
+        }
+    }
+    tx.commit().await?;
+    tracing::info!(
+        event = "PRODUCTION_BOOTSTRAP_COMPLETE",
+        "Production core initialized; no demonstration users or active demonstration OAuth clients"
+    );
+    Ok(())
+}
+
 /// 幂等种子: 仅当 users 表为空时执行 (docs/db-schema.md 种子计划)
 pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let existing: i64 = sqlx::query_scalar("SELECT count(*) FROM users")

@@ -50,7 +50,7 @@ const passwordSchema = z
     oldPassword: z.string().min(1, "请输入当前密码"),
     newPassword: z
       .string()
-      .min(8, "新密码至少 8 位")
+      .min(12, "新密码至少 12 位")
       .regex(/[A-Za-z]/, "需包含字母")
       .regex(/\d/, "需包含数字"),
     confirmPassword: z.string().min(1, "请再次输入新密码"),
@@ -449,7 +449,7 @@ export default function ProfilePage() {
               <KeyRound className="size-4 text-primary" />
               修改密码
             </CardTitle>
-            <CardDescription>新密码需至少 8 位,且同时包含字母与数字</CardDescription>
+            <CardDescription>新密码需至少 12 位,且同时包含字母与数字</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -482,7 +482,7 @@ export default function ProfilePage() {
                         新密码 <span className="text-destructive">*</span>
                       </FormLabel>
                       <FormControl>
-                        <Input type="password" autoComplete="new-password" placeholder="至少 8 位,含字母与数字" {...field} />
+                        <Input type="password" autoComplete="new-password" placeholder="至少 12 位,含字母与数字" {...field} />
                       </FormControl>
                       <FormDescription>建议混合大小写字母、数字与符号</FormDescription>
                       <FormMessage />

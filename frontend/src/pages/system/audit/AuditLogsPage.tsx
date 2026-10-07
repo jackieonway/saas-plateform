@@ -383,6 +383,8 @@ export default function AuditLogsPage() {
                             <p className="max-h-48 overflow-y-auto scroll-area whitespace-pre-wrap break-all text-sm">
                               {log.detail}
                             </p>
+                            {log.requestId && <p className="mt-3 break-all font-mono text-xs text-muted-foreground">请求编号：{log.requestId}</p>}
+                            {log.applicationId && <p className="mt-1 break-all font-mono text-xs text-muted-foreground">应用 ID：{log.applicationId}</p>}
                           </PopoverContent>
                         </Popover>
                       ) : (

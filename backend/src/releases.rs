@@ -663,12 +663,16 @@ async fn run(config: &Config, release: &ReleaseRow) -> Value {
         let policy = FetchPolicy::new(config, &release.environment)?;
         let entry = policy.resolve(&release.entry_url, None)?;
         let root = version_root(&entry, &release.version)?;
-        let client = Client::builder()
+        let mut client_builder = Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(4))
-            .user_agent("Dante-Application-Preflight/1.0")
+            .user_agent("Dante-Application-Preflight/1.0");
+        for certificate in &config.micro_ca_certificates {
+            client_builder = client_builder.add_root_certificate(certificate.clone());
+        }
+        let client = client_builder
             .build()
             .map_err(|_| AppError::bad_request("无法建立 HTTP 预检客户端"))?;
         Ok((policy, entry, root, client))

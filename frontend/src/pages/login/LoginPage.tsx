@@ -40,17 +40,17 @@ import type { LoginResp, Membership } from "@/api/types"
 const REMEMBER_KEY = "dante-remember-username"
 
 const FEATURES = [
-  { icon: Layers, title: "多租户隔离", desc: "租户 · 组织 · 部门三级上下文,数据与权限完全隔离" },
+  { icon: Layers, title: "多租户隔离", desc: "租户、组织与应用边界由服务端统一校验" },
   { icon: ShieldCheck, title: "多层级组织权限", desc: "租户授权 ⊇ 组织授权 ⊇ 角色菜单,层层收窄、精确可控" },
-  { icon: Tv, title: "多应用统一接入", desc: "标准 OAuth 2.0 + 设备码,一次登录畅达所有应用" },
+  { icon: Tv, title: "多应用统一接入", desc: "统一登录，按租户和组织授权访问应用" },
 ]
 
-/** 生态应用徽标墙: 静态展示 4 个种子 OAuth 客户端(纯信任背书, 不发请求) */
+/** 展示支持的接入方式，不把演示客户端当成已部署应用。 */
 const ECO_APPS = [
-  { icon: Globe, name: "Dante Web", desc: "Web 控制台" },
-  { icon: MonitorSmartphone, name: "Smart TV", desc: "设备码授权" },
-  { icon: Server, name: "API Service", desc: "服务间调用" },
-  { icon: LayoutGrid, name: "Resource Portal", desc: "资源门户" },
+  { icon: Globe, name: "独立微应用", desc: "统一上下文接入" },
+  { icon: MonitorSmartphone, name: "终端设备", desc: "设备码授权" },
+  { icon: Server, name: "业务 API", desc: "逐请求授权校验" },
+  { icon: LayoutGrid, name: "平台控制台", desc: "租户与应用管理" },
 ]
 
 const schema = z.object({
@@ -215,9 +215,9 @@ export default function LoginPage() {
               <span>OAuth 2.0 / RFC 8628</span>
             </div>
 
-            {/* 生态应用徽标墙(纯静态 4 个种子客户端; 品牌区为固定深色渐变, 通透白/teal 质感与 FEATURES 一致) */}
+            {/* 支持的接入方式；实际应用由平台管理员登记和授权。 */}
             <div className="mt-5">
-              <p className="text-[10px] font-medium tracking-widest text-white/40">生态应用</p>
+              <p className="text-[10px] font-medium tracking-widest text-white/40">接入方式</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {ECO_APPS.map((app) => (
                   <div

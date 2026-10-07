@@ -30,6 +30,7 @@ use crate::state::AppState;
 pub fn api_router() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(health))
+        .merge(crate::observability::routes())
         .merge(auth::routes())
         .merge(tenants::routes())
         .merge(applications::routes())
@@ -72,7 +73,8 @@ pub(crate) fn page_json(records: Vec<Value>, total: i64, page: i64, size: i64) -
 }
 
 async fn health(axum::extract::State(state): axum::extract::State<AppState>) -> Response {
-    let db_up = sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&state.pool).await.is_ok();
+    let db_up = tokio::time::timeout(std::time::Duration::from_secs(1),
+        sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&state.pool)).await.is_ok_and(|value| value.is_ok());
     if db_up {
         (StatusCode::OK, Json(json!({"status": "UP", "version": "1.0.0", "database": "UP"}))).into_response()
     } else {

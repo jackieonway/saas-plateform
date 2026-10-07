@@ -156,6 +156,7 @@ async fn register(
         &mut tx,
         &user,
         &headers,
+        app,
         "REGISTER_APPLICATION_RELEASE",
         &format!("application={app} environment={environment} version={version} release={id}"),
     )
@@ -208,7 +209,7 @@ async fn preflight(
     let id = uuid(&id)?;
     let row = check_and_save(&state, app, id).await?;
     // A failed resource check is a persisted result, not a lost HTTP error response.
-    audit::write(
+    audit::write_for_app(
         &state.pool,
         audit::AuditInfo {
             user_id: Some(user.user_id),
@@ -223,6 +224,7 @@ async fn preflight(
             ip: &audit::client_ip(&headers),
             user_agent: &audit::ua_of(&headers),
         },
+        app,
     )
     .await;
     Ok(Json(json!(row)))
@@ -296,6 +298,7 @@ async fn activate(
         &mut tx,
         &user,
         &headers,
+        app,
         "ACTIVATE_APPLICATION_RELEASE",
         &format!(
             "application={app} environment={} version={} release={id}",
@@ -347,6 +350,7 @@ async fn rollback(
         &mut tx,
         &user,
         &headers,
+        app,
         "ROLLBACK_APPLICATION_RELEASE",
         &format!("application={app} environment={environment} from={active} to={previous}"),
     )
@@ -425,14 +429,16 @@ async fn write_audit(
     tx: &mut Transaction<'_, Postgres>,
     user: &CurrentUser,
     headers: &HeaderMap,
+    application_id: Uuid,
     action: &str,
     detail: &str,
 ) -> Result<(), AppError> {
     sqlx::query("INSERT INTO audit_logs \
-        (user_id,username,tenant_id,tenant_name,organization_id,organization_name,action,detail,ip,user_agent) \
-        VALUES($1,$2,$3,(SELECT name FROM tenants WHERE id=$3),$4,(SELECT name FROM organizations WHERE id=$4),$5,$6,$7,$8)")
+        (user_id,username,tenant_id,tenant_name,organization_id,organization_name,action,detail,ip,user_agent,request_id,application_id) \
+        VALUES($1,$2,$3,(SELECT name FROM tenants WHERE id=$3),$4,(SELECT name FROM organizations WHERE id=$4),$5,$6,$7,$8,$9,$10)")
         .bind(user.user_id).bind(&user.username).bind(user.tenant_id).bind(user.org_id)
         .bind(action).bind(detail).bind(audit::client_ip(headers)).bind(audit::ua_of(headers))
+        .bind(crate::observability::request_id()).bind(application_id)
         .execute(&mut **tx).await?;
     Ok(())
 }

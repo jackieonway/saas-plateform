@@ -1,0 +1,20 @@
+[Unit]
+Description=Dante SaaS platform
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=dante-platform
+Group=dante-platform
+WorkingDirectory=@@ROOT@@/current/backend
+EnvironmentFile=@@ROOT@@/secrets/platform.env
+ExecStart=@@BACKEND_BINARY@@
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+LimitNOFILE=65536
+[Install]
+WantedBy=multi-user.target

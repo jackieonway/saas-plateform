@@ -563,6 +563,8 @@ export interface AuditLogRecord {
   ip: string | null
   /** 客户端 User-Agent(可能为空串; 旧后端未返回时缺省) */
   userAgent?: string
+  requestId?: string | null
+  applicationId?: string | null
   createdAt: string
 }
 

@@ -195,6 +195,19 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
   const [supportsUpdate, setSupportsUpdate] = React.useState(false)
   const [stats, setStats] = React.useState<MicroSandboxStats | null>(null)
 
+  const reportRuntimeFailure = React.useCallback((kind: "LOAD_FAILED" | "LIFECYCLE_FAILED", stage: "mount" | "update") => {
+    const value = snapshotRef.current
+    if (!value || value.signal.aborted || Date.parse(value.context.expiresAt) <= Date.now() ||
+        Date.parse(value.tokenExpiresAt) <= Date.now()) return
+    // Static, bounded diagnostics only. Lifecycle cancellation must not cancel
+    // this report, and failures must not change the host session or error UI.
+    void fetch(`/api/apps/${encodeURIComponent(appCode)}/runtime-events`, {
+      method: "POST", credentials: "omit", keepalive: true,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${value.token}` },
+      body: JSON.stringify({ kind, stage }), signal: AbortSignal.timeout(3000),
+    }).catch(() => {})
+  }, [appCode])
+
   const disposeEntry = React.useCallback((entry: ActiveEntry) => {
     entry.controller.abort()
     entry.node.remove()
@@ -377,6 +390,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
         return
       }
       if (entryInfo.runtimeMode === "TRUSTED" && entryInfo.entryType === "HTML") markEntryFailed(entryInfo.entryUrl)
+      reportRuntimeFailure("LOAD_FAILED", "mount")
       runtimeRef.current?.stop()
       setStatus("error")
       setErrorMessage(error instanceof Error ? error.message : String(error))
@@ -390,7 +404,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
       if (document.title !== titleSnapshot) document.title = titleSnapshot
     }
   }, [hasSnapshot, appCode, entryInfo.runtimeMode, entryInfo.entryType, entryInfo.entryUrl,
-    entryInfo.entryVersionId, entryInfo.deploymentVersion, entryInfo.name, reloadNonce, mountNonce, disposeEntry])
+    entryInfo.entryVersionId, entryInfo.deploymentVersion, entryInfo.name, reloadNonce, mountNonce, disposeEntry, reportRuntimeFailure])
 
   React.useEffect(() => {
     if (status !== "mounted" || !hasSnapshot) return
@@ -409,12 +423,13 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
     }
     void active.session.update(props).catch((error) => {
       if (active.controller.signal.aborted || (props.signal.aborted && error instanceof Error && error.name === "AbortError")) return
+      reportRuntimeFailure("LIFECYCLE_FAILED", "update")
       runtimeRef.current?.stop()
       setStatus("error")
       setErrorMessage(error instanceof Error ? error.message : String(error))
       void disposeEntry(active)
     })
-  }, [snapshot, routePath, resolvedTheme, status, buildProps, hasSnapshot, disposeEntry])
+  }, [snapshot, routePath, resolvedTheme, status, buildProps, hasSnapshot, disposeEntry, reportRuntimeFailure])
 
   /* ---------- 沙箱诊断(v1.1): HTML 通道挂载后 1s 轮询 getStats ---------- */
   React.useEffect(() => {

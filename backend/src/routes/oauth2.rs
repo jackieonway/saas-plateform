@@ -66,8 +66,8 @@ impl OAuthError {
     pub fn invalid_token(desc: &str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, "invalid_token", desc)
     }
-    pub fn server(e: impl std::fmt::Display) -> Self {
-        tracing::error!("OAuth 服务器错误: {e}");
+    pub fn server(_e: impl std::fmt::Display) -> Self {
+        tracing::error!(error_code="OAUTH_SERVER_ERROR", "OAuth server operation failed");
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "服务器内部错误")
     }
 }
@@ -1012,12 +1012,56 @@ async fn introspect(
     headers: HeaderMap,
     Form(form): Form<HashMap<String, String>>,
 ) -> Result<Response, OAuthError> {
-    if let Err(resp) = check_oauth_rate(&state, &headers) {
-        return Ok(resp);
+    let ip = audit::client_ip(&headers);
+    if let Some(retry_after) = state.record_introspection_attempt(&ip) {
+        return Ok(AppError::RateLimited(retry_after as u64).into_response());
     }
-    let caller = authenticate_client(&state, &headers, &form).await?;
-    let token = form.get("token").ok_or_else(|| OAuthError::invalid_request("缺少 token"))?;
-    let row = sqlx::query_as::<_, (Option<Uuid>, String, String, DateTime<Utc>, DateTime<Utc>, bool, Option<i64>, String, String)>(
+    let permit = match state.introspection_auth_slots.try_acquire() {
+        Ok(permit) => permit,
+        Err(_) => return Ok(AppError::RateLimited(1).into_response()),
+    };
+    let authentication = authenticate_client(&state, &headers, &form).await;
+    drop(permit);
+    let caller = match authentication {
+        Ok(caller) => caller,
+        Err(error) => {
+            if error.status == StatusCode::UNAUTHORIZED {
+                crate::observability::record_auth_failure("invalid_client");
+                if let Some(retry_after) = state.record_introspection_failure(&ip) {
+                    return Ok(AppError::RateLimited(retry_after as u64).into_response());
+                }
+            }
+            return Err(error);
+        }
+    };
+    // Public client identifiers are not client authentication credentials.
+    if caller.client_type != "CONFIDENTIAL" {
+        crate::observability::record_auth_failure("invalid_client");
+        if let Some(retry_after) = state.record_introspection_failure(&ip) {
+            return Ok(AppError::RateLimited(retry_after as u64).into_response());
+        }
+        return Err(OAuthError::invalid_client("内省要求机密客户端凭据"));
+    }
+    if let Some(retry_after) = state.record_introspection_client(&caller.client_id) {
+        return Ok(AppError::RateLimited(retry_after as u64).into_response());
+    }
+    let token = form
+        .get("token")
+        .ok_or_else(|| OAuthError::invalid_request("缺少 token"))?;
+    let row = sqlx::query_as::<
+        _,
+        (
+            Option<Uuid>,
+            String,
+            String,
+            DateTime<Utc>,
+            DateTime<Utc>,
+            bool,
+            Option<i64>,
+            String,
+            String,
+        ),
+    >(
         "SELECT user_id, client_id, COALESCE(scope,'') AS scope, created_at, expires_at, revoked, \
          EXTRACT(EPOCH FROM expires_at)::bigint AS exp_epoch, token_use \
          , token_type \
@@ -1026,10 +1070,23 @@ async fn introspect(
     .bind(hash::sha256_hex(token))
     .fetch_optional(&state.pool)
     .await?;
-    let Some((user_id, client_id, scope, created_at, expires_at, revoked, exp_epoch, token_use, token_type)) = row else {
+    let Some((
+        user_id,
+        client_id,
+        scope,
+        created_at,
+        expires_at,
+        revoked,
+        exp_epoch,
+        token_use,
+        token_type,
+    )) = row
+    else {
+        crate::observability::record_auth_failure("inactive_token");
         return Ok(Json(json!({"active": false})).into_response());
     };
     if token_type != "access" {
+        crate::observability::record_auth_failure("invalid_token");
         return Ok(Json(json!({"active": false})).into_response());
     }
     if token_use == "app" {
@@ -1038,12 +1095,17 @@ async fn introspect(
         }
         let claims = match jwt::verify(token, &state.config.jwt_secret) {
             Ok(claims) => claims,
-            Err(_) => return Ok(Json(json!({"active": false})).into_response()),
+            Err(_) => {
+                crate::observability::record_auth_failure("invalid_token");
+                return Ok(Json(json!({"active": false})).into_response());
+            }
         };
         let Some(info) = app_token::inspect(&state.pool, token, &claims).await? else {
+            crate::observability::record_auth_failure("inactive_token");
             return Ok(Json(json!({"active": false})).into_response());
         };
         if caller.application_id != Some(info.application_id) {
+            crate::observability::record_auth_failure("invalid_token");
             return Ok(Json(json!({"active": false})).into_response());
         }
         return Ok(Json(json!({
@@ -1052,13 +1114,20 @@ async fn introspect(
             "tenant_id": info.tenant_id, "organization_id": info.organization_id,
             "aud": info.audience, "jti": info.jti,
             "exp": info.expires_at.timestamp(), "iat": created_at.timestamp(),
-        })).into_response());
+        }))
+        .into_response());
     }
     if caller.client_id != client_id {
+        crate::observability::record_auth_failure("invalid_token");
         return Ok(Json(json!({"active": false})).into_response());
     }
     let active = !revoked && expires_at > Utc::now();
     if !active {
+        crate::observability::record_auth_failure(if expires_at <= Utc::now() {
+            "expired_token"
+        } else {
+            "inactive_token"
+        });
         return Ok(Json(json!({"active": false})).into_response());
     }
     let username = username_of(&state.pool, user_id).await;

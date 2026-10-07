@@ -299,11 +299,12 @@ async fn create(
         .check(&state, &user)
         .await?;
     let username = body.username.trim().to_string();
-    if username.is_empty() || body.password.len() < 6 {
+    if username.is_empty() {
         return Err(AppError::bad_request(
-            "用户名不能为空且密码长度不能少于 6 位",
+            "用户名不能为空",
         ));
     }
+    pw::validate_for_config(&body.password, &state.config)?;
     let gender = parse_gender(&body.gender)?;
     let hash = pw::hash_password(&body.password)?;
     let platform = state.is_platform_context(&user).await?;
@@ -560,9 +561,7 @@ async fn reset_password(
     RequirePermission("system:user")
         .check(&state, &user)
         .await?;
-    if body.new_password.len() < 6 {
-        return Err(AppError::bad_request("新密码长度不能少于 6 位"));
-    }
+    pw::validate_for_config(&body.new_password, &state.config)?;
     let id: Uuid = id
         .parse()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;

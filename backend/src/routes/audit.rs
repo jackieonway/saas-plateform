@@ -31,12 +31,24 @@ type AuditRowTuple = (
     String,
     DateTime<Utc>,
     String,
+    Option<Uuid>,
+    Option<Uuid>,
 );
 
 const AUDIT_WHERE: &str = "($1 = '' OR username ILIKE '%' || $1 || '%' OR detail ILIKE '%' || $1 || '%' \
-     OR tenant_name ILIKE '%' || $1 || '%' OR organization_name ILIKE '%' || $1 || '%') \
+     OR tenant_name ILIKE '%' || $1 || '%' OR organization_name ILIKE '%' || $1 || '%' \
+     OR request_id::text ILIKE '%' || $1 || '%' OR application_id::text ILIKE '%' || $1 || '%') \
      AND ($2 = '' OR action = $2) \
-     AND ($3::uuid IS NULL OR tenant_id = $3)";
+     AND ($3::uuid IS NULL OR tenant_id = $3) \
+     AND ($5::uuid IS NULL OR request_id = $5) \
+     AND ($6::uuid IS NULL OR application_id = $6)";
+
+fn correlation_filter(params: &HashMap<String, String>, key: &str) -> Result<Option<Uuid>, AppError> {
+    match params.get(key).filter(|value| !value.is_empty()) {
+        Some(value) => value.parse().map(Some).map_err(|_| AppError::bad_request(format!("{key} 参数非法"))),
+        None => Ok(None),
+    }
+}
 
 /// 解析 tenant_id 筛选参数: 空/缺省 = 不过滤(全部); "none" = 仅平台级(NULL 租户)行; 其他 = 指定租户 uuid
 /// 返回 (附加 SQL 片段, 绑定值); 非平台用户 scope 已强制本租户, 再叠加任意 tenant 过滤只会收窄/清空, 无越权面
@@ -77,22 +89,26 @@ async fn export_csv(
     };
     let tf = params.get("tenant_id").cloned().unwrap_or_default();
     let (tf_sql, tf_val) = tenant_filter_clause(&tf)?;
+    let request_id = correlation_filter(&params, "request_id")?;
+    let application_id = correlation_filter(&params, "application_id")?;
     let rows: Vec<AuditRowTuple> = sqlx::query_as(&format!(
         "SELECT id, COALESCE(username,''), tenant_id, COALESCE(tenant_name,''), COALESCE(organization_name,''), \
-         action, COALESCE(detail,''), COALESCE(ip,''), created_at, COALESCE(user_agent,'') \
+         action, COALESCE(detail,''), COALESCE(ip,''), created_at, COALESCE(user_agent,''), request_id, application_id \
          FROM audit_logs WHERE {AUDIT_WHERE}{tf_sql} ORDER BY created_at DESC, id DESC LIMIT 10000"
     ))
     .bind(&kw)
     .bind(&action)
     .bind(scope)
     .bind(tf_val)
+    .bind(request_id)
+    .bind(application_id)
     .fetch_all(&state.pool)
     .await?;
 
-    let mut csv = String::from("\u{FEFF}时间,用户,租户,组织,动作,详情,IP,UA\n");
-    for (_, username, _tenant_id, tenant_name, organization_name, act, detail, ip, created_at, user_agent) in rows {
+    let mut csv = String::from("\u{FEFF}时间,用户,租户,组织,动作,详情,IP,UA,请求编号,应用ID\n");
+    for (_, username, _tenant_id, tenant_name, organization_name, act, detail, ip, created_at, user_agent, request_id, application_id) in rows {
         csv.push_str(&format!(
-            "{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{}\n",
             created_at.format("%Y-%m-%d %H:%M:%S"),
             csv_escape(&username),
             csv_escape(&tenant_name),
@@ -101,6 +117,8 @@ async fn export_csv(
             csv_escape(&detail),
             csv_escape(&ip),
             csv_escape(&user_agent),
+            request_id.map(|value| value.to_string()).unwrap_or_default(),
+            application_id.map(|value| value.to_string()).unwrap_or_default(),
         ));
     }
     let filename = format!("audit-logs-{}.csv", Utc::now().format("%Y%m%d-%H%M%S"));
@@ -130,16 +148,20 @@ async fn list(
     };
     let tf = params.get("tenant_id").cloned().unwrap_or_default();
     let (tf_sql, tf_val) = tenant_filter_clause(&tf)?;
+    let request_id = correlation_filter(&params, "request_id")?;
+    let application_id = correlation_filter(&params, "application_id")?;
     let where_clause = format!("{AUDIT_WHERE}{tf_sql}");
     let rows: Vec<AuditRowTuple> = sqlx::query_as(&format!(
         "SELECT id, COALESCE(username,''), tenant_id, COALESCE(tenant_name,''), COALESCE(organization_name,''), \
-         action, COALESCE(detail,''), COALESCE(ip,''), created_at, COALESCE(user_agent,'') \
-         FROM audit_logs WHERE {where_clause} ORDER BY created_at DESC, id DESC LIMIT $5 OFFSET $6"
+         action, COALESCE(detail,''), COALESCE(ip,''), created_at, COALESCE(user_agent,''), request_id, application_id \
+         FROM audit_logs WHERE {where_clause} ORDER BY created_at DESC, id DESC LIMIT $7 OFFSET $8"
     ))
     .bind(&kw)
     .bind(&action)
     .bind(scope)
     .bind(tf_val)
+    .bind(request_id)
+    .bind(application_id)
     .bind(size)
     .bind(offset)
     .fetch_all(&state.pool)
@@ -149,15 +171,18 @@ async fn list(
         .bind(&action)
         .bind(scope)
         .bind(tf_val)
+        .bind(request_id)
+        .bind(application_id)
         .fetch_one(&state.pool)
         .await?;
     let records: Vec<Value> = rows
         .into_iter()
-        .map(|(id, username, tenant_id, tenant_name, organization_name, act, detail, ip, created_at, user_agent)| {
+        .map(|(id, username, tenant_id, tenant_name, organization_name, act, detail, ip, created_at, user_agent, request_id, application_id)| {
             json!({
                 "id": id, "username": username, "tenantId": tenant_id, "tenantName": tenant_name,
                 "organizationName": organization_name, "action": act, "detail": detail,
                 "ip": ip, "createdAt": created_at, "userAgent": user_agent,
+                "requestId": request_id, "applicationId": application_id,
             })
         })
         .collect();
