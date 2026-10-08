@@ -88,6 +88,10 @@ const appSchema = z
   })
 type AppForm = z.infer<typeof appSchema>
 
+// 只有 /micro/:appCode/* 会进入微应用容器；宿主内置路由随主前端发布。
+const isMicroApp = (app: ApplicationRecord) =>
+  app.basePath?.replace(/\/+$/, "") === `/micro/${app.code}`
+
 export default function ApplicationsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -251,9 +255,13 @@ export default function ApplicationsPage() {
               <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t pt-3 text-xs text-muted-foreground">
                 <Badge variant="secondary" className="text-[11px] tabular-nums">{a.menuCount} 菜单</Badge>
                 <Badge variant="outline" className="text-[11px] tabular-nums">排序 {a.sortOrder}</Badge>
-                <Badge variant="outline" className="text-[11px]">{a.runtimeMode === "TRUSTED" ? "自有可信" : "iframe 隔离"}</Badge>
-                {/* 入口通道: ESM 灰 / HTML 紫 + entry_url truncate + title 悬停全量 */}
-                {a.entryType === "HTML" ? (
+                {isMicroApp(a) ? (
+                  <Badge variant="outline" className="text-[11px]">{a.runtimeMode === "TRUSTED" ? "自有可信" : "iframe 隔离"}</Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[11px]">宿主内置</Badge>
+                )}
+                {/* 内置页面不使用微应用入口；独立微应用显示实际入口通道。 */}
+                {isMicroApp(a) && a.entryType === "HTML" ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span
@@ -271,11 +279,11 @@ export default function ApplicationsPage() {
                       <span className="mt-0.5 block font-mono text-xs break-all">{a.entryUrl ?? "(未配置)"}</span>
                     </TooltipContent>
                   </Tooltip>
-                ) : (
+                ) : isMicroApp(a) ? (
                   <span className="rounded-full border bg-muted px-2 py-px text-[10px] font-medium text-muted-foreground">
                     ESM
                   </span>
-                )}
+                ) : null}
                 {a.basePath && (
                   <code className="max-w-[9rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
                     {a.basePath}
@@ -296,10 +304,12 @@ export default function ApplicationsPage() {
                   <TooltipContent>为该应用配置菜单</TooltipContent>
                 </Tooltip>
               </div>
-              <Button variant="outline" size="sm" className="w-full" onClick={() => setReleasesApplication(a)}>
-                <Rocket className="size-3.5" />
-                发布版本
-              </Button>
+              {isMicroApp(a) && (
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setReleasesApplication(a)}>
+                  <Rocket className="size-3.5" />
+                  发布版本
+                </Button>
+              )}
 
               <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <DropdownMenu>
@@ -317,10 +327,12 @@ export default function ApplicationsPage() {
                       <ListTree className="size-4" />
                       配置菜单
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setReleasesApplication(a)}>
-                      <Rocket className="size-4" />
-                      发布版本
-                    </DropdownMenuItem>
+                    {isMicroApp(a) && (
+                      <DropdownMenuItem onClick={() => setReleasesApplication(a)}>
+                        <Rocket className="size-4" />
+                        发布版本
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onClick={() => setDeleting(a)}>
                       <Trash2 className="size-4" />
@@ -551,7 +563,7 @@ export default function ApplicationsPage() {
                   )}
                 />
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">保存登记信息后，可通过“发布版本”注册环境版本并手动预检、激活。租户、组织和角色授权需另行配置。</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">使用 /micro/应用编码 路由的微应用可登记、预检并激活独立版本；宿主内置页面随主前端发布。租户、组织和角色授权需另行配置。</p>
             </form>
           </Form>
           <DialogFooter>
