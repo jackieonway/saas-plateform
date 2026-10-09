@@ -1,8 +1,8 @@
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useFieldArray, useForm } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { CheckCircle2, FileCheck2, Loader2, Plus, RefreshCw, Rocket, RotateCcw, Trash2, XCircle } from "lucide-react"
+import { CheckCircle2, FileCheck2, Loader2, Plus, RefreshCw, Rocket, RotateCcw, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { applicationsApi } from "@/api/applications"
 import type { ApplicationEnvironment, ApplicationRecord, ApplicationReleaseRecord } from "@/api/types"
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,42 +32,10 @@ const ENVIRONMENTS: { value: ApplicationEnvironment; label: string }[] = [
   { value: "production", label: "生产 · production" },
 ]
 
-function isEntryAddress(value: string) {
-  return /^(https?:\/\/|\/(?!\/))/i.test(value)
-}
-
-function isResourceAddress(value: string) {
-  try {
-    return ["http:", "https:"].includes(new URL(value, window.location.origin).protocol)
-  } catch {
-    return false
-  }
-}
-
 const releaseSchema = z.object({
   version: z.string().trim().min(1, "请输入版本号").max(64, "版本号最多 64 个字符")
     .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "仅支持字母、数字、点、下划线与中划线")
     .refine((value) => !value.includes(".."), "版本号不能包含连续的两个点"),
-  entryType: z.enum(["HTML", "ESM"]),
-  entryUrl: z.string().trim().min(1, "请输入版本入口").max(500).refine(isEntryAddress, "需以 http(s):// 或 / 开头"),
-  healthUrl: z.string().trim().max(500).refine((value) => !value || isEntryAddress(value), "需以 http(s):// 或 / 开头"),
-  resources: z.array(z.object({
-    kind: z.enum(["SCRIPT", "STYLE", "ASSET"]),
-    url: z.string().trim().min(1, "请输入资源地址").max(500).refine(isResourceAddress, "请输入 HTTP 地址或相对资源路径"),
-  })).max(48, "最多登记 48 个资源"),
-}).superRefine((value, ctx) => {
-  try {
-    const url = new URL(value.entryUrl, window.location.origin)
-    const segments = url.pathname.split("/").slice(0, -1).map((segment) => decodeURIComponent(segment))
-    if (!segments.includes(value.version)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryUrl"], message: "入口路径需包含版本号的完整目录，如 /versions/1.0.0/index.html" })
-    }
-    if (url.search || url.hash) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryUrl"], message: "版本入口不能使用查询参数或锚点，请使用固定版本目录" })
-    }
-  } catch {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryUrl"], message: "请输入有效的版本入口地址" })
-  }
 })
 
 type ReleaseForm = z.infer<typeof releaseSchema>
@@ -110,6 +78,8 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
   const queryClient = useQueryClient()
   const [environment, setEnvironment] = React.useState<ApplicationEnvironment>("development")
   const [registerOpen, setRegisterOpen] = React.useState(false)
+  const [archiveFile, setArchiveFile] = React.useState<File | null>(null)
+  const archiveInput = React.useRef<HTMLInputElement>(null)
   const [action, setAction] = React.useState<DeploymentAction | null>(null)
   const releasesKey = ["application-releases", application.id, environment]
   const deploymentsKey = ["application-deployments", application.id]
@@ -128,16 +98,13 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
   const releases = releasesQuery.data ?? []
   const deployment = deploymentsQuery.data?.find((item) => item.environment === environment)
   const previousRelease = releases.find((item) => item.id === deployment?.previousReleaseId)
-  const trusted = application.runtimeMode === "TRUSTED"
-  const previousUnsupported = !trusted && previousRelease?.entryType === "ESM"
+  const previousUnsupported = previousRelease?.entryType === "ESM"
   const enabled = application.status === "ENABLED"
 
   const form = useForm<ReleaseForm>({
     resolver: zResolver(releaseSchema),
-    defaultValues: { version: "", entryType: "HTML", entryUrl: "", healthUrl: "", resources: [] },
+    defaultValues: { version: "" },
   })
-  const resources = useFieldArray({ control: form.control, name: "resources" })
-  const versionValue = form.watch("version")
 
   const refreshReleaseData = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ["application-releases", application.id] }),
@@ -149,17 +116,13 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
   ])
 
   const registerMutation = useMutation({
-    mutationFn: (values: ReleaseForm) => applicationsApi.registerRelease(application.id, {
-      environment,
-      version: values.version,
-      entryType: values.entryType,
-      entryUrl: values.entryUrl,
-      healthUrl: values.healthUrl || undefined,
-      resources: values.resources,
-    }),
-    onSuccess: () => {
-      toast.success("版本已登记", { description: "请手动预检，确认资源可用后激活版本。" })
-      form.reset({ version: "", entryType: "HTML", entryUrl: "", healthUrl: "", resources: [] })
+    mutationFn: (values: ReleaseForm) => applicationsApi.uploadRelease(application.id, environment, values.version, "HTML", archiveFile!),
+    onSuccess: (release) => {
+      if (release.validationStatus === "PASSED") toast.success("版本包已上传，预检通过", { description: "确认版本后即可激活。" })
+      else toast.error("版本包已上传，预检未通过", { description: "查看诊断；若包内容有误，请使用新版本号重新上传。" })
+      form.reset({ version: "" })
+      setArchiveFile(null)
+      if (archiveInput.current) archiveInput.current.value = ""
       setRegisterOpen(false)
     },
     onError: (error: Error) => toast.error(error.message || "版本登记失败"),
@@ -171,7 +134,7 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
     onSuccess: (release) => {
       queryClient.setQueryData<ApplicationReleaseRecord[]>(releasesKey, (old) => old?.map((item) => item.id === release.id ? release : item))
       if (release.validationStatus === "PASSED") toast.success(`版本 ${release.version} 预检通过`)
-      else toast.error(`版本 ${release.version} 预检失败`, { description: "请查看逐资源诊断，修复部署资源后重新预检。" })
+      else toast.error(`版本 ${release.version} 预检失败`, { description: "请查看逐资源诊断；包内容有误时使用新版本号。" })
     },
     onError: (error: Error) => toast.error(error.message || "预检请求失败"),
     onSettled: refreshReleaseData,
@@ -201,7 +164,9 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
     setEnvironment(value)
     setAction(null)
     setRegisterOpen(false)
-    form.reset({ version: "", entryType: "HTML", entryUrl: "", healthUrl: "", resources: [] })
+    form.reset({ version: "" })
+    setArchiveFile(null)
+    if (archiveInput.current) archiveInput.current.value = ""
   }
 
   return (
@@ -210,10 +175,10 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
         <SheetContent className="w-full gap-0 sm:max-w-3xl">
           <SheetHeader className="shrink-0 border-b p-5 pr-12">
             <SheetTitle className="flex items-center gap-2"><Rocket className="size-5 text-primary" />{application.name} · 发布版本</SheetTitle>
-            <SheetDescription>按环境登记不可覆盖的版本，手动预检、激活或回滚。</SheetDescription>
+            <SheetDescription>上传 ZIP 或 tar.gz 前端构建包，按环境预检、激活或回滚。</SheetDescription>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="font-mono">{application.code}</Badge>
-              <Badge variant="secondary">{trusted ? "自有可信 · HTML / ESM" : "iframe 隔离 · HTML"}</Badge>
+              <Badge variant="secondary">iframe 隔离 · HTML</Badge>
               {!enabled && <Badge variant="destructive">应用已停用</Badge>}
             </div>
           </SheetHeader>
@@ -227,7 +192,7 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
                 <Button variant="ghost" size="icon" aria-label="刷新版本与部署" disabled={busy || releasesQuery.isFetching || deploymentsQuery.isFetching} onClick={() => refreshReleaseData()}>
                   <RefreshCw className={cn("size-4", (releasesQuery.isFetching || deploymentsQuery.isFetching) && "animate-spin")} />
                 </Button>
-                <Button size="sm" variant={registerOpen ? "secondary" : "default"} disabled={busy} onClick={() => setRegisterOpen((value) => !value)}><Plus className="size-4" />登记版本</Button>
+                <Button size="sm" variant={registerOpen ? "secondary" : "default"} disabled={busy} onClick={() => setRegisterOpen((value) => !value)}><Plus className="size-4" />上传版本包</Button>
               </div>
             </div>
 
@@ -260,56 +225,43 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
               </div>
               <p className="mt-3 border-t pt-3 text-xs leading-relaxed text-muted-foreground">宿主使用服务端配置的环境入口；切换此筛选只查看并管理该环境的版本。激活后仍沿用现有菜单与授权。</p>
               {!enabled && <p className="mt-2 text-xs text-destructive">应用停用期间可登记与预检，请启用应用后再激活或回滚。</p>}
-              {previousUnsupported && <p className="mt-2 text-xs text-destructive">上一部署为 ESM，iframe 隔离应用无法回滚至该版本。请选择已验 HTML 版本，或由平台管理员确认自有可信运行方式。</p>}
+              {previousUnsupported && <p className="mt-2 text-xs text-destructive">上一部署为旧 ESM 版本，无法在 iframe 中回滚；请选择已验证的 HTML 版本。</p>}
             </section>
 
             {registerOpen && (
-              <section className="mb-5 rounded-lg border p-4" aria-label="登记新版本">
+              <section className="mb-5 rounded-lg border p-4" aria-label="上传新版本">
                 <div className="mb-4">
-                  <h3 className="text-sm font-semibold">登记 {environment} 版本</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">版本登记后不可修改或覆盖。入口请指向完整版本目录，资源通过 Nginx / Caddy 等静态服务部署后再预检。</p>
+                  <h3 className="text-sm font-semibold">上传 {environment} 版本</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">上传构建后的 ZIP 或 tar.gz；系统解压到独立版本目录并生成资源清单。版本不可覆盖。</p>
                 </div>
                 <Form {...form}>
                   <form className="space-y-4" onSubmit={form.handleSubmit((values) => {
                     if (busy) return
-                    if (!trusted && values.entryType === "ESM") {
-                      form.setError("entryType", { message: "iframe 隔离应用仅支持 HTML 入口" })
+                    if (!archiveFile) {
+                      toast.error("请选择 ZIP 或 tar.gz 构建包")
                       return
                     }
                     registerMutation.mutate(values)
                   })}>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
                       <FormField control={form.control} name="version" render={({ field }) => (
                         <FormItem><FormLabel>版本号 <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} placeholder="如 1.0.0" className="font-mono" disabled={busy} /></FormControl><FormMessage /></FormItem>
                       )} />
-                      <FormField control={form.control} name="entryType" render={({ field }) => (
-                        <FormItem><FormLabel>入口类型</FormLabel><Select value={field.value} onValueChange={field.onChange} disabled={busy}><FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="HTML">HTML · 页面</SelectItem><SelectItem value="ESM" disabled={!trusted}>ESM · 可信模块</SelectItem></SelectContent></Select><FormMessage /></FormItem>
-                      )} />
                     </div>
-                    <FormField control={form.control} name="entryUrl" render={({ field }) => (
-                      <FormItem><FormLabel>版本入口 <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} placeholder={`/sub-apps/${application.code}/versions/${versionValue || "1.0.0"}/index.html`} className="font-mono text-xs" disabled={busy} /></FormControl><FormDescription>路径必须含版本号的完整目录，版本号不能放在查询参数中。</FormDescription><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="healthUrl" render={({ field }) => (
-                      <FormItem><FormLabel>健康检查地址</FormLabel><FormControl><Input {...field} placeholder="选填，如 /sub-apps/example/health.json" className="font-mono text-xs" disabled={busy} /></FormControl><FormDescription>登记后与入口、资源一起由服务端发起 HTTP 预检。</FormDescription><FormMessage /></FormItem>
-                    )} />
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">预检资源 <span className="font-normal text-muted-foreground">({resources.fields.length}/48)</span></p><Button type="button" variant="outline" size="sm" disabled={busy || resources.fields.length >= 48} onClick={() => resources.append({ kind: "SCRIPT", url: "" })}><Plus className="size-3.5" />添加资源</Button></div>
-                      <p className="text-xs text-muted-foreground">登记关键脚本、样式与静态资源；支持相对于版本入口的路径，预检会逐项检查响应、内容类型与大小。</p>
-                      {resources.fields.map((resource, index) => (
-                        <div key={resource.id} className="flex items-start gap-2 rounded-md border bg-muted/20 p-2">
-                          <FormField control={form.control} name={`resources.${index}.kind`} render={({ field }) => (
-                            <FormItem className="w-24 shrink-0"><Select value={field.value} onValueChange={field.onChange} disabled={busy}><FormControl><SelectTrigger className="w-full" aria-label={`资源 ${index + 1} 类型`}><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="SCRIPT">脚本</SelectItem><SelectItem value="STYLE">样式</SelectItem><SelectItem value="ASSET">资源</SelectItem></SelectContent></Select><FormMessage /></FormItem>
-                          )} />
-                          <FormField control={form.control} name={`resources.${index}.url`} render={({ field }) => (
-                            <FormItem className="min-w-0 flex-1"><FormControl><Input {...field} aria-label={`资源 ${index + 1} 地址`} placeholder="/sub-apps/example/versions/1.0.0/assets/main.js" className="font-mono text-xs" disabled={busy} /></FormControl><FormMessage /></FormItem>
-                          )} />
-                          <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={`移除资源 ${index + 1}`} onClick={() => resources.remove(index)}><Trash2 className="size-4" /></Button>
-                        </div>
-                      ))}
+                      <label htmlFor="micro-release-archive" className="text-sm font-medium">构建包 <span className="text-destructive">*</span></label>
+                      <Input id="micro-release-archive" ref={archiveInput} type="file" accept=".zip,.tar.gz" disabled={busy}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null
+                          if (file && !/\.(zip|tar\.gz)$/i.test(file.name)) { toast.error("仅支持 .zip 或 .tar.gz 文件"); event.target.value = ""; setArchiveFile(null); return }
+                          if (file && file.size > 20 * 1024 * 1024) { toast.error("压缩包不能超过 20 MiB"); event.target.value = ""; setArchiveFile(null); return }
+                          setArchiveFile(file)
+                        }} />
+                      <p className="text-xs text-muted-foreground">构建包须包含 index.html；可直接压缩构建目录，或压缩一个包含构建文件的顶层文件夹。</p>
                     </div>
                     <div className="flex items-center justify-between gap-3 border-t pt-3">
-                      <p className="text-xs text-muted-foreground">登记只保存版本信息，预检和激活需手动完成。</p>
-                      <Button type="submit" size="sm" disabled={busy}>{registerMutation.isPending && <Loader2 className="size-4 animate-spin" />}登记版本</Button>
+                      <p className="text-xs text-muted-foreground">上传后自动预检；通过后手动激活，不会自动切换当前版本。</p>
+                      <Button type="submit" size="sm" disabled={busy}>{registerMutation.isPending && <Loader2 className="size-4 animate-spin" />}上传并登记</Button>
                     </div>
                   </form>
                 </Form>
@@ -320,14 +272,14 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
             {releasesQuery.isLoading ? <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取版本…</div> : releasesQuery.isError ? (
               <ErrorState message={releasesQuery.error instanceof Error ? releasesQuery.error.message : undefined} onRetry={() => releasesQuery.refetch()} />
             ) : releases.length === 0 ? (
-              <EmptyState title="该环境还没有版本" description="登记版本后，完成预检即可手动激活。" icon={<Rocket className="size-6" />} action={<Button variant="outline" size="sm" disabled={busy} onClick={() => setRegisterOpen(true)}><Plus className="size-4" />登记第一个版本</Button>} />
+              <EmptyState title="该环境还没有版本" description="上传构建包后系统自动预检，通过即可激活。" icon={<Rocket className="size-6" />} action={<Button variant="outline" size="sm" disabled={busy} onClick={() => setRegisterOpen(true)}><Plus className="size-4" />上传第一个版本</Button>} />
             ) : (
               <div className="space-y-3">
                 {releases.map((release) => {
                   const active = deployment ? deployment.activeReleaseId === release.id : release.active
                   const checks = Array.isArray(release.validationResult?.checks) ? release.validationResult.checks : []
                   const preflighting = preflightMutation.isPending && preflightMutation.variables === release.id
-                  const unsupported = !trusted && release.entryType === "ESM"
+                  const unsupported = release.entryType === "ESM"
                   return (
                     <article key={release.id} className={cn("rounded-lg border p-4", active && "border-primary/40 bg-primary/5")}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -342,7 +294,7 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
                       </div>
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>登记 {dateLabel(release.createdAt)}</span><span>预检 {dateLabel(release.checkedAt)}</span><span>{release.resources.length} 项登记资源</span></div>
                       {release.healthUrl && <p className="mt-1 break-all text-xs text-muted-foreground">健康检查 <span className="font-mono">{release.healthUrl}</span></p>}
-                      {unsupported && <p className="mt-2 text-xs text-destructive">iframe 隔离应用无法激活 ESM，请登记 HTML 版本或由平台管理员确认自有可信运行方式。</p>}
+                      {unsupported && <p className="mt-2 text-xs text-destructive">旧 ESM 版本无法在 iframe 中激活，请上传 HTML 版本。</p>}
                       {checks.length > 0 && (
                         <details className="mt-3 border-t pt-3" open={release.validationStatus === "FAILED"}>
                           <summary className="cursor-pointer text-xs font-medium">逐资源预检诊断 · {checks.filter((check) => check.passed).length}/{checks.length} 通过</summary>
@@ -364,7 +316,7 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
               </div>
             )}
           </div>
-          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : "登记版本"}，完成后可切换环境或关闭面板。</div>}
+          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : "上传版本包"}，完成后可切换环境或关闭面板。</div>}
         </SheetContent>
       </Sheet>
 

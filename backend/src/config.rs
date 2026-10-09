@@ -32,6 +32,7 @@ pub struct Config {
     pub oauth_introspection_attempts_per_minute: usize,
     pub oauth_auto_purge: bool,
     pub static_dir: String,
+    pub micro_apps_dir: String,
 }
 
 fn value(env: &HashMap<String, String>, key: &str, fallback: &str) -> String {
@@ -302,11 +303,18 @@ impl Config {
             )? as usize,
             oauth_auto_purge: boolean(env, "OAUTH_AUTO_PURGE", false)?,
             static_dir: value(env, "STATIC_DIR", ""),
+            micro_apps_dir: value(env, "MICRO_APPS_DIR", ""),
         };
         config
             .bind_addr
             .parse::<SocketAddr>()
             .map_err(|_| anyhow::anyhow!("BIND_ADDR must be a socket address"))?;
+        if !config.micro_apps_dir.is_empty() {
+            anyhow::ensure!(
+                Path::new(&config.micro_apps_dir).is_absolute(),
+                "MICRO_APPS_DIR must be an absolute path"
+            );
+        }
         if production {
             anyhow::ensure!(
                 optional(env, "DATABASE_URL").is_some(),

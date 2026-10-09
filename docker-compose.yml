@@ -35,6 +35,7 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:?Set the exact public HTTPS origin}
       MICRO_GATEWAY_ORIGIN: ${PUBLIC_APP_URL:?Set the exact public HTTPS origin}
       MICRO_ALLOWED_ORIGINS: ${MICRO_ALLOWED_ORIGINS:-${PUBLIC_APP_URL}}
+      MICRO_APPS_DIR: /micro-apps
       CORS_ALLOWED_ORIGINS: ${PUBLIC_APP_URL}
       TRUSTED_PROXY_IPS: ${WEB_PROXY_IP:-172.30.0.10}
       OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE: ${OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE:-600}
@@ -44,6 +45,11 @@ services:
     depends_on: {postgres: {condition: service_healthy}}
     expose: ["3001"]
     read_only: true
+    volumes:
+      - type: bind
+        source: ${MICRO_APPS_DIR:?Set a persistent absolute micro-apps directory outside the frontend checkout}
+        target: /micro-apps
+        bind: {create_host_path: false}
     tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -121,7 +127,7 @@ services:
     ports: ["${HTTP_PORT:-80}:80", "${HTTPS_PORT:-443}:443"]
     volumes:
       - type: bind
-        source: ${MICRO_APPS_DIR:-./deploy/micro-apps}
+        source: ${MICRO_APPS_DIR:?Set a persistent absolute micro-apps directory outside the frontend checkout}
         target: /micro-apps
         read_only: true
         bind: {create_host_path: false}

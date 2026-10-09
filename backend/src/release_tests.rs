@@ -6,6 +6,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::io::{Cursor, Write};
 
 use anyhow::{anyhow, ensure, Result};
 use axum::body::{to_bytes, Body};
@@ -382,6 +383,15 @@ impl Harness {
         origin: &str,
         allowed_origins: Vec<String>,
     ) -> Result<Self> {
+        Self::create_with_upload_root(pool, origin, allowed_origins, None).await
+    }
+
+    async fn create_with_upload_root(
+        pool: &PgPool,
+        origin: &str,
+        allowed_origins: Vec<String>,
+        upload_root: Option<&str>,
+    ) -> Result<Self> {
         // Migration SQL defines all functions and constraints; test identities need no seed data.
         let (platform_tenant, platform_org) = tenant(pool, "release-platform", true).await?;
         let (tenant_a, org_a) = tenant(pool, "release-tenant-a", false).await?;
@@ -459,6 +469,7 @@ impl Harness {
         config.application_environment = ENVIRONMENT.into();
         config.micro_gateway_origin = origin.into();
         config.micro_allowed_origins = allowed_origins;
+        config.micro_apps_dir = upload_root.unwrap_or("").into();
         let app = Router::new()
             .merge(routes::api_router())
             .with_state(AppState::new(pool.clone(), Arc::new(config)));
@@ -595,6 +606,48 @@ fn release_body(version: &str, entry_type: &str) -> Value {
         "healthUrl": format!("/micro/{version}/health"),
         "resources": [],
     })
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn release_archive_upload_registers_files_and_preserves_version_bytes() -> Result<()> {
+    let database = TestDatabase::create().await?;
+    let root = std::env::temp_dir().join(format!("micro-release-upload-{}", Uuid::new_v4()));
+    std::fs::create_dir(&root)?;
+    let result: Result<()> = async {
+        let h = Harness::create_with_upload_root(&database.pool, "http://127.0.0.1:7777",
+            vec!["http://127.0.0.1:7777".into()], root.to_str()).await?;
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        writer.start_file("index.html", zip::write::SimpleFileOptions::default())?;
+        writer.write_all(b"<html><script src='./app.js'></script></html>")?;
+        writer.start_file("app.js", zip::write::SimpleFileOptions::default())?;
+        writer.write_all(b"console.log('release')")?;
+        let archive = writer.finish()?.into_inner();
+        let upload = |environment: &str, token: &str, body: Vec<u8>| {
+            Request::builder().method(Method::POST).uri(format!(
+                "/api/applications/{}/releases/upload?environment={environment}&version=1.0.0&entryType=HTML&format=zip", h.main_app
+            )).header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .header(header::CONTENT_TYPE, "application/zip")
+                .body(Body::from(body))
+        };
+        let denied = h.app.clone().oneshot(upload("development", &h.a, archive.clone())?).await?;
+        ensure!(denied.status() == StatusCode::FORBIDDEN, "tenant user uploaded a release");
+        let first = h.app.clone().oneshot(upload("development", &h.platform, archive.clone())?).await?;
+        ensure!(first.status() == StatusCode::OK, "upload returned {}", first.status());
+        let first: Value = serde_json::from_slice(&to_bytes(first.into_body(), 1024 * 1024).await?)?;
+        ensure!(first["entryUrl"] == "/sub-apps/release-app/versions/1.0.0/index.html", "wrong uploaded entry: {first}");
+        ensure!(first["resources"].as_array().is_some_and(|items| items.len() == 1), "resource manifest missing: {first}");
+        ensure!(first["validationStatus"] == "FAILED" && first["checkedAt"].is_string(),
+            "upload did not persist automatic preflight diagnostics: {first}");
+        let file = root.join("release-app/versions/1.0.0/app.js");
+        ensure!(std::fs::read(&file)? == b"console.log('release')", "uploaded bytes differ");
+        let promoted = h.app.clone().oneshot(upload("staging", &h.platform, archive)?).await?;
+        ensure!(promoted.status() == StatusCode::OK, "same bytes could not be registered in staging");
+        ensure!(std::fs::read(&file)? == b"console.log('release')", "promotion changed version bytes");
+        Ok(())
+    }.await;
+    let _ = std::fs::remove_dir_all(&root);
+    database.finish(result).await
 }
 
 #[derive(Clone)]

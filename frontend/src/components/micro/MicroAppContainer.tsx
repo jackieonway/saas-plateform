@@ -15,6 +15,7 @@
  */
 
 import * as React from "react"
+import { loadHostEsm } from "@/micro-apps/registry"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import {
   Activity,
@@ -366,7 +367,10 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
         }
         return lifecycle
       }
-      const mod = (await import(/* @vite-ignore */ entryInfo.entryUrl)) as MicroEsmModule
+      // Code-bundled ESM shares the host's React and UI module instances.
+      const mod = (!entryInfo.entryVersionId
+        ? await loadHostEsm(entryInfo.entryUrl)
+        : await import(/* @vite-ignore */ entryInfo.entryUrl)) as MicroEsmModule
       check()
       const lifecycle = mod.__DANTE_MICRO_APP__ ??
         (mod.mount && mod.unmount ? { name: entryInfo.name, mount: mod.mount, unmount: mod.unmount, update: mod.update } : null)
@@ -498,18 +502,18 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
           </span>
         )}
 
-        {/* 增量更新能力徽章(v1.1) */}
+        {/* 运行时属性更新能力，不代表重新部署前端代码。 */}
         {supportsUpdate && status === "mounted" && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                 <Zap className="size-3" />
-                增量更新
+                运行时同步
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-xs text-xs">
-              该子应用实现了 lifecycle.update 契约: 子路径/主题/菜单变化时容器只推送新 props,
-              不重挂载(计时器/输入等内部状态保留)
+              授权上下文续期、子路径或主题变化时只更新运行时属性；不重新部署代码，
+              也不重挂页面（计时器、输入等内部状态保留）。
             </TooltipContent>
           </Tooltip>
         )}

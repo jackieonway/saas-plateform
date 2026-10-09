@@ -1,10 +1,75 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { createReadStream, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
+const microAppsDevDir = process.env.MICRO_APPS_DEV_DIR || path.resolve(__dirname, "../deploy/micro-apps");
+if (!path.isAbsolute(microAppsDevDir)) throw new Error("MICRO_APPS_DEV_DIR must be absolute");
+const versionMimeTypes: Record<string, string> = {
+  ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8", ".cjs": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif",
+  ".ico": "image/x-icon", ".woff": "font/woff", ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8", ".map": "application/json; charset=utf-8",
+};
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: "external-microapp-versions",
+      configureServer(server) {
+        const root = realpathSync(microAppsDevDir);
+        server.middlewares.use((req, res, next) => {
+          const pathname = req.url?.split("?", 1)[0] || "";
+          if (!/^\/sub-apps\/[^/]+\/versions\//.test(pathname)) return next();
+          const missing = () => { res.statusCode = 404; res.setHeader("Cache-Control", "no-store"); res.end(); };
+          const match = /^\/sub-apps\/([a-z0-9-]+)\/versions\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(.+)$/.exec(pathname);
+          if (!match || match[2].includes("..") || !["GET", "HEAD"].includes(req.method || "")) return missing();
+          let segments: string[];
+          try { segments = match[3].split("/").map(decodeURIComponent); } catch { return missing(); }
+          if (segments.some((segment) => !segment || segment === "." || segment === ".." ||
+            segment.includes("/") || segment.includes("\\") || segment.includes(":") || /[\x00-\x1f]/.test(segment))) return missing();
+          try {
+            const file = realpathSync(path.resolve(root, match[1], "versions", match[2], ...segments));
+            if (!file.startsWith(root + path.sep) || !statSync(file).isFile()) return missing();
+            res.setHeader("Content-Type", versionMimeTypes[path.extname(file).toLowerCase()] || "application/octet-stream");
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            res.setHeader("Cache-Control", path.extname(file).toLowerCase() === ".html" ? "no-cache" : "public, max-age=31536000, immutable");
+            if (req.method === "HEAD") { res.end(); return; }
+            createReadStream(file).on("error", () => {
+              if (res.headersSent) res.destroy();
+              else missing();
+            }).pipe(res);
+          } catch { missing(); }
+        });
+      },
+    },
+    {
+      name: "opaque-microapp-api-preflight",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const pathname = req.url?.split("?", 1)[0];
+          const externalView = pathname === "/api/external/menus" || pathname === "/api/external/roles";
+          const workOrdersApi = pathname === "/work-orders-api" || pathname?.startsWith("/work-orders-api/");
+          if (req.method !== "OPTIONS" || req.headers.origin !== "null" || (!externalView && !workOrdersApi)) {
+            next();
+            return;
+          }
+          res.statusCode = 204;
+          res.setHeader("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
+          res.setHeader("Access-Control-Allow-Origin", "null");
+          res.setHeader("Access-Control-Allow-Methods", externalView ? "GET" : "GET,POST,PATCH,DELETE");
+          res.setHeader("Access-Control-Allow-Headers", "authorization,content-type,x-request-id");
+          res.end();
+        });
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -24,6 +89,10 @@ export default defineConfig({
       },
       "/oauth": {
         target: "http://127.0.0.1:3001",
+        changeOrigin: true,
+      },
+      "/work-orders-api": {
+        target: "http://127.0.0.1:3104",
         changeOrigin: true,
       },
       // 微前端子应用服务(21-b): /sub/vue/* → 3005(Vue 工坊), /sub/jquery/* → 3006(legacy 工单)

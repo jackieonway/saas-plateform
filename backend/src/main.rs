@@ -7,6 +7,7 @@ mod extractors;
 mod notifications;
 mod observability;
 mod releases;
+mod release_archives;
 mod routes;
 mod seed;
 mod session;
@@ -35,7 +36,7 @@ use axum::http::{header, HeaderValue, Method};
 use axum::middleware::Next;
 use axum::response::Response;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::config::Config;
 use crate::state::AppState;
@@ -87,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
     };
     tracing::info!("PostgreSQL 连接成功");
 
-    // 迁移
+    // 迁移文件在编译时嵌入，新增迁移须重建后端镜像。
     sqlx::migrate!("./migrations")
         .run(&pool)
         .await
@@ -211,7 +212,14 @@ pub(crate) fn cors_layer(config: &Config) -> CorsLayer {
         .map(|origin| HeaderValue::from_str(origin).expect("validated origin"))
         .collect();
     CorsLayer::new()
-        .allow_origin(origins)
+        .allow_origin(AllowOrigin::predicate(move |origin, request| {
+            origins.contains(origin)
+                || (origin == "null"
+                    && matches!(
+                        request.uri.path(),
+                        "/api/external/menus" | "/api/external/roles"
+                    ))
+        }))
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -226,6 +234,40 @@ pub(crate) fn cors_layer(config: &Config) -> CorsLayer {
             axum::http::HeaderName::from_static("x-request-id"),
         ])
         .expose_headers([axum::http::HeaderName::from_static("x-request-id")])
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn opaque_iframe_cors_only_allows_legacy_user_views() {
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    let config = Config::from_values(&Default::default()).unwrap();
+    let app = axum::Router::new()
+        .route("/api/external/menus", axum::routing::get(|| async { "ok" }))
+        .route("/api/external/roles", axum::routing::get(|| async { "ok" }))
+        .route("/api/auth/profile", axum::routing::get(|| async { "ok" }))
+        .layer(cors_layer(&config));
+    for path in ["/api/external/menus", "/api/external/roles", "/api/auth/profile"] {
+        let request = Request::builder()
+            .method(Method::OPTIONS)
+            .uri(path)
+            .header(header::ORIGIN, "null")
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+            .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "authorization")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .and_then(|value| value.to_str().ok()),
+            path.starts_with("/api/external/").then_some("null")
+        );
+    }
 }
 
 /// Normalize before all route handlers and observability. Headers supplied by an

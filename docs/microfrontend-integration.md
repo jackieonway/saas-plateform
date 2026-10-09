@@ -1,29 +1,20 @@
 # 微前端接入与上线指南
 
-Phase 9 的推荐交付方式是[独立版本打包与部署](./application-independent-deployment.md)：版本文件置于 `/sub-apps/<code>/versions/<version>/`，由管理员手动登记、预检、激活或回滚，宿主按当前环境的部署指针加载入口。发布不会自动授予租户、组织或角色权限，也不需要重新构建宿主镜像。管理接口与 HTTPS、来源、CORS 规则见[发布 API](./application-release-api.md)。
+HTML 微应用采用[上传 ZIP 或 tar.gz 构建包](./application-independent-deployment.md)：服务端将静态文件置于 `/sub-apps/<code>/versions/<version>/`，由管理员预检、激活或回滚，宿主按当前环境的部署指针加载入口。ESM 模块随宿主前端构建和部署。两种方式都不会自动授予租户、组织或角色权限。管理接口与 HTTPS、来源、CORS 规则见[发布 API](./application-release-api.md)。
 
-应用默认 `IFRAME`，隔离运行 HTML 页面；独立页面需要使用 iframe SDK 接收平台上下文。平台管理员明确标记 `TRUSTED` 的自有应用才可在宿主执行 HTML 生命周期或 ESM 模块。以下旧同步与未版本化路径保留作迁移兼容；Vue/jQuery 现有生命周期示例须显式标记可信，或改为独立页面并接入 iframe SDK，不能仅因使用 HTML 就获得宿主执行能力。
+新建微应用选择 `ESM` 或 `HTML`，无需单独选择运行方式或入口。第一方 ESM 模块以应用编码命名，加入宿主构建后由编码自动关联并直挂运行，随宿主发布；报表中心使用此方式。系统管理和消息中心由宿主路由直接承载，也没有独立入口。HTML 应用上传 ZIP 或 tar.gz 静态包，系统解压并管理环境版本，通过 iframe SDK 接收平台上下文；Vue、jQuery 和独立工单使用此方式。以下可信 HTML 加载方式仅供历史集成迁移参考。
 
 ## 接入链路
 
 ### 快速接入（HTML 微应用）
 
-新建应用时选择 `HTML` 并保持“快速接入”开启，只需填写名称和编码。系统按编码生成 `basePath=/micro/{code}`、`entryUrl=/sub-apps/{code}/index.html`，并在同一数据库事务里创建首页 `MICRO` 菜单。接着按平台原有流程完成租户、组织、角色授权。关闭“快速接入”可自行填写入口和菜单；即使直接调用创建 API，HTML 类型留空的路径与入口也会采用相同约定。
+新建应用时选择 `HTML` 并保持“快速接入”开启，只需填写名称和编码。系统按编码生成 `basePath=/micro/{code}`、未发布占位入口，并在同一数据库事务里创建首页 `MICRO` 菜单。创建后上传 ZIP 或 tar.gz，待预检通过再激活版本；随后按平台原有流程完成租户、组织、角色授权。关闭“快速接入”可自行填写挂载路径和菜单。
 
-将已经构建好的子应用文件同步到主站静态目录：
-
-此同步方式覆盖未版本化目录，并在重建宿主时随镜像发布。生产新发布应使用独立版本打包；同步不提供不可覆盖版本或回滚归档。
-
-```bash
-npm run micro:sync -- example ./path/to/example/dist
-```
-
-命令要求源目录包含 `index.html`，把内容复制到 `frontend/public/sub-apps/example/`。随后重新构建主站，或将该目录作为独立静态目录挂载到生产网关。若后续采用独立服务反代，则在应用管理关闭“快速接入”，填写自定义入口地址即可。
-
-1. 管理员在应用管理创建应用。使用快速接入时填写名称、编码并选择 `HTML`；自定义模式可以指定 `basePath` 和 `entryUrl`。
-2. 快速接入会自动创建首页菜单。自定义模式需要在菜单管理创建菜单，`path` 填 `/micro/{code}` 或其子路径，`linkTarget` 选 `MICRO`，`linkUrl` 留空。
-3. 完成租户应用/菜单、组织应用/菜单、角色菜单授权，并为用户分配该角色。`/api/auth/profile` 只返回当前租户和组织均已授权的启用应用；`/api/auth/menus` 再按角色与菜单授权过滤导航。
-4. 用户打开 `/micro/{code}/*`，`MicroAppContainer` 从个人应用列表读取入口配置，申请应用专用短期 token，再调用 `/api/apps/{code}/context` 获取完整上下文。只有两步成功才加载子应用；关联客户端缺失、授权失效或上下文过期时停止挂载。
+1. 管理员在应用管理创建应用。使用快速接入时填写名称、编码并选择 `HTML`；自定义模式可以指定 `basePath` 和菜单。
+2. 上传包含 `index.html` 的 ZIP 或 tar.gz，选择环境与版本号，预检通过后激活。
+3. 快速接入会自动创建首页菜单。自定义模式需要在菜单管理创建菜单，`path` 填 `/micro/{code}` 或其子路径，`linkTarget` 选 `MICRO`，`linkUrl` 留空。
+4. 完成租户应用/菜单、组织应用/菜单、角色菜单授权，并为用户分配该角色。`/api/auth/profile` 只返回当前租户和组织均已授权的启用应用；`/api/auth/menus` 再按角色与菜单授权过滤导航。
+5. 用户打开 `/micro/{code}/*`，`MicroAppContainer` 从个人应用列表读取入口配置，申请应用专用短期 token，再调用 `/api/apps/{code}/context` 获取完整上下文。只有两步成功才加载子应用；关联客户端缺失、授权失效或上下文过期时停止挂载。
 
 快速接入只自动创建首页菜单，不会自动授予租户、组织和角色权限，也不会创建 OAuth 客户端。接入微应用时须关联已启用的机密客户端，确认所需 scope 与业务后端权限规则；客户端密钥只保存在业务后端。角色控制菜单和操作权限，数据范围按当前组织成员关系独立显式授权。
 
@@ -116,8 +107,8 @@ location ^~ /sub-apps/example/ {
 
 ## 当前仓库示例的上线差距
 
-- Vue 和 jQuery 子应用源码已复制到 `frontend/public/sub-apps/vue/`、`jquery/`；但迁移 `0011_micro_frontend.sql` 插入的数据库入口仍为 `/sub/vue/`、`/sub/jquery/`，依赖 Vite 开发代理和 3005/3006 端口。上线时应按[版本打包命令](./application-independent-deployment.md)发布到独立目录，登记 `/sub-apps/<code>/versions/<version>/index.html` 并预检、激活。管理员须明确标记现有宿主生命周期示例为自有可信，或先接入 iframe SDK。已执行的旧迁移不要直接修改。
-- `report-center` 示例是 `ESM`，迁移中的入口为 `/src/micro-apps/report-center.tsx`。该地址只适用于 Vite 开发服务器；生产环境需显式打包为浏览器可加载的 ESM 文件、登记版本入口并由管理员确认 TRUSTED，或改造为 iframe HTML 页面。
+- Vue 和 jQuery 的旧迁移入口 `/sub/vue/`、`/sub/jquery/` 依赖开发代理，当前使用已接入 iframe SDK 的 HTML 版本并从独立目录激活。已执行的旧迁移不要直接修改。
+- `report-center` 使用宿主构建的 `/src/micro-apps/report-center.tsx` ESM 入口，直挂运行并展示共享 React 运行时；更新它需要重新构建宿主前端。
 - `frontend/Dockerfile` 使用 `frontend/package-lock.json` 与 `npm ci`。首次启用版本网关需实际构建、发布宿主镜像；随后新版本写入独立只读挂载即可，无需重新构建宿主镜像。
 - 存量 `frontend/dist/sub-apps/` 中的 Vue、jQuery 示例仍可用于迁移兼容，旧镜像不会自动得到新的网关路由。独立版本使用 Compose 的 `MICRO_APPS_DIR` 挂载目录，须验证网关文件、缓存、MIME 与严格 404 行为。
 - Phase 5～8 已补齐应用 token 的租户/组织授权、受众、平台会话绑定和撤销检查，以及完整上下文、续期和生命周期。生产业务后端仍须接入[校验组件](../examples/app-backend/authorize.mjs)，不能只依赖前端菜单或数据授权展示。

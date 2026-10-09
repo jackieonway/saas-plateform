@@ -4,7 +4,6 @@ import type {
   ApplicationEnvironment,
   ApplicationPayload,
   ApplicationRecord,
-  ApplicationReleasePayload,
   ApplicationReleaseRecord,
 } from "./types"
 
@@ -15,8 +14,14 @@ export const applicationsApi = {
   remove: (id: string) => api.del(`/api/applications/${id}`),
   releases: (id: string, environment?: ApplicationEnvironment) =>
     api.get<ApplicationReleaseRecord[]>(`/api/applications/${id}/releases${qs({ environment })}`),
-  registerRelease: (id: string, body: ApplicationReleasePayload) =>
-    api.post<ApplicationReleaseRecord>(`/api/applications/${id}/releases`, body),
+  uploadRelease: (id: string, environment: ApplicationEnvironment, version: string, entryType: "HTML" | "ESM", file: File) => {
+    const format = file.name.toLowerCase().endsWith(".tar.gz") ? "tar.gz" : "zip"
+    return api.postRaw<ApplicationReleaseRecord>(
+      `/api/applications/${id}/releases/upload${qs({ environment, version, entryType, format })}`,
+      file,
+      format === "zip" ? "application/zip" : "application/gzip",
+    )
+  },
   preflightRelease: (id: string, releaseId: string) =>
     api.post<ApplicationReleaseRecord>(`/api/applications/${id}/releases/${releaseId}/preflight`),
   activateRelease: (id: string, releaseId: string) =>

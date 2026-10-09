@@ -16,6 +16,8 @@ export class ApiError extends Error {
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE"
   body?: unknown
+  rawBody?: BodyInit
+  contentType?: string
   /** 显式指定 Bearer(如登录流程的 credential ticket) */
   bearer?: string
   /** 完全不带认证头(登录本身) */
@@ -33,10 +35,11 @@ function redirectToLogin() {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, bearer, skipAuth, suppress401, signal } = options
+  const { method = "GET", body, rawBody, contentType, bearer, skipAuth, suppress401, signal } = options
 
   const headers: Record<string, string> = { Accept: "application/json" }
   if (body !== undefined) headers["Content-Type"] = "application/json"
+  if (rawBody !== undefined && contentType) headers["Content-Type"] = contentType
 
   const storeToken = authStore.getState().token
   const contextEpoch = authStore.getState().contextEpoch
@@ -48,7 +51,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     resp = await fetch(path, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined),
       signal,
     })
   } catch (e) {
@@ -94,6 +97,8 @@ export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "POST", body }),
+  postRaw: <T>(path: string, rawBody: BodyInit, contentType: string, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: "POST", rawBody, contentType }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "PUT", body }),
   del: <T>(path: string, body?: unknown, options?: RequestOptions) =>

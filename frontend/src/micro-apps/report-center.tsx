@@ -294,7 +294,7 @@ function OverviewView({
       <section className="rounded-lg border bg-card p-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <Activity className="size-4 text-primary" />
-          ② 增量更新 · 未重挂证据
+          ② 运行时同步 · 无需重新部署
         </h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg border bg-muted/40 p-3 text-center">
@@ -303,13 +303,12 @@ function OverviewView({
           </div>
           <div className="rounded-lg border bg-muted/40 p-3 text-center">
             <p className="font-mono text-xl font-semibold tabular-nums leading-none">×{updateCount}</p>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">update 推送次数</p>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">上下文与页面同步次数</p>
           </div>
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-          {updateCount > 0
-            ? `最近一次推送 ${lastUpdateAt}。切换左侧菜单或主应用主题, 计时器持续走秒即为「增量更新·未重挂」的实证。`
-            : "本子应用实现 lifecycle.update 契约: 子路径/主题/菜单变化时容器只推送新 props 不重挂。切换左侧菜单试试。"}
+          {updateCount > 0 && `最近一次同步 ${lastUpdateAt}。`}
+          授权上下文最长有效 30 秒，宿主约每 20 秒重新核对；路径或主题变化也会同步。计数增加不代表上传新版本、重新下载代码或重挂页面。
         </p>
       </section>
 
@@ -504,7 +503,7 @@ function SharedRuntimeView({
             <ArrowUpRight className="size-3.5" />
           </Button>
           <span className="font-mono">
-            挂载时钟 {seconds}s · update ×{updateCount}
+            挂载时钟 {seconds}s · 运行时同步 ×{updateCount}
             {updateCount > 0 && ` · 最近 ${lastUpdateAt}`}
           </span>
         </div>

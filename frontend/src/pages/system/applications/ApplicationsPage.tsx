@@ -53,7 +53,7 @@ import { asArray } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { useAuthStore } from "@/stores/auth"
+import { hostEsmEntryForCode } from "@/micro-apps/registry"
 import { ApplicationReleasesPanel } from "./ApplicationReleasesPanel"
 import type { ApplicationRecord } from "@/api/types"
 
@@ -70,20 +70,13 @@ const appSchema = z
     description: z.string().max(255).optional(),
     sortOrder: z.coerce.number().int().min(0).max(9999),
     status: z.enum(["ENABLED", "DISABLED"]),
-    runtimeMode: z.enum(["IFRAME", "TRUSTED"]),
     entryType: z.enum(["ESM", "HTML"]),
     entryUrl: z.string().max(500).optional(),
   })
   .superRefine((v, ctx) => {
-    if (v.runtimeMode === "IFRAME" && v.entryType === "ESM") {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryType"], message: "iframe 隔离应用仅支持 HTML 入口" })
-    }
-    // HTML 入口留空时，后端按应用编码使用同源静态目录约定。
-    if (v.entryType === "HTML") {
-      const url = (v.entryUrl ?? "").trim()
-      if (url && !/^(https?:\/\/|\/)/i.test(url)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryUrl"], message: "入口地址需以 http(s):// 或 / 开头" })
-      }
+    const url = (v.entryUrl ?? "").trim()
+    if (url && !/^(https?:\/\/|\/)/i.test(url)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryUrl"], message: "入口地址需以 http(s):// 或 / 开头" })
     }
   })
 type AppForm = z.infer<typeof appSchema>
@@ -92,10 +85,12 @@ type AppForm = z.infer<typeof appSchema>
 const isMicroApp = (app: ApplicationRecord) =>
   app.basePath?.replace(/\/+$/, "") === `/micro/${app.code}`
 
+// ESM 随宿主构建；只有 HTML 微应用使用独立版本上传。
+const isHostEsm = (app: ApplicationRecord) => isMicroApp(app) && app.entryType === "ESM"
+
 export default function ApplicationsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const canManageTrusted = useAuthStore((s) => !!(s.profile?.tenant.isPlatform || s.profile?.user.isSuperAdmin))
 
   const listQuery = useQuery({
     queryKey: ["applications"],
@@ -110,17 +105,16 @@ export default function ApplicationsPage() {
   const [quickSetup, setQuickSetup] = React.useState(true)
   const form = useForm<AppForm>({
     resolver: zResolver(appSchema),
-    defaultValues: { code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", runtimeMode: "IFRAME", entryType: "HTML", entryUrl: "" },
+    defaultValues: { code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" },
   })
   const entryTypeValue = form.watch("entryType")
-  const runtimeModeValue = form.watch("runtimeMode")
   const codeValue = form.watch("code")
   const useQuickSetup = !editing && entryTypeValue === "HTML" && quickSetup
 
   const openCreate = () => {
     setEditing(null)
     setQuickSetup(true)
-    form.reset({ code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", runtimeMode: "IFRAME", entryType: "HTML", entryUrl: "" })
+    form.reset({ code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" })
     setDialogOpen(true)
   }
   const openEdit = (a: ApplicationRecord) => {
@@ -134,8 +128,7 @@ export default function ApplicationsPage() {
       description: a.description ?? "",
       sortOrder: a.sortOrder ?? 0,
       status: a.status,
-      runtimeMode: a.runtimeMode ?? "IFRAME",
-      entryType: a.entryType === "HTML" ? "HTML" : "ESM",
+      entryType: a.entryType === "ESM" ? "ESM" : "HTML",
       entryUrl: a.entryUrl ?? "",
     })
     setDialogOpen(true)
@@ -143,18 +136,21 @@ export default function ApplicationsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (values: AppForm) => {
-      const quick = !editing && values.entryType === "HTML" && quickSetup
+      const esm = values.entryType === "ESM"
+      const quick = !editing && !esm && quickSetup
       const payload = {
         code: values.code,
         name: values.name,
         icon: values.icon || "LayoutGrid",
-        basePath: quick ? `/micro/${values.code}` : values.basePath || "",
+        basePath: !editing && (quick || esm) ? `/micro/${values.code}` : values.basePath || "",
         description: values.description || "",
         sortOrder: values.sortOrder,
         status: values.status,
-        runtimeMode: values.runtimeMode,
-        entryType: values.entryType,
-        entryUrl: quick ? `/sub-apps/${values.code}/index.html` : values.entryUrl?.trim() || "",
+        entryType: editing?.entryType ?? values.entryType,
+        runtimeMode: editing?.runtimeMode ?? (esm ? "TRUSTED" as const : "IFRAME" as const),
+        entryUrl: editing ? editing.entryUrl ?? "" : esm
+          ? hostEsmEntryForCode(values.code) ?? ""
+          : `/sub-apps/${values.code}/unreleased/index.html`,
         autoCreateMenu: quick,
       }
       if (editing) {
@@ -162,16 +158,19 @@ export default function ApplicationsPage() {
         return null
       }
       /* create 返回新建应用记录(含 id), 供 toast 引导直接跳转菜单配置 */
-      const created = (await applicationsApi.create(payload)) as { id?: string } | null | undefined
-      return { id: created?.id ?? null, quick }
+      const created = await applicationsApi.create(payload)
+      return { id: created.id, quick, entryType: values.entryType, application: created }
     },
     onSuccess: (created) => {
-      if (created?.id) {
+      if (created?.entryType === "HTML") {
+        toast.success("应用已创建，请上传并激活 HTML 版本")
+        setReleasesApplication(created.application)
+      } else if (created?.id) {
         toast.success("应用创建成功", {
-          description: created.quick ? "首页菜单已创建，下一步配置授权" : "下一步: 为应用配置菜单树",
+          description: "ESM 模块随宿主构建；下一步配置菜单与授权",
           action: {
-            label: created.quick ? "去授权" : "去配置菜单",
-            onClick: () => navigate(created.quick ? "/system/authorizations" : `/system/menus?applicationId=${created.id}`),
+            label: "去配置菜单",
+            onClick: () => navigate(`/system/menus?applicationId=${created.id}`),
           },
         })
       } else {
@@ -201,7 +200,7 @@ export default function ApplicationsPage() {
     <div>
       <PageHeader
         title="应用管理"
-        description="接入平台的子应用,应用通过菜单与授权体系对接"
+        description="选择宿主 ESM 或上传 HTML 版本包，再配置菜单与授权"
         icon={<LayoutGrid className="size-5" />}
         actions={
           <Button onClick={openCreate}>
@@ -256,7 +255,7 @@ export default function ApplicationsPage() {
                 <Badge variant="secondary" className="text-[11px] tabular-nums">{a.menuCount} 菜单</Badge>
                 <Badge variant="outline" className="text-[11px] tabular-nums">排序 {a.sortOrder}</Badge>
                 {isMicroApp(a) ? (
-                  <Badge variant="outline" className="text-[11px]">{a.runtimeMode === "TRUSTED" ? "自有可信" : "iframe 隔离"}</Badge>
+                  <Badge variant="outline" className="text-[11px]">{a.entryType === "ESM" ? "宿主 ESM" : "iframe 隔离"}</Badge>
                 ) : (
                   <Badge variant="outline" className="text-[11px]">宿主内置</Badge>
                 )}
@@ -275,7 +274,7 @@ export default function ApplicationsPage() {
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-[20rem]">
-                      <span className="block text-xs">HTML 入口 · {a.runtimeMode === "TRUSTED" ? "宿主内可信执行" : "iframe 隔离执行"}</span>
+                      <span className="block text-xs">HTML 入口 · iframe 隔离执行</span>
                       <span className="mt-0.5 block font-mono text-xs break-all">{a.entryUrl ?? "(未配置)"}</span>
                     </TooltipContent>
                   </Tooltip>
@@ -304,7 +303,11 @@ export default function ApplicationsPage() {
                   <TooltipContent>为该应用配置菜单</TooltipContent>
                 </Tooltip>
               </div>
-              {isMicroApp(a) && (
+              {isHostEsm(a) ? (
+                <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
+                  随宿主发布 · 使用宿主构建版本
+                </div>
+              ) : isMicroApp(a) && (
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setReleasesApplication(a)}>
                   <Rocket className="size-3.5" />
                   发布版本
@@ -327,7 +330,7 @@ export default function ApplicationsPage() {
                       <ListTree className="size-4" />
                       配置菜单
                     </DropdownMenuItem>
-                    {isMicroApp(a) && (
+                    {isMicroApp(a) && !isHostEsm(a) && (
                       <DropdownMenuItem onClick={() => setReleasesApplication(a)}>
                         <Rocket className="size-4" />
                         发布版本
@@ -356,7 +359,13 @@ export default function ApplicationsPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form id="app-form" onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
+            <form id="app-form" onSubmit={form.handleSubmit((v) => {
+              if (!editing && v.entryType === "ESM" && !hostEsmEntryForCode(v.code)) {
+                form.setError("code", { message: "当前宿主构建中没有与此编码同名的 ESM 模块" })
+                return
+              }
+              saveMutation.mutate(v)
+            })} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -415,8 +424,8 @@ export default function ApplicationsPage() {
                           placeholder="如 /athena"
                           className="font-mono"
                           {...field}
-                          value={useQuickSetup ? `/micro/${codeValue || "{code}"}` : field.value}
-                          readOnly={useQuickSetup}
+                          value={!editing && (useQuickSetup || entryTypeValue === "ESM") ? `/micro/${codeValue || "{code}"}` : field.value}
+                          readOnly={!editing && (useQuickSetup || entryTypeValue === "ESM")}
                         />
                       </FormControl>
                       <FormMessage />
@@ -425,95 +434,35 @@ export default function ApplicationsPage() {
                 />
               </div>
 
-              {/* 微前端入口: entry_type + entry_url (契约 21-a/21-c) */}
-              <FormField
-                control={form.control}
-                name="runtimeMode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>运行方式</FormLabel>
-                    <Select
-                      value={field.value}
-                      disabled={!canManageTrusted}
-                      onValueChange={(value) => {
-                        field.onChange(value)
-                        if (value === "IFRAME") form.setValue("entryType", "HTML", { shouldValidate: true })
-                      }}
-                    >
-                      <FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="IFRAME">iframe · 默认隔离</SelectItem>
-                        <SelectItem value="TRUSTED">自有可信 · 宿主内执行</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {runtimeModeValue === "TRUSTED"
-                        ? "仅适用于平台自有、已审查的可信应用，HTML / ESM 会在宿主内执行。"
-                        : "默认通过 iframe 隔离第三方 HTML 页面；平台管理员可显式标记自有可信应用。"}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {editing && isHostEsm(editing) ? (
+                <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm">
+                  <p className="font-medium">第一方 ESM · 宿主直挂</p>
+                  <p className="mt-1 text-xs text-muted-foreground">模块入口随宿主构建部署，不需要单独上传版本。</p>
+                </div>
+              ) : <>
+              {editing ? (
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">接入类型：{!isMicroApp(editing) ? "宿主内置路由" : entryTypeValue === "ESM" ? "ESM · 随宿主构建" : "HTML · 上传版本包"}</div>
+              ) : <FormField control={form.control} name="entryType" render={({ field }) => (
+                <FormItem><FormLabel>接入类型</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent><SelectItem value="HTML">HTML · 上传版本包 / iframe</SelectItem><SelectItem value="ESM">ESM · 宿主构建 / 直挂</SelectItem></SelectContent>
+                  </Select>
+                  <FormDescription>ESM 仅适用于已纳入宿主构建并由平台管理员审核的第一方模块。</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )} />}
               {entryTypeValue === "HTML" && !editing && (
                 <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-3 py-2.5">
                   <div>
                     <p className="text-sm font-medium">快速接入</p>
-                    <p className="text-xs text-muted-foreground">按编码生成挂载路径、静态入口和首页菜单</p>
+                    <p className="text-xs text-muted-foreground">按编码生成挂载路径和首页菜单，上传版本后才可访问</p>
                   </div>
                   <Switch checked={quickSetup} onCheckedChange={setQuickSetup} aria-label="快速接入微应用" />
                 </div>
               )}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="entryType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>入口类型</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="ESM" disabled={runtimeModeValue !== "TRUSTED"}>ESM · 可信模块</SelectItem>
-                          <SelectItem value="HTML">HTML · 微前端页面</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>{runtimeModeValue === "TRUSTED" ? "自有可信应用可接入 HTML 页面或 ESM 模块" : "iframe 隔离应用使用 HTML 页面入口"}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="entryUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        入口地址
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="/sub-apps/example/index.html"
-                          className="font-mono"
-                          value={useQuickSetup ? `/sub-apps/${codeValue || "{code}"}/index.html` : field.value ?? ""}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          readOnly={useQuickSetup}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        留空时使用 /sub-apps/{"{"}code{"}"}/index.html；自定义地址需以 http(s):// 或 / 开头
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              {!editing && entryTypeValue === "ESM" ? <p className="text-xs leading-relaxed text-muted-foreground">应用编码自动对应宿主内同名 ESM 模块。先将模块加入宿主构建；创建时无需填写入口。</p> : !editing && entryTypeValue === "HTML" ? <p className="text-xs leading-relaxed text-muted-foreground">HTML 应用使用 iframe 隔离。创建后上传 ZIP 或 tar.gz，系统生成固定版本入口；未激活前不会加载占位入口。</p> : null}
+              </>}
               <FormField
                 control={form.control}
                 name="description"
@@ -563,7 +512,13 @@ export default function ApplicationsPage() {
                   )}
                 />
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">使用 /micro/应用编码 路由的微应用可登记、预检并激活独立版本；宿主内置页面随主前端发布。租户、组织和角色授权需另行配置。</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">{editing && !isMicroApp(editing)
+                ? "宿主内置路由随宿主前端发布；此处只编辑应用元数据。"
+                : editing && isHostEsm(editing)
+                ? "该第一方模块随宿主前端发布；租户、组织和角色授权仍由平台配置。"
+                : entryTypeValue === "ESM"
+                  ? "ESM 模块需先加入宿主构建，创建后配置菜单与授权；代码更新随宿主部署。"
+                  : "HTML 微应用创建后上传 ZIP 或 tar.gz，预检、激活并配置授权；版本文件独立于宿主镜像。"}</p>
             </form>
           </Form>
           <DialogFooter>
@@ -606,7 +561,7 @@ export default function ApplicationsPage() {
 /* ============ 新应用接入四步曲引导卡 ============ */
 
 const ONBOARDING_STEPS: { title: string; desc: string; to: string | null }[] = [
-  { title: "登记 / 发布应用", desc: "登记应用，按环境注册、预检并手动激活版本", to: null },
+  { title: "登记应用", desc: "ESM 随宿主发布；HTML 按环境上传、预检并激活", to: null },
   { title: "配置菜单树", desc: "按需增加子页面、目录与按钮", to: "/system/menus" },
   { title: "授权租户 / 组织", desc: "把应用授权给租户, 可细化到指定组织", to: "/system/authorizations" },
   { title: "角色绑定菜单", desc: "给角色分配菜单与按钮权限, 用户即见菜单", to: "/system/roles" },

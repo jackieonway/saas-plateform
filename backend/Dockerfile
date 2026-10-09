@@ -17,7 +17,7 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata curl \
     && rm -rf /var/lib/apt/lists/*
-RUN groupadd --system dante && useradd --system --gid dante --no-create-home dante
+RUN groupadd --system --gid 10001 dante && useradd --system --uid 10001 --gid dante --no-create-home dante
 ENV APP_ENV=production APPLICATION_ENVIRONMENT=production TZ=Asia/Shanghai RUST_LOG=info BIND_ADDR=0.0.0.0:3001
 COPY --from=build /app/target/release/dante-cloud-backend /usr/local/bin/dante-cloud-backend
 USER dante

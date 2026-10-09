@@ -1,16 +1,24 @@
 # 应用独立版本打包与部署
 
-应用和授权使用稳定的 `applications.id`；静态版本文件、预检记录和环境部署指针分别管理。发布和回滚只切换应用入口，不重建宿主镜像，也不自动授予租户、组织或角色权限。完整管理 API、来源限制与预检诊断见[独立发布 API](./application-release-api.md)。
+应用和授权使用稳定的 `applications.id`；静态版本文件、预检记录和环境部署指针分别管理。管理页面现在接收 ZIP 或 tar.gz 构建包，服务端自动解压、登记入口与资源；发布和回滚只切换应用入口，不重建宿主镜像，也不自动授予租户、组织或角色权限。完整管理 API、来源限制与预检诊断见[独立发布 API](./application-release-api.md)。
+
+## 管理页面上传流程
+
+1. 子应用构建为可独立运行的 HTML 静态文件，包根目录放 `index.html`，也可在压缩包内多包一层 `dist/`。资源使用相对路径，不引用开发服务器的 `/src/` 或可变的 `/latest/`。
+2. 在“应用管理 → 发布版本”选择环境、填写新版本号并选择 `.zip` 或 `.tar.gz` 文件，点击“上传并登记”。服务端从压缩包生成资源清单，写入 `MICRO_APPS_DIR/<应用编码>/versions/<版本>/`，并自动发起 HTTP 预检。上传不会激活版本。
+3. 确认预检状态为 `PASSED`，再点击“激活”。失败时可查看诊断并重新预检；回滚仍使用版本记录中的上一版本。
+
+上传大小最多 20 MiB，解压后最多 16 MiB，单文件最多 4 MiB，入口以外最多 48 个文件。系统拒绝路径穿越、链接、特殊文件、重复路径和常见敏感文件。相同版本号在其它环境上传完全相同的文件时复用已有目录；文件不同则拒绝，须使用新版本号。发布服务须对 `MICRO_APPS_DIR` 有写权限，静态网关只需读权限。
 
 ## 运行方式与接入前提
 
-新建和迁移后的应用默认 `IFRAME`，只可激活 HTML 版本。独立 HTML 页面通过[iframe 桥接 SDK](../examples/micro-app-sdk/iframe-bridge.js)接收授权上下文并处理续期、更新与卸载，调用 `DanteMicroIframe.connect` 时明确配置应用编码、允许宿主 origin 和生命周期；授权字段见[MicroProps 接入说明](./micro-app-context-props.md)，接入方式见[微前端接入指南](./microfrontend-integration.md)。平台自有、已经审查的应用可由平台管理员在应用编辑表单显式选择 `TRUSTED`，此时支持在宿主执行 HTML 生命周期或 ESM 模块。应用编码、入口来源或仓库示例名称都不会自动赋予信任。
+新建微应用时选择 `ESM` 或 `HTML`，不单独选择运行方式或模块入口。第一方 ESM 模块先以应用编码命名（例如 `report-center.tsx`）并加入宿主前端构建；创建应用时系统按编码关联模块，它随宿主部署，不上传独立版本包。HTML 应用创建后上传 ZIP 或 tar.gz，由系统解压、预检并激活，运行时使用 iframe 隔离。独立 HTML 页面通过[iframe 桥接 SDK](../examples/micro-app-sdk/iframe-bridge.js)接收授权上下文并处理续期、更新与卸载，调用 `DanteMicroIframe.connect` 时配置应用编码、允许宿主 origin 和生命周期；授权字段见[MicroProps 接入说明](./micro-app-context-props.md)，接入方式见[微前端接入指南](./microfrontend-integration.md)。报表中心是随宿主构建的第一方 ESM 示例。
 
-Vue、jQuery 现有示例导出宿主 HTML 生命周期，使用这些现有产物时须先由管理员明确标记自有可信；若保持默认 iframe，需要把子应用改为独立渲染页面并使用 iframe SDK。业务后端仍需校验应用 token 受众、组织、权限和数据授权，见[校验示例](../examples/app-backend/authorize.mjs)。
+Vue、jQuery、工单的当前发布版本均使用 iframe 桥接 SDK；旧的宿主生命周期产物只作历史兼容，不作为新的上传包。业务后端仍需校验应用 token 受众、组织、权限和数据授权，见[校验示例](../examples/app-backend/authorize.mjs)。
 
-## 不可覆盖的版本打包
+## 命令行打包工具（现有集成兼容）
 
-先由子应用自己的构建流程生成浏览器可运行的静态目录。HTML、脚本和样式使用相对资源地址；例如 `./assets/main.js`，不要引用开发服务器的 `/src/` 或共享的 `/latest/` 路径。将入口和全部动态 import、CSS 依赖所需文件放入构建目录，然后执行：
+管理页面上传是前端微应用的常规发布方式。现有 `package-microapp.mjs` 仍供自动化集成和历史部署使用；它接收静态目录并生成版本目录及 `release.json`，不会自动预检或激活。先由子应用自己的构建流程生成浏览器可运行的静态目录；HTML、脚本和样式使用相对资源地址，然后执行：
 
 ```powershell
 node scripts/package-microapp.mjs --app example --environment development --version 1.0.0 --input path/to/example/dist
@@ -28,14 +36,14 @@ deploy/micro-apps/
             └── release.json
 ```
 
-`release.json` 是可直接发送到 `POST /api/applications/{id}/releases` 的请求体，不含应用授权、运行方式或客户端密钥。生成的入口为 `/sub-apps/example/versions/1.0.0/index.html`，资源清单包含构建目录中除入口以外的所有文件，并按入口目录生成相对 URL。JS/MJS/CJS 登记为 `SCRIPT`，CSS 为 `STYLE`，其它静态文件为 `ASSET`；文件名会进行 URL 编码。
+`release.json` 是历史 JSON 登记接口的请求体，供现有集成兼容使用；管理页面不再要求手填这些字段。生成的入口为 `/sub-apps/example/versions/1.0.0/index.html`，资源清单包含构建目录中除入口以外的所有文件，并按入口目录生成相对 URL。JS/MJS/CJS 登记为 `SCRIPT`，CSS 为 `STYLE`，其它静态文件为 `ASSET`；文件名会进行 URL 编码。
 
 可选参数如下：
 
 | 参数 | 用途 |
 | --- | --- |
 | `--output-root /srv/dante/micro-apps` | 把独立版本发布到指定存储根目录 |
-| `--entry-type ESM --entry assets/entry.mjs` | 指定可信 ESM 入口；缺省 ESM 入口为 `entry.mjs` |
+| `--entry-type ESM --entry assets/entry.mjs` | 旧集成的可信 ESM 归档参数；新建 ESM 应随宿主构建 |
 | `--entry pages/index.html` | 指定构建目录内的 HTML 入口 |
 | `--health-url /micro-services/example/health` | 增加服务端 HTTP 健康检查 |
 
@@ -47,14 +55,15 @@ deploy/micro-apps/
 
 ## Caddy 与 Docker Compose
 
-`frontend/Dockerfile` 使用[deploy/Caddyfile](../deploy/Caddyfile)。Compose 把 `./deploy/micro-apps` 只读挂载到 web 容器的 `/micro-apps`。独立团队可在 `.env.docker` 设置 `MICRO_APPS_DIR=/srv/dante/micro-apps`，让打包器的 `--output-root` 使用同一宿主机目录。因此独立子应用版本不进入宿主前端镜像；首次更新网关配置需要重建 web 镜像，后续新增版本只需写入挂载目录，无需再次构建宿主。
+`frontend/Dockerfile` 使用[deploy/Caddyfile](../deploy/Caddyfile)。Compose 要求显式设置 `MICRO_APPS_DIR` 为宿主机上的持久绝对目录，并将其以可写方式挂载到后端、以只读方式挂载到 web 容器的 `/micro-apps`；不要把它放在会被替换的前端源码或构建目录内。宿主目录须预先存在，并允许后端容器中的 `dante` 用户（UID/GID 10001）写入；web 只需读取。首次安装时由部署人员创建目录并设置属主或等效 ACL，已有版本文件仍须保留。因此独立子应用版本不进入宿主前端镜像；首次更新网关配置需要重建 web 镜像，后续在管理页面上传新版本无需再次构建宿主。本地 Vite 联调从 `deploy/micro-apps` 读取上传版本，旧的 `frontend/public/sub-apps` 仅保留演示静态资源。
+
+例如 Linux 宿主机首次部署且使用 `/srv/dante/micro-apps` 时，先执行 `sudo install -d -m 0755 -o 10001 -g 10001 /srv/dante/micro-apps`。若目录已经存在，应保留其中的历史版本并单独配置写入权限，不要清空目录。
 
 ```powershell
 # 第一次安装版本网关配置
 docker compose up -d --build
 
-# 已安装版本网关后，发布新应用文件
-node scripts/package-microapp.mjs --app example --environment development --version 1.0.1 --input path/to/example/dist
+# 已安装版本网关后，在应用管理页面上传 ZIP 或 tar.gz 构建包
 ```
 
 网关先按 `/sub-apps/<应用>/versions/<版本>/*` 从 `/micro-apps` 读取版本文件；存量 `/sub-apps/*` 继续读取镜像的 `/srv/sub-apps`，迁移期旧入口仍可使用。两个微应用路径均无 SPA fallback：不存在的 HTML、JS、CSS 返回 404；只有宿主路由会回退到宿主 `index.html`。HTML 和目录首页使用 `Cache-Control: no-cache`，成功的版本静态资源使用 `public, max-age=31536000, immutable`，错误返回 `no-store`。保留历史版本文件，使尚未刷新 profile 的用户继续访问原版本资源。
@@ -94,9 +103,9 @@ MICRO_ALLOWED_ORIGINS=https://saas.example.com,https://cdn.example.com
 ## 登记、人工预检、发布与回滚
 
 1. 登记应用身份、菜单和 OAuth 关联，再完成租户、组织、角色授权。发布动作不会代替授权。
-2. 打包并部署新的版本目录。检查浏览器和平台后端都可访问相同入口与资源。
-3. 在应用卡片选择“发布版本”，选择对应环境并登记请求体；也可通过平台 session Bearer 调用注册 API，发送 `release.json`。新版本状态是 DRAFT，不自动联网或激活。
-4. 手工预检，逐项检查状态、MIME、字节、健康检查、来源及 CORS。HTTP 200 可能表示 FAILED，必须看 `validationStatus`。
+2. 将构建目录压缩为 ZIP 或 tar.gz，在应用卡片的“发布版本”中选择环境、版本号和构建包并上传。系统生成固定版本目录与资源清单，并自动预检；不自动激活。
+3. 检查浏览器和平台后端都能访问版本入口与资源。
+4. 查看自动预检的逐项状态、MIME、字节、来源及 CORS。HTTP 200 也可能对应 `FAILED`，必须看 `validationStatus`。
 5. 预检 PASSED 后人工激活。服务器会再检；失败保留当前部署并保存诊断。
 6. 浏览器刷新 profile 后按版本 ID 卸载旧实例、挂载新入口。已挂载旧用户仍访问旧版本目录，不删除旧目录。
 7. 回滚会重新验证 `previousReleaseId` 指向的上一部署，再交换指针；也可手工激活任意历史 PASSED 版本。iframe 应用不能回滚 ESM，停用应用不能切换部署。
@@ -110,7 +119,7 @@ node scripts/package-microapp.mjs --app vue --environment development --version 
 node scripts/package-microapp.mjs --app vue --environment development --version 1.0.1 --input mini-services/micro-vue/public
 ```
 
-两个 `release.json` 各含 `app.js` 与 `vendor/vue.global.prod.js`，分别指向 `/sub-apps/vue/versions/1.0.0/index.html` 和 `/sub-apps/vue/versions/1.0.1/index.html`。上述命令用相同源码检验独立版本归档和指针切换；真实代码变更应先由子应用构建，再给新版本号打包。运行现有 Vue 示例时，管理员须明确标记 TRUSTED。
+两个 `release.json` 各含 `app.js` 与 `vendor/vue.global.prod.js`，分别指向 `/sub-apps/vue/versions/1.0.0/index.html` 和 `/sub-apps/vue/versions/1.0.1/index.html`。上述旧命令用于检验独立版本归档和指针切换；实际启用时应使用已接入 iframe SDK 的当前构建，并给变更分配新版本号。
 
 打包器的真实文件测试不使用既有输出：
 

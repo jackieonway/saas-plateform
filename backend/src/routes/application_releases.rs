@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use axum::extract::{Path, Query, State};
+use axum::body::Bytes;
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -13,12 +14,15 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
 use crate::releases::{self, FetchPolicy, ReleaseRow, Resource, RELEASE_SELECT};
+use crate::release_archives;
 use crate::state::AppState;
 use crate::util::audit;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/applications/{id}/releases", get(list).post(register))
+        .route("/api/applications/{id}/releases/upload", post(upload)
+            .layer(DefaultBodyLimit::max(release_archives::MAX_ARCHIVE_BYTES)))
         .route(
             "/api/applications/{id}/releases/{release_id}/preflight",
             post(preflight),
@@ -110,6 +114,92 @@ async fn register(
     authorize(&state, &user).await?;
     let app = uuid(&id)?;
     ensure_application(&state, app).await?;
+    register_fields(&state, &user, &headers, app, body).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UploadQuery {
+    environment: String,
+    version: String,
+    entry_type: String,
+    format: String,
+}
+
+async fn upload(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(query): Query<UploadQuery>,
+    archive: Bytes,
+) -> Result<Json<Value>, AppError> {
+    authorize(&state, &user).await?;
+    let app = uuid(&id)?;
+    let row: Option<(String, String, String, String)> = sqlx::query_as(
+        "SELECT code,base_path,entry_type,runtime_mode FROM applications WHERE id=$1"
+    ).bind(app).fetch_optional(&state.pool).await?;
+    let (code, base_path, app_entry_type, runtime_mode) = row.ok_or_else(|| AppError::not_found("应用不存在"))?;
+    if code.len() < 2 || code.len() > 32
+        || !code.bytes().next().is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        || !code.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-') {
+        return Err(AppError::bad_request("应用编码不适合静态版本目录"));
+    }
+    if base_path.trim_end_matches('/') != format!("/micro/{code}") {
+        return Err(AppError::bad_request("只有独立微应用可以上传前端压缩包"));
+    }
+    if query.entry_type != "HTML" || app_entry_type != "HTML" || runtime_mode != "IFRAME" {
+        return Err(AppError::bad_request("仅 HTML iframe 微应用支持上传版本包；ESM 随宿主构建发布"));
+    }
+    let environment = releases::validate_environment(&query.environment)?;
+    let version = releases::validate_version(&query.version)?;
+    let format = query.format;
+    let entry_type = query.entry_type.clone();
+    let root = state.config.micro_apps_dir.clone();
+    let prepared = tokio::task::spawn_blocking(move || {
+        release_archives::prepare(&archive, &format, &entry_type)
+    }).await.map_err(|_| AppError::bad_request("压缩包处理失败"))??;
+    let entry_url = format!("/sub-apps/{code}/versions/{version}/{}", prepared.entry);
+    let body = RegisterBody {
+        environment,
+        version: version.clone(),
+        entry_type: query.entry_type,
+        entry_url,
+        health_url: None,
+        resources: prepared.resources.clone(),
+    };
+    let registered_environment = body.environment.clone();
+    let registered_version = body.version.clone();
+    let (destination, created) = tokio::task::spawn_blocking(move || {
+        release_archives::write(&prepared, &root, &code, &version)
+    }).await.map_err(|_| AppError::bad_request("版本文件写入失败"))??;
+    let registered = register_fields(&state, &user, &headers, app, body).await;
+    if registered.is_err() && created {
+        // A database commit may have succeeded even if the final response lookup failed.
+        // Keep files unless the database confirms this release was not registered.
+        let exists: Result<bool, _> = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM application_releases WHERE application_id=$1 AND environment=$2 AND version=$3)"
+        ).bind(app).bind(registered_environment).bind(registered_version)
+            .fetch_one(&state.pool).await;
+        if matches!(exists, Ok(false)) {
+            tokio::task::spawn_blocking(move || release_archives::remove_uploaded(&destination))
+                .await.ok();
+        }
+    }
+    let Json(row) = registered?;
+    let id = row["id"].as_str().and_then(|value| value.parse::<Uuid>().ok())
+        .ok_or_else(|| AppError::conflict("版本已登记，但无法读取其 ID"))?;
+    let checked = check_and_save(&state, app, id).await?;
+    Ok(Json(json!(checked)))
+}
+
+async fn register_fields(
+    state: &AppState,
+    user: &CurrentUser,
+    headers: &HeaderMap,
+    app: Uuid,
+    body: RegisterBody,
+) -> Result<Json<Value>, AppError> {
     let environment = releases::validate_environment(&body.environment)?;
     let version = releases::validate_version(&body.version)?;
     if !["HTML", "ESM"].contains(&body.entry_type.as_str()) {
@@ -154,15 +244,15 @@ async fn register(
         .bind(health_url).bind(json!(resources)).bind(user.user_id).fetch_one(&mut *tx).await?;
     write_audit(
         &mut tx,
-        &user,
-        &headers,
+        user,
+        headers,
         app,
         "REGISTER_APPLICATION_RELEASE",
         &format!("application={app} environment={environment} version={version} release={id}"),
     )
     .await?;
     tx.commit().await?;
-    Ok(Json(json!(release(&state, app, id).await?)))
+    Ok(Json(json!(release(state, app, id).await?)))
 }
 
 async fn check_and_save(state: &AppState, app: Uuid, id: Uuid) -> Result<ReleaseRow, AppError> {

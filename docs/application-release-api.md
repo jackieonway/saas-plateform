@@ -6,9 +6,9 @@ Phase 9 将应用身份和授权、发布版本、当前部署分别保存。`ap
 
 以下管理 API 均使用平台 session Bearer token，同时要求 `system:application` 权限和平台租户上下文；超管可执行。普通租户管理员即使拥有应用管理权限，也不能调用发布管理 API。
 
-应用定义的 `runtimeMode` 为 `IFRAME | TRUSTED`。创建时缺省为 `IFRAME`；0021 迁移也将所有存量应用设置为 `IFRAME`。平台管理员审核自有代码后，显式调用 `PUT /api/applications/{id}`，传入 `{"runtimeMode":"TRUSTED"}`，才能让宿主执行该应用的 HTML/ESM。仓库 Vue、jQuery、report-center 示例升级后也需要管理员逐个明确标记，不依据应用编码或入口 URL 自动推断信任。
+管理界面新建时选择 `ESM` 或 `HTML`，不单独选择运行方式或模块入口。ESM 是已加入宿主构建、与应用编码同名的第一方模块，以 `TRUSTED` 方式直挂，随宿主部署；报表中心使用此方式。系统管理和消息中心由宿主路由直接承载，也无需模块入口。HTML 应用通过 ZIP 或 tar.gz 上传独立版本，以 `IFRAME` 方式隔离；Vue、jQuery 和独立工单使用此方式。数据库及旧 API 仍保留 `runtimeMode` 字段，供历史记录和兼容集成使用。
 
-`IFRAME` 应用只能启用 HTML 发布版本；ESM 的启用和回滚都要求 `TRUSTED`。运行模式实际变更会撤销该应用当前的应用 token，下一次内省或授权上下文请求即拒绝旧 token；平台 session 保持有效。重写相同运行模式、普通版本启用和回滚不会撤销应用 token。0021 新增默认 IFRAME 字段本身保留已有应用 token，存量 token 最长经过 5 分钟 TTL 兼容窗到期；升级宿主立即按默认 IFRAME 处理这些应用。随后任何明确的运行模式 UPDATE 均按前述即时撤销规则执行。
+新上传接口只接受 `HTML + IFRAME` 应用的 HTML 包。旧 JSON 登记 API 中 ESM 的启用和回滚仍要求 `TRUSTED`，用于历史记录兼容。运行模式实际变更会撤销该应用当前的应用 token，下一次内省或授权上下文请求即拒绝旧 token；平台 session 保持有效。普通版本启用和回滚不会撤销应用 token。
 
 ## 配置
 
@@ -23,6 +23,10 @@ Phase 9 将应用身份和授权、发布版本、当前部署分别保存。`ap
 宿主环境或注册环境为 `production` 时，所有预检 URL 必须为 HTTPS。远程来源不在缺省允许列表中；开发环境本地 HTTP 也须与配置的 origin 完全一致。
 
 ## 版本注册
+
+HTML 静态微应用使用 `POST /api/applications/{id}/releases/upload?environment=development&version=1.0.0&entryType=HTML&format=zip`。请求体直接是 ZIP 或 tar.gz 文件字节，分别传 `format=zip` 或 `format=tar.gz`；包须包含 `index.html`。服务端安全解压到 `MICRO_APPS_DIR`，自动生成入口和资源清单，随即执行 HTTP 预检，返回 `PASSED` 或 `FAILED` 发布行；不会自动激活。ESM 模块随宿主构建，此上传接口拒绝 ESM。后端容器须具有该目录的写权限，网关只读。文件上限和操作顺序见[独立版本部署](./application-independent-deployment.md)。
+
+下面的 JSON 登记接口保留给现有集成及已经自行托管的第三方 HTTP 服务；前端静态包不再通过管理页面手填入口和资源。
 
 `POST /api/applications/{id}/releases`
 

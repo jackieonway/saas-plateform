@@ -306,15 +306,6 @@ export interface ApplicationReleaseRecord {
   createdAt: string
 }
 
-export interface ApplicationReleasePayload {
-  environment: ApplicationEnvironment
-  version: string
-  entryType: ApplicationEntryType
-  entryUrl: string
-  healthUrl?: string
-  resources?: ApplicationReleaseResource[]
-}
-
 export interface ApplicationDeploymentRecord {
   applicationId: string
   environment: ApplicationEnvironment

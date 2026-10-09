@@ -182,8 +182,12 @@ async fn create(
         body.base_path.trim().to_string()
     };
     let default_entry_url = format!("/sub-apps/{code}/index.html");
+    let default_esm_entry_url = format!("/src/micro-apps/{code}.tsx");
     let raw_entry_url = if entry_type == "HTML" && body.entry_url.trim().is_empty() {
         default_entry_url.as_str()
+    } else if entry_type == "ESM" && body.entry_url.trim().is_empty()
+        && base_path == format!("/micro/{code}") {
+        default_esm_entry_url.as_str()
     } else {
         body.entry_url.as_str()
     };
