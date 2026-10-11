@@ -11,6 +11,7 @@ use crate::{error::AppError, extractors::{ApiJson, CurrentUser}, state::AppState
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/regions/versions", get(versions).post(create_version))
+        .route("/api/regions/versions/{version}", axum::routing::delete(delete_version))
         .route("/api/regions", get(list).post(create))
         .route("/api/regions/{id}", axum::routing::put(update).delete(remove))
 }
@@ -21,7 +22,7 @@ async fn manage(state: &AppState, user: &CurrentUser) -> Result<(), AppError> {
 }
 
 async fn versions(State(state): State<AppState>, _user: CurrentUser) -> Result<Json<Value>, AppError> {
-    let rows = sqlx::query("SELECT v.version,v.label,v.source_version,v.imported, count(r.source_id) AS count FROM region_versions v LEFT JOIN regions r ON r.version=v.version GROUP BY v.version ORDER BY v.version DESC")
+    let rows = sqlx::query("SELECT v.version,v.label,v.source_version,v.imported, count(r.source_id) AS count FROM region_versions v LEFT JOIN regions r ON r.version=v.version WHERE v.deleted_at IS NULL GROUP BY v.version ORDER BY v.version DESC")
         .fetch_all(&state.pool).await?;
     Ok(Json(Value::Array(rows.iter().map(|r| json!({
         "version":r.get::<String,_>("version"), "label":r.get::<String,_>("label"),
@@ -44,21 +45,36 @@ async fn create_version(State(state): State<AppState>, user: CurrentUser, ApiJso
     if label.is_empty() || label.chars().count()>100 { return Err(AppError::bad_request("版本名称不能为空且最多100字")); }
     let mut tx=state.pool.begin().await?;
     if let Some(ref source)=body.source_version {
-        let found: bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1)")
+        let found: bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1 AND deleted_at IS NULL)")
             .bind(source).fetch_one(&mut *tx).await?;
         if !found { return Err(AppError::bad_request("来源版本不存在")); }
     }
-    let exists: bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1)")
+    let exists: bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1 AND deleted_at IS NULL)")
         .bind(version).fetch_one(&mut *tx).await?;
     if exists { return Err(AppError::bad_request("版本已存在")); }
-    sqlx::query("INSERT INTO region_versions(version,label,source_version,imported) VALUES($1,$2,$3,true)")
+    let created=sqlx::query("INSERT INTO region_versions(version,label,source_version,imported) VALUES($1,$2,$3,true) ON CONFLICT(version) DO UPDATE SET label=EXCLUDED.label,source_version=EXCLUDED.source_version,imported=true,deleted_at=NULL,updated_at=now() WHERE region_versions.deleted_at IS NOT NULL")
         .bind(version).bind(label).bind(&body.source_version).execute(&mut *tx).await?;
+    if created.rows_affected()!=1 { return Err(AppError::bad_request("版本已存在")); }
     if let Some(ref source)=body.source_version {
         sqlx::query("INSERT INTO regions(version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url) SELECT $1,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url FROM regions WHERE version=$2")
             .bind(version).bind(source).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(Json(json!({"version":version,"label":label,"sourceVersion":body.source_version})))
+}
+
+async fn delete_version(State(state): State<AppState>, user: CurrentUser, Path(version): Path<String>) -> Result<Json<Value>, AppError> {
+    manage(&state,&user).await?;
+    let mut tx=state.pool.begin().await?;
+    let exists:Option<bool>=sqlx::query_scalar("SELECT imported FROM region_versions WHERE version=$1 AND deleted_at IS NULL FOR UPDATE")
+        .bind(&version).fetch_optional(&mut *tx).await?;
+    if exists.is_none() { return Err(AppError::not_found("地区版本不存在")); }
+    let removed=sqlx::query("DELETE FROM regions WHERE version=$1")
+        .bind(&version).execute(&mut *tx).await?.rows_affected();
+    sqlx::query("UPDATE region_versions SET deleted_at=now(),updated_at=now(),imported=true WHERE version=$1")
+        .bind(&version).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(Json(json!({"version":version,"deleted":true,"removedRegions":removed})))
 }
 
 fn row_json(r: &sqlx::postgres::PgRow) -> Value {
@@ -72,7 +88,7 @@ fn row_json(r: &sqlx::postgres::PgRow) -> Value {
 
 async fn list(State(state): State<AppState>, _user: CurrentUser, Query(p): Query<HashMap<String,String>>) -> Result<Json<Value>, AppError> {
     let version=p.get("version").map(String::as_str).unwrap_or("2023");
-    let parent=p.get("parentCode").map(String::as_str).unwrap_or("0");
+    let parent=p.get("parentCode").map(String::as_str).unwrap_or("-1");
     let search=p.get("search").map(|s|s.trim()).filter(|s|!s.is_empty());
     let (page,size,offset)=super::paging(&p);
     let pattern=search.map(|s|format!("%{}%",s));
@@ -104,7 +120,7 @@ fn validate(b: &RegionBody) -> Result<(),AppError> {
 }
 
 async fn check_parent(state:&AppState,b:&RegionBody) -> Result<(),AppError> {
-    let version: bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1)")
+    let version: bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1 AND deleted_at IS NULL)")
         .bind(&b.version).fetch_one(&state.pool).await?;
     if !version { return Err(AppError::bad_request("版本不存在")); }
     if b.parent_code!="0" && b.parent_code!="-1" {

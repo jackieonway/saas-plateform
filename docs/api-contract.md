@@ -186,6 +186,7 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 - `GET /api/regions/versions`：列出地区数据版本及记录数。
 - `POST /api/regions/versions`：创建版本，参数 `version`、`label`、可选 `sourceVersion`；有来源版本时复制其地区数据。
-- `GET /api/regions?version=2023&parentCode=0&page=1&size=50`：按父级编码分页加载；可传 `search` 搜索编码、名称或拼音。
+- `GET /api/regions?version=2023&parentCode=-1&page=1&size=50`：默认加载国家级；选择国家后以 `parentCode=0` 加载省级，之后按父级编码分页加载。可传 `search` 搜索编码、名称或拼音。
+- `DELETE /api/regions/versions/{version}`：删除版本及其全部地区记录，保留内部删除标记，避免内置 2023 版在重启后重新导入。
 - `POST /api/regions`、`PUT /api/regions/{id}`、`DELETE /api/regions/{id}?version=2023`：维护单条地区记录。写操作要求平台上下文和 `system:region` 权限；读取要求已登录。
 - 地区记录的 `id` 是源文件主键或系统生成的 32 位标识，不按通用 UUID 格式解析；`code` 在同一版本内唯一。

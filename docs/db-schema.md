@@ -330,4 +330,6 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 
 `region_versions` 保存版本标识、显示名称和复制来源；`regions` 保存地区编码、父级编码、名称、拼音、层级、类型等字段。`regions(version, code)` 唯一，`source_id` 保留源记录主键。建表与字段备注见 `0028_region_catalog.sql`，唯一索引与数据修正见 `0029_region_code_unique.sql`、`0030_region_catalog_comment.sql`。
 
-内置 `2023` 版来自 `docs/t_region.sql`。源文件有 688,939 行，其中 23,016 行的编码和业务字段完全重复；`scripts/prepare-region-seed.py` 去重后生成 665,923 行的 `backend/assets/regions-2023.copy.gz`。后端启动时在事务中流式导入一次；后续启动不会覆盖后台维护过的数据。新版本可创建空版本或复制现有版本，复制出的版本需要自行核对并维护，不能视为新的官方区划数据。
+内置 `2023` 版来自原始 `t_region.sql`。源文件有 688,939 行，其中 23,016 行的编码和业务字段完全重复；`scripts/prepare-region-seed.py` 去重后生成 665,923 行的 `backend/assets/regions-2023.copy.gz`。后端启动时在事务中流式导入一次；后续启动不会覆盖后台维护过的数据。新版本可创建空版本或复制现有版本，复制出的版本需要自行核对并维护，不能视为新的官方区划数据。删除版本会删除其地区记录，并保留删除标记，因此删除内置版本后重启不会重新导入。
+
+源文件的 `type` 只包含 `111/112/121/122/123/210/220` 七个城乡分类编码，主要用于村级记录。后台编辑额外提供各层级常见行政区划类型；这些类型使用不超过 12 字符的英文编码，中文名称写入 `type_name`，原始数值编码保持不变。

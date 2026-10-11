@@ -10,6 +10,7 @@ export type RegionPayload = Omit<RegionRecord, "id">
 export const regionsApi = {
   versions: () => api.get<RegionVersion[]>("/api/regions/versions"),
   createVersion: (body: {version: string; label: string; sourceVersion?: string}) => api.post("/api/regions/versions", body),
+  removeVersion: (version: string) => api.del(`/api/regions/versions/${encodeURIComponent(version)}`),
   list: (params: {version: string; parentCode?: string; search?: string; page?: number; size?: number}) =>
     api.get<{records: RegionRecord[]; total: number; page: number; size: number}>(`/api/regions${qs(params)}`),
   create: (body: RegionPayload) => api.post("/api/regions", body),
