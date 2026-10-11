@@ -9,6 +9,7 @@ RUN mkdir -p src && echo 'fn main() { println!("cache"); }' > src/main.rs \
 
 # 实际源码
 COPY backend/src ./src
+COPY backend/assets ./assets
 COPY backend/migrations ./migrations
 RUN touch src/main.rs && cargo build --release --locked
 

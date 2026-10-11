@@ -43,14 +43,14 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 `system:tenant` `system:organization` `system:department` `system:user` `system:role` `system:menu` `system:application` `system:oauth` `system:monitor`
 
 ### 2.1 租户 /tenants
-- GET `/api/tenants?page&size&keyword` → 分页 `{id,name,code,description,status,createdAt,organizationCount,userCount,authorizedAppCount}`
-- POST `/api/tenants` `{name,code,description}` ; PUT `/api/tenants/:id` ; DELETE `/api/tenants/:id`(级联删组织/授权/角色)
+- GET `/api/tenants?page&size&keyword` → 分页 `{id,name,code,description,province,city,district,address,longitude,latitude,status,createdAt,organizationCount,userCount,authorizedAppCount}`；经纬度未标注时均为 `null`。
+- POST `/api/tenants` `{name,code,description,province?,city?,district?,address?,longitude?,latitude?,rootOrganizationName,administrator:{username,password?,realName?,email?}}`；事务内创建根组织、内置租户管理员角色、管理员成员关系和基础管理授权，根组织初始继承租户地点。已有用户名必须留空 `password`，新用户名必须提供符合环境规则的初始密码。PUT `/api/tenants/:id` 可更新地点；DELETE `/api/tenants/:id`(级联删组织/授权/角色)
 - PUT `/api/tenants/:id/status` `{"status":"ENABLED|DISABLED"}`
 
 ### 2.2 租户授权 /tenants/:id/authorizations
 - GET `/api/tenants/:id/authorizations` → `{"applications":[{"id","code","name","icon","authorized":bool,"menuCount":n,"authorizedMenuCount":n}],"menus":{"<applicationId>":[<该应用全部菜单平铺,含 authorized:bool>]}}`
 - PUT `/api/tenants/:id/authorizations` Body `{"applications":[{"applicationId","authorized":true|false}],"menus":[{"menuId","authorized":true|false}]}`
-  事务内:取消应用授权时同步清理该应用下菜单授权;取消菜单授权时级联清理下属组织的 organization_menus 与该租户角色的 role_menus。
+  事务内:取消应用授权时同步清理该应用下菜单授权;取消菜单授权时级联清理下属组织的 organization_menus 与该租户角色的 role_menus。新增授权自动同步到根组织及其内置租户管理员角色。
 
 ### 2.3 应用 /applications
 - GET `/api/applications` → 全量列表(含 menuCount)
@@ -63,10 +63,18 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 - PUT `/api/menus/:id` ; DELETE `/api/menus/:id`(级联子菜单)
 
 ### 2.5 组织 /organizations (租户下多层级树)
-- GET `/api/organizations/tree?tenantId=` → `[{id,tenantId,parentId,name,code,sortOrder,description,status,children:[...]}]`
-- POST `/api/organizations` `{tenantId,parentId,name,code,sortOrder,description}`
+- GET `/api/organizations/tree?tenantId=` → `[{id,tenantId,parentId,name,code,sortOrder,description,province,city,district,address,longitude,latitude,status,children:[...]}]`
+- POST `/api/organizations` `{tenantId,parentId,name,code,sortOrder,description,province?,city?,district?,address?,longitude?,latitude?,administrator?}`；创建子组织时可选填 `{username,password?,realName?,email?}` 指定管理员，自动建立成员关系及不可删除的内置组织管理员角色。已有用户须为本租户成员。根组织管理员由租户创建接口指定。
 - PUT `/api/organizations/:id` ; DELETE(级联子组织+部门+成员关系+org授权+角色)
 - PUT `/api/organizations/:id/status`
+- 组织新增应用及菜单授权时，自动同步到该组织的内置管理员角色；撤销授权时同步清理。默认管理员角色的菜单由授权维护，不接受手工编辑。
+
+### 2.5.1 地图资源 /maps
+- GET `/api/maps/tiles/:z/:x/:y.png` → PNG 瓦片；服务端仅代理有效瓦片坐标，浏览器可缓存 24 小时。
+- GET `/api/maps/search?q=` → OpenStreetMap 地点搜索结果，最多 5 项，关键词上限 120 字符。
+- GET `/api/maps/reverse?lat=&lon=` → 当前坐标的 OpenStreetMap 反向地址解析结果；租户/组织表单确认位置时用来回填省市区和详细地址。IP 估算位置只回填行政区划，避免把城市中心误当精确门牌。
+- GET `/api/maps/ip-location` → `{success,latitude,longitude}`；只根据可信网关规范化后的访问者公网 IP 估算，不接受客户端指定的目标 IP。回环或内网 IP 返回错误。
+- 前端只调用同源接口；开发环境由 Vite 代理固定外部上游，部署环境由 Rust 后端代理。瓦片每 IP 每分钟最多 300 次，搜索/反向解析/IP 定位合计最多 20 次。
 
 ### 2.6 组织授权 /organizations/:id/authorizations
 - GET → 同租户授权结构,但应用/菜单仅展示 **该组织所属租户已授权** 的范围(超出的不出现),authorized 字段表示组织是否授权。
@@ -174,3 +182,10 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 ### 对外用户视图（Phase 7）
 
 `GET /api/external/menus` 和 `GET /api/external/roles` 保留旧路径，但仅接受应用专用令牌，分别返回当前用户菜单和当前组织角色。`client_credentials` 令牌访问返回 403；原全量配置视图不再由这两个接口提供。业务后端参考校验组件、旧客户端迁移顺序见[对外 API 迁移说明](./external-api-migration.md)。
+# 地区目录
+
+- `GET /api/regions/versions`：列出地区数据版本及记录数。
+- `POST /api/regions/versions`：创建版本，参数 `version`、`label`、可选 `sourceVersion`；有来源版本时复制其地区数据。
+- `GET /api/regions?version=2023&parentCode=0&page=1&size=50`：按父级编码分页加载；可传 `search` 搜索编码、名称或拼音。
+- `POST /api/regions`、`PUT /api/regions/{id}`、`DELETE /api/regions/{id}?version=2023`：维护单条地区记录。写操作要求平台上下文和 `system:region` 权限；读取要求已登录。
+- 地区记录的 `id` 是源文件主键或系统生成的 32 位标识，不按通用 UUID 格式解析；`code` 在同一版本内唯一。

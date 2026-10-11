@@ -12,6 +12,8 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
 use crate::state::AppState;
+use crate::routes::onboarding::{self, Administrator};
+use crate::routes::tenants::validate_coordinates;
 use crate::util::{audit, tree};
 
 pub fn routes() -> Router<AppState> {
@@ -23,17 +25,21 @@ pub fn routes() -> Router<AppState> {
         .route("/api/organizations/{id}/authorizations", get(get_authorizations).put(put_authorizations))
 }
 
-type OrgRowTuple = (Uuid, Uuid, Option<Uuid>, String, String, i32, String, String, Option<DateTime<Utc>>);
+type OrgRowTuple = (Uuid, Uuid, Option<Uuid>, String, String, i32, String, String, Option<DateTime<Utc>>, String, String, String, String, Option<f64>, Option<f64>);
 
 const ORG_SELECT: &str = "SELECT o.id, o.tenant_id, o.parent_id, o.name, COALESCE(o.code,'') AS code, \
- o.sort_order, COALESCE(o.description,'') AS description, o.status, o.expires_at";
+ o.sort_order, COALESCE(o.description,'') AS description, o.status, o.expires_at, \
+ o.province, o.city, o.district, o.address, o.longitude, o.latitude";
 
 fn org_json(r: &OrgRowTuple) -> Value {
-    let (id, tenant_id, parent_id, name, code, sort_order, description, status, expires_at) = r;
+    let (id, tenant_id, parent_id, name, code, sort_order, description, status, expires_at,
+        province, city, district, address, longitude, latitude) = r;
     json!({
         "id": id, "tenantId": tenant_id, "parentId": parent_id, "name": name, "code": code,
         "sortOrder": sort_order, "description": description, "status": status,
         "expiresAt": expires_at,
+        "province": province, "city": city, "district": district, "address": address,
+        "longitude": longitude, "latitude": latitude,
     })
 }
 
@@ -121,9 +127,23 @@ struct OrgBody {
     sort_order: i32,
     #[serde(default)]
     description: String,
+    #[serde(default)]
+    province: String,
+    #[serde(default)]
+    city: String,
+    #[serde(default)]
+    district: String,
+    #[serde(default)]
+    address: String,
+    #[serde(default)]
+    longitude: Option<f64>,
+    #[serde(default)]
+    latitude: Option<f64>,
     /// 过期时间: 缺省/null = 永久
     #[serde(default)]
     expires_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    administrator: Option<Administrator>,
 }
 
 async fn parse_parent(
@@ -172,6 +192,9 @@ async fn create(
         return Err(AppError::bad_request("所属租户不存在"));
     }
     let parent_id = parse_parent(&state.pool, tenant_id, &body.parent_id).await?;
+    if body.administrator.is_some() && parent_id.is_none() {
+        return Err(AppError::bad_request("根组织管理员请在创建租户时指定"));
+    }
     // 根组织唯一: 每个租户仅允许一个 parent_id IS NULL 的组织 (应用层前置校验, DB 唯一索引兜底)
     if parent_id.is_none() {
         let root_exists: bool = sqlx::query_scalar(
@@ -188,11 +211,14 @@ async fn create(
     if name.is_empty() {
         return Err(AppError::bad_request("组织名称不能为空"));
     }
+    validate_coordinates(body.longitude, body.latitude)?;
+    let mut tx = state.pool.begin().await?;
     let row: OrgRowTuple = sqlx::query_as(
-        "INSERT INTO organizations (tenant_id, parent_id, name, code, sort_order, description, expires_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7) \
+        "INSERT INTO organizations (tenant_id, parent_id, name, code, sort_order, description, expires_at, \
+         province, city, district, address, longitude, latitude) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) \
          RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, sort_order, \
-         COALESCE(description,'') AS description, status, expires_at",
+         COALESCE(description,'') AS description, status, expires_at, province, city, district, address, longitude, latitude",
     )
     .bind(tenant_id)
     .bind(parent_id)
@@ -201,9 +227,20 @@ async fn create(
     .bind(body.sort_order)
     .bind(&body.description)
     .bind(body.expires_at)
-    .fetch_one(&state.pool)
+    .bind(body.province.trim())
+    .bind(body.city.trim())
+    .bind(body.district.trim())
+    .bind(body.address.trim())
+    .bind(body.longitude)
+    .bind(body.latitude)
+    .fetch_one(&mut *tx)
     .await
     .map_err(map_root_unique_violation)?;
+    if let (Some(parent), Some(admin)) = (parent_id, &body.administrator) {
+        onboarding::provision_organization(&mut tx, &state.config, tenant_id, row.0, parent, admin).await?;
+    }
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
@@ -225,6 +262,18 @@ struct OrgUpdate {
     sort_order: Option<i32>,
     #[serde(default)]
     description: Option<String>,
+    #[serde(default)]
+    province: Option<String>,
+    #[serde(default)]
+    city: Option<String>,
+    #[serde(default)]
+    district: Option<String>,
+    #[serde(default)]
+    address: Option<String>,
+    #[serde(default, deserialize_with = "double_option")]
+    longitude: Option<Option<f64>>,
+    #[serde(default, deserialize_with = "double_option")]
+    latitude: Option<Option<f64>>,
     /// 过期时间三态: 缺省不更新 / 显式 null 清除(永久) / 有值则设置
     /// (注: 本端点不支持修改 parent_id, 根组织归属仅由创建时决定)
     #[serde(default, deserialize_with = "double_option")]
@@ -247,13 +296,24 @@ async fn update(
             return Err(AppError::bad_request("组织名称不能为空"));
         }
     }
+    let current_coordinates: (Option<f64>, Option<f64>) = sqlx::query_as(
+        "SELECT longitude, latitude FROM organizations WHERE id = $1",
+    ).bind(id).fetch_one(&state.pool).await?;
+    validate_coordinates(
+        body.longitude.unwrap_or(current_coordinates.0),
+        body.latitude.unwrap_or(current_coordinates.1),
+    )?;
     let row: OrgRowTuple = sqlx::query_as(
         "UPDATE organizations SET name = COALESCE($2, name), code = COALESCE($3, code), \
          sort_order = COALESCE($4, sort_order), description = COALESCE($5, description), \
-         expires_at = CASE WHEN $6 THEN $7::timestamptz ELSE expires_at END, updated_at = now() \
+         expires_at = CASE WHEN $6 THEN $7::timestamptz ELSE expires_at END, \
+         province = COALESCE($8, province), city = COALESCE($9, city), district = COALESCE($10, district), \
+         address = COALESCE($11, address), \
+         longitude = CASE WHEN $12 THEN $13::double precision ELSE longitude END, \
+         latitude = CASE WHEN $14 THEN $15::double precision ELSE latitude END, updated_at = now() \
          WHERE id = $1 \
          RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, sort_order, \
-         COALESCE(description,'') AS description, status, expires_at",
+         COALESCE(description,'') AS description, status, expires_at, province, city, district, address, longitude, latitude",
     )
     .bind(id)
     .bind(&body.name)
@@ -262,6 +322,14 @@ async fn update(
     .bind(&body.description)
     .bind(body.expires_at.is_some())
     .bind(body.expires_at.flatten())
+    .bind(body.province.as_deref().map(str::trim))
+    .bind(body.city.as_deref().map(str::trim))
+    .bind(body.district.as_deref().map(str::trim))
+    .bind(body.address.as_deref().map(str::trim))
+    .bind(body.longitude.is_some())
+    .bind(body.longitude.flatten())
+    .bind(body.latitude.is_some())
+    .bind(body.latitude.flatten())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("组织不存在"))?;
@@ -610,6 +678,7 @@ async fn put_authorizations(
     .bind(org_id)
     .execute(&mut *tx)
     .await?;
+    onboarding::sync_org_admin(&mut tx, org_id).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
 

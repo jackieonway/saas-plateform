@@ -47,6 +47,8 @@ import { tenantsApi } from "@/api/tenants"
 import { asPage } from "@/lib/api"
 import { formatDateTime, useDebounced } from "@/lib/format"
 import { ExpiryCell, isoToLocalInput } from "@/lib/expiry"
+import { coordinateField, coordinateOrNull, coordinatePoint, hasCoordinatePair, locationText } from "@/lib/location"
+import { LocationPicker } from "@/components/LocationPicker"
 import { toast } from "sonner"
 import type { TenantRecord } from "@/api/types"
 
@@ -58,12 +60,23 @@ const tenantSchema = z.object({
     .max(32)
     .regex(/^[a-zA-Z0-9-]+$/, "仅支持字母、数字与中划线"),
   description: z.string().max(255, "描述过长").optional(),
+  province: z.string().max(100, "省份名称过长"),
+  city: z.string().max(100, "城市名称过长"),
+  district: z.string().max(100, "区县名称过长"),
+  address: z.string().max(300, "详细地址过长"),
+  longitude: coordinateField("经度", -180, 180),
+  latitude: coordinateField("纬度", -90, 90),
+  rootOrganizationName: z.string().optional(),
+  adminUsername: z.string().optional(),
+  adminPassword: z.string().optional(),
+  adminRealName: z.string().optional(),
+  adminEmail: z.string().email("邮箱格式无效").or(z.literal("")).optional(),
   /** 过期时间: 空=永不过期; 接受 datetime-local("2026-12-31T23:59")或合法 ISO */
   expiresAt: z
     .string()
     .refine((v) => !v || !Number.isNaN(new Date(v).getTime()), "无效的过期时间")
     .optional(),
-})
+}).refine(hasCoordinatePair, { message: "经纬度需同时填写或同时留空", path: ["longitude"] })
 type TenantForm = z.infer<typeof tenantSchema>
 
 export default function TenantsPage() {
@@ -97,12 +110,12 @@ export default function TenantsPage() {
   const [editing, setEditing] = React.useState<TenantRecord | null>(null)
   const form = useForm<TenantForm>({
     resolver: zResolver(tenantSchema),
-    defaultValues: { name: "", code: "", description: "", expiresAt: "" },
+    defaultValues: { name: "", code: "", description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
   })
 
   const openCreate = () => {
     setEditing(null)
-    form.reset({ name: "", code: "", description: "", expiresAt: "" })
+    form.reset({ name: "", code: "", description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
     setDialogOpen(true)
   }
   const openEdit = (t: TenantRecord) => {
@@ -111,7 +124,10 @@ export default function TenantsPage() {
       name: t.name,
       code: t.code,
       description: t.description ?? "",
+      province: t.province ?? "", city: t.city ?? "", district: t.district ?? "", address: t.address ?? "",
+      longitude: t.longitude == null ? "" : String(t.longitude), latitude: t.latitude == null ? "" : String(t.latitude),
       expiresAt: isoToLocalInput(t.expiresAt),
+      rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "",
     })
     setDialogOpen(true)
   }
@@ -120,11 +136,20 @@ export default function TenantsPage() {
     mutationFn: async (values: TenantForm) => {
       /* datetime-local("2026-12-31T23:59") → ISO; 空串 → null(清除/永久) */
       const body = {
-        ...values,
+        name: values.name, code: values.code, description: values.description,
+        province: values.province, city: values.city, district: values.district, address: values.address,
+        longitude: coordinateOrNull(values.longitude), latitude: coordinateOrNull(values.latitude),
         expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
       }
       if (editing) await tenantsApi.update(editing.id, body)
-      else await tenantsApi.create(body)
+      else {
+        if (!values.rootOrganizationName?.trim() || !values.adminUsername?.trim()) {
+          throw new Error("请填写根组织名称和首位管理员用户名")
+        }
+        await tenantsApi.create({ ...body, rootOrganizationName: values.rootOrganizationName,
+          administrator: { username: values.adminUsername, password: values.adminPassword,
+            realName: values.adminRealName, email: values.adminEmail } })
+      }
     },
     onSuccess: () => {
       toast.success(editing ? "租户已更新" : "租户创建成功")
@@ -276,6 +301,10 @@ export default function TenantsPage() {
                             </span>
                           )}
                         </div>
+                        {locationText(t) && <p className="truncate text-xs text-muted-foreground" title={locationText(t)}>{locationText(t)}</p>}
+                        {t.longitude != null && t.latitude != null && (
+                          <p className="text-xs text-muted-foreground">坐标：{t.longitude}, {t.latitude}</p>
+                        )}
                         {t.description && (
                           <p className="truncate text-xs text-muted-foreground" title={t.description}>
                             {t.description}
@@ -398,7 +427,7 @@ export default function TenantsPage() {
 
       {/* 新建/编辑弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? "编辑租户" : "新建租户"}</DialogTitle>
             <DialogDescription>
@@ -473,6 +502,58 @@ export default function TenantsPage() {
                   </FormItem>
                 )}
               />
+              <div className="space-y-3 border-t pt-4">
+                <p className="text-sm font-medium">地点标注</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["province", "city", "district"] as const).map((name, index) => <FormField key={name} control={form.control} name={name} render={({ field }) => <FormItem>
+                    <FormLabel>{["省份", "城市", "区县"][index]}</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
+                  </FormItem>} />)}
+                </div>
+                <FormField control={form.control} name="address" render={({ field }) => <FormItem>
+                  <FormLabel>详细地址</FormLabel><FormControl><Input placeholder="街道、门牌号等" {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+                <LocationPicker
+                  value={coordinatePoint(form.watch("longitude"), form.watch("latitude"))}
+                  searchHint={locationText(form.watch())}
+                  onChange={(point) => {
+                    form.setValue("longitude", point ? String(point.longitude) : "", { shouldDirty: true })
+                    form.setValue("latitude", point ? String(point.latitude) : "", { shouldDirty: true })
+                    for (const key of ["province", "city", "district", "address"] as const) {
+                      const value = point?.location?.[key]
+                      if (value) form.setValue(key, value, { shouldDirty: true })
+                    }
+                    void form.trigger(["longitude", "latitude", "province", "city", "district", "address"])
+                  }}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField control={form.control} name="longitude" render={({ field }) => <FormItem>
+                    <FormLabel>经度</FormLabel><FormControl><Input type="number" step="any" placeholder="-180 ～ 180" {...field} /></FormControl><FormMessage />
+                  </FormItem>} />
+                  <FormField control={form.control} name="latitude" render={({ field }) => <FormItem>
+                    <FormLabel>纬度</FormLabel><FormControl><Input type="number" step="any" placeholder="-90 ～ 90" {...field} /></FormControl><FormMessage />
+                  </FormItem>} />
+                </div>
+                <p className="text-xs text-muted-foreground">使用 WGS-84 坐标；经纬度需同时填写，留空表示尚未标注。</p>
+              </div>
+              {!editing && <div className="space-y-4 border-t pt-4">
+                <p className="text-sm font-medium">开通管理员</p>
+                <FormField control={form.control} name="rootOrganizationName" render={({ field }) => <FormItem>
+                  <FormLabel>根组织名称 *</FormLabel><FormControl><Input placeholder="如: 公司总部" {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+                <FormField control={form.control} name="adminUsername" render={({ field }) => <FormItem>
+                  <FormLabel>管理员用户名 *</FormLabel><FormControl><Input autoComplete="off" placeholder="已有用户名或新用户名" {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+                <FormField control={form.control} name="adminPassword" render={({ field }) => <FormItem>
+                  <FormLabel>新账号初始密码</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl>
+                  <FormDescription>已有账号请留空；新账号必须填写，不会生成默认密码。</FormDescription><FormMessage />
+                </FormItem>} />
+                <FormField control={form.control} name="adminRealName" render={({ field }) => <FormItem>
+                  <FormLabel>管理员姓名</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+                <FormField control={form.control} name="adminEmail" render={({ field }) => <FormItem>
+                  <FormLabel>管理员邮箱</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+              </div>}
             </form>
           </Form>
           <DialogFooter>

@@ -56,9 +56,11 @@ UNION ALL SELECT o.id, o.parent_id FROM organizations o JOIN anc ON o.id = anc.p
 pub struct AppState {
     pub pool: sqlx::PgPool,
     pub config: Arc<crate::config::Config>,
+    pub map_client: reqwest::Client,
     /// 进程启动时刻 (GET /api/monitor/system 的 startedAt/uptimeSeconds 数据源)
     pub started_at: chrono::DateTime<chrono::Utc>,
     oauth_rate: RateMap,
+    map_rate: RateMap,
     introspection_clients: RateMap,
     introspection_failures: RateMap,
     introspection_attempts: RateMap,
@@ -70,12 +72,26 @@ impl AppState {
         Self {
             pool,
             config,
+            map_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .redirect(reqwest::redirect::Policy::none())
+                .user_agent("DanteCloud/1.0 map-resource-proxy")
+                .build()
+                .expect("static map client configuration"),
             started_at: chrono::Utc::now(),
             oauth_rate: Arc::new(Mutex::new(HashMap::new())),
+            map_rate: Arc::new(Mutex::new(HashMap::new())),
             introspection_clients: Arc::new(Mutex::new(HashMap::new())),
             introspection_failures: Arc::new(Mutex::new(HashMap::new())),
             introspection_attempts: Arc::new(Mutex::new(HashMap::new())),
             introspection_auth_slots: Arc::new(tokio::sync::Semaphore::new(32)),
+        }
+    }
+
+    pub fn check_map_rate(&self, identity: &str, limit: usize) -> Result<(), AppError> {
+        match record_rate(&self.map_rate, identity, limit) {
+            Some(retry) => Err(AppError::RateLimited(retry as u64)),
+            None => Ok(()),
         }
     }
 

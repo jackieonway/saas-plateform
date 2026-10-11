@@ -8,12 +8,15 @@ pub mod departments;
 pub mod device;
 pub mod external;
 pub mod menus;
+pub mod maps;
 pub mod monitor;
 pub mod notifications;
+mod onboarding;
 pub mod oauth2;
 pub mod oauth_admin;
 pub mod organizations;
 pub mod roles;
+pub mod regions;
 pub mod search;
 pub mod tenants;
 pub mod users;
@@ -38,10 +41,12 @@ pub fn api_router() -> Router<AppState> {
         .merge(app_context::routes())
         .merge(app_members::routes())
         .merge(menus::routes())
+        .merge(maps::routes())
         .merge(organizations::routes())
         .merge(departments::routes())
         .merge(users::routes())
         .merge(roles::routes())
+        .merge(regions::routes())
         .merge(search::routes())
         .merge(oauth_admin::routes())
         .merge(external::routes())

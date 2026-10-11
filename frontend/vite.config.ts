@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { createReadStream, realpathSync, statSync } from "node:fs";
+import type { ClientRequest } from "node:http";
 import path from "node:path";
 
 const microAppsDevDir = process.env.MICRO_APPS_DEV_DIR || path.resolve(__dirname, "../deploy/micro-apps");
@@ -15,6 +16,13 @@ const versionMimeTypes: Record<string, string> = {
   ".ico": "image/x-icon", ".woff": "font/woff", ".woff2": "font/woff2",
   ".txt": "text/plain; charset=utf-8", ".map": "application/json; charset=utf-8",
 };
+const stripMapProxyCredentials = (request: ClientRequest) => {
+  request.removeHeader("authorization");
+  request.removeHeader("cookie");
+  request.removeHeader("x-real-ip");
+  request.removeHeader("x-forwarded-for");
+};
+const mapProxyHeaders = { "User-Agent": "DanteCloud/1.0 map-resource-proxy" };
 
 export default defineConfig({
   plugins: [
@@ -83,6 +91,36 @@ export default defineConfig({
     // Vite 6 默认会拦截 (403 Blocked request), 必须放行全部 Host 才能经 Caddy 网关预览。
     allowedHosts: true,
     proxy: {
+      // Development host can reach the public map services even when WSL's
+      // backend cannot. Production /api/maps/* is served by the Rust gateway.
+      "/api/maps/tiles": {
+        target: "https://tile.openstreetmap.org",
+        changeOrigin: true,
+        headers: mapProxyHeaders,
+        rewrite: (p) => p.replace(/^\/api\/maps\/tiles/, ""),
+        configure: (proxy) => proxy.on("proxyReq", stripMapProxyCredentials),
+      },
+      "/api/maps/search": {
+        target: "https://nominatim.openstreetmap.org",
+        changeOrigin: true,
+        headers: mapProxyHeaders,
+        rewrite: (p) => p.replace(/^\/api\/maps\/search/, "/search"),
+        configure: (proxy) => proxy.on("proxyReq", stripMapProxyCredentials),
+      },
+      "/api/maps/reverse": {
+        target: "https://nominatim.openstreetmap.org",
+        changeOrigin: true,
+        headers: mapProxyHeaders,
+        rewrite: (p) => p.replace(/^\/api\/maps\/reverse/, "/reverse"),
+        configure: (proxy) => proxy.on("proxyReq", stripMapProxyCredentials),
+      },
+      "/api/maps/ip-location": {
+        target: "https://ipwho.is",
+        changeOrigin: true,
+        headers: mapProxyHeaders,
+        rewrite: () => "/",
+        configure: (proxy) => proxy.on("proxyReq", stripMapProxyCredentials),
+      },
       "/api": {
         target: "http://127.0.0.1:3001",
         changeOrigin: true,

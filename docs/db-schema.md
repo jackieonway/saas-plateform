@@ -1,7 +1,7 @@
 # Dante Cloud — PostgreSQL 数据库设计
 
 > 连接串: `postgres://dante@127.0.0.1:5432/dante_cloud` (本地 trust 认证;docker 部署时带密码)
-> 使用 SQLx 迁移: `backend/migrations/0001_init.sql`(结构) + `0002_seed.sql`(种子数据)
+> 使用 SQLx 迁移: `backend/migrations/0001_init.sql`(初始结构)及后续增量迁移；地点字段由 `0027_tenant_organization_location.sql` 增加。
 > 所有主键 UUID (gen_random_uuid()),时间 timestamptz。
 
 ## 实体关系
@@ -29,6 +29,12 @@ CREATE TABLE tenants (
   name VARCHAR(100) NOT NULL,
   code VARCHAR(50) NOT NULL UNIQUE,
   description TEXT DEFAULT '',
+  province VARCHAR(100) NOT NULL DEFAULT '',
+  city VARCHAR(100) NOT NULL DEFAULT '',
+  district VARCHAR(100) NOT NULL DEFAULT '',
+  address VARCHAR(300) NOT NULL DEFAULT '',
+  longitude DOUBLE PRECISION,
+  latitude DOUBLE PRECISION,
   status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -73,6 +79,12 @@ CREATE TABLE organizations (
   code VARCHAR(50) DEFAULT '',
   sort_order INT NOT NULL DEFAULT 0,
   description TEXT DEFAULT '',
+  province VARCHAR(100) NOT NULL DEFAULT '',
+  city VARCHAR(100) NOT NULL DEFAULT '',
+  district VARCHAR(100) NOT NULL DEFAULT '',
+  address VARCHAR(300) NOT NULL DEFAULT '',
+  longitude DOUBLE PRECISION,
+  latitude DOUBLE PRECISION,
   status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -314,3 +326,8 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 ## 0020 独立数据授权
 
 [`0020_membership_data_grants.sql`](../backend/migrations/0020_membership_data_grants.sql) 创建 `membership_data_grants`：按成员关系、应用、资源和操作显式授予 `SELF/ORG/ORG_SUBTREE/TENANT` 范围，缺失即拒绝。数据授权不引用角色，删除成员时级联删除。授权上下文与业务资源边界见[应用授权上下文契约](./app-authorization-context.md)。
+# 地区数据版本与初始化
+
+`region_versions` 保存版本标识、显示名称和复制来源；`regions` 保存地区编码、父级编码、名称、拼音、层级、类型等字段。`regions(version, code)` 唯一，`source_id` 保留源记录主键。建表与字段备注见 `0028_region_catalog.sql`，唯一索引与数据修正见 `0029_region_code_unique.sql`、`0030_region_catalog_comment.sql`。
+
+内置 `2023` 版来自 `docs/t_region.sql`。源文件有 688,939 行，其中 23,016 行的编码和业务字段完全重复；`scripts/prepare-region-seed.py` 去重后生成 665,923 行的 `backend/assets/regions-2023.copy.gz`。后端启动时在事务中流式导入一次；后续启动不会覆盖后台维护过的数据。新版本可创建空版本或复制现有版本，复制出的版本需要自行核对并维护，不能视为新的官方区划数据。

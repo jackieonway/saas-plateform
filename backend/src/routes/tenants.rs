@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
 use crate::routes::{page_json, paging};
+use crate::routes::onboarding::{self, Administrator};
 use crate::state::AppState;
 use crate::util::audit;
 
@@ -24,6 +25,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 const LIST_SELECT: &str = "SELECT t.id, t.name, t.code, COALESCE(t.description,'') AS description, t.status, t.is_platform, t.created_at, t.expires_at, \
+ t.province, t.city, t.district, t.address, t.longitude, t.latitude, \
  (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id) AS organization_count, \
  (SELECT count(DISTINCT m.user_id) FROM memberships m JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id) AS user_count, \
  (SELECT count(*) FROM tenant_applications ta WHERE ta.tenant_id = t.id) AS authorized_app_count";
@@ -40,6 +42,12 @@ struct TenantRow {
     created_at: DateTime<Utc>,
     /// 过期时间: null = 永久
     expires_at: Option<DateTime<Utc>>,
+    province: String,
+    city: String,
+    district: String,
+    address: String,
+    longitude: Option<f64>,
+    latitude: Option<f64>,
     organization_count: i64,
     user_count: i64,
     authorized_app_count: i64,
@@ -96,9 +104,23 @@ struct TenantBody {
     code: String,
     #[serde(default)]
     description: String,
+    #[serde(default)]
+    province: String,
+    #[serde(default)]
+    city: String,
+    #[serde(default)]
+    district: String,
+    #[serde(default)]
+    address: String,
+    #[serde(default)]
+    longitude: Option<f64>,
+    #[serde(default)]
+    latitude: Option<f64>,
     /// 过期时间: 缺省/null = 永久
     #[serde(default)]
     expires_at: Option<DateTime<Utc>>,
+    root_organization_name: String,
+    administrator: Administrator,
 }
 
 /// POST /api/tenants
@@ -114,17 +136,41 @@ async fn create(
     if name.is_empty() || body.code.trim().is_empty() {
         return Err(AppError::bad_request("租户名称与编码不能为空"));
     }
-    let row: TenantRow = sqlx::query_as(&format!(
-        "INSERT INTO tenants (name, code, description, expires_at) VALUES ($1, $2, $3, $4) RETURNING id, name, code, \
-         description, status, false AS is_platform, created_at, expires_at, \
+    let root_name = body.root_organization_name.trim();
+    if root_name.is_empty() { return Err(AppError::bad_request("根组织名称不能为空")); }
+    validate_coordinates(body.longitude, body.latitude)?;
+    let mut tx = state.pool.begin().await?;
+    let mut row: TenantRow = sqlx::query_as(&format!(
+        "INSERT INTO tenants (name, code, description, expires_at, province, city, district, address, longitude, latitude) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, name, code, \
+         description, status, false AS is_platform, created_at, expires_at, province, city, district, address, longitude, latitude, \
          0::bigint AS organization_count, 0::bigint AS user_count, 0::bigint AS authorized_app_count"
     ))
     .bind(&name)
     .bind(body.code.trim())
     .bind(&body.description)
     .bind(body.expires_at)
-    .fetch_one(&state.pool)
+    .bind(body.province.trim())
+    .bind(body.city.trim())
+    .bind(body.district.trim())
+    .bind(body.address.trim())
+    .bind(body.longitude)
+    .bind(body.latitude)
+    .fetch_one(&mut *tx)
     .await?;
+    let root_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO organizations (tenant_id, name, code, province, city, district, address, longitude, latitude) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+    ).bind(row.id).bind(root_name).bind(body.code.trim())
+        .bind(&row.province).bind(&row.city).bind(&row.district).bind(&row.address)
+        .bind(row.longitude).bind(row.latitude)
+        .fetch_one(&mut *tx).await?;
+    onboarding::provision_tenant(&mut tx, &state.config, row.id, root_id, &body.administrator).await?;
+    tx.commit().await?;
+    row.organization_count = 1;
+    row.user_count = 1;
+    row.authorized_app_count = 1;
+    state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
@@ -144,6 +190,29 @@ where
     Deserialize::deserialize(de).map(Some)
 }
 
+pub(super) fn validate_coordinates(longitude: Option<f64>, latitude: Option<f64>) -> Result<(), AppError> {
+    match (longitude, latitude) {
+        (None, None) => Ok(()),
+        (Some(lon), Some(lat)) if lon.is_finite() && lat.is_finite()
+            && (-180.0..=180.0).contains(&lon) && (-90.0..=90.0).contains(&lat) => Ok(()),
+        _ => Err(AppError::bad_request("经纬度需同时填写；经度范围 -180~180，纬度范围 -90~90")),
+    }
+}
+
+#[cfg(test)]
+mod coordinate_tests {
+    use super::validate_coordinates;
+
+    #[test]
+    fn coordinates_require_a_valid_pair() {
+        assert!(validate_coordinates(None, None).is_ok());
+        assert!(validate_coordinates(Some(180.0), Some(-90.0)).is_ok());
+        assert!(validate_coordinates(Some(121.47), None).is_err());
+        assert!(validate_coordinates(Some(181.0), Some(30.0)).is_err());
+        assert!(validate_coordinates(Some(f64::NAN), Some(30.0)).is_err());
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TenantUpdate {
@@ -153,6 +222,18 @@ struct TenantUpdate {
     code: Option<String>,
     #[serde(default)]
     description: Option<String>,
+    #[serde(default)]
+    province: Option<String>,
+    #[serde(default)]
+    city: Option<String>,
+    #[serde(default)]
+    district: Option<String>,
+    #[serde(default)]
+    address: Option<String>,
+    #[serde(default, deserialize_with = "double_option")]
+    longitude: Option<Option<f64>>,
+    #[serde(default, deserialize_with = "double_option")]
+    latitude: Option<Option<f64>>,
     /// 过期时间三态: 缺省不更新 / 显式 null 清除(永久) / 有值则设置
     #[serde(default, deserialize_with = "double_option")]
     expires_at: Option<Option<DateTime<Utc>>>,
@@ -174,13 +255,26 @@ async fn update(
             return Err(AppError::bad_request("租户名称不能为空"));
         }
     }
+    let current_coordinates: (Option<f64>, Option<f64>) = sqlx::query_as(
+        "SELECT longitude, latitude FROM tenants WHERE id = $1",
+    ).bind(id).fetch_optional(&state.pool).await?
+        .ok_or_else(|| AppError::not_found("租户不存在"))?;
+    validate_coordinates(
+        body.longitude.unwrap_or(current_coordinates.0),
+        body.latitude.unwrap_or(current_coordinates.1),
+    )?;
     let row = sqlx::query_as::<_, TenantRow>(&format!(
         // 注: 目标表别名 t 供 RETURNING 子查询引用 (无别名时 o.tenant_id = t.id 报 missing FROM-clause,
         // 此前该端点一直 500, 本任务修复: UPDATE tenants AS t ... WHERE t.id = $1)
         "UPDATE tenants AS t SET name = COALESCE($2, name), code = COALESCE($3, code), \
          description = COALESCE($4, description), \
-         expires_at = CASE WHEN $5 THEN $6::timestamptz ELSE expires_at END, updated_at = now() \
+         expires_at = CASE WHEN $5 THEN $6::timestamptz ELSE expires_at END, \
+         province = COALESCE($7, province), city = COALESCE($8, city), district = COALESCE($9, district), \
+         address = COALESCE($10, address), \
+         longitude = CASE WHEN $11 THEN $12::double precision ELSE longitude END, \
+         latitude = CASE WHEN $13 THEN $14::double precision ELSE latitude END, updated_at = now() \
          WHERE t.id = $1 RETURNING id, name, code, description, status, is_platform, created_at, expires_at, \
+         province, city, district, address, longitude, latitude, \
          (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id) AS organization_count, \
          (SELECT count(DISTINCT m.user_id) FROM memberships m JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id) AS user_count, \
          (SELECT count(*) FROM tenant_applications ta WHERE ta.tenant_id = t.id) AS authorized_app_count"
@@ -191,6 +285,14 @@ async fn update(
     .bind(&body.description)
     .bind(body.expires_at.is_some())
     .bind(body.expires_at.flatten())
+    .bind(body.province.as_deref().map(str::trim))
+    .bind(body.city.as_deref().map(str::trim))
+    .bind(body.district.as_deref().map(str::trim))
+    .bind(body.address.as_deref().map(str::trim))
+    .bind(body.longitude.is_some())
+    .bind(body.longitude.flatten())
+    .bind(body.latitude.is_some())
+    .bind(body.latitude.flatten())
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("租户不存在"))?;
@@ -570,6 +672,7 @@ async fn put_authorizations(
     .bind(tenant_id)
     .execute(&mut *tx)
     .await?;
+    onboarding::sync_tenant_admin(&mut tx, tenant_id).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
 

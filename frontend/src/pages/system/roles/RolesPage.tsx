@@ -370,11 +370,11 @@ export default function RolesPage() {
                     <div className="flex items-center justify-end gap-0.5">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8" aria-label="菜单权限" onClick={() => setMenusRole(r)}>
+                          <Button variant="ghost" size="icon" className="size-8" aria-label="菜单权限" disabled={r.builtIn && ["tenant_admin", "org_admin"].includes(r.code)} onClick={() => setMenusRole(r)}>
                             <Settings2 className="size-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>菜单权限</TooltipContent>
+                        <TooltipContent>{r.builtIn && ["tenant_admin", "org_admin"].includes(r.code) ? "默认角色菜单随授权自动同步" : "菜单权限"}</TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>

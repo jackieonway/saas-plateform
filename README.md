@@ -107,6 +107,7 @@ tests/                  现有 shell 运行时检查脚本
 
 3. 启动后端：`cd backend; cargo run`。健康检查为 `http://localhost:3001/api/health`。
 4. 启动前端：`cd frontend; npm ci; npm run dev`，访问 `http://localhost:3000`。Vite 会代理 API；`npm run build` 执行 TypeScript 检查及生产构建。
+   租户和组织的地图选点统一访问同源 `/api/maps/*`：本地 Vite 代理 OpenStreetMap 瓦片、Nominatim 搜索与反向地址解析、ipwho.is IP 估算，部署时由 Rust 后端代理固定上游。服务端须能访问这些 HTTPS 上游，受限网络可为后端配置标准 `HTTPS_PROXY`；浏览器不再直连地图服务。确认位置时反向解析省市区及详细地址；IP 估算在部署环境使用经过可信网关规范化的访问者公网 IP，结果通常只精确到城市，不自动写入门牌地址。本地 Vite 模式的 IP 估算使用开发机出口 IP。自有底图需修改后端固定上游及其授权说明。
 5. 如需实时通知，另行启动 `mini-services/notification-ws/`；如需 OAuth 流程演练，启动 `mini-services/oauth-playground/`；HTML 子应用可使用 `frontend/public/sub-apps/` 的静态副本，也可分别启动 3005/3006 开发服务并修改应用入口地址为 `/sub/vue/`、`/sub/jquery/`。
 
 首次空库启动时，`seed.rs` 创建演示数据，包括超管 `admin`。其初始密码在源码中为 `admin123`，只适合本地演示；部署后应立即修改。种子主要在 `users` 表为空时执行，已存在用户的数据库不会重建整套演示数据。`backend/migrations/0002_seed.sql` 只是占位迁移，真正的种子逻辑在 Rust 代码中。

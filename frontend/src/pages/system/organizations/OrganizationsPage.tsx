@@ -55,6 +55,8 @@ import { departmentsApi } from "@/api/departments"
 import { asArray, asPage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { expiryBadge, ExpiryCell, isoToLocalInput } from "@/lib/expiry"
+import { coordinateField, coordinateOrNull, coordinatePoint, hasCoordinatePair, locationText } from "@/lib/location"
+import { LocationPicker } from "@/components/LocationPicker"
 import { toast } from "sonner"
 import type { DeptNode, OrgNode, TenantRecord } from "@/api/types"
 
@@ -68,11 +70,21 @@ type NodeForm = z.infer<typeof nodeSchema>
 
 /** 组织表单在部门表单基础上增加「过期时间」(空=永不过期; 接受 datetime-local 或合法 ISO) */
 const orgNodeSchema = nodeSchema.extend({
+  province: z.string().max(100, "省份名称过长"),
+  city: z.string().max(100, "城市名称过长"),
+  district: z.string().max(100, "区县名称过长"),
+  address: z.string().max(300, "详细地址过长"),
+  longitude: coordinateField("经度", -180, 180),
+  latitude: coordinateField("纬度", -90, 90),
+  adminUsername: z.string().optional(),
+  adminPassword: z.string().optional(),
+  adminRealName: z.string().optional(),
+  adminEmail: z.string().email("邮箱格式无效").or(z.literal("")).optional(),
   expiresAt: z
     .string()
     .refine((v) => !v || !Number.isNaN(new Date(v).getTime()), "无效的过期时间")
     .optional(),
-})
+}).refine(hasCoordinatePair, { message: "经纬度需同时填写或同时留空", path: ["longitude"] })
 type OrgNodeForm = z.infer<typeof orgNodeSchema>
 
 function orgToEditable(nodes: OrgNode[]): EditableNode[] {
@@ -168,13 +180,13 @@ export default function OrganizationsPage() {
   const [orgParent, setOrgParent] = React.useState<string | null>(null)
   const orgForm = useForm<OrgNodeForm>({
     resolver: zResolver(orgNodeSchema),
-    defaultValues: { name: "", code: "", sortOrder: 0, description: "", expiresAt: "" },
+    defaultValues: { name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
   })
 
   const openOrgCreate = (parentId: string | null) => {
     setOrgEditing(null)
     setOrgParent(parentId)
-    orgForm.reset({ name: "", code: "", sortOrder: 0, description: "", expiresAt: "" })
+    orgForm.reset({ name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
     setOrgDialog(true)
   }
   const openOrgEdit = (node: EditableNode) => {
@@ -187,7 +199,10 @@ export default function OrganizationsPage() {
       code: full.code,
       sortOrder: full.sortOrder ?? 0,
       description: full.description ?? "",
+      province: full.province ?? "", city: full.city ?? "", district: full.district ?? "", address: full.address ?? "",
+      longitude: full.longitude == null ? "" : String(full.longitude), latitude: full.latitude == null ? "" : String(full.latitude),
       expiresAt: isoToLocalInput(full.expiresAt),
+      adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "",
     })
     setOrgDialog(true)
   }
@@ -202,7 +217,13 @@ export default function OrganizationsPage() {
         code: v.code,
         sortOrder: v.sortOrder,
         description: v.description || "",
+        province: v.province, city: v.city, district: v.district, address: v.address,
+        longitude: coordinateOrNull(v.longitude), latitude: coordinateOrNull(v.latitude),
         expiresAt: v.expiresAt ? new Date(v.expiresAt).toISOString() : null,
+        administrator: !orgEditing && orgParent && v.adminUsername?.trim() ? {
+          username: v.adminUsername, password: v.adminPassword,
+          realName: v.adminRealName, email: v.adminEmail,
+        } : null,
       }
       if (orgEditing) await organizationsApi.update(orgEditing.id, payload)
       else await organizationsApi.create(payload)
@@ -447,6 +468,10 @@ export default function OrganizationsPage() {
                       </Breadcrumb>
                     )}
                     {selected.description && <p className="text-sm text-muted-foreground">{selected.description}</p>}
+                    {locationText(selected) && <p className="text-sm text-muted-foreground">地址：{locationText(selected)}</p>}
+                    {selected.longitude != null && selected.latitude != null && (
+                      <p className="text-xs text-muted-foreground">坐标：{selected.longitude}, {selected.latitude}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       排序 #{selected.sortOrder ?? 0} · 所属租户 {tenants.find((t) => t.id === selected.tenantId)?.name ?? "—"}
                       <span className="mx-1.5 text-muted-foreground/40">·</span>
@@ -519,7 +544,7 @@ export default function OrganizationsPage() {
 
       {/* 组织弹窗 */}
       <Dialog open={orgDialog} onOpenChange={setOrgDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{orgEditing ? `编辑组织「${orgEditing.name}」` : "新增组织"}</DialogTitle>
             <DialogDescription>
@@ -603,6 +628,55 @@ export default function OrganizationsPage() {
                   </FormItem>
                 )}
               />
+              <div className="space-y-3 border-t pt-4">
+                <p className="text-sm font-medium">地点标注</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["province", "city", "district"] as const).map((name, index) => <FormField key={name} control={orgForm.control} name={name} render={({ field }) => <FormItem>
+                    <FormLabel>{["省份", "城市", "区县"][index]}</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
+                  </FormItem>} />)}
+                </div>
+                <FormField control={orgForm.control} name="address" render={({ field }) => <FormItem>
+                  <FormLabel>详细地址</FormLabel><FormControl><Input placeholder="街道、门牌号等" {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+                <LocationPicker
+                  value={coordinatePoint(orgForm.watch("longitude"), orgForm.watch("latitude"))}
+                  searchHint={locationText(orgForm.watch())}
+                  onChange={(point) => {
+                    orgForm.setValue("longitude", point ? String(point.longitude) : "", { shouldDirty: true })
+                    orgForm.setValue("latitude", point ? String(point.latitude) : "", { shouldDirty: true })
+                    for (const key of ["province", "city", "district", "address"] as const) {
+                      const value = point?.location?.[key]
+                      if (value) orgForm.setValue(key, value, { shouldDirty: true })
+                    }
+                    void orgForm.trigger(["longitude", "latitude", "province", "city", "district", "address"])
+                  }}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField control={orgForm.control} name="longitude" render={({ field }) => <FormItem>
+                    <FormLabel>经度</FormLabel><FormControl><Input type="number" step="any" placeholder="-180 ～ 180" {...field} /></FormControl><FormMessage />
+                  </FormItem>} />
+                  <FormField control={orgForm.control} name="latitude" render={({ field }) => <FormItem>
+                    <FormLabel>纬度</FormLabel><FormControl><Input type="number" step="any" placeholder="-90 ～ 90" {...field} /></FormControl><FormMessage />
+                  </FormItem>} />
+                </div>
+                <p className="text-xs text-muted-foreground">使用 WGS-84 坐标；经纬度需同时填写，留空表示尚未标注。</p>
+              </div>
+              {!orgEditing && !!orgParent && <div className="space-y-4 border-t pt-4">
+                <p className="text-sm font-medium">组织管理员（可选）</p>
+                <FormField control={orgForm.control} name="adminUsername" render={({ field }) => <FormItem>
+                  <FormLabel>管理员用户名</FormLabel><FormControl><Input placeholder="本租户已有成员或新用户名" {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+                <FormField control={orgForm.control} name="adminPassword" render={({ field }) => <FormItem>
+                  <FormLabel>新账号初始密码</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl>
+                  <FormDescription>已有成员请留空；新账号必须填写。</FormDescription><FormMessage />
+                </FormItem>} />
+                <FormField control={orgForm.control} name="adminRealName" render={({ field }) => <FormItem>
+                  <FormLabel>管理员姓名</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+                <FormField control={orgForm.control} name="adminEmail" render={({ field }) => <FormItem>
+                  <FormLabel>管理员邮箱</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage />
+                </FormItem>} />
+              </div>}
             </form>
           </Form>
           <DialogFooter>

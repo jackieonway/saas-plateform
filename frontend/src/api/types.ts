@@ -178,6 +178,12 @@ export interface TenantRecord {
   name: string
   code: string
   description: string | null
+  province: string
+  city: string
+  district: string
+  address: string
+  longitude: number | null
+  latitude: number | null
   status: Status
   /** 平台租户标记: 全库唯一, 不可删除/停用 */
   isPlatform?: boolean
@@ -193,8 +199,23 @@ export interface TenantPayload {
   name: string
   code: string
   description?: string
+  province?: string
+  city?: string
+  district?: string
+  address?: string
+  longitude?: number | null
+  latitude?: number | null
   /** 过期时间(ISO; null=清除/永不过期) */
   expiresAt?: string | null
+  rootOrganizationName?: string
+  administrator?: AdministratorPayload
+}
+
+export interface AdministratorPayload {
+  username: string
+  password?: string
+  realName?: string
+  email?: string
 }
 
 /* ============ 2.2 授权 ============ */
@@ -346,6 +367,12 @@ export interface OrgNode {
   code: string
   sortOrder: number
   description: string | null
+  province: string
+  city: string
+  district: string
+  address: string
+  longitude: number | null
+  latitude: number | null
   status: Status
   /** 过期时间(ISO, null/缺省=永不过期; 到期后组织下用户无法登录) */
   expiresAt?: string | null
@@ -363,8 +390,15 @@ export interface OrgPayload {
   code: string
   sortOrder: number
   description?: string
+  province?: string
+  city?: string
+  district?: string
+  address?: string
+  longitude?: number | null
+  latitude?: number | null
   /** 过期时间(ISO; null=清除/永不过期) */
   expiresAt?: string | null
+  administrator?: AdministratorPayload | null
 }
 
 /* ============ 2.7 部门 ============ */

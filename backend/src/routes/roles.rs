@@ -187,6 +187,10 @@ async fn update(
     // 隔离校验需在写库前: 先读角色归属再更新
     let loaded = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, loaded).await?;
+    let managed: bool = sqlx::query_scalar(
+        "SELECT built_in AND code IN ('tenant_admin', 'org_admin') FROM roles WHERE id = $1",
+    ).bind(id).fetch_one(&state.pool).await?;
+    if managed { return Err(AppError::conflict("默认管理员角色由系统维护，不允许修改")); }
     if let Some(name) = &body.name {
         if name.trim().is_empty() {
             return Err(AppError::bad_request("角色名称不能为空"));
@@ -290,6 +294,10 @@ async fn put_menus(
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, role_name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, role_name.clone())).await?;
+    let managed: bool = sqlx::query_scalar(
+        "SELECT built_in AND code IN ('tenant_admin', 'org_admin') FROM roles WHERE id = $1",
+    ).bind(id).fetch_one(&state.pool).await?;
+    if managed { return Err(AppError::conflict("默认管理员角色的菜单随授权自动同步")); }
     let menu_ids: Vec<Uuid> = body
         .menu_ids
         .iter()

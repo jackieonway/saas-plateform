@@ -17,6 +17,7 @@ const DepartmentsPage = lazy(() => import("@/pages/system/departments/Department
 const AuthorizationsPage = lazy(() => import("@/pages/system/authorizations/AuthorizationsPage"))
 const UsersPage = lazy(() => import("@/pages/system/users/UsersPage"))
 const RolesPage = lazy(() => import("@/pages/system/roles/RolesPage"))
+const RegionsPage = lazy(() => import("@/pages/system/regions/RegionsPage"))
 const OAuthClientsPage = lazy(() => import("@/pages/system/oauth/ClientsPage"))
 const OAuthTokensPage = lazy(() => import("@/pages/system/oauth/TokensPage"))
 const AuditLogsPage = lazy(() => import("@/pages/system/audit/AuditLogsPage"))
@@ -75,6 +76,7 @@ export default function App() {
           <Route path="/system/authorizations" element={<AuthorizationsPage />} />
           <Route path="/system/users" element={<UsersPage />} />
           <Route path="/system/roles" element={<RolesPage />} />
+          <Route path="/system/regions" element={<RegionsPage />} />
           <Route path="/system/oauth/clients" element={<OAuthClientsPage />} />
           <Route path="/system/oauth/tokens" element={<OAuthTokensPage />} />
           <Route path="/system/audit-logs" element={<AuditLogsPage />} />

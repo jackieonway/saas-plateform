@@ -7,6 +7,7 @@ mod extractors;
 mod notifications;
 mod observability;
 mod releases;
+mod region_seed;
 mod release_archives;
 mod routes;
 mod seed;
@@ -104,6 +105,10 @@ async fn main() -> anyhow::Result<()> {
         } else {
             anyhow::anyhow!("DATABASE_INITIALIZATION_FAILED")
         }
+    })?;
+    region_seed::initialize(&pool).await.map_err(|error| {
+        tracing::error!(error = %error, "Region catalog initialization failed");
+        anyhow::anyhow!("REGION_INITIALIZATION_FAILED")
     })?;
 
     let state = AppState::new(pool, config.clone());
