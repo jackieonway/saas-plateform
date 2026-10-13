@@ -77,6 +77,7 @@ import { organizationsApi } from "@/api/organizations"
 import { departmentsApi } from "@/api/departments"
 import { asArray, asPage } from "@/lib/api"
 import { formatDateTime, formatRelative, generatePassword, useDebounced, GENDER_LABELS } from "@/lib/format"
+import { telephoneSchema } from "@/lib/contact"
 import { toast } from "sonner"
 import type { DeptNode, OrgNode, RoleRecord, TenantRecord, UserRecord } from "@/api/types"
 
@@ -84,12 +85,13 @@ const userSchema = z.object({
   username: z
     .string()
     .min(3, "用户名至少 3 位")
-    .max(32)
-    .regex(/^[a-z0-9_-]+$/i, "仅支持字母、数字、下划线与中划线"),
+    .max(100)
+    .refine((value) => /^[a-z0-9_-]+$/i.test(value) || /^\+?\d{6,30}$/.test(value) || z.string().email().safeParse(value).success,
+      "请输入用户名、电话或 Email"),
   password: z.string().min(12, "密码至少 12 位").max(64),
-  realName: z.string().min(1, "请输入姓名").max(64),
+  realName: z.string().min(1, "请输入姓名").max(100),
   email: z.string().email("邮箱格式不正确").optional().or(z.literal("")),
-  phone: z.string().regex(/^1\d{10}$/, "手机号格式不正确").optional().or(z.literal("")),
+  phone: telephoneSchema.optional(),
   gender: z.enum(["MALE", "FEMALE", "UNKNOWN"]),
 })
 type UserForm = z.infer<typeof userSchema>
@@ -766,7 +768,7 @@ export default function UsersPage() {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>手机号</FormLabel>
+                      <FormLabel>电话</FormLabel>
                       <FormControl>
                         <Input placeholder="选填" {...field} />
                       </FormControl>

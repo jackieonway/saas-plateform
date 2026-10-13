@@ -26,14 +26,13 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { TreeEditor, type EditableNode } from "@/components/TreeEditor"
-import { EntityTreePicker, type PickerNode } from "@/components/EntityTreePicker"
+import { EntityTreePicker } from "@/components/EntityTreePicker"
 import { EmptyState, ErrorState } from "@/components/states"
-import { tenantsApi } from "@/api/tenants"
-import { organizationsApi } from "@/api/organizations"
 import { departmentsApi } from "@/api/departments"
-import { asArray, asPage } from "@/lib/api"
+import { asArray } from "@/lib/api"
+import { useAuthStore } from "@/stores/auth"
 import { toast } from "sonner"
-import type { DeptNode, OrgNode, TenantRecord } from "@/api/types"
+import type { DepartmentOrgNode, DeptNode } from "@/api/types"
 
 const deptSchema = z.object({
   name: z.string().min(1, "请输入部门名称").max(64),
@@ -62,54 +61,51 @@ function findDept(nodes: DeptNode[], id: string): DeptNode | null {
   return null
 }
 
+function findOrganization(nodes: DepartmentOrgNode[], id: string): DepartmentOrgNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node
+    const child = findOrganization(node.children ?? [], id)
+    if (child) return child
+  }
+  return null
+}
+
 export default function DepartmentsPage() {
   const queryClient = useQueryClient()
-
-  const tenantsQuery = useQuery({
-    queryKey: ["tenants", "options"],
-    queryFn: async () => asPage<TenantRecord>(await tenantsApi.list({ page: 1, size: 100 })).records,
-    staleTime: 60_000,
-    retry: 1,
-  })
-  const tenants = tenantsQuery.data ?? []
-  const [tenantId, setTenantId] = React.useState<string | null>(null)
-  React.useEffect(() => {
-    if (!tenantId && tenants.length > 0) setTenantId(tenants[0].id)
-  }, [tenants, tenantId])
+  const profile = useAuthStore((s) => s.profile)
+  const contextEpoch = useAuthStore((s) => s.contextEpoch)
+  const contextSwitching = useAuthStore((s) => s.contextSwitching)
+  const tenantId = profile?.tenant.id ?? null
+  const defaultOrganizationId = profile?.organization.id ?? null
+  const contextKey = `${contextEpoch}:${tenantId}:${defaultOrganizationId}`
+  const contextReady = !!tenantId && !!defaultOrganizationId && !contextSwitching
+  const [selection, setSelection] = React.useState({ contextKey, id: defaultOrganizationId })
 
   const orgTreeQuery = useQuery({
-    queryKey: ["org-tree", tenantId],
-    queryFn: async () => asArray<OrgNode>(await organizationsApi.tree(tenantId!)),
-    enabled: !!tenantId,
+    queryKey: ["department-organizations", tenantId, defaultOrganizationId, contextEpoch],
+    queryFn: async ({ signal }) => asArray<DepartmentOrgNode>(await departmentsApi.organizations(signal)),
+    enabled: contextReady,
     staleTime: 30_000,
     retry: 1,
   })
-  const orgTree = orgTreeQuery.data ?? []
-  const [organizationId, setOrganizationId] = React.useState<string | null>(null)
-  React.useEffect(() => {
-    if (organizationId && orgTree.length > 0) {
-      const exists = (function find(nodes: OrgNode[], id: string): boolean {
-        return nodes.some((n) => n.id === id || (n.children?.length ? find(n.children, id) : false))
-      })(orgTree, organizationId)
-      if (!exists) setOrganizationId(null)
-    }
-  }, [orgTree, organizationId])
-
-  const selectedOrg = React.useMemo(() => {
-    const find = (nodes: OrgNode[]): OrgNode | null => {
-      for (const n of nodes) {
-        if (n.id === organizationId) return n
-        const sub = n.children?.length ? find(n.children) : null
-        if (sub) return sub
-      }
-      return null
-    }
-    return organizationId ? find(orgTree) : null
-  }, [orgTree, organizationId])
+  const orgTree = React.useMemo(() => {
+    if (!contextReady || !profile) return []
+    const current = findOrganization(orgTreeQuery.data ?? [], profile.organization.id)
+    // The authenticated profile remains authoritative while the selector loads
+    // or is unavailable; never fall back to an unrelated organization.
+    return [current ?? { id: profile.organization.id, name: profile.organization.name, code: "", children: [] }]
+  }, [contextReady, profile, orgTreeQuery.data])
+  const selectedOrg = contextReady
+    ? findOrganization(orgTree, selection.contextKey === contextKey && selection.id ? selection.id : defaultOrganizationId!)
+      ?? orgTree[0]
+    : null
+  // Derive the active organization during render so session switches cannot issue a request for the
+  // previously selected organization before a state-reset effect runs.
+  const organizationId = selectedOrg?.id ?? null
 
   const treeQuery = useQuery({
-    queryKey: ["dept-tree", organizationId],
-    queryFn: async () => asArray<DeptNode>(await departmentsApi.tree(organizationId!)),
+    queryKey: ["dept-tree", organizationId, contextEpoch],
+    queryFn: async ({ signal }) => asArray<DeptNode>(await departmentsApi.tree(organizationId!, signal)),
     enabled: !!organizationId,
     staleTime: 30_000,
     retry: 1,
@@ -126,6 +122,7 @@ export default function DepartmentsPage() {
   })
 
   const openCreate = (parentId: string | null) => {
+    if (!organizationId) return
     setEditing(null)
     setParent(parentId)
     form.reset({ name: "", code: "", sortOrder: 0, description: "" })
@@ -142,8 +139,9 @@ export default function DepartmentsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (v: DeptForm) => {
+      if (!organizationId || contextSwitching) throw new Error("请等待登录组织加载完成")
       const payload = {
-        organizationId: organizationId!,
+        organizationId,
         parentId: parent,
         name: v.name,
         code: v.code,
@@ -162,6 +160,13 @@ export default function DepartmentsPage() {
   })
 
   const [deleting, setDeleting] = React.useState<EditableNode | null>(null)
+  React.useEffect(() => {
+    setDialogOpen(false)
+    setEditing(null)
+    setParent(null)
+    setDeleting(null)
+  }, [contextKey, organizationId])
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => departmentsApi.remove(id),
     onSuccess: () => {
@@ -176,17 +181,20 @@ export default function DepartmentsPage() {
     <div>
       <PageHeader
         title="部门管理"
-        description="组织下的部门树,用于用户归属与数据权限细分"
+        description="默认管理当前登录组织的部门，可切换到下级组织"
         icon={<Building2 className="size-5" />}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <EntityTreePicker
-              nodes={orgTree.map((n) => ({ id: n.id, name: n.name, code: n.code, children: toPicker(n.children) }))}
+              nodes={orgTree}
               value={organizationId}
-              onSelect={setOrganizationId}
+              onSelect={(id) => {
+                if (id && findOrganization(orgTree, id)) setSelection({ contextKey, id })
+              }}
               placeholder="选择组织"
               className="w-52"
-              disabled={orgTreeQuery.isLoading}
+              allowClear={false}
+              disabled={!contextReady || orgTreeQuery.isLoading}
             />
             <Button onClick={() => openCreate(null)} disabled={!organizationId}>
               <Plus className="size-4" />
@@ -196,12 +204,20 @@ export default function DepartmentsPage() {
         }
       />
 
+      {contextReady && orgTreeQuery.isError && (
+        <ErrorState
+          className="mb-4"
+          message="下级组织加载失败，当前登录组织的部门仍可管理。"
+          onRetry={() => orgTreeQuery.refetch()}
+        />
+      )}
+
       {!organizationId ? (
         <div className="rounded-xl border bg-card">
           <EmptyState
             className="py-16"
-            title="请先选择组织"
-            description="部门隶属于组织,请在上方选择要管理的组织"
+            title="正在加载登录组织"
+            description="登录组织加载完成后，将自动展示该组织的部门"
             icon={<Building2 className="size-6" />}
           />
         </div>
@@ -211,7 +227,7 @@ export default function DepartmentsPage() {
             <div>
               <p className="text-sm font-semibold">{selectedOrg?.name ?? "已选组织"} · 部门树</p>
               <p className="text-xs text-muted-foreground">
-                {selectedOrg ? `编码 ${selectedOrg.code}` : ""}
+                {selectedOrg?.code ? `编码 ${selectedOrg.code}` : ""}
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={() => openCreate(null)}>
@@ -342,8 +358,4 @@ export default function DepartmentsPage() {
       />
     </div>
   )
-}
-
-function toPicker(children?: OrgNode[]): PickerNode[] {
-  return (children ?? []).map((c) => ({ id: c.id, name: c.name, code: c.code, children: toPicker(c.children) }))
 }

@@ -14,6 +14,8 @@
     "test:platform:browser": "node ../tests/platform-settings-browser.mjs",
     "test:regions": "node --test ../tests/map-location-regions.mjs",
     "test:regions:browser": "node ../tests/region-location-browser.mjs",
+    "test:entities:browser": "node ../tests/entity-types-browser.mjs",
+    "test:departments:browser": "node ../tests/department-context-browser.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx"
   },

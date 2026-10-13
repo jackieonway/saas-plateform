@@ -1,64 +1,93 @@
-use serde::Deserialize;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::config::Config;
 use crate::error::AppError;
+use crate::config::Config;
+use crate::routes::contact::{normalize_phone, Contact};
 use crate::util::password;
+use rand::RngCore;
+use serde::Serialize;
 
-#[derive(Deserialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct Administrator {
+pub(super) struct ContactAdministrator {
+    pub user_id: Uuid,
     pub username: String,
-    #[serde(default)]
-    pub password: String,
-    #[serde(default)]
-    pub real_name: String,
-    #[serde(default)]
-    pub email: String,
+    pub role_name: String,
+    pub created: bool,
+    pub already_initialized: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initial_password: Option<String>,
 }
 
-async fn administrator_user(
-    tx: &mut Transaction<'_, Postgres>, config: &Config, admin: &Administrator,
-    tenant_id: Uuid, require_existing_membership: bool,
-) -> Result<Uuid, AppError> {
-    let username = admin.username.trim();
-    if username.is_empty() { return Err(AppError::bad_request("管理员用户名不能为空")); }
-    let existing: Option<(Uuid, String, bool)> = sqlx::query_as(
-        "SELECT id, status, is_super_admin FROM users WHERE username = $1 FOR UPDATE",
-    ).bind(username).fetch_optional(&mut **tx).await?;
-    if let Some((id, status, super_admin)) = existing {
-        if status != "ENABLED" { return Err(AppError::bad_request("管理员账号未启用")); }
-        if super_admin { return Err(AppError::bad_request("平台超级管理员不能作为租户或组织的默认管理员")); }
-        if !admin.password.is_empty() {
-            return Err(AppError::bad_request("该用户名已存在；选择已有账号时请勿填写初始密码"));
-        }
-        if require_existing_membership {
-            let belongs: bool = sqlx::query_scalar(
-                "SELECT EXISTS(SELECT 1 FROM memberships m JOIN organizations o ON o.id = m.organization_id \
-                 WHERE m.user_id = $1 AND o.tenant_id = $2)",
-            ).bind(id).bind(tenant_id).fetch_one(&mut **tx).await?;
-            if !belongs { return Err(AppError::bad_request("组织管理员必须是本租户已有成员，或创建新账号")); }
-        }
-        Ok(id)
-    } else {
-        if admin.password.is_empty() { return Err(AppError::bad_request("新管理员账号需要填写初始密码")); }
-        password::validate_for_config(&admin.password, config)?;
-        let hash = password::hash_password(&admin.password)?;
-        let id = sqlx::query_scalar(
-            "INSERT INTO users (username, password_hash, real_name, email) VALUES ($1, $2, $3, $4) RETURNING id",
-        ).bind(username).bind(hash).bind(admin.real_name.trim()).bind(admin.email.trim())
-            .fetch_one(&mut **tx).await?;
-        Ok(id)
+type ContactUserRow = (Uuid, String, String, String, String, String, bool);
+
+/// Provision a contact in the same transaction as the entity and managed role.
+/// The returned password is never persisted, logged, or returned by read APIs.
+pub(super) async fn provision_contact_administrator(
+    tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid, org_id: Uuid,
+    contact: &Contact, role_code: &str, allow_existing_global: bool,
+) -> Result<Option<ContactAdministrator>, AppError> {
+    if contact.is_empty() { return Ok(None); }
+    contact.validate(true)?;
+    let username = contact.username();
+    let phone = normalize_phone(&contact.contact_phone);
+    let mut locks = vec![format!("contact:username:{username}")];
+    if !phone.is_empty() { locks.push(format!("contact:phone:{phone}")); }
+    if !contact.contact_email.is_empty() { locks.push(format!("contact:email:{}", contact.contact_email)); }
+    locks.sort();
+    locks.dedup();
+    for key in locks {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(key).execute(&mut **tx).await?;
     }
+    let existing: Vec<ContactUserRow> = sqlx::query_as(
+        "SELECT id, username, COALESCE(real_name,''), COALESCE(phone,''), COALESCE(email,''), status, is_super_admin \
+         FROM users u WHERE trim(COALESCE(real_name,''))=$1 \
+         AND regexp_replace(COALESCE(phone,''), '[[:space:]()\\-]', '', 'g')=$2 \
+         AND lower(trim(COALESCE(email,'')))=$3 AND status='ENABLED' AND is_super_admin=false \
+         AND ($5 OR EXISTS(SELECT 1 FROM memberships m JOIN organizations o ON o.id=m.organization_id \
+             WHERE m.user_id=u.id AND o.tenant_id=$4)) LIMIT 2 FOR UPDATE",
+    ).bind(&contact.contact_name).bind(&phone).bind(&contact.contact_email).bind(tenant_id)
+        .bind(allow_existing_global).fetch_all(&mut **tx).await?;
+    let existing = if existing.len() == 1 { existing.into_iter().next() } else { None };
+    let (user_id, username, created, initial_password) = if let Some((id, username, _, _, _, _, _)) = existing {
+        (id, username, false, None)
+    } else {
+        // Shared phone/email values are not person identity keys. Distinct
+        // contacts receive independent accounts and never inherit each other's grants.
+        let occupied: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE username=$1)")
+            .bind(&username).fetch_one(&mut **tx).await?;
+        let username = if occupied { format!("admin-{}", Uuid::new_v4().simple()) } else { username };
+        let mut bytes = [0_u8; 16];
+        rand::rngs::OsRng.try_fill_bytes(&mut bytes).map_err(|_| anyhow::anyhow!("initial password generation failed"))?;
+        let initial_password = hex::encode(bytes);
+        password::validate_for_config(&initial_password, config)?;
+        let secret = initial_password.clone();
+        let hash = tokio::task::spawn_blocking(move || password::hash_password(&secret))
+            .await.map_err(|_| anyhow::anyhow!("password hashing worker failed"))??;
+        let id = sqlx::query_scalar(
+            "INSERT INTO users(username,password_hash,real_name,phone,email) VALUES($1,$2,$3,$4,$5) RETURNING id",
+        ).bind(&username).bind(hash).bind(&contact.contact_name).bind(&contact.contact_phone)
+            .bind(&contact.contact_email).fetch_one(&mut **tx).await?;
+        (id, username, true, Some(initial_password))
+    };
+    let (role_id, role_name): (Uuid, String) = sqlx::query_as(
+        "SELECT id,name FROM roles WHERE tenant_id=$1 AND organization_id=$2 AND code=$3 AND built_in=true",
+    ).bind(tenant_id).bind(org_id).bind(role_code).fetch_one(&mut **tx).await?;
+    sqlx::query("INSERT INTO memberships(user_id,organization_id,position) VALUES($1,$2,$3) ON CONFLICT DO NOTHING")
+        .bind(user_id).bind(org_id).bind(&role_name).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING")
+        .bind(user_id).bind(role_id).bind(org_id).execute(&mut **tx).await?;
+    Ok(Some(ContactAdministrator { user_id, username, role_name, created, already_initialized: false, initial_password }))
 }
 
-pub(super) async fn provision_tenant(
-    tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid, root_id: Uuid,
-    admin: &Administrator,
+/// Prepare permissions and an unassigned administrator role. Accounts and role
+/// membership are maintained separately through the user and role APIs.
+pub(super) async fn initialize_tenant(
+    tx: &mut Transaction<'_, Postgres>, tenant_id: Uuid, root_id: Uuid,
 ) -> Result<(), AppError> {
-    let user_id = administrator_user(tx, config, admin, tenant_id, false).await?;
-    bind_administrator(tx, user_id, tenant_id, root_id, "租户管理员", "tenant_admin").await?;
+    create_administrator_role(tx, tenant_id, root_id, "超级管理员", "tenant_admin").await?;
     let system: Uuid = sqlx::query_scalar("SELECT id FROM applications WHERE code = 'system' AND status = 'ENABLED'")
         .fetch_optional(&mut **tx).await?.ok_or_else(|| AppError::bad_request("系统管理应用尚未配置"))?;
     sqlx::query("INSERT INTO tenant_applications (tenant_id, application_id) VALUES ($1, $2)")
@@ -68,22 +97,25 @@ pub(super) async fn provision_tenant(
     let menus: Vec<Uuid> = sqlx::query_scalar(
         "SELECT id FROM menus WHERE application_id = $1 AND status = 'ENABLED' \
          AND permission = ANY($2)",
-    ).bind(system).bind(&management_permissions()).fetch_all(&mut **tx).await?;
+    ).bind(system).bind(management_permissions()).fetch_all(&mut **tx).await?;
     grant_menus(tx, tenant_id, root_id, &menus, true).await?;
     Ok(())
 }
 
-pub(super) async fn provision_organization(
-    tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid, org_id: Uuid,
-    parent_id: Uuid, admin: &Administrator,
+pub(super) async fn initialize_organization(
+    tx: &mut Transaction<'_, Postgres>, tenant_id: Uuid, org_id: Uuid,
+    parent_id: Option<Uuid>,
 ) -> Result<(), AppError> {
-    let user_id = administrator_user(tx, config, admin, tenant_id, true).await?;
-    bind_administrator(tx, user_id, tenant_id, org_id, "组织管理员", "org_admin").await?;
+    let Some(parent_id) = parent_id else {
+        create_administrator_role(tx, tenant_id, org_id, "超级管理员", "tenant_admin").await?;
+        return sync_tenant_admin(tx, tenant_id).await;
+    };
+    create_administrator_role(tx, tenant_id, org_id, "超级管理员", "org_admin").await?;
     let menus: Vec<Uuid> = sqlx::query_scalar(
         "SELECT m.id FROM menus m JOIN tenant_menus tm ON tm.menu_id = m.id AND tm.tenant_id = $1 \
          JOIN organization_menus om ON om.menu_id = m.id AND om.organization_id = $2 \
          WHERE m.status = 'ENABLED' AND m.permission = ANY($3)",
-    ).bind(tenant_id).bind(parent_id).bind(&management_permissions())
+    ).bind(tenant_id).bind(parent_id).bind(management_permissions())
         .fetch_all(&mut **tx).await?;
     sqlx::query(
         "INSERT INTO organization_applications (organization_id, application_id) \
@@ -100,18 +132,14 @@ fn management_permissions() -> Vec<&'static str> {
     vec!["dashboard:view", "system:organization", "system:department", "system:authorization", "system:user", "system:role"]
 }
 
-async fn bind_administrator(
-    tx: &mut Transaction<'_, Postgres>, user_id: Uuid, tenant_id: Uuid,
+async fn create_administrator_role(
+    tx: &mut Transaction<'_, Postgres>, tenant_id: Uuid,
     org_id: Uuid, name: &str, code: &str,
 ) -> Result<(), AppError> {
-    sqlx::query("INSERT INTO memberships (user_id, organization_id, position) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING")
-        .bind(user_id).bind(org_id).bind(name).execute(&mut **tx).await?;
-    let role_id: Uuid = sqlx::query_scalar(
+    sqlx::query(
         "INSERT INTO roles (tenant_id, organization_id, name, code, built_in) \
-         VALUES ($1, $2, $3, $4, true) RETURNING id",
-    ).bind(tenant_id).bind(org_id).bind(name).bind(code).fetch_one(&mut **tx).await?;
-    sqlx::query("INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3)")
-        .bind(user_id).bind(role_id).bind(org_id).execute(&mut **tx).await?;
+         VALUES ($1, $2, $3, $4, true)",
+    ).bind(tenant_id).bind(org_id).bind(name).bind(code).execute(&mut **tx).await?;
     Ok(())
 }
 
@@ -169,4 +197,51 @@ pub(super) async fn sync_org_admin(
          ON CONFLICT DO NOTHING",
     ).bind(org_id).execute(&mut **tx).await?;
     Ok(())
+}
+
+/// Explicit, serialized initialization for existing entities. Never replaces an
+/// administrator or changes an existing account password/profile.
+pub(super) async fn initialize_existing_administrator(
+    tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid,
+    org_id: Uuid, contact: &Contact, role_code: &str, allow_existing_global: bool,
+) -> Result<ContactAdministrator, AppError> {
+    sqlx::query("SELECT id FROM organizations WHERE id=$1 FOR UPDATE")
+        .bind(org_id).fetch_one(&mut **tx).await?;
+    let existing: Option<(Uuid, String, String, String, String, bool, bool)> = sqlx::query_as(
+        "SELECT u.id,u.username,r.name,u.status,r.status,r.built_in AND r.code=$2, \
+         EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id AND m.organization_id=ur.organization_id) \
+         FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN users u ON u.id=ur.user_id \
+         WHERE ur.organization_id=$1 AND r.organization_id=$1 \
+         AND (r.code IN ('tenant_admin','org_admin','super_admin','star_admin') \
+              OR r.name IN ('租户管理员','组织管理员','平台管理员','超级管理员')) \
+         ORDER BY ur.created_at,u.id LIMIT 1",
+    ).bind(org_id).bind(role_code).fetch_optional(&mut **tx).await?;
+    if let Some((user_id, username, role_name, user_status, role_status, managed, member)) = existing {
+        if !managed || !member || user_status != "ENABLED" || role_status != "ENABLED" {
+            return Err(AppError::bad_request("该组织已有管理员，请在用户管理和角色管理中单独维护"));
+        }
+        return Ok(ContactAdministrator { user_id, username, role_name, created: false,
+            already_initialized: true, initial_password: None });
+    }
+    if contact.is_empty() {
+        return Err(AppError::bad_request("请先保存联系人姓名，并至少填写电话或 Email"));
+    }
+    contact.validate(true)?;
+    let role: Option<(Uuid, bool, String)> = sqlx::query_as(
+        "SELECT id,built_in,status FROM roles WHERE organization_id=$1 AND code=$2",
+    ).bind(org_id).bind(role_code).fetch_optional(&mut **tx).await?;
+    match role {
+        Some((_, true, status)) if status == "ENABLED" => {},
+        Some(_) => return Err(AppError::bad_request("管理员角色不可用，请在角色管理中维护")),
+        None => {
+            let name = "超级管理员";
+            let occupied: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM roles WHERE organization_id=$1 AND name=$2)")
+                .bind(org_id).bind(name).fetch_one(&mut **tx).await?;
+            if occupied { return Err(AppError::bad_request("已有同名管理员角色，请在角色管理中维护")); }
+            create_administrator_role(tx, tenant_id, org_id, name, role_code).await?;
+        }
+    }
+    sync_org_admin(tx, org_id).await?;
+    provision_contact_administrator(tx, config, tenant_id, org_id, contact, role_code, allow_existing_global)
+        .await?.ok_or_else(|| AppError::bad_request("联系人信息不完整"))
 }

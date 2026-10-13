@@ -33,6 +33,9 @@ mod production_security_tests;
 #[cfg(test)]
 mod platform_settings_tests;
 
+#[cfg(test)]
+mod entity_creation_tests;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;

@@ -5,7 +5,7 @@ use axum::http::HeaderMap;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -128,7 +128,31 @@ struct LoginBody {
     password: String,
 }
 
-/// POST /api/auth/login — 校验凭证 → memberships + credential ticket (10min)
+#[derive(sqlx::FromRow)]
+struct LoginUserRow {
+    id: Uuid,
+    username: String,
+    password_hash: String,
+    status: String,
+    session_version: i64,
+    real_name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CredentialAccount {
+    user_id: Uuid,
+    version: i64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CredentialSelection {
+    #[serde(flatten)]
+    claims: jwt::Claims,
+    accounts: Vec<CredentialAccount>,
+}
+
+/// Password proof precedes tenant/organization selection, including shared aliases.
 async fn login(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -136,100 +160,107 @@ async fn login(
 ) -> Result<Json<Value>, AppError> {
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    let username = body.username.trim().to_string();
-    if username.is_empty() || body.password.is_empty() {
-        return Err(AppError::bad_request("用户名与密码不能为空"));
+    let identifier = body.username.trim().to_string();
+    if identifier.is_empty() || body.password.is_empty() {
+        return Err(AppError::bad_request("登录账号与密码不能为空"));
     }
-    // 登录限流: 失败次数过多直接拒绝
-    if login_locked(&username, &ip) {
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: None, username: &username, tenant_id: None, organization_id: None,
-            action: "LOGIN_FAILED", detail: "尝试过于频繁被限流", ip: &ip, user_agent: &ua,
-        }).await;
+    let phone = crate::routes::contact::phone_identifier(&identifier);
+    let email = if identifier.contains('@') { identifier.to_lowercase() } else { String::new() };
+    if phone.is_empty() && email.is_empty() && login_locked(&identifier, &ip) {
         return Err(AppError::forbidden("登录尝试过于频繁, 请 10 分钟后再试"));
     }
-    let row = sqlx::query_as::<_, (Uuid, String, String, bool, i64)>(
-        "SELECT id, password_hash, status, is_super_admin, session_version FROM users WHERE username = $1",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await?;
-
-    let Some((user_id, hash, status, _, session_version)) = row else {
-        record_login_failure(&username, &ip);
+    let rows: Vec<LoginUserRow> = sqlx::query_as(
+        "SELECT id, username, password_hash, status, session_version, COALESCE(real_name,'') AS real_name \
+         FROM users WHERE username=$1 OR ($2<>'' AND regexp_replace(phone, '[[:space:]()\\-]', '', 'g')=$2) \
+         OR ($3<>'' AND lower(email)=$3) ORDER BY id LIMIT 65",
+    ).bind(&identifier).bind(phone).bind(email).fetch_all(&state.pool).await?;
+    if rows.len() > 64 {
+        return Err(AppError::bad_request("该电话或 Email 关联账号过多，请使用其他登录账号"));
+    }
+    if rows.is_empty() {
+        record_login_failure(&identifier, &ip);
         audit::write(&state.pool, audit::AuditInfo {
-            user_id: None, username: &username, tenant_id: None, organization_id: None,
+            user_id: None, username: &identifier, tenant_id: None, organization_id: None,
             action: "LOGIN_FAILED", detail: "用户不存在", ip: &ip, user_agent: &ua,
         }).await;
         return Err(AppError::unauthorized("用户名或密码错误"));
-    };
-    if status != "ENABLED" {
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user_id), username: &username, tenant_id: None, organization_id: None,
-            action: "LOGIN_FAILED", detail: "账号已禁用", ip: &ip, user_agent: &ua,
-        }).await;
-        return Err(AppError::unauthorized("账号已被禁用"));
     }
-    if !pw::verify_password(&hash, &body.password) {
-        record_login_failure(&username, &ip);
+    let mut accounts = Vec::new();
+    let mut choices = Vec::new();
+    let mut locked = false;
+    let mut authenticated_without_membership = false;
+    let mut failures = Vec::new();
+    for row in rows {
+        if login_locked(&row.username, &ip) { locked = true; continue; }
+        if row.status != "ENABLED" { continue; }
+        let hash = row.password_hash;
+        let secret = body.password.clone();
+        let valid = tokio::task::spawn_blocking(move || pw::verify_password(&hash, &secret))
+            .await.map_err(|_| anyhow::anyhow!("password verification worker failed"))?;
+        if !valid {
+            failures.push((row.id, row.username));
+            continue;
+        }
+        clear_login_failures(&row.username, &ip);
+        let memberships = fetch_memberships(&state.pool, row.id).await?;
+        if memberships.is_empty() { authenticated_without_membership = true; continue; }
+        for membership in &memberships {
+            let mut choice = membership_json(membership);
+            choice["userId"] = json!(row.id);
+            choice["username"] = json!(row.username);
+            choice["realName"] = json!(row.real_name);
+            choices.push(choice);
+        }
+        sqlx::query("UPDATE users SET last_login_at=now(), updated_at=now() WHERE id=$1")
+            .bind(row.id).execute(&state.pool).await?;
+        let first = &memberships[0];
         audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user_id), username: &username, tenant_id: None, organization_id: None,
-            action: "LOGIN_FAILED", detail: "密码错误", ip: &ip, user_agent: &ua,
+            user_id: Some(row.id), username: &row.username, tenant_id: Some(first.tenant_id), organization_id: Some(first.organization_id),
+            action: "LOGIN", detail: "登录成功, 签发登录票据", ip: &ip, user_agent: &ua,
         }).await;
+        accounts.push(CredentialAccount { user_id: row.id, version: row.session_version });
+    }
+    let Some(first) = accounts.first() else {
+        // A successful shared-alias login must not count as a failed attempt
+        // against the other accounts using that alias.
+        if !authenticated_without_membership {
+            for (id, username) in failures {
+                record_login_failure(&username, &ip);
+                audit::write(&state.pool, audit::AuditInfo {
+                    user_id: Some(id), username: &username, tenant_id: None, organization_id: None,
+                    action: "LOGIN_FAILED", detail: "密码错误", ip: &ip, user_agent: &ua,
+                }).await;
+            }
+        }
+        if locked { return Err(AppError::forbidden("登录尝试过于频繁, 请 10 分钟后再试")); }
+        if authenticated_without_membership {
+            return Err(AppError::forbidden("所属租户或组织已到期, 无法登录"));
+        }
         return Err(AppError::unauthorized("用户名或密码错误"));
-    }
-    clear_login_failures(&username, &ip);
-
-    let memberships = fetch_memberships(&state.pool, user_id).await?;
-    // 登录拦截: 过期过滤后无任何可用组织上下文 → 拒绝登录 (在签发 ticket 之前)
-    if memberships.is_empty() {
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user_id), username: &username, tenant_id: None, organization_id: None,
-            action: "LOGIN_FAILED", detail: "所属租户或组织已到期, 无法登录", ip: &ip, user_agent: &ua,
-        }).await;
-        return Err(AppError::forbidden("所属租户或组织已到期, 无法登录"));
-    }
-    let now = Utc::now().timestamp();
-    let claims = jwt::Claims {
-        sub: user_id.to_string(),
-        typ: "credential".into(),
-        tenant: None,
-        org: None,
-        cid: None,
-        scope: None,
-        sid: None,
-        ver: Some(session_version),
-        aud: None,
-        jti: None,
-        exp: now + state.config.credential_ticket_ttl_minutes * 60,
-        iat: now,
     };
-    let ticket = jwt::sign(&claims, &state.config.jwt_secret)?;
-
-    sqlx::query("UPDATE users SET last_login_at = now(), updated_at = now() WHERE id = $1")
-        .bind(user_id)
-        .execute(&state.pool)
-        .await?;
-
-    let (t_id, o_id) = memberships
-        .first()
-        .map(|m| (Some(m.tenant_id), Some(m.organization_id)))
-        .unwrap_or((None, None));
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user_id), username: &username, tenant_id: t_id, organization_id: o_id,
-        action: "LOGIN", detail: "登录成功, 签发登录票据", ip: &ip, user_agent: &ua,
-    }).await;
-
-    Ok(Json(json!({
-        "ticket": ticket,
-        "memberships": memberships.iter().map(membership_json).collect::<Vec<_>>(),
-    })))
+    let now = Utc::now().timestamp();
+    let account_count = accounts.len();
+    let claims = jwt::Claims {
+        sub: first.user_id.to_string(),
+        typ: if account_count > 1 { "credential_multi" } else { "credential" }.into(),
+        tenant: None, org: None, cid: None, scope: None, sid: None,
+        ver: Some(first.version), aud: None, jti: None,
+        exp: now + state.config.credential_ticket_ttl_minutes * 60, iat: now,
+    };
+    let ticket = if account_count == 1 {
+        jwt::sign(&claims, &state.config.jwt_secret)?
+    } else {
+        jwt::sign_payload(&CredentialSelection { claims, accounts }, &state.config.jwt_secret)?
+    };
+    Ok(Json(json!({ "ticket": ticket, "memberships": choices, "accountCount": account_count })))
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ContextBody {
     organization_id: String,
+    #[serde(default)]
+    user_id: Option<Uuid>,
 }
 
 /// POST /api/auth/context — ticket (首次选择组织) 或 session (切换组织) → 会话 JWT
@@ -241,14 +272,32 @@ async fn context(
     let token = bearer_token(&headers)?;
     let claims = jwt::verify(&token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("凭证无效或已过期"))?;
-    if claims.typ != "credential" && claims.typ != "session" {
+    if claims.typ != "credential" && claims.typ != "credential_multi" && claims.typ != "session" {
         return Err(AppError::unauthorized("凭证类型错误, 需要 ticket 或会话令牌"));
     }
-    let user_id: Uuid = claims
-        .sub
-        .parse()
-        .map_err(|_| AppError::unauthorized("凭证无效"))?;
-    let claim_version = claims.ver.ok_or_else(|| AppError::unauthorized("旧版凭证已失效，请重新登录"))?;
+    let org_id: Uuid = body.organization_id.parse()
+        .map_err(|_| AppError::bad_request("组织 ID 格式错误"))?;
+    let (user_id, claim_version) = if claims.typ == "credential_multi" {
+        let selection: CredentialSelection = jwt::verify_payload(&token, &state.config.jwt_secret)
+            .map_err(|_| AppError::unauthorized("登录选择凭证无效或已过期"))?;
+        let selected = if let Some(selected) = body.user_id { selected } else {
+            let ids: Vec<Uuid> = selection.accounts.iter().map(|account| account.user_id).collect();
+            let candidates: Vec<Uuid> = sqlx::query_scalar(
+                "SELECT user_id FROM memberships WHERE organization_id=$1 AND user_id=ANY($2)",
+            ).bind(org_id).bind(ids).fetch_all(&state.pool).await?;
+            if candidates.len() != 1 { return Err(AppError::bad_request("请选择要进入该组织的账号")); }
+            candidates[0]
+        };
+        let account = selection.accounts.iter().find(|account| account.user_id == selected)
+            .ok_or_else(|| AppError::forbidden("所选账号未通过本次登录验证"))?;
+        (account.user_id, account.version)
+    } else {
+        let id: Uuid = claims.sub.parse().map_err(|_| AppError::unauthorized("凭证无效"))?;
+        if body.user_id.is_some_and(|selected| selected != id) {
+            return Err(AppError::forbidden("不能通过当前凭证切换用户账号"));
+        }
+        (id, claims.ver.ok_or_else(|| AppError::unauthorized("旧版凭证已失效，请重新登录"))?)
+    };
     let old_session_id = if claims.typ == "session" {
         let sid: Uuid = claims.sid.as_deref()
             .and_then(|value| Uuid::parse_str(value).ok())
@@ -262,11 +311,6 @@ async fn context(
     } else {
         None
     };
-    let org_id: Uuid = body
-        .organization_id
-        .parse()
-        .map_err(|_| AppError::bad_request("组织 ID 格式错误"))?;
-
     let user = sqlx::query_as::<_, (String, String, String, String, String, String, bool, String, i64)>(
         "SELECT username, COALESCE(real_name,''), COALESCE(email,''), COALESCE(phone,''), \
          COALESCE(avatar,''), COALESCE(gender,'UNKNOWN'), is_super_admin, status, session_version FROM users WHERE id = $1",

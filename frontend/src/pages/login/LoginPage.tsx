@@ -55,7 +55,7 @@ const ECO_APPS = [
 ]
 
 const schema = z.object({
-  username: z.string().min(1, "请输入用户名"),
+  username: z.string().min(1, "请输入登录账号"),
   password: z.string().min(1, "请输入密码"),
   remember: z.boolean(),
 })
@@ -105,7 +105,8 @@ export default function LoginPage() {
 
   React.useEffect(() => {
     if (step === "select" && loginData && tenantGroups.length === 1 && tenantGroups[0].items.length === 1) {
-      void selectContext(tenantGroups[0].items[0].organizationId, loginData)
+      const only = tenantGroups[0].items[0]
+      void selectContext(only.organizationId, loginData, only.userId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, loginData])
@@ -127,16 +128,16 @@ export default function LoginPage() {
     }
   }
 
-  const selectContext = async (organizationId: string, data: LoginResp) => {
+  const selectContext = async (organizationId: string, data: LoginResp, userId?: string) => {
     if (!data.ticket) {
       setError("登录票据缺失,请重新登录")
       setStep("form")
       return
     }
-    setSelecting(organizationId)
+    setSelecting(`${userId ?? ""}:${organizationId}`)
     setError(null)
     try {
-      const ctx = await authApi.selectContext(organizationId, data.ticket)
+      const ctx = await authApi.selectContext(organizationId, data.ticket, userId)
       // 清空上一会话的所有缓存,避免残留他人数据
       queryClient.clear()
       setToken(ctx.accessToken)
@@ -275,14 +276,14 @@ export default function LoginPage() {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                   <div className="space-y-2">
                     <Label htmlFor="username">
-                      用户名 <span className="text-destructive">*</span>
+                      登录账号 <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
                       <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         id="username"
                         autoComplete="username"
-                        placeholder="请输入用户名"
+                        placeholder="用户名 / 电话 / Email"
                         className="pl-9"
                         {...register("username")}
                       />
@@ -387,10 +388,10 @@ export default function LoginPage() {
                       <div className="space-y-2">
                         {g.items.map((m) => (
                           <button
-                            key={m.organizationId}
+                            key={`${m.userId ?? ""}:${m.organizationId}`}
                             type="button"
                             disabled={selecting !== null}
-                            onClick={() => selectContext(m.organizationId, loginData!)}
+                            onClick={() => selectContext(m.organizationId, loginData!, m.userId)}
                             className={cn(
                               "group flex w-full items-center gap-3 rounded-xl border bg-card p-3.5 text-left outline-none transition-all hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                             )}
@@ -410,8 +411,11 @@ export default function LoginPage() {
                               <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                                 {m.organizationPath}
                               </span>
+                              {(loginData?.accountCount ?? 1) > 1 && <span className="mt-0.5 block text-xs text-muted-foreground">
+                                登录身份：{m.realName || m.username}（{m.username}）
+                              </span>}
                             </span>
-                            {selecting === m.organizationId ? (
+                            {selecting === `${m.userId ?? ""}:${m.organizationId}` ? (
                               <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
                             ) : (
                               <CheckCircle2 className="size-4 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-primary" />

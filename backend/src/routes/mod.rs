@@ -13,6 +13,7 @@ pub mod monitor;
 pub mod notifications;
 mod platform_settings;
 mod onboarding;
+mod contact;
 pub mod oauth2;
 pub mod oauth_admin;
 pub mod organizations;

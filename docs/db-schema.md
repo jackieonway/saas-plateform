@@ -28,6 +28,11 @@ CREATE TABLE tenants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL,
   code VARCHAR(50) NOT NULL UNIQUE,
+  tenant_type VARCHAR(30) NOT NULL DEFAULT 'COMPANY'
+    CHECK (tenant_type IN ('PERSONAL', 'COMPANY', 'PUBLIC_INSTITUTION', 'GOVERNMENT', 'OTHER')),
+  contact_name VARCHAR(100) NOT NULL DEFAULT '',
+  contact_phone VARCHAR(30) NOT NULL DEFAULT '',
+  contact_email VARCHAR(100) NOT NULL DEFAULT '',
   description TEXT DEFAULT '',
   province VARCHAR(100) NOT NULL DEFAULT '',
   city VARCHAR(100) NOT NULL DEFAULT '',
@@ -79,7 +84,12 @@ CREATE TABLE organizations (
   parent_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
   code VARCHAR(50) DEFAULT '',
+  organization_type VARCHAR(30) NOT NULL DEFAULT 'COMPANY'
+    CHECK (organization_type IN ('COMPANY', 'SUBSIDIARY', 'BRANCH', 'PUBLIC_INSTITUTION', 'GOVERNMENT', 'OTHER')),
   sort_order INT NOT NULL DEFAULT 0,
+  contact_name VARCHAR(100) NOT NULL DEFAULT '',
+  contact_phone VARCHAR(30) NOT NULL DEFAULT '',
+  contact_email VARCHAR(100) NOT NULL DEFAULT '',
   description TEXT DEFAULT '',
   province VARCHAR(100) NOT NULL DEFAULT '',
   city VARCHAR(100) NOT NULL DEFAULT '',
@@ -110,7 +120,7 @@ CREATE TABLE departments (
 
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  username VARCHAR(50) NOT NULL UNIQUE,
+  username VARCHAR(100) NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   real_name VARCHAR(100) DEFAULT '',
   email VARCHAR(100) DEFAULT '',
@@ -267,7 +277,7 @@ CREATE TABLE oauth_device_codes (
 
 CREATE TABLE audit_logs (
   id BIGSERIAL PRIMARY KEY,
-  user_id UUID, username VARCHAR(50) DEFAULT '',
+  user_id UUID, username VARCHAR(100) DEFAULT '',
   tenant_id UUID, tenant_name VARCHAR(100) DEFAULT '',
   organization_id UUID, organization_name VARCHAR(100) DEFAULT '',
   action VARCHAR(50) NOT NULL,
@@ -343,3 +353,8 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 [`0032_platform_settings.sql`](../backend/migrations/0032_platform_settings.sql) 创建单行 `platform_settings` 表。主键 `singleton` 固定为 `true`，保存 `platform_name`（100 字符）、`platform_description`（300）、`logo_url`（2048）、`login_title`（100）、`login_description`（300）、`footer_text`（500）和更新时间。匿名接口只读取这些展示字段；修改需平台管理上下文和 `system:settings` 权限。
 
 平台租户名称继续由 `tenants.name` 保存，避免出现两份名称。此迁移将 `is_platform = true` 的租户编码改为 `admin-tenant`，保留 UUID 和关联数据；原默认名称改为 `平台管理租户`，自定义名称保持原值。管理接口在一个事务中保存展示配置和租户名称。后台入口和升级说明见[平台品牌与管理租户设置](./platform-settings.md)。
+
+联系人及登录标识由 `0035_entity_contacts.sql` 增加。租户与组织的联系人电话、邮箱均不设全局唯一约束；用户仍以 UUID 为身份主键、用户名全局唯一。用户电话和小写邮箱采用普通索引，支持多个账号共用；登录先验证密码，再通过签名票据中的账号 ID 与实际成员关系选择租户、组织。管理员绑定使用现有 memberships、user_roles 和内置角色，初始密码仅保存 Argon2 哈希。
+
+
+`0036_scoped_super_administrator_names.sql` 将现有角色名称、成员职位中的“租户管理员”“组织管理员”统一为“超级管理员”。角色 ID、`tenant_admin`/`org_admin` 等角色编码、成员关系和菜单授权保持不变；`users.is_super_admin` 不变，普通租户和组织的超级管理员仍受原有作用域限制。

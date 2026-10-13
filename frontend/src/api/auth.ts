@@ -14,8 +14,8 @@ export const authApi = {
     api.post<LoginResp>("/api/auth/login", { username, password }, { skipAuth: true, suppress401: true }),
 
   /** 登录第二步:用 credential ticket 选择组织建立会话 */
-  selectContext: (organizationId: string, ticket: string) =>
-    api.post<ContextResp>("/api/auth/context", { organizationId }, { bearer: ticket, suppress401: true }),
+  selectContext: (organizationId: string, ticket: string, userId?: string) =>
+    api.post<ContextResp>("/api/auth/context", { organizationId, userId }, { bearer: ticket, suppress401: true }),
 
   /** 已登录会话中切换组织 */
   switchContext: (organizationId: string, token: string) =>

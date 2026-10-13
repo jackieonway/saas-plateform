@@ -15,12 +15,50 @@ use crate::util::{audit, tree};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/api/departments/organizations", get(organization_options))
         .route("/api/departments/tree", get(tree_handler))
         .route("/api/departments", post(create))
         .route("/api/departments/{id}", put(update).delete(delete))
 }
 
 type DeptRowTuple = (Uuid, Uuid, Option<Uuid>, String, String, i32, String, String);
+type DepartmentOrgRowTuple = (Uuid, Uuid, Option<Uuid>, String, String, String);
+
+/// GET /api/departments/organizations — 当前会话组织及下级组织的部门管理选择范围。
+async fn organization_options(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
+    RequirePermission("system:department").check(&state, &user).await?;
+    let rows: Vec<DepartmentOrgRowTuple> = sqlx::query_as(
+        "WITH RECURSIVE scoped_orgs AS ( \
+         SELECT id, parent_id FROM organizations WHERE id = $1 AND tenant_id = $2 \
+         UNION SELECT o.id, o.parent_id FROM organizations o \
+         JOIN scoped_orgs parent ON o.parent_id = parent.id WHERE o.tenant_id = $2 ) \
+         SELECT o.id, o.tenant_id, CASE WHEN o.id = $1 THEN NULL::uuid ELSE o.parent_id END, \
+         o.name, COALESCE(o.code, ''), o.status \
+         FROM organizations o JOIN scoped_orgs scoped ON scoped.id = o.id \
+         ORDER BY o.sort_order, o.created_at",
+    )
+    .bind(user.org_id)
+    .bind(user.tenant_id)
+    .fetch_all(&state.pool)
+    .await?;
+    let items = rows
+        .into_iter()
+        .map(|(id, tenant_id, parent_id, name, code, status)| {
+            json!({
+                "id": id, "tenantId": tenant_id, "parentId": parent_id,
+                "name": name, "code": code, "status": status,
+            })
+        })
+        .collect();
+    Ok(Json(Value::Array(tree::build_tree(items))))
+}
+
+#[cfg(test)]
+#[path = "department_organization_tests.rs"]
+mod organization_tests;
 
 /// 部门所属租户 (经 organization 链路); 不存在返回 None
 async fn dept_tenant(pool: &sqlx::PgPool, dept_id: Uuid) -> Result<Option<Uuid>, AppError> {

@@ -56,10 +56,15 @@ import { asArray, asPage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { expiryBadge, ExpiryCell, isoToLocalInput } from "@/lib/expiry"
 import { coordinateField, coordinateOrNull, coordinatePoint, hasCoordinatePair, locationText } from "@/lib/location"
+import { organizationTypes, organizationTypeLabels } from "@/lib/entity-types"
+import { contactFields, requireContact } from "@/lib/contact"
+import { ContactFields } from "@/components/ContactFields"
+import { InitializeAdministratorButton } from "@/components/InitializeAdministratorButton"
+import { ContactAdministratorDialog } from "@/components/ContactAdministratorDialog"
 import { LocationPicker } from "@/components/LocationPicker"
 import { RegionPicker } from "@/components/RegionPicker"
 import { toast } from "sonner"
-import type { DeptNode, OrgNode, TenantRecord } from "@/api/types"
+import type { ContactAdministrator, DeptNode, OrgNode, TenantRecord } from "@/api/types"
 
 const nodeSchema = z.object({
   name: z.string().min(1, "请输入名称").max(64),
@@ -71,6 +76,8 @@ type NodeForm = z.infer<typeof nodeSchema>
 
 /** 组织表单在部门表单基础上增加「过期时间」(空=永不过期; 接受 datetime-local 或合法 ISO) */
 const orgNodeSchema = nodeSchema.extend({
+  ...contactFields,
+  organizationType: z.enum(organizationTypes),
   province: z.string().max(100, "省份名称过长"),
   city: z.string().max(100, "城市名称过长"),
   district: z.string().max(100, "区县名称过长"),
@@ -79,10 +86,6 @@ const orgNodeSchema = nodeSchema.extend({
   address: z.string().max(300, "详细地址过长"),
   longitude: coordinateField("经度", -180, 180),
   latitude: coordinateField("纬度", -90, 90),
-  adminUsername: z.string().optional(),
-  adminPassword: z.string().optional(),
-  adminRealName: z.string().optional(),
-  adminEmail: z.string().email("邮箱格式无效").or(z.literal("")).optional(),
   expiresAt: z
     .string()
     .refine((v) => !v || !Number.isNaN(new Date(v).getTime()), "无效的过期时间")
@@ -181,16 +184,17 @@ export default function OrganizationsPage() {
   const [orgDialog, setOrgDialog] = React.useState(false)
   const [regionVersion, setRegionVersion] = React.useState<string | null>(null)
   const [orgEditing, setOrgEditing] = React.useState<OrgNode | null>(null)
+  const [administrator, setAdministrator] = React.useState<ContactAdministrator | null>(null)
   const [orgParent, setOrgParent] = React.useState<string | null>(null)
   const orgForm = useForm<OrgNodeForm>({
-    resolver: zResolver(orgNodeSchema),
-    defaultValues: { name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
+    resolver: zResolver(orgNodeSchema.superRefine((values, ctx) => { if (!orgEditing) requireContact(values, ctx) })),
+    defaultValues: { contactName: "", contactPhone: "", contactEmail: "", name: "", code: "", organizationType: "COMPANY", sortOrder: 0, description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "" },
   })
 
   const openOrgCreate = (parentId: string | null) => {
     setOrgEditing(null)
     setOrgParent(parentId)
-    orgForm.reset({ name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
+    orgForm.reset({ contactName: "", contactPhone: "", contactEmail: "", name: "", code: "", organizationType: "COMPANY", sortOrder: 0, description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "" })
     setOrgDialog(true)
   }
   const openOrgEdit = (node: EditableNode) => {
@@ -201,12 +205,13 @@ export default function OrganizationsPage() {
     orgForm.reset({
       name: full.name,
       code: full.code,
+      organizationType: full.organizationType ?? "COMPANY",
+      contactName: full.contactName ?? "", contactPhone: full.contactPhone ?? "", contactEmail: full.contactEmail ?? "",
       sortOrder: full.sortOrder ?? 0,
       description: full.description ?? "",
       province: full.province ?? "", city: full.city ?? "", district: full.district ?? "", township: full.township ?? "", village: full.village ?? "", address: full.address ?? "",
       longitude: full.longitude == null ? "" : String(full.longitude), latitude: full.latitude == null ? "" : String(full.latitude),
       expiresAt: isoToLocalInput(full.expiresAt),
-      adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "",
     })
     setOrgDialog(true)
   }
@@ -219,23 +224,26 @@ export default function OrganizationsPage() {
         parentId: orgParent,
         name: v.name,
         code: v.code,
+        organizationType: v.organizationType,
+        contactName: v.contactName, contactPhone: v.contactPhone, contactEmail: v.contactEmail,
         sortOrder: v.sortOrder,
         description: v.description || "",
         province: v.province, city: v.city, district: v.district, township: v.township, village: v.village, address: v.address,
         longitude: coordinateOrNull(v.longitude), latitude: coordinateOrNull(v.latitude),
         expiresAt: v.expiresAt ? new Date(v.expiresAt).toISOString() : null,
-        administrator: !orgEditing && orgParent && v.adminUsername?.trim() ? {
-          username: v.adminUsername, password: v.adminPassword,
-          realName: v.adminRealName, email: v.adminEmail,
-        } : null,
       }
       if (orgEditing) await organizationsApi.update(orgEditing.id, payload)
-      else await organizationsApi.create(payload)
+      else return (await organizationsApi.create(payload)).administrator
     },
-    onSuccess: () => {
+    onSuccess: (createdAdministrator) => {
+      if (createdAdministrator) setAdministrator(createdAdministrator)
       toast.success(orgEditing ? "组织已更新" : "组织创建成功")
       setOrgDialog(false)
       queryClient.invalidateQueries({ queryKey: ["org-tree"] })
+      queryClient.invalidateQueries({ queryKey: ["department-organizations"] })
+      queryClient.invalidateQueries({ queryKey: ["roles"] })
+      queryClient.invalidateQueries({ queryKey: ["users"] })
+      queryClient.invalidateQueries({ queryKey: ["tenants"] })
       queryClient.invalidateQueries({ queryKey: ["profile"] })
     },
     onError: (e: Error) => toast.error(e.message || "保存失败"),
@@ -248,6 +256,7 @@ export default function OrganizationsPage() {
       toast.success("组织已删除")
       setOrgDeleting(null)
       queryClient.invalidateQueries({ queryKey: ["org-tree"] })
+      queryClient.invalidateQueries({ queryKey: ["department-organizations"] })
     },
     onError: (e: Error) => toast.error(e.message || "删除失败"),
   })
@@ -368,9 +377,9 @@ export default function OrganizationsPage() {
           onLocate={() => setView("tree")}
         />
       ) : (
-      <div className="flex flex-col gap-4 lg:flex-row">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         {/* 左侧组织树 */}
-        <aside className="w-full shrink-0 rounded-xl border bg-card lg:w-[340px]">
+        <aside className="min-w-0 rounded-xl border bg-card">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">组织树</p>
             <Button size="sm" variant="outline" onClick={() => openOrgCreate(null)} disabled={!tenantId}>
@@ -420,6 +429,7 @@ export default function OrganizationsPage() {
                   onAdd={openOrgCreate}
                   onEdit={openOrgEdit}
                   onDelete={setOrgDeleting}
+                  onAdministrator={setAdministrator}
                 />
               </div>
             )}
@@ -427,7 +437,7 @@ export default function OrganizationsPage() {
         </aside>
 
         {/* 右侧详情 */}
-        <section className="min-w-0 flex-1 space-y-4">
+        <section className="min-w-0 space-y-4">
           {!selected ? (
             <div className="rounded-xl border bg-card">
               <EmptyState
@@ -445,6 +455,7 @@ export default function OrganizationsPage() {
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold">{selected.name}</h2>
+                      <Badge variant="outline">{organizationTypeLabels[selected.organizationType ?? "COMPANY"]}</Badge>
                       <StatusBadge status={selected.status} />
                       {expiryBadge(selected.expiresAt ?? null)}
                       <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">{selected.code}</code>
@@ -472,6 +483,9 @@ export default function OrganizationsPage() {
                       </Breadcrumb>
                     )}
                     {selected.description && <p className="text-sm text-muted-foreground">{selected.description}</p>}
+                    {(selected.contactName || selected.contactPhone || selected.contactEmail) && <p className="text-sm text-muted-foreground">
+                      联系人：{[selected.contactName, selected.contactPhone, selected.contactEmail].filter(Boolean).join(" · ")}
+                    </p>}
                     {locationText(selected) && <p className="text-sm text-muted-foreground">地址：{locationText(selected)}</p>}
                     {selected.longitude != null && selected.latitude != null && (
                       <p className="text-xs text-muted-foreground">坐标：{selected.longitude}, {selected.latitude}</p>
@@ -486,13 +500,20 @@ export default function OrganizationsPage() {
                         <span className="whitespace-nowrap">永不过期</span>
                       )}
                     </p>
+                    <p className="text-xs text-muted-foreground">
+                      管理员可在 <Link to="/system/users" className="text-primary hover:underline">用户管理</Link> 中维护组织成员，
+                      再到 <Link to="/system/roles" className="text-primary hover:underline">角色管理</Link> 分配内置管理员角色。
+                    </p>
                   </div>
+                  <div className="flex shrink-0 items-center gap-1 self-start">
+                  <InitializeAdministratorButton key={selected.id} name={selected.name} initialize={() => organizationsApi.initializeAdministrator(selected.id)} onSuccess={setAdministrator} />
                   <Button asChild>
                     <Link to={`/system/authorizations?organizationId=${selected.id}`}>
                       <Settings2 className="size-4" />
                       授权管理
                     </Link>
                   </Button>
+                  </div>
                 </div>
               </div>
 
@@ -552,7 +573,7 @@ export default function OrganizationsPage() {
           <DialogHeader>
             <DialogTitle>{orgEditing ? `编辑组织「${orgEditing.name}」` : "新增组织"}</DialogTitle>
             <DialogDescription>
-              {orgEditing ? "" : orgParent ? "将在所选组织下创建子组织" : "将创建为根组织"}
+              {orgEditing ? "维护组织基本信息" : orgParent ? "将在所选组织下创建子组织；管理员可在创建后通过用户管理与角色管理单独维护。" : "将创建为根组织；管理员可在创建后通过用户管理与角色管理单独维护。"}
             </DialogDescription>
           </DialogHeader>
           <Form {...orgForm}>
@@ -583,6 +604,24 @@ export default function OrganizationsPage() {
                     <FormControl>
                       <Input placeholder="如: east-china" className="font-mono" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={orgForm.control}
+                name="organizationType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>组织类型 <span className="text-destructive">*</span></FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger aria-label="组织类型"><SelectValue placeholder="选择组织类型" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {organizationTypes.map((type) => <SelectItem key={type} value={type}>{organizationTypeLabels[type]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -632,6 +671,7 @@ export default function OrganizationsPage() {
                   </FormItem>
                 )}
               />
+              <ContactFields creating={!orgEditing} />
               <div className="space-y-3 border-t pt-4">
                 <p className="text-sm font-medium">地点标注</p>
                 <RegionPicker version={regionVersion} onVersionChange={setRegionVersion} />
@@ -662,22 +702,6 @@ export default function OrganizationsPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">使用 WGS-84 坐标；经纬度需同时填写，留空表示尚未标注。</p>
               </div>
-              {!orgEditing && !!orgParent && <div className="space-y-4 border-t pt-4">
-                <p className="text-sm font-medium">组织管理员（可选）</p>
-                <FormField control={orgForm.control} name="adminUsername" render={({ field }) => <FormItem>
-                  <FormLabel>管理员用户名</FormLabel><FormControl><Input placeholder="本租户已有成员或新用户名" {...field} /></FormControl><FormMessage />
-                </FormItem>} />
-                <FormField control={orgForm.control} name="adminPassword" render={({ field }) => <FormItem>
-                  <FormLabel>新账号初始密码</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl>
-                  <FormDescription>已有成员请留空；新账号必须填写。</FormDescription><FormMessage />
-                </FormItem>} />
-                <FormField control={orgForm.control} name="adminRealName" render={({ field }) => <FormItem>
-                  <FormLabel>管理员姓名</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
-                </FormItem>} />
-                <FormField control={orgForm.control} name="adminEmail" render={({ field }) => <FormItem>
-                  <FormLabel>管理员邮箱</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage />
-                </FormItem>} />
-              </div>}
             </form>
           </Form>
           <DialogFooter>
@@ -773,6 +797,7 @@ export default function OrganizationsPage() {
         </DialogContent>
       </Dialog>
 
+      <ContactAdministratorDialog administrator={administrator} onClose={() => setAdministrator(null)} />
       <ConfirmDialog
         open={!!orgDeleting}
         onOpenChange={(o) => !o && setOrgDeleting(null)}
@@ -809,6 +834,7 @@ function SelectableTree({
   onAdd,
   onEdit,
   onDelete,
+  onAdministrator,
 }: {
   nodes: EditableNode[]
   selectedId: string | null
@@ -816,6 +842,7 @@ function SelectableTree({
   onAdd: (parentId: string) => void
   onEdit: (node: EditableNode) => void
   onDelete: (node: EditableNode) => void
+  onAdministrator: (administrator: ContactAdministrator) => void
 }) {
   return (
     <ul role="tree" className="space-y-0.5">
@@ -830,6 +857,7 @@ function SelectableTree({
           onAdd={onAdd}
           onEdit={onEdit}
           onDelete={onDelete}
+          onAdministrator={onAdministrator}
         />
       ))}
     </ul>
@@ -845,6 +873,7 @@ function SelectRow({
   onAdd,
   onEdit,
   onDelete,
+  onAdministrator,
 }: {
   node: EditableNode
   siblings: EditableNode[]
@@ -854,6 +883,7 @@ function SelectRow({
   onAdd: (parentId: string) => void
   onEdit: (node: EditableNode) => void
   onDelete: (node: EditableNode) => void
+  onAdministrator: (administrator: ContactAdministrator) => void
 }) {
   const [open, setOpen] = React.useState(true)
   const hasChildren = node.children.length > 0
@@ -892,7 +922,10 @@ function SelectRow({
         <span className={cnText(active)}>{node.name}</span>
         {expiryBadge(node.expiresAt ?? null)}
         {node.code && <code className="hidden font-mono text-[10px] text-muted-foreground/50 sm:inline">{node.code}</code>}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+            <InitializeAdministratorButton name={node.name} initialize={() => organizationsApi.initializeAdministrator(node.id)} onSuccess={onAdministrator} />
+          </div>
           <IconBtn label="新增子组织" onClick={() => onAdd(node.id)}>
             <Plus className="size-3.5" />
           </IconBtn>
@@ -917,6 +950,7 @@ function SelectRow({
               onAdd={onAdd}
               onEdit={onEdit}
               onDelete={onDelete}
+              onAdministrator={onAdministrator}
             />
           ))}
         </ul>

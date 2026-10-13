@@ -30,12 +30,27 @@ pub struct Claims {
 }
 
 pub fn sign(claims: &Claims, secret: &str) -> anyhow::Result<String> {
+    sign_payload(claims, secret)
+}
+
+pub(crate) fn sign_payload<T: Serialize>(claims: &T, secret: &str) -> anyhow::Result<String> {
     encode(
         &Header::new(jsonwebtoken::Algorithm::HS256),
         claims,
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(|e| anyhow::anyhow!("JWT 签发失败: {e}"))
+}
+
+pub(crate) fn verify_payload<T: serde::de::DeserializeOwned>(token: &str, secret: &str) -> anyhow::Result<T> {
+    // Apply the same strict expiry check as every existing credential before
+    // decoding the signed account-selection payload.
+    verify(token, secret)?;
+    let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+    validation.validate_aud = false;
+    validation.leeway = 0;
+    decode::<T>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation)
+        .map(|data| data.claims).map_err(|_| anyhow::anyhow!("invalid login selection credential"))
 }
 
 pub fn verify(token: &str, secret: &str) -> anyhow::Result<Claims> {

@@ -46,15 +46,22 @@ import { useAuthStore } from "@/stores/auth"
 import { tenantsApi } from "@/api/tenants"
 import { asPage } from "@/lib/api"
 import { formatDateTime, useDebounced } from "@/lib/format"
+import { tenantTypeLabels, tenantTypes } from "@/lib/entity-types"
+import { contactFields, requireContact } from "@/lib/contact"
+import { ContactFields } from "@/components/ContactFields"
+import { InitializeAdministratorButton } from "@/components/InitializeAdministratorButton"
+import { ContactAdministratorDialog } from "@/components/ContactAdministratorDialog"
 import { ExpiryCell, isoToLocalInput } from "@/lib/expiry"
 import { coordinateField, coordinateOrNull, coordinatePoint, hasCoordinatePair, locationText } from "@/lib/location"
 import { LocationPicker } from "@/components/LocationPicker"
 import { RegionPicker } from "@/components/RegionPicker"
 import { toast } from "sonner"
-import type { TenantRecord } from "@/api/types"
+import type { ContactAdministrator, TenantRecord } from "@/api/types"
 
 const tenantSchema = z.object({
+  ...contactFields,
   name: z.string().trim().min(1, "请输入租户名称").max(100, "名称最多 100 个字符"),
+  tenantType: z.enum(tenantTypes),
   code: z
     .string()
     .min(2, "请输入租户编码")
@@ -69,11 +76,6 @@ const tenantSchema = z.object({
   address: z.string().max(300, "详细地址过长"),
   longitude: coordinateField("经度", -180, 180),
   latitude: coordinateField("纬度", -90, 90),
-  rootOrganizationName: z.string().optional(),
-  adminUsername: z.string().optional(),
-  adminPassword: z.string().optional(),
-  adminRealName: z.string().optional(),
-  adminEmail: z.string().email("邮箱格式无效").or(z.literal("")).optional(),
   /** 过期时间: 空=永不过期; 接受 datetime-local("2026-12-31T23:59")或合法 ISO */
   expiresAt: z
     .string()
@@ -112,14 +114,15 @@ export default function TenantsPage() {
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [regionVersion, setRegionVersion] = React.useState<string | null>(null)
   const [editing, setEditing] = React.useState<TenantRecord | null>(null)
+  const [administrator, setAdministrator] = React.useState<ContactAdministrator | null>(null)
   const form = useForm<TenantForm>({
-    resolver: zResolver(tenantSchema),
-    defaultValues: { name: "", code: "", description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
+    resolver: zResolver(tenantSchema.superRefine((values, ctx) => { if (!editing) requireContact(values, ctx) })),
+    defaultValues: { contactName: "", contactPhone: "", contactEmail: "", name: "", code: "", tenantType: "COMPANY", description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "" },
   })
 
   const openCreate = () => {
     setEditing(null)
-    form.reset({ name: "", code: "", description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
+    form.reset({ contactName: "", contactPhone: "", contactEmail: "", name: "", code: "", tenantType: "COMPANY", description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "" })
     setDialogOpen(true)
   }
   const openEdit = (t: TenantRecord) => {
@@ -127,11 +130,12 @@ export default function TenantsPage() {
     form.reset({
       name: t.name,
       code: t.code,
+      tenantType: t.tenantType ?? "COMPANY",
+      contactName: t.contactName ?? "", contactPhone: t.contactPhone ?? "", contactEmail: t.contactEmail ?? "",
       description: t.description ?? "",
       province: t.province ?? "", city: t.city ?? "", district: t.district ?? "", township: t.township ?? "", village: t.village ?? "", address: t.address ?? "",
       longitude: t.longitude == null ? "" : String(t.longitude), latitude: t.latitude == null ? "" : String(t.latitude),
       expiresAt: isoToLocalInput(t.expiresAt),
-      rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "",
     })
     setDialogOpen(true)
   }
@@ -140,25 +144,23 @@ export default function TenantsPage() {
     mutationFn: async (values: TenantForm) => {
       /* datetime-local("2026-12-31T23:59") → ISO; 空串 → null(清除/永久) */
       const body = {
-        name: values.name, code: values.code, description: values.description,
+        name: values.name, code: values.code, tenantType: values.tenantType, description: values.description,
+        contactName: values.contactName, contactPhone: values.contactPhone, contactEmail: values.contactEmail,
         province: values.province, city: values.city, district: values.district, township: values.township, village: values.village, address: values.address,
         longitude: coordinateOrNull(values.longitude), latitude: coordinateOrNull(values.latitude),
         expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
       }
       if (editing) await tenantsApi.update(editing.id, body)
-      else {
-        if (!values.rootOrganizationName?.trim() || !values.adminUsername?.trim()) {
-          throw new Error("请填写根组织名称和首位管理员用户名")
-        }
-        await tenantsApi.create({ ...body, rootOrganizationName: values.rootOrganizationName,
-          administrator: { username: values.adminUsername, password: values.adminPassword,
-            realName: values.adminRealName, email: values.adminEmail } })
-      }
+      else return (await tenantsApi.create(body)).administrator
     },
-    onSuccess: () => {
+    onSuccess: (createdAdministrator) => {
+      if (createdAdministrator) setAdministrator(createdAdministrator)
       toast.success(editing ? "租户已更新" : "租户创建成功")
       setDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ["tenants"] })
+      queryClient.invalidateQueries({ queryKey: ["org-tree"] })
+      queryClient.invalidateQueries({ queryKey: ["roles"] })
+      queryClient.invalidateQueries({ queryKey: ["users"] })
       queryClient.invalidateQueries({ queryKey: ["profile"] })
       queryClient.invalidateQueries({ queryKey: ["platform-settings"] })
     },
@@ -248,7 +250,7 @@ export default function TenantsPage() {
       <div className="rounded-xl border bg-card">
         {listQuery.isLoading ? (
           <div className="p-2">
-            <TableSkeleton cols={9} />
+            <TableSkeleton cols={10} />
           </div>
         ) : listQuery.isError ? (
           <ErrorState
@@ -275,6 +277,7 @@ export default function TenantsPage() {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">名称</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">编码</TableHead>
+                <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">类型</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">状态</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">有效期</TableHead>
                 <TableHead className="text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">组织数</TableHead>
@@ -307,6 +310,9 @@ export default function TenantsPage() {
                             </span>
                           )}
                         </div>
+                        {t.contactName && <p className="text-xs text-muted-foreground">联系人：{t.contactName}</p>}
+                        {t.contactPhone && <p className="text-xs text-muted-foreground">{t.contactPhone}</p>}
+                        {t.contactEmail && <p className="text-xs text-muted-foreground">{t.contactEmail}</p>}
                         {locationText(t) && <p className="truncate text-xs text-muted-foreground" title={locationText(t)}>{locationText(t)}</p>}
                         {t.longitude != null && t.latitude != null && (
                           <p className="text-xs text-muted-foreground">坐标：{t.longitude}, {t.latitude}</p>
@@ -322,6 +328,7 @@ export default function TenantsPage() {
                   <TableCell>
                     <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{t.code}</code>
                   </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">{tenantTypeLabels[t.tenantType ?? "COMPANY"]}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={t.status} />
@@ -363,6 +370,7 @@ export default function TenantsPage() {
                   <TableCell className="pr-5">
                     {isPlatformContext ? (
                       <div className="flex items-center justify-end gap-0.5">
+                        <InitializeAdministratorButton name={t.name} initialize={() => tenantsApi.initializeAdministrator(t.id)} onSuccess={setAdministrator} />
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button asChild variant="ghost" size="icon" className="size-8">
@@ -437,7 +445,7 @@ export default function TenantsPage() {
           <DialogHeader>
             <DialogTitle>{editing ? "编辑租户" : "新建租户"}</DialogTitle>
             <DialogDescription>
-              {editing ? `正在编辑「${editing.name}」` : "租户是组织结构与授权体系的顶层容器"}
+              {editing ? `正在编辑「${editing.name}」` : "创建后自动以租户名称建立根组织，并根据联系人信息开通首位管理员。管理员可在用户管理和角色管理中单独维护。"}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -478,6 +486,22 @@ export default function TenantsPage() {
               />
               <FormField
                 control={form.control}
+                name="tenantType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>租户类型 <span className="text-destructive">*</span></FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger aria-label="租户类型"><SelectValue placeholder="请选择租户类型" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {tenantTypes.map((type) => <SelectItem key={type} value={type}>{tenantTypeLabels[type]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="expiresAt"
                 render={({ field }) => (
                   <FormItem>
@@ -508,6 +532,7 @@ export default function TenantsPage() {
                   </FormItem>
                 )}
               />
+              <ContactFields creating={!editing} />
               <div className="space-y-3 border-t pt-4">
                 <p className="text-sm font-medium">地点标注</p>
                 <RegionPicker version={regionVersion} onVersionChange={setRegionVersion} />
@@ -538,25 +563,6 @@ export default function TenantsPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">使用 WGS-84 坐标；经纬度需同时填写，留空表示尚未标注。</p>
               </div>
-              {!editing && <div className="space-y-4 border-t pt-4">
-                <p className="text-sm font-medium">开通管理员</p>
-                <FormField control={form.control} name="rootOrganizationName" render={({ field }) => <FormItem>
-                  <FormLabel>根组织名称 *</FormLabel><FormControl><Input placeholder="如: 公司总部" {...field} /></FormControl><FormMessage />
-                </FormItem>} />
-                <FormField control={form.control} name="adminUsername" render={({ field }) => <FormItem>
-                  <FormLabel>管理员用户名 *</FormLabel><FormControl><Input autoComplete="off" placeholder="已有用户名或新用户名" {...field} /></FormControl><FormMessage />
-                </FormItem>} />
-                <FormField control={form.control} name="adminPassword" render={({ field }) => <FormItem>
-                  <FormLabel>新账号初始密码</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl>
-                  <FormDescription>已有账号请留空；新账号必须填写，不会生成默认密码。</FormDescription><FormMessage />
-                </FormItem>} />
-                <FormField control={form.control} name="adminRealName" render={({ field }) => <FormItem>
-                  <FormLabel>管理员姓名</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
-                </FormItem>} />
-                <FormField control={form.control} name="adminEmail" render={({ field }) => <FormItem>
-                  <FormLabel>管理员邮箱</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage />
-                </FormItem>} />
-              </div>}
             </form>
           </Form>
           <DialogFooter>
@@ -571,6 +577,7 @@ export default function TenantsPage() {
         </DialogContent>
       </Dialog>
 
+      <ContactAdministratorDialog administrator={administrator} onClose={() => setAdministrator(null)} />
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}

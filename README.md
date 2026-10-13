@@ -119,6 +119,10 @@ tests/                  现有 shell 运行时检查脚本
 
 ## 7. API 与数据库
 
+租户支持个人、公司、事业单位、政府、其他类型；组织支持公司、子公司、分公司、事业单位、政府、其他类型。创建租户时根组织自动采用租户名称，租户和组织的新建表单不再填写管理员。新建时维护联系人姓名、电话、Email（姓名及至少一个登录标识），自动创建或匹配首位用户并授予对应管理员角色；新账号随机初始密码创建后展示一次。电话优先作为用户名，电话和 Email 都能登录。不同联系人共用电话或邮箱时拥有独立账号；同一联系人的复用在许可范围内进行。登录先验证密码，再选择租户与组织，选择项与已验证用户 ID 绑定。账号资料和后续授权仍可在用户管理、角色管理中维护。现有数据默认类型为公司，新增字段通过后端启动时的 SQLx 迁移自动补齐；联系人字段默认空，不批量创建历史用户。前端创建、联系人维护、类型回填及登录身份选择检查可在 `frontend/` 执行 `npm run test:entities:browser`。
+
+部门管理默认展示当前登录组织的部门，可在组织选择器中切换到任意下级组织，切换后新增部门归属所选组织。组织选项使用部门专用接口，只需部门管理权限；切换登录组织后，页面自动重新选择新的登录组织。浏览器回归检查可在 `frontend/` 执行 `npm run test:departments:browser`。
+
 - 健康检查：`GET /api/health`，含数据库可用性状态。
 - 业务 API：`/api/auth`、`/api/tenants`、`/api/organizations`、`/api/departments`、`/api/users`、`/api/roles`、`/api/applications`、`/api/menus`、`/api/notifications`、`/api/oauth`、`/api/audit-logs`、`/api/monitor` 等。路由注册以 `backend/src/routes/mod.rs` 及各模块 `routes()` 为准。
 - OAuth 协议 API：`/oauth/authorize`、`/oauth/token`、`/oauth/userinfo`、`/oauth/introspect`、`/oauth/revoke`、`/oauth/device/authorization` 和发现文档。
@@ -157,3 +161,14 @@ tests/                  现有 shell 运行时检查脚本
 ## 10. 维护入口
 
 新增业务模块时，通常需要同时修改 `backend/src/routes/`、`frontend/src/api/`、`frontend/src/pages/` 和 `frontend/src/App.tsx`；若涉及持久化，再新增 SQLx 迁移。菜单、权限码和默认授权可参考 `backend/src/seed.rs`，新旧数据库的数据补丁应通过新迁移实现，避免改动已执行迁移。现有 shell 检查脚本位于 `tests/`，两个 HTML 子应用各有 `smoke-test.cjs`；仓库没有统一的一键测试命令。
+
+
+### 既有租户和组织：初始化首位管理员
+
+完善并保存联系人后，可在租户列表或组织详情点击“初始化首位管理员”。修改联系人本身仍不会创建人员。
+
+- `POST /api/tenants/{id}/initialize-administrator`：平台上下文，需 `system:tenant`、`system:user`、`system:role`，使用租户联系人和唯一根组织。
+- `POST /api/organizations/{id}/initialize-administrator`：需 `system:organization`、`system:user`、`system:role`，沿用组织租户隔离，使用组织联系人；根组织和子组织均授予“超级管理员”角色，权限分别限制在对应租户、组织授权范围内。
+- 响应包含 `administrator`。新账号返回一次 `initialPassword`；复用账号保留原密码。已有已初始化管理员时返回 `alreadyInitialized: true`，不重复创建人员或修改授权。
+- 已有单独维护的管理员、不可用管理员角色、联系人缺失或租户没有唯一根组织时，返回可操作的错误提示。旧实体缺少内置角色时补建角色，仅同步现有组织授权范围，不扩大租户或组织授权。
+- 初始化在事务内锁定组织，租户入口、根组织入口和并发重复请求共用相同幂等检查。更换联系人后再执行也不会替换已初始化管理员。

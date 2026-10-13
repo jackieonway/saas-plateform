@@ -2,6 +2,9 @@
  * Dante Cloud API 强类型定义(与 docs/api-contract.md 精确一致)
  */
 
+import type { OrganizationType, TenantType } from "@/lib/entity-types"
+export type { OrganizationType, TenantType } from "@/lib/entity-types"
+
 export type Status = "ENABLED" | "DISABLED"
 export type MenuType = "DIR" | "MENU" | "BUTTON"
 export type ClientType = "CONFIDENTIAL" | "PUBLIC"
@@ -26,6 +29,10 @@ export interface PageParams {
 /* ============ 1. 认证 ============ */
 
 export interface Membership {
+  /** 登录选择项可关联多个已验证账号；建立会话时需提交对应 userId。 */
+  userId?: string
+  username?: string
+  realName?: string
   organizationId: string
   organizationName: string
   organizationPath: string
@@ -36,6 +43,7 @@ export interface Membership {
 }
 
 export interface LoginResp {
+  accountCount?: number
   memberships: Membership[]
   ticket?: string
 }
@@ -177,6 +185,10 @@ export interface TenantRecord {
   id: string
   name: string
   code: string
+  tenantType?: TenantType
+  contactName?: string
+  contactPhone?: string
+  contactEmail?: string
   description: string | null
   province: string
   city: string
@@ -200,6 +212,10 @@ export interface TenantRecord {
 export interface TenantPayload {
   name: string
   code: string
+  tenantType?: TenantType
+  contactName?: string
+  contactPhone?: string
+  contactEmail?: string
   description?: string
   province?: string
   city?: string
@@ -211,15 +227,6 @@ export interface TenantPayload {
   latitude?: number | null
   /** 过期时间(ISO; null=清除/永不过期) */
   expiresAt?: string | null
-  rootOrganizationName?: string
-  administrator?: AdministratorPayload
-}
-
-export interface AdministratorPayload {
-  username: string
-  password?: string
-  realName?: string
-  email?: string
 }
 
 /* ============ 2.2 授权 ============ */
@@ -369,6 +376,10 @@ export interface OrgNode {
   parentId: string | null
   name: string
   code: string
+  organizationType?: OrganizationType
+  contactName?: string
+  contactPhone?: string
+  contactEmail?: string
   sortOrder: number
   description: string | null
   province: string
@@ -394,6 +405,10 @@ export interface OrgPayload {
   parentId: string | null
   name: string
   code: string
+  organizationType?: OrganizationType
+  contactName?: string
+  contactPhone?: string
+  contactEmail?: string
   sortOrder: number
   description?: string
   province?: string
@@ -406,10 +421,32 @@ export interface OrgPayload {
   latitude?: number | null
   /** 过期时间(ISO; null=清除/永不过期) */
   expiresAt?: string | null
-  administrator?: AdministratorPayload | null
 }
 
 /* ============ 2.7 部门 ============ */
+
+export interface ContactAdministrator {
+  alreadyInitialized?: boolean
+  userId: string
+  username: string
+  roleName: string
+  created: boolean
+  initialPassword?: string
+}
+
+export interface EntityCreationResult {
+  id: string
+  administrator?: ContactAdministrator
+}
+
+/** 部门管理可切换的组织：当前登录组织及其下级组织。 */
+export interface DepartmentOrgNode {
+  id: string
+  name: string
+  code: string
+  status?: Status
+  children: DepartmentOrgNode[]
+}
 
 export interface DeptNode {
   id: string

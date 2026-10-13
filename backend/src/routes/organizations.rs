@@ -12,7 +12,8 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
 use crate::state::AppState;
-use crate::routes::onboarding::{self, Administrator};
+use crate::routes::onboarding;
+use crate::routes::contact::{Contact, ContactUpdate};
 use crate::routes::tenants::validate_coordinates;
 use crate::util::{audit, tree};
 
@@ -22,6 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/organizations", post(create))
         .route("/api/organizations/{id}", put(update).delete(delete))
         .route("/api/organizations/{id}/status", put(update_status))
+        .route("/api/organizations/{id}/initialize-administrator", post(initialize_administrator))
         .route("/api/organizations/{id}/authorizations", get(get_authorizations).put(put_authorizations))
 }
 
@@ -32,6 +34,10 @@ struct OrgRow {
     parent_id: Option<Uuid>,
     name: String,
     code: String,
+    organization_type: String,
+    contact_name: String,
+    contact_phone: String,
+    contact_email: String,
     sort_order: i32,
     description: String,
     status: String,
@@ -46,13 +52,15 @@ struct OrgRow {
     latitude: Option<f64>,
 }
 
-const ORG_SELECT: &str = "SELECT o.id, o.tenant_id, o.parent_id, o.name, COALESCE(o.code,'') AS code, \
+const ORG_SELECT: &str = "SELECT o.id, o.tenant_id, o.parent_id, o.name, COALESCE(o.code,'') AS code, o.organization_type, o.contact_name, o.contact_phone, o.contact_email, \
  o.sort_order, COALESCE(o.description,'') AS description, o.status, o.expires_at, \
  o.province, o.city, o.district, o.township, o.village, o.address, o.longitude, o.latitude";
 
 fn org_json(r: &OrgRow) -> Value {
     json!({
         "id": r.id, "tenantId": r.tenant_id, "parentId": r.parent_id, "name": r.name, "code": r.code,
+        "organizationType": r.organization_type,
+        "contactName": r.contact_name, "contactPhone": r.contact_phone, "contactEmail": r.contact_email,
         "sortOrder": r.sort_order, "description": r.description, "status": r.status,
         "expiresAt": r.expires_at,
         "province": r.province, "city": r.city, "district": r.district,
@@ -135,10 +143,14 @@ async fn tree_handler(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OrgBody {
+    #[serde(flatten)]
+    contact: Contact,
     tenant_id: String,
     #[serde(default)]
     parent_id: Option<String>,
     name: String,
+    #[serde(default = "default_organization_type")]
+    organization_type: String,
     #[serde(default)]
     code: String,
     #[serde(default)]
@@ -164,8 +176,18 @@ struct OrgBody {
     /// 过期时间: 缺省/null = 永久
     #[serde(default)]
     expires_at: Option<DateTime<Utc>>,
-    #[serde(default)]
-    administrator: Option<Administrator>,
+}
+
+fn default_organization_type() -> String {
+    "COMPANY".to_string()
+}
+
+fn validate_organization_type(organization_type: &str) -> Result<(), AppError> {
+    if ["COMPANY", "SUBSIDIARY", "BRANCH", "PUBLIC_INSTITUTION", "GOVERNMENT", "OTHER"].contains(&organization_type) {
+        Ok(())
+    } else {
+        Err(AppError::bad_request("组织类型仅支持公司、子公司、分公司、事业单位、政府或其他"))
+    }
 }
 
 async fn parse_parent(
@@ -200,6 +222,10 @@ async fn create(
     ApiJson(body): ApiJson<OrgBody>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:organization").check(&state, &user).await?;
+    validate_organization_type(&body.organization_type)?;
+    let contact = body.contact.normalized();
+    contact.validate(true)?;
+    let allow_existing_global = state.is_platform_context(&user).await?;
     let tenant_id: Uuid = body
         .tenant_id
         .parse()
@@ -214,9 +240,6 @@ async fn create(
         return Err(AppError::bad_request("所属租户不存在"));
     }
     let parent_id = parse_parent(&state.pool, tenant_id, &body.parent_id).await?;
-    if body.administrator.is_some() && parent_id.is_none() {
-        return Err(AppError::bad_request("根组织管理员请在创建租户时指定"));
-    }
     // 根组织唯一: 每个租户仅允许一个 parent_id IS NULL 的组织 (应用层前置校验, DB 唯一索引兜底)
     if parent_id.is_none() {
         let root_exists: bool = sqlx::query_scalar(
@@ -237,9 +260,9 @@ async fn create(
     let mut tx = state.pool.begin().await?;
     let row: OrgRow = sqlx::query_as(
         "INSERT INTO organizations (tenant_id, parent_id, name, code, sort_order, description, expires_at, \
-         province, city, district, township, village, address, longitude, latitude) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) \
-         RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, sort_order, \
+         province, city, district, township, village, address, longitude, latitude, organization_type, contact_name, contact_phone, contact_email) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) \
+         RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, organization_type, contact_name, contact_phone, contact_email, sort_order, \
          COALESCE(description,'') AS description, status, expires_at, province, city, district, township, village, address, longitude, latitude",
     )
     .bind(tenant_id)
@@ -257,12 +280,18 @@ async fn create(
     .bind(body.address.trim())
     .bind(body.longitude)
     .bind(body.latitude)
+    .bind(&body.organization_type)
+    .bind(&contact.contact_name)
+    .bind(&contact.contact_phone)
+    .bind(&contact.contact_email)
     .fetch_one(&mut *tx)
     .await
     .map_err(map_root_unique_violation)?;
-    if let (Some(parent), Some(admin)) = (parent_id, &body.administrator) {
-        onboarding::provision_organization(&mut tx, &state.config, tenant_id, row.id, parent, admin).await?;
-    }
+    onboarding::initialize_organization(&mut tx, tenant_id, row.id, parent_id).await?;
+    let role_code = if parent_id.is_none() { "tenant_admin" } else { "org_admin" };
+    let administrator = onboarding::provision_contact_administrator(
+        &mut tx, &state.config, tenant_id, row.id, &contact, role_code, allow_existing_global,
+    ).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
@@ -272,16 +301,24 @@ async fn create(
         tenant_id: Some(tenant_id), organization_id: Some(row.id),
         action: "CREATE_ORGANIZATION", detail: &format!("创建组织: {}", name), ip: &ip, user_agent: &ua,
     }).await;
-    Ok(Json(org_json(&row)))
+    let mut response = org_json(&row);
+    if let Some(administrator) = administrator {
+        response["administrator"] = serde_json::to_value(administrator).map_err(anyhow::Error::from)?;
+    }
+    Ok(Json(response))
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OrgUpdate {
+    #[serde(flatten)]
+    contact: ContactUpdate,
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
     code: Option<String>,
+    #[serde(default)]
+    organization_type: Option<String>,
     #[serde(default)]
     sort_order: Option<i32>,
     #[serde(default)]
@@ -310,7 +347,7 @@ struct OrgUpdate {
 
 #[cfg(test)]
 mod location_contract_tests {
-    use super::{OrgBody, OrgUpdate};
+    use super::{validate_organization_type, OrgBody, OrgUpdate};
     use serde_json::json;
 
     #[test]
@@ -320,6 +357,7 @@ mod location_contract_tests {
             "province": "浙江省", "city": "杭州市", "district": "西湖区",
         });
         let legacy: OrgBody = serde_json::from_value(payload.clone()).unwrap();
+        assert_eq!(legacy.organization_type, "COMPANY");
         assert_eq!((legacy.township.as_str(), legacy.village.as_str()), ("", ""));
 
         payload["township"] = json!("转塘街道");
@@ -327,6 +365,24 @@ mod location_contract_tests {
         let full: OrgBody = serde_json::from_value(payload).unwrap();
         assert_eq!(full.township, "转塘街道");
         assert_eq!(full.village, "龙王沙社区");
+    }
+
+    #[test]
+    fn organization_types_follow_the_contract() {
+        for organization_type in ["COMPANY", "SUBSIDIARY", "BRANCH", "PUBLIC_INSTITUTION", "GOVERNMENT", "OTHER"] {
+            assert!(validate_organization_type(organization_type).is_ok());
+            let body: OrgBody = serde_json::from_value(json!({
+                "tenantId": "tenant-id", "name": "业务组织", "organizationType": organization_type,
+            })).unwrap();
+            assert_eq!(body.organization_type, organization_type);
+        }
+        for invalid in ["", "branch", "PERSONAL", "UNKNOWN"] {
+            assert!(validate_organization_type(invalid).is_err());
+        }
+        let omitted: OrgUpdate = serde_json::from_value(json!({"name": "新名称"})).unwrap();
+        assert_eq!(omitted.organization_type, None);
+        let update: OrgUpdate = serde_json::from_value(json!({"organizationType": "BRANCH"})).unwrap();
+        assert_eq!(update.organization_type.as_deref(), Some("BRANCH"));
     }
 
     #[test]
@@ -361,6 +417,10 @@ async fn update(
             return Err(AppError::bad_request("组织名称不能为空"));
         }
     }
+    if let Some(organization_type) = &body.organization_type {
+        validate_organization_type(organization_type)?;
+    }
+    let contact = body.contact.normalized()?;
     let current_coordinates: (Option<f64>, Option<f64>) = sqlx::query_as(
         "SELECT longitude, latitude FROM organizations WHERE id = $1",
     ).bind(id).fetch_one(&state.pool).await?;
@@ -375,9 +435,11 @@ async fn update(
          province = COALESCE($8, province), city = COALESCE($9, city), district = COALESCE($10, district), \
          township = COALESCE($11, township), village = COALESCE($12, village), address = COALESCE($13, address), \
          longitude = CASE WHEN $14 THEN $15::double precision ELSE longitude END, \
-         latitude = CASE WHEN $16 THEN $17::double precision ELSE latitude END, updated_at = now() \
+         latitude = CASE WHEN $16 THEN $17::double precision ELSE latitude END, \
+         organization_type = COALESCE($18, organization_type), contact_name = COALESCE($19, contact_name), \
+         contact_phone = COALESCE($20, contact_phone), contact_email = COALESCE($21, contact_email), updated_at = now() \
          WHERE id = $1 \
-         RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, sort_order, \
+         RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, organization_type, contact_name, contact_phone, contact_email, sort_order, \
          COALESCE(description,'') AS description, status, expires_at, province, city, district, township, village, address, longitude, latitude",
     )
     .bind(id)
@@ -397,6 +459,10 @@ async fn update(
     .bind(body.longitude.flatten())
     .bind(body.latitude.is_some())
     .bind(body.latitude.flatten())
+    .bind(&body.organization_type)
+    .bind(&contact.contact_name)
+    .bind(&contact.contact_phone)
+    .bind(&contact.contact_email)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("组织不存在"))?;
@@ -759,4 +825,36 @@ async fn put_authorizations(
         ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(json!({"ok": true})))
+}
+
+async fn initialize_administrator(
+    State(state): State<AppState>, headers: HeaderMap, user: CurrentUser, Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    RequirePermission("system:organization").check(&state, &user).await?;
+    RequirePermission("system:user").check(&state, &user).await?;
+    RequirePermission("system:role").check(&state, &user).await?;
+    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    ensure_org_in_scope(&state, &user, id).await?;
+    let allow_global = state.is_platform_context(&user).await?;
+    let mut tx = state.pool.begin().await?;
+    let (tenant_id, parent_id, name, contact_name, contact_phone, contact_email): (Uuid, Option<Uuid>, String, String, String, String) = sqlx::query_as(
+        "SELECT tenant_id,parent_id,name,contact_name,contact_phone,contact_email FROM organizations WHERE id=$1 FOR UPDATE",
+    ).bind(id).fetch_optional(&mut *tx).await?.ok_or_else(|| AppError::not_found("组织不存在"))?;
+    let org_id = id;
+    let role_code = if parent_id.is_none() { "tenant_admin" } else { "org_admin" };
+    let contact = Contact { contact_name, contact_phone, contact_email }.normalized();
+    let administrator = onboarding::initialize_existing_administrator(
+        &mut tx, &state.config, tenant_id, org_id, &contact, role_code, allow_global,
+    ).await?;
+    tx.commit().await?;
+    state.invalidate_perm_cache();
+    let ip = audit::client_ip(&headers);
+    let ua = audit::ua_of(&headers);
+    audit::write(&state.pool, audit::AuditInfo {
+        user_id: Some(user.user_id), username: &user.username,
+        tenant_id: Some(tenant_id), organization_id: Some(org_id),
+        action: "INITIALIZE_ADMINISTRATOR", detail: &format!("初始化首位管理员: {name}；账号 {}", administrator.user_id),
+        ip: &ip, user_agent: &ua,
+    }).await;
+    Ok(Json(json!({"administrator": administrator})))
 }

@@ -1,13 +1,14 @@
 import { api } from "@/lib/api"
-import type { AuthorizationResp, AuthorizationPayload, TenantPayload } from "./types"
+import type { AuthorizationResp, AuthorizationPayload, TenantPayload, EntityCreationResult } from "./types"
 
 export const tenantsApi = {
   list: (params: { page?: number; size?: number; keyword?: string; status?: string }) =>
     api.get<unknown>(
       `/api/tenants${paramsToString({ page: params.page, size: params.size, keyword: params.keyword, status: params.status })}`
     ),
-  create: (body: TenantPayload) => api.post("/api/tenants", body),
+  create: (body: TenantPayload) => api.post<EntityCreationResult>("/api/tenants", body),
   update: (id: string, body: TenantPayload) => api.put(`/api/tenants/${id}`, body),
+  initializeAdministrator: (id: string) => api.post<EntityCreationResult>(`/api/tenants/${id}/initialize-administrator`, {}),
   remove: (id: string) => api.del(`/api/tenants/${id}`),
   setStatus: (id: string, status: string) => api.put(`/api/tenants/${id}/status`, { status }),
 

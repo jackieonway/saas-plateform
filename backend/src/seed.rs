@@ -344,7 +344,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     // ===== 成员关系 =====
     insert_membership(&mut tx, admin, root, Some(rd_dept), "超级管理员").await?;
-    insert_membership(&mut tx, zhangsan, east, None, "组织管理员").await?;
+    insert_membership(&mut tx, zhangsan, east, None, "超级管理员").await?;
     insert_membership(&mut tx, lisi, root, None, "产品专员").await?;
     insert_membership(&mut tx, wangwu, root, None, "总部职员").await?;
     insert_membership(&mut tx, wangwu, north, None, "驻京代表").await?;
@@ -352,7 +352,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     // ===== 角色 =====
     let super_role = insert_role(&mut tx, tenant, root, "超级管理员", "super_admin", "平台内置超管角色, 拥有全部菜单", true).await?;
-    let org_admin_role = insert_role(&mut tx, tenant, east, "组织管理员", "org_admin", "华东区分公司组织管理员", false).await?;
+    let org_admin_role = insert_role(&mut tx, tenant, east, "超级管理员", "org_admin", "华东区分公司超级管理员", false).await?;
     let common_role = insert_role(&mut tx, tenant, root, "普通用户", "common_user", "普通用户基础菜单", false).await?;
 
     // ===== 角色菜单 =====
@@ -448,10 +448,10 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     .await?;
     let star_root = insert_org(&mut tx, star, None, "星辰集团", "STAR", 1, "星辰制造总部").await?;
     let chenjiu = insert_user(&mut tx, "chenjiu", "Cj@12345", "陈九", "chenjiu@star-mfg.example", "13900000009", "MALE", false).await?;
-    insert_membership(&mut tx, chenjiu, star_root, None, "租户管理员").await?;
+    insert_membership(&mut tx, chenjiu, star_root, None, "超级管理员").await?;
     let star_admin = insert_role(
-        &mut tx, star, star_root, "租户管理员", "star_admin",
-        "星辰制造租户管理员: 本租户内组织/用户/角色管理", false,
+        &mut tx, star, star_root, "超级管理员", "star_admin",
+        "星辰制造超级管理员: 本租户内组织/用户/角色管理", false,
     ).await?;
     // 角色菜单/租户授权/组织授权三网同口径: system 管理子集 + 消息中心
     let star_menus = [dashboard, org_dir, org_mgmt, dept_mgmt, authz_mgmt, ur_dir, user_mgmt, role_mgmt, h_inbox, h_notify];
