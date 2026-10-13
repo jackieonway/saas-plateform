@@ -23,6 +23,7 @@ const stripMapProxyCredentials = (request: ClientRequest) => {
   request.removeHeader("x-forwarded-for");
 };
 const mapProxyHeaders = { "User-Agent": "DanteCloud/1.0 map-resource-proxy" };
+const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || "http://127.0.0.1:3001";
 
 export default defineConfig({
   plugins: [
@@ -122,11 +123,11 @@ export default defineConfig({
         configure: (proxy) => proxy.on("proxyReq", stripMapProxyCredentials),
       },
       "/api": {
-        target: "http://127.0.0.1:3001",
+        target: backendProxyTarget,
         changeOrigin: true,
       },
       "/oauth": {
-        target: "http://127.0.0.1:3001",
+        target: backendProxyTarget,
         changeOrigin: true,
       },
       "/work-orders-api": {

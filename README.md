@@ -107,6 +107,7 @@ tests/                  现有 shell 运行时检查脚本
    ```
 
 3. 启动后端：`cd backend; cargo run`。健康检查为 `http://localhost:3001/api/health`。
+   Vite 的后端代理可通过 `BACKEND_PROXY_TARGET` 指定，默认 `http://127.0.0.1:3001`。若 Windows 本机 IPv4 连接超时而 IPv6 正常，可用 `BIND_ADDR=[::1]:3001` 启动后端，并在启动前端的 PowerShell 中设置 `$env:BACKEND_PROXY_TARGET='http://[::1]:3001'`。
 4. 启动前端：`cd frontend; npm ci; npm run dev`，访问 `http://localhost:3000`。Vite 会代理 API；`npm run build` 执行 TypeScript 检查及生产构建。
    租户和组织的地图选点统一访问同源 `/api/maps/*`：本地 Vite 代理 OpenStreetMap 瓦片、Nominatim 搜索与反向地址解析、ipwho.is IP 估算，部署时由 Rust 后端代理固定上游。服务端须能访问这些 HTTPS 上游，受限网络可为后端配置标准 `HTTPS_PROXY`；浏览器不再直连地图服务。确认位置时反向解析省市区及详细地址；IP 估算在部署环境使用经过可信网关规范化的访问者公网 IP，结果通常只精确到城市，不自动写入门牌地址。本地 Vite 模式的 IP 估算使用开发机出口 IP。自有底图需修改后端固定上游及其授权说明。
    租户和组织的省、市、县（区）、乡镇（街道）、村（社区）五级选项使用地区管理目录，默认选择未删除且有数据的最新版本，也可在表单中切换版本。上级变更会清空全部下级；地图解析结果按相同版本匹配标准地区路径，未匹配的层级会留空并提示手动选择。东莞、中山等没有区县层级的城市可直接选择乡镇街道。已有地址会尝试匹配标准名称；无法匹配的原值保留并提示重新选择。乡镇、村社区字段由 `0033_tenant_organization_local_regions.sql` 迁移新增，后端启动时自动执行。地区回归检查可在 `frontend/` 执行 `npm run test:regions` 和 `npm run test:regions:browser`，浏览器检查使用隔离的 API 数据，需要现有 Chromium 或 Edge。
