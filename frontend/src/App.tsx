@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react"
 import { Navigate, Route, Routes } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import AppLayout from "@/components/layout/AppLayout"
+import { usePlatformBrandingMetadata } from "@/hooks/use-platform-branding"
 
 const LoginPage = lazy(() => import("@/pages/login/LoginPage"))
 const DevicePage = lazy(() => import("@/pages/device/DevicePage"))
@@ -10,6 +11,7 @@ const DashboardPage = lazy(() => import("@/pages/dashboard/DashboardPage"))
 const ProfilePage = lazy(() => import("@/pages/profile/ProfilePage"))
 const EmbedPage = lazy(() => import("@/pages/embed/EmbedPage"))
 const TenantsPage = lazy(() => import("@/pages/system/tenants/TenantsPage"))
+const PlatformSettingsPage = lazy(() => import("@/pages/system/settings/PlatformSettingsPage"))
 const ApplicationsPage = lazy(() => import("@/pages/system/applications/ApplicationsPage"))
 const MenusPage = lazy(() => import("@/pages/system/menus/MenusPage"))
 const OrganizationsPage = lazy(() => import("@/pages/system/organizations/OrganizationsPage"))
@@ -52,6 +54,7 @@ function NotFound() {
 }
 
 export default function App() {
+  usePlatformBrandingMetadata()
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
@@ -69,6 +72,7 @@ export default function App() {
           <Route path="/embed" element={<EmbedPage />} />
 
           <Route path="/system/tenants" element={<TenantsPage />} />
+          <Route path="/system/settings" element={<PlatformSettingsPage />} />
           <Route path="/system/applications" element={<ApplicationsPage />} />
           <Route path="/system/menus" element={<MenusPage />} />
           <Route path="/system/organizations" element={<OrganizationsPage />} />

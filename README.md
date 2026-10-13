@@ -50,6 +50,7 @@ flowchart LR
 | OAuth | 客户端管理、授权码与 PKCE、刷新令牌、客户端凭据、密码模式、设备授权、令牌管理与撤销 |
 | 通知 | 站内通知、未读数、批量操作、偏好与免打扰、Socket.IO 实时提醒 |
 | 运维 | 审计日志与 CSV 导出、平台监控、租户洞察与 CSV 导出、健康检查 |
+| 平台设置 | 后台维护品牌名称、Logo、登录文案、页脚和平台租户名称；平台租户编码固定为 `admin-tenant` |
 | 演示应用 | Athena 数据分析、Hermes 消息中心、Vue/jQuery HTML 子应用、报表中心 ESM 子应用 |
 
 Athena 页面使用 `frontend/src/pages/athena/mock.tsx` 中的演示数据，不能据此判断已有真实分析数据链路。OAuth 演练站点位于 `mini-services/oauth-playground/`，是授权服务器的测试客户端。
@@ -108,6 +109,7 @@ tests/                  现有 shell 运行时检查脚本
 3. 启动后端：`cd backend; cargo run`。健康检查为 `http://localhost:3001/api/health`。
 4. 启动前端：`cd frontend; npm ci; npm run dev`，访问 `http://localhost:3000`。Vite 会代理 API；`npm run build` 执行 TypeScript 检查及生产构建。
    租户和组织的地图选点统一访问同源 `/api/maps/*`：本地 Vite 代理 OpenStreetMap 瓦片、Nominatim 搜索与反向地址解析、ipwho.is IP 估算，部署时由 Rust 后端代理固定上游。服务端须能访问这些 HTTPS 上游，受限网络可为后端配置标准 `HTTPS_PROXY`；浏览器不再直连地图服务。确认位置时反向解析省市区及详细地址；IP 估算在部署环境使用经过可信网关规范化的访问者公网 IP，结果通常只精确到城市，不自动写入门牌地址。本地 Vite 模式的 IP 估算使用开发机出口 IP。自有底图需修改后端固定上游及其授权说明。
+   租户和组织的省、市、县（区）、乡镇（街道）、村（社区）五级选项使用地区管理目录，默认选择未删除且有数据的最新版本，也可在表单中切换版本。上级变更会清空全部下级；地图解析结果按相同版本匹配标准地区路径，未匹配的层级会留空并提示手动选择。东莞、中山等没有区县层级的城市可直接选择乡镇街道。已有地址会尝试匹配标准名称；无法匹配的原值保留并提示重新选择。乡镇、村社区字段由 `0033_tenant_organization_local_regions.sql` 迁移新增，后端启动时自动执行。地区回归检查可在 `frontend/` 执行 `npm run test:regions` 和 `npm run test:regions:browser`，浏览器检查使用隔离的 API 数据，需要现有 Chromium 或 Edge。
 5. 如需实时通知，另行启动 `mini-services/notification-ws/`；如需 OAuth 流程演练，启动 `mini-services/oauth-playground/`；HTML 子应用可使用 `frontend/public/sub-apps/` 的静态副本，也可分别启动 3005/3006 开发服务并修改应用入口地址为 `/sub/vue/`、`/sub/jquery/`。
 
 首次空库启动时，`seed.rs` 创建演示数据，包括超管 `admin`。其初始密码在源码中为 `admin123`，只适合本地演示；部署后应立即修改。种子主要在 `users` 表为空时执行，已存在用户的数据库不会重建整套演示数据。`backend/migrations/0002_seed.sql` 只是占位迁移，真正的种子逻辑在 Rust 代码中。
@@ -123,6 +125,8 @@ tests/                  现有 shell 运行时检查脚本
 - 结构迁移：`backend/migrations/0001_init.sql` 建核心表，后续迁移加入通知、平台租户、外链、外部 API 和微前端入口等。迁移文件目前到 `0012_micro_esm.sql`。
 
 详细字段和接口示例参见 [API 契约](docs/api-contract.md) 与 [数据库设计](docs/db-schema.md)。这两份早期说明未覆盖全部后续迁移与新增路由，修改代码时应同步更新。
+
+平台名称及管理租户的后台配置、升级步骤和接口说明参见 [平台品牌与管理租户设置](docs/platform-settings.md)。
 
 独立子应用的开发与上线步骤参见 [微前端接入与上线指南](docs/microfrontend-integration.md)。
 

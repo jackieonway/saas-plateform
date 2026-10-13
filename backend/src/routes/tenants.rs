@@ -25,7 +25,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 const LIST_SELECT: &str = "SELECT t.id, t.name, t.code, COALESCE(t.description,'') AS description, t.status, t.is_platform, t.created_at, t.expires_at, \
- t.province, t.city, t.district, t.address, t.longitude, t.latitude, \
+ t.province, t.city, t.district, t.township, t.village, t.address, t.longitude, t.latitude, \
  (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id) AS organization_count, \
  (SELECT count(DISTINCT m.user_id) FROM memberships m JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id) AS user_count, \
  (SELECT count(*) FROM tenant_applications ta WHERE ta.tenant_id = t.id) AS authorized_app_count";
@@ -45,6 +45,8 @@ struct TenantRow {
     province: String,
     city: String,
     district: String,
+    township: String,
+    village: String,
     address: String,
     longitude: Option<f64>,
     latitude: Option<f64>,
@@ -111,6 +113,10 @@ struct TenantBody {
     #[serde(default)]
     district: String,
     #[serde(default)]
+    township: String,
+    #[serde(default)]
+    village: String,
+    #[serde(default)]
     address: String,
     #[serde(default)]
     longitude: Option<f64>,
@@ -136,14 +142,15 @@ async fn create(
     if name.is_empty() || body.code.trim().is_empty() {
         return Err(AppError::bad_request("租户名称与编码不能为空"));
     }
+    validate_tenant_identity(&name, body.code.trim(), false)?;
     let root_name = body.root_organization_name.trim();
     if root_name.is_empty() { return Err(AppError::bad_request("根组织名称不能为空")); }
     validate_coordinates(body.longitude, body.latitude)?;
     let mut tx = state.pool.begin().await?;
     let mut row: TenantRow = sqlx::query_as(&format!(
-        "INSERT INTO tenants (name, code, description, expires_at, province, city, district, address, longitude, latitude) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, name, code, \
-         description, status, false AS is_platform, created_at, expires_at, province, city, district, address, longitude, latitude, \
+        "INSERT INTO tenants (name, code, description, expires_at, province, city, district, township, village, address, longitude, latitude) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, name, code, \
+         description, status, false AS is_platform, created_at, expires_at, province, city, district, township, village, address, longitude, latitude, \
          0::bigint AS organization_count, 0::bigint AS user_count, 0::bigint AS authorized_app_count"
     ))
     .bind(&name)
@@ -153,16 +160,19 @@ async fn create(
     .bind(body.province.trim())
     .bind(body.city.trim())
     .bind(body.district.trim())
+    .bind(body.township.trim())
+    .bind(body.village.trim())
     .bind(body.address.trim())
     .bind(body.longitude)
     .bind(body.latitude)
     .fetch_one(&mut *tx)
     .await?;
     let root_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO organizations (tenant_id, name, code, province, city, district, address, longitude, latitude) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+        "INSERT INTO organizations (tenant_id, name, code, province, city, district, township, village, address, longitude, latitude) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
     ).bind(row.id).bind(root_name).bind(body.code.trim())
-        .bind(&row.province).bind(&row.city).bind(&row.district).bind(&row.address)
+        .bind(&row.province).bind(&row.city).bind(&row.district)
+        .bind(&row.township).bind(&row.village).bind(&row.address)
         .bind(row.longitude).bind(row.latitude)
         .fetch_one(&mut *tx).await?;
     onboarding::provision_tenant(&mut tx, &state.config, row.id, root_id, &body.administrator).await?;
@@ -199,9 +209,58 @@ pub(super) fn validate_coordinates(longitude: Option<f64>, latitude: Option<f64>
     }
 }
 
+fn validate_tenant_identity(name: &str, code: &str, is_platform: bool) -> Result<(), AppError> {
+    if name.trim().is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
+        return Err(AppError::bad_request("租户名称需为 1~100 个字符，且不能包含控制字符"));
+    }
+    if code.trim().is_empty() || code.chars().count() > 50 || code.chars().any(char::is_control) {
+        return Err(AppError::bad_request("租户编码需为 1~50 个字符，且不能包含控制字符"));
+    }
+    if is_platform && code != "admin-tenant" {
+        return Err(AppError::bad_request("平台租户编码固定为 admin-tenant"));
+    }
+    if !is_platform && code == "admin-tenant" {
+        return Err(AppError::bad_request("admin-tenant 为平台租户专用编码"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod coordinate_tests {
-    use super::validate_coordinates;
+    use super::{validate_coordinates, validate_tenant_identity, TenantBody, TenantUpdate};
+    use serde_json::json;
+
+    #[test]
+    fn tenant_creation_accepts_legacy_and_five_level_locations() {
+        let mut payload = json!({
+            "name": "业务租户", "code": "business", "rootOrganizationName": "总部",
+            "administrator": {"username": "tenant-admin"},
+            "province": "浙江省", "city": "杭州市", "district": "西湖区",
+        });
+        let legacy: TenantBody = serde_json::from_value(payload.clone()).unwrap();
+        assert_eq!((legacy.township.as_str(), legacy.village.as_str()), ("", ""));
+
+        payload["township"] = json!("转塘街道");
+        payload["village"] = json!("龙王沙社区");
+        let full: TenantBody = serde_json::from_value(payload).unwrap();
+        assert_eq!(full.township, "转塘街道");
+        assert_eq!(full.village, "龙王沙社区");
+    }
+
+    #[test]
+    fn tenant_local_region_updates_distinguish_omission_from_clear() {
+        let omitted: TenantUpdate = serde_json::from_value(json!({"name": "新名称"})).unwrap();
+        assert_eq!(omitted.township, None);
+        assert_eq!(omitted.village, None);
+        let selected: TenantUpdate = serde_json::from_value(json!({
+            "township": "转塘街道", "village": "龙王沙社区",
+        })).unwrap();
+        assert_eq!(selected.township.as_deref(), Some("转塘街道"));
+        assert_eq!(selected.village.as_deref(), Some("龙王沙社区"));
+        let cleared: TenantUpdate = serde_json::from_value(json!({"township": "", "village": ""})).unwrap();
+        assert_eq!(cleared.township.as_deref(), Some(""));
+        assert_eq!(cleared.village.as_deref(), Some(""));
+    }
 
     #[test]
     fn coordinates_require_a_valid_pair() {
@@ -210,6 +269,17 @@ mod coordinate_tests {
         assert!(validate_coordinates(Some(121.47), None).is_err());
         assert!(validate_coordinates(Some(181.0), Some(30.0)).is_err());
         assert!(validate_coordinates(Some(f64::NAN), Some(30.0)).is_err());
+    }
+
+    #[test]
+    fn platform_tenant_code_is_reserved_and_fixed() {
+        assert!(validate_tenant_identity("平台管理租户", "admin-tenant", true).is_ok());
+        assert!(validate_tenant_identity("平台管理租户", "dante", true).is_err());
+        assert!(validate_tenant_identity("业务租户", "admin-tenant", false).is_err());
+        assert!(validate_tenant_identity("业务租户", "business", false).is_ok());
+        assert!(validate_tenant_identity(" ", "business", false).is_err());
+        assert!(validate_tenant_identity("", "business", false).is_err());
+        assert!(validate_tenant_identity("错误\n名称", "business", false).is_err());
     }
 }
 
@@ -228,6 +298,10 @@ struct TenantUpdate {
     city: Option<String>,
     #[serde(default)]
     district: Option<String>,
+    #[serde(default)]
+    township: Option<String>,
+    #[serde(default)]
+    village: Option<String>,
     #[serde(default)]
     address: Option<String>,
     #[serde(default, deserialize_with = "double_option")]
@@ -255,13 +329,18 @@ async fn update(
             return Err(AppError::bad_request("租户名称不能为空"));
         }
     }
-    let current_coordinates: (Option<f64>, Option<f64>) = sqlx::query_as(
-        "SELECT longitude, latitude FROM tenants WHERE id = $1",
+    let (longitude, latitude, current_name, current_code, is_platform): (Option<f64>, Option<f64>, String, String, bool) = sqlx::query_as(
+        "SELECT longitude, latitude, name, code, is_platform FROM tenants WHERE id = $1",
     ).bind(id).fetch_optional(&state.pool).await?
         .ok_or_else(|| AppError::not_found("租户不存在"))?;
+    validate_tenant_identity(
+        body.name.as_deref().unwrap_or(&current_name).trim(),
+        body.code.as_deref().unwrap_or(&current_code).trim(),
+        is_platform,
+    )?;
     validate_coordinates(
-        body.longitude.unwrap_or(current_coordinates.0),
-        body.latitude.unwrap_or(current_coordinates.1),
+        body.longitude.unwrap_or(longitude),
+        body.latitude.unwrap_or(latitude),
     )?;
     let row = sqlx::query_as::<_, TenantRow>(&format!(
         // 注: 目标表别名 t 供 RETURNING 子查询引用 (无别名时 o.tenant_id = t.id 报 missing FROM-clause,
@@ -270,24 +349,26 @@ async fn update(
          description = COALESCE($4, description), \
          expires_at = CASE WHEN $5 THEN $6::timestamptz ELSE expires_at END, \
          province = COALESCE($7, province), city = COALESCE($8, city), district = COALESCE($9, district), \
-         address = COALESCE($10, address), \
-         longitude = CASE WHEN $11 THEN $12::double precision ELSE longitude END, \
-         latitude = CASE WHEN $13 THEN $14::double precision ELSE latitude END, updated_at = now() \
+         township = COALESCE($10, township), village = COALESCE($11, village), address = COALESCE($12, address), \
+         longitude = CASE WHEN $13 THEN $14::double precision ELSE longitude END, \
+         latitude = CASE WHEN $15 THEN $16::double precision ELSE latitude END, updated_at = now() \
          WHERE t.id = $1 RETURNING id, name, code, description, status, is_platform, created_at, expires_at, \
-         province, city, district, address, longitude, latitude, \
+         province, city, district, township, village, address, longitude, latitude, \
          (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id) AS organization_count, \
          (SELECT count(DISTINCT m.user_id) FROM memberships m JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id) AS user_count, \
          (SELECT count(*) FROM tenant_applications ta WHERE ta.tenant_id = t.id) AS authorized_app_count"
     ))
     .bind(id)
-    .bind(&body.name)
-    .bind(&body.code)
+    .bind(body.name.as_deref().map(str::trim))
+    .bind(body.code.as_deref().map(str::trim))
     .bind(&body.description)
     .bind(body.expires_at.is_some())
     .bind(body.expires_at.flatten())
     .bind(body.province.as_deref().map(str::trim))
     .bind(body.city.as_deref().map(str::trim))
     .bind(body.district.as_deref().map(str::trim))
+    .bind(body.township.as_deref().map(str::trim))
+    .bind(body.village.as_deref().map(str::trim))
     .bind(body.address.as_deref().map(str::trim))
     .bind(body.longitude.is_some())
     .bind(body.longitude.flatten())

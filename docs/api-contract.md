@@ -43,8 +43,8 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 `system:tenant` `system:organization` `system:department` `system:user` `system:role` `system:menu` `system:application` `system:oauth` `system:monitor`
 
 ### 2.1 租户 /tenants
-- GET `/api/tenants?page&size&keyword` → 分页 `{id,name,code,description,province,city,district,address,longitude,latitude,status,createdAt,organizationCount,userCount,authorizedAppCount}`；经纬度未标注时均为 `null`。
-- POST `/api/tenants` `{name,code,description,province?,city?,district?,address?,longitude?,latitude?,rootOrganizationName,administrator:{username,password?,realName?,email?}}`；事务内创建根组织、内置租户管理员角色、管理员成员关系和基础管理授权，根组织初始继承租户地点。已有用户名必须留空 `password`，新用户名必须提供符合环境规则的初始密码。PUT `/api/tenants/:id` 可更新地点；DELETE `/api/tenants/:id`(级联删组织/授权/角色)
+- GET `/api/tenants?page&size&keyword` → 分页 `{id,name,code,description,province,city,district,township,village,address,longitude,latitude,status,createdAt,organizationCount,userCount,authorizedAppCount}`；经纬度未标注时均为 `null`。
+- POST `/api/tenants` `{name,code,description,province?,city?,district?,township?,village?,address?,longitude?,latitude?,rootOrganizationName,administrator:{username,password?,realName?,email?}}`；事务内创建根组织、内置租户管理员角色、管理员成员关系和基础管理授权，根组织初始继承租户的省市县乡村及地点。已有用户名必须留空 `password`，新用户名必须提供符合环境规则的初始密码。PUT `/api/tenants/:id` 可更新地点，省略乡村字段时保留原值，传空字符串清除；DELETE `/api/tenants/:id`(级联删组织/授权/角色)
 - PUT `/api/tenants/:id/status` `{"status":"ENABLED|DISABLED"}`
 
 ### 2.2 租户授权 /tenants/:id/authorizations
@@ -63,8 +63,8 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 - PUT `/api/menus/:id` ; DELETE `/api/menus/:id`(级联子菜单)
 
 ### 2.5 组织 /organizations (租户下多层级树)
-- GET `/api/organizations/tree?tenantId=` → `[{id,tenantId,parentId,name,code,sortOrder,description,province,city,district,address,longitude,latitude,status,children:[...]}]`
-- POST `/api/organizations` `{tenantId,parentId,name,code,sortOrder,description,province?,city?,district?,address?,longitude?,latitude?,administrator?}`；创建子组织时可选填 `{username,password?,realName?,email?}` 指定管理员，自动建立成员关系及不可删除的内置组织管理员角色。已有用户须为本租户成员。根组织管理员由租户创建接口指定。
+- GET `/api/organizations/tree?tenantId=` → `[{id,tenantId,parentId,name,code,sortOrder,description,province,city,district,township,village,address,longitude,latitude,status,children:[...]}]`
+- POST `/api/organizations` `{tenantId,parentId,name,code,sortOrder,description,province?,city?,district?,township?,village?,address?,longitude?,latitude?,administrator?}`；创建子组织时可选填 `{username,password?,realName?,email?}` 指定管理员，自动建立成员关系及不可删除的内置组织管理员角色。已有用户须为本租户成员。根组织管理员由租户创建接口指定。乡村字段缺省为空，更新时省略保留、空字符串清除。
 - PUT `/api/organizations/:id` ; DELETE(级联子组织+部门+成员关系+org授权+角色)
 - PUT `/api/organizations/:id/status`
 - 组织新增应用及菜单授权时，自动同步到该组织的内置管理员角色；撤销授权时同步清理。默认管理员角色的菜单由授权维护，不接受手工编辑。
@@ -72,7 +72,7 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 ### 2.5.1 地图资源 /maps
 - GET `/api/maps/tiles/:z/:x/:y.png` → PNG 瓦片；服务端仅代理有效瓦片坐标，浏览器可缓存 24 小时。
 - GET `/api/maps/search?q=` → OpenStreetMap 地点搜索结果，最多 5 项，关键词上限 120 字符。
-- GET `/api/maps/reverse?lat=&lon=` → 当前坐标的 OpenStreetMap 反向地址解析结果；租户/组织表单确认位置时用来回填省市区和详细地址。IP 估算位置只回填行政区划，避免把城市中心误当精确门牌。
+- GET `/api/maps/reverse?lat=&lon=` → 当前坐标的 OpenStreetMap 反向地址解析结果；租户/组织表单确认位置时通过地区目录解析接口回填省市县乡村及详细地址。IP 估算位置只回填行政区划，避免把城市中心误当精确门牌。
 - GET `/api/maps/ip-location` → `{success,latitude,longitude}`；只根据可信网关规范化后的访问者公网 IP 估算，不接受客户端指定的目标 IP。回环或内网 IP 返回错误。
 - 前端只调用同源接口；开发环境由 Vite 代理固定外部上游，部署环境由 Rust 后端代理。瓦片每 IP 每分钟最多 300 次，搜索/反向解析/IP 定位合计最多 20 次。
 
@@ -161,6 +161,8 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 ## 4. 公共
 - GET `/api/health` → `{"status":"UP","version":"1.0.0","database":"UP"}` (无需认证)
+- GET `/api/platform/branding` → `{platformName,platformDescription,logoUrl,loginTitle,loginDescription,footerText}`（无需认证，只公开展示配置）。
+- GET / PUT `/api/platform/settings`：要求平台管理上下文和 `system:settings` 权限；读取额外返回 `platformTenantName,platformTenantCode`，完整保存七个可写字段，编码固定为 `admin-tenant`，不接受保存编码。详见[平台设置](./platform-settings.md)。
 - 401 → 错误码 UNAUTHORIZED;403 → FORBIDDEN;统一 JSON。
 
 ### 平台会话（Phase 4）
@@ -187,6 +189,8 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 - `GET /api/regions/versions`：列出地区数据版本及记录数。
 - `POST /api/regions/versions`：创建版本，参数 `version`、`label`、可选 `sourceVersion`；有来源版本时复制其地区数据。
 - `GET /api/regions?version=2023&parentCode=-1&page=1&size=50`：默认加载国家级；选择国家后以 `parentCode=0` 加载省级，之后按父级编码分页加载。可传 `search` 搜索编码、名称或拼音。
+- `GET /api/regions/options?version=&parentCode=`：租户和组织表单的五级地区选项，返回 `{version,records}`，不分页。未传 `version` 时使用尚未删除且有数据的最新版本；未传 `parentCode` 时直接返回省级（第 2 级），之后按父级编码返回下一层级的全部直属记录，最高第 6 级。东莞、中山等没有县级记录的地级市直接返回其第 5 级乡镇街道，选项按记录层级放入对应字段。指定版本不存在或无数据时返回 404。
+- `GET /api/regions/resolve?version=&province=&city=&district=&township=&village=`：将地图或已有地址中的五级地区名称映射为地区目录的标准路径，返回 `{version,province,city,district,township,village}`，各地区为完整记录或 `null`。使用相同的版本选择规则，优先精确名称，再匹配明确的行政后缀及村委会、社区简称；只在已确定的父级内匹配，重名或未识别的下级返回 `null`。县级市名称可恢复其真实地级市父级；直辖市和省直辖县级行政区划保留目录中的第 3 级分组。无县级记录的地级市保留 `district:null`，直接解析下属乡镇街道；第 5、6 级仅查询已确定父级下的记录。
 - `DELETE /api/regions/versions/{version}`：删除版本及其全部地区记录，保留内部删除标记，避免内置 2023 版在重启后重新导入。
 - `POST /api/regions`、`PUT /api/regions/{id}`、`DELETE /api/regions/{id}?version=2023`：维护单条地区记录。写操作要求平台上下文和 `system:region` 权限；读取要求已登录。
 - 地区记录的 `id` 是源文件主键或系统生成的 32 位标识，不按通用 UUID 格式解析；`code` 在同一版本内唯一。

@@ -42,6 +42,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuthStore } from "@/stores/auth"
+import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { useMenusQuery, usePermissionsQuery, useSwitchContext } from "@/hooks/use-auth-data"
 import { useNotificationSocket } from "@/hooks/use-notification-socket"
 import {
@@ -66,6 +67,7 @@ export function TopBar({
   onOpenCommandPalette: () => void
 }) {
   const { pathname } = useLocation()
+  const { platformName } = usePlatformBranding()
   const profile = useAuthStore((s) => s.profile)
   const currentApplicationId = useAuthStore((s) => s.currentApplicationId)
   const app = profile?.applications.find((a) => a.id === currentApplicationId) ?? null
@@ -124,7 +126,7 @@ export function TopBar({
                     </span>
                   </>
                 ) : (
-                  "Dante Cloud"
+                  platformName
                 )}
               </BreadcrumbLink>
             </BreadcrumbItem>

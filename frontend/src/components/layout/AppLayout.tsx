@@ -13,6 +13,8 @@ import { TopBar } from "@/components/layout/TopBar"
 import { CommandPalette } from "@/components/layout/CommandPalette"
 import { ErrorState } from "@/components/states"
 import { useAuthStore } from "@/stores/auth"
+import { BrandMark } from "@/components/brand"
+import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { useQueryClient } from "@tanstack/react-query"
 import { useMenusQuery, useProfileQuery } from "@/hooks/use-auth-data"
 import { useDocumentTitle, pageTitleFor } from "@/hooks/use-document-title"
@@ -23,38 +25,8 @@ import { asArray } from "@/lib/api"
 import { sortMenuTree } from "@/lib/tree"
 import type { MenuNode } from "@/api/types"
 
-function BrandMark({ className }: { className?: string }) {
-  return (
-    <span className={className} aria-hidden>
-      <svg viewBox="0 0 48 48" className="size-full">
-        <defs>
-          <linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="currentColor" stopOpacity="0.95" />
-            <stop offset="1" stopColor="currentColor" stopOpacity="0.55" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M12 30a7 7 0 0 1 .5-13.96A9.5 9.5 0 0 1 30.6 14a8 8 0 0 1 7.9 9.4A6 6 0 0 1 37 31H12Z"
-          fill="url(#brand-g)"
-          opacity="0.9"
-        />
-        <path
-          d="M24 26l4.2 4.2-1.7 1.7-1.5-1.5v6.1h-2v-6.1l-1.5 1.5-1.7-1.7L24 26Z"
-          fill="currentColor"
-        />
-        <path
-          d="M18.2 33.8a6.4 6.4 0 0 1-5.7-3.5"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          fill="none"
-        />
-      </svg>
-    </span>
-  )
-}
-
 export default function AppLayout() {
+  const { platformName } = usePlatformBranding()
   const token = useAuthStore((s) => s.token)
   const contextEpoch = useAuthStore((s) => s.contextEpoch)
   const profile = useAuthStore((s) => s.profile)
@@ -319,7 +291,7 @@ export default function AppLayout() {
                 <span className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
                   <BrandMark className="size-5" />
                 </span>
-                Dante Cloud
+                <span className="truncate" title={platformName}>{platformName}</span>
               </SheetTitle>
             </SheetHeader>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

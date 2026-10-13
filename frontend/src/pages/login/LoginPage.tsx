@@ -33,6 +33,7 @@ import { BrandMark } from "@/components/brand"
 import { authApi } from "@/api/auth"
 import { useAuthStore } from "@/stores/auth"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { LoginResp, Membership } from "@/api/types"
@@ -61,6 +62,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function LoginPage() {
+  const { platformName, platformDescription, loginTitle, loginDescription, footerText } = usePlatformBranding()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [params] = useSearchParams()
@@ -167,9 +169,9 @@ export default function LoginPage() {
               <span className="flex size-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
                 <BrandMark className="size-7 text-white" />
               </span>
-              <div>
-                <p className="text-lg font-semibold tracking-tight">Dante Cloud</p>
-                <p className="text-xs text-white/60">多租户权限平台</p>
+              <div className="min-w-0">
+                <p className="break-words text-lg font-semibold tracking-tight">{platformName}</p>
+                <p className="break-words text-xs text-white/60">{platformDescription}</p>
               </div>
             </div>
 
@@ -258,8 +260,8 @@ export default function LoginPage() {
                   <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary sm:hidden">
                     <BrandMark className="size-7" />
                   </span>
-                  <h2 className="text-2xl font-semibold tracking-tight">欢迎回来</h2>
-                  <p className="text-sm text-muted-foreground">登录 Dante Cloud,管理您的租户与应用权限</p>
+                  <h2 className="break-words text-2xl font-semibold tracking-tight">{loginTitle}</h2>
+                  <p className="break-words text-sm text-muted-foreground">{loginDescription}</p>
                 </div>
 
                 {error && (
@@ -427,9 +429,9 @@ export default function LoginPage() {
       </div>
 
       {/* 页脚 */}
-      <footer className="sticky bottom-0 border-t bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground backdrop-blur">
-        © 2026 Dante Cloud · Powered by Rust &amp; React
-      </footer>
+      {footerText && <footer className="sticky bottom-0 break-words border-t bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground backdrop-blur">
+        {footerText}
+      </footer>}
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { BrandWordmark } from "@/components/brand"
 import { consentApi } from "@/api/public"
 import { useAuthStore } from "@/stores/auth"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { SCOPE_LABELS } from "@/lib/format"
 import { AppIcon } from "@/lib/icons"
 import type { ConsentInfo } from "@/api/types"
@@ -177,6 +178,7 @@ export default function ConsentPage() {
 }
 
 function ConsentShell({ children }: { children: React.ReactNode }) {
+  const { footerText } = usePlatformBranding()
   return (
     <div className="flex min-h-dvh flex-col bg-muted/40">
       <header className="border-b bg-background px-4 py-3">
@@ -188,9 +190,9 @@ function ConsentShell({ children }: { children: React.ReactNode }) {
       <main className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-md rounded-2xl border bg-card p-7 shadow-sm">{children}</div>
       </main>
-      <footer className="border-t bg-background px-4 py-3 text-center text-xs text-muted-foreground">
-        © 2026 Dante Cloud · Powered by Rust &amp; React
-      </footer>
+      {footerText && <footer className="break-words border-t bg-background px-4 py-3 text-center text-xs text-muted-foreground">
+        {footerText}
+      </footer>}
     </div>
   )
 }

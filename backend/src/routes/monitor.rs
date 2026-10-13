@@ -178,7 +178,7 @@ async fn export_tenant_insights_csv(
             trend,
         ));
     }
-    let filename = format!("dante-tenant-insights-{}.csv", Utc::now().format("%Y%m%d"));
+    let filename = format!("tenant-insights-{}.csv", Utc::now().format("%Y%m%d"));
     let mut resp = csv.into_response();
     resp.headers_mut().insert(CONTENT_TYPE, "text/csv; charset=utf-8".parse().unwrap());
     resp.headers_mut().insert(
@@ -217,8 +217,9 @@ async fn system(State(state): State<AppState>, user: CurrentUser) -> Result<Json
     state.require_platform(&user).await?;
 
     let uptime_seconds = (Utc::now() - state.started_at).num_seconds().max(0);
+    let branding = crate::platform_settings::load_branding(&state.pool).await?;
     let service = json!({
-        "name": "dante-cloud-backend",
+        "name": branding.platform_name,
         "version": env!("CARGO_PKG_VERSION"),
         "pid": std::process::id(),
         "startedAt": state.started_at,

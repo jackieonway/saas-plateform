@@ -7,6 +7,13 @@
 
 type NavKey = "home" | "device" | "auth" | "cc" | "pwd" | "ext"
 
+/** 仅替换 HTML 文本中的品牌占位符，不把后台配置写入页面脚本。 */
+export function renderBrandedPage(page: string, platformName: string): string {
+  const escapedName = platformName.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;")
+  return page.replaceAll("{{PLATFORM_NAME}}", () => escapedName)
+}
+
 function layout(opts: { title: string; active: NavKey; body: string; script?: string }): string {
   const nav = (href: string, key: NavKey, label: string) =>
     `<a href="${href}"${opts.active === key ? ' class="active"' : ""}>${label}</a>`
@@ -124,7 +131,7 @@ footer { margin-top: 30px; padding-top: 16px; border-top: 1px solid #1c2a30; fon
 </header>
 ${opts.body}
 <footer>
-  Dante Cloud 授权服务器 <span class="mono">http://localhost:3001</span> · 前端(consent/device 批准页) <span class="mono">http://localhost:3000</span> · 本工具 <span class="mono">:3004</span> 纯 node:http 零依赖 · 沙箱内部测试工具, 网关不转发, 仅本机可达
+  {{PLATFORM_NAME}} 授权服务器 <span class="mono">http://localhost:3001</span> · 前端(consent/device 批准页) <span class="mono">http://localhost:3000</span> · 本工具 <span class="mono">:3004</span> 纯 node:http 零依赖 · 沙箱内部测试工具, 网关不转发, 仅本机可达
 </footer>
 </div>
 ${opts.script ? `<script>\n${opts.script}\n</script>` : ""}
@@ -140,7 +147,7 @@ export const homePage = layout({
   title: "首页",
   active: "home",
   body: `
-<h1>OAuth Playground <span class="h1sub">Dante Cloud 授权服务器流程演练</span></h1>
+<h1>OAuth Playground <span class="h1sub">{{PLATFORM_NAME}} 授权服务器流程演练</span></h1>
 <p class="sub">四条 OAuth 流程的端到端演练工具: 所有请求真实调用授权服务器 <code>http://localhost:3001</code> (授权服务器 CORS 全放开, 页面可浏览器直连), 关键步骤由本服务服务端代理 (client_secret 只存服务端, 不落页面)。批准/consent 操作在前端 <code>http://localhost:3000</code> 完成 (登录 admin/admin123)。</p>
 
 <div class="grid">

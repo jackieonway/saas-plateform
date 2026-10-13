@@ -25,21 +25,39 @@ pub fn routes() -> Router<AppState> {
         .route("/api/organizations/{id}/authorizations", get(get_authorizations).put(put_authorizations))
 }
 
-type OrgRowTuple = (Uuid, Uuid, Option<Uuid>, String, String, i32, String, String, Option<DateTime<Utc>>, String, String, String, String, Option<f64>, Option<f64>);
+#[derive(sqlx::FromRow)]
+struct OrgRow {
+    id: Uuid,
+    tenant_id: Uuid,
+    parent_id: Option<Uuid>,
+    name: String,
+    code: String,
+    sort_order: i32,
+    description: String,
+    status: String,
+    expires_at: Option<DateTime<Utc>>,
+    province: String,
+    city: String,
+    district: String,
+    township: String,
+    village: String,
+    address: String,
+    longitude: Option<f64>,
+    latitude: Option<f64>,
+}
 
 const ORG_SELECT: &str = "SELECT o.id, o.tenant_id, o.parent_id, o.name, COALESCE(o.code,'') AS code, \
  o.sort_order, COALESCE(o.description,'') AS description, o.status, o.expires_at, \
- o.province, o.city, o.district, o.address, o.longitude, o.latitude";
+ o.province, o.city, o.district, o.township, o.village, o.address, o.longitude, o.latitude";
 
-fn org_json(r: &OrgRowTuple) -> Value {
-    let (id, tenant_id, parent_id, name, code, sort_order, description, status, expires_at,
-        province, city, district, address, longitude, latitude) = r;
+fn org_json(r: &OrgRow) -> Value {
     json!({
-        "id": id, "tenantId": tenant_id, "parentId": parent_id, "name": name, "code": code,
-        "sortOrder": sort_order, "description": description, "status": status,
-        "expiresAt": expires_at,
-        "province": province, "city": city, "district": district, "address": address,
-        "longitude": longitude, "latitude": latitude,
+        "id": r.id, "tenantId": r.tenant_id, "parentId": r.parent_id, "name": r.name, "code": r.code,
+        "sortOrder": r.sort_order, "description": r.description, "status": r.status,
+        "expiresAt": r.expires_at,
+        "province": r.province, "city": r.city, "district": r.district,
+        "township": r.township, "village": r.village, "address": r.address,
+        "longitude": r.longitude, "latitude": r.latitude,
     })
 }
 
@@ -76,7 +94,7 @@ async fn tree_handler(
         None => user.tenant_id,
     };
     state.ensure_tenant_scope(&user, tenant_id, "租户").await?;
-    let rows: Vec<OrgRowTuple> = sqlx::query_as(&format!(
+    let rows: Vec<OrgRow> = sqlx::query_as(&format!(
         "{ORG_SELECT} FROM organizations o WHERE o.tenant_id = $1 ORDER BY o.sort_order, o.created_at"
     ))
     .bind(tenant_id)
@@ -84,7 +102,7 @@ async fn tree_handler(
     .await?;
 
     // 统计每个组织的部门数与直属成员数
-    let org_ids: Vec<Uuid> = rows.iter().map(|r| r.0).collect();
+    let org_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     let mut dept_counts: HashMap<Uuid, i64> = HashMap::new();
     let mut member_counts: HashMap<Uuid, i64> = HashMap::new();
     if !org_ids.is_empty() {
@@ -106,8 +124,8 @@ async fn tree_handler(
         .iter()
         .map(|r| {
             let mut v = org_json(r);
-            v["departmentCount"] = json!(dept_counts.get(&r.0).copied().unwrap_or(0));
-            v["userCount"] = json!(member_counts.get(&r.0).copied().unwrap_or(0));
+            v["departmentCount"] = json!(dept_counts.get(&r.id).copied().unwrap_or(0));
+            v["userCount"] = json!(member_counts.get(&r.id).copied().unwrap_or(0));
             v
         })
         .collect();
@@ -133,6 +151,10 @@ struct OrgBody {
     city: String,
     #[serde(default)]
     district: String,
+    #[serde(default)]
+    township: String,
+    #[serde(default)]
+    village: String,
     #[serde(default)]
     address: String,
     #[serde(default)]
@@ -213,12 +235,12 @@ async fn create(
     }
     validate_coordinates(body.longitude, body.latitude)?;
     let mut tx = state.pool.begin().await?;
-    let row: OrgRowTuple = sqlx::query_as(
+    let row: OrgRow = sqlx::query_as(
         "INSERT INTO organizations (tenant_id, parent_id, name, code, sort_order, description, expires_at, \
-         province, city, district, address, longitude, latitude) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) \
+         province, city, district, township, village, address, longitude, latitude) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) \
          RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, sort_order, \
-         COALESCE(description,'') AS description, status, expires_at, province, city, district, address, longitude, latitude",
+         COALESCE(description,'') AS description, status, expires_at, province, city, district, township, village, address, longitude, latitude",
     )
     .bind(tenant_id)
     .bind(parent_id)
@@ -230,6 +252,8 @@ async fn create(
     .bind(body.province.trim())
     .bind(body.city.trim())
     .bind(body.district.trim())
+    .bind(body.township.trim())
+    .bind(body.village.trim())
     .bind(body.address.trim())
     .bind(body.longitude)
     .bind(body.latitude)
@@ -237,7 +261,7 @@ async fn create(
     .await
     .map_err(map_root_unique_violation)?;
     if let (Some(parent), Some(admin)) = (parent_id, &body.administrator) {
-        onboarding::provision_organization(&mut tx, &state.config, tenant_id, row.0, parent, admin).await?;
+        onboarding::provision_organization(&mut tx, &state.config, tenant_id, row.id, parent, admin).await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -245,7 +269,7 @@ async fn create(
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(row.0),
+        tenant_id: Some(tenant_id), organization_id: Some(row.id),
         action: "CREATE_ORGANIZATION", detail: &format!("创建组织: {}", name), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(org_json(&row)))
@@ -269,6 +293,10 @@ struct OrgUpdate {
     #[serde(default)]
     district: Option<String>,
     #[serde(default)]
+    township: Option<String>,
+    #[serde(default)]
+    village: Option<String>,
+    #[serde(default)]
     address: Option<String>,
     #[serde(default, deserialize_with = "double_option")]
     longitude: Option<Option<f64>>,
@@ -278,6 +306,43 @@ struct OrgUpdate {
     /// (注: 本端点不支持修改 parent_id, 根组织归属仅由创建时决定)
     #[serde(default, deserialize_with = "double_option")]
     expires_at: Option<Option<DateTime<Utc>>>,
+}
+
+#[cfg(test)]
+mod location_contract_tests {
+    use super::{OrgBody, OrgUpdate};
+    use serde_json::json;
+
+    #[test]
+    fn organization_creation_accepts_legacy_and_five_level_locations() {
+        let mut payload = json!({
+            "tenantId": "tenant-id", "name": "业务组织",
+            "province": "浙江省", "city": "杭州市", "district": "西湖区",
+        });
+        let legacy: OrgBody = serde_json::from_value(payload.clone()).unwrap();
+        assert_eq!((legacy.township.as_str(), legacy.village.as_str()), ("", ""));
+
+        payload["township"] = json!("转塘街道");
+        payload["village"] = json!("龙王沙社区");
+        let full: OrgBody = serde_json::from_value(payload).unwrap();
+        assert_eq!(full.township, "转塘街道");
+        assert_eq!(full.village, "龙王沙社区");
+    }
+
+    #[test]
+    fn organization_local_region_updates_distinguish_omission_from_clear() {
+        let omitted: OrgUpdate = serde_json::from_value(json!({"name": "新名称"})).unwrap();
+        assert_eq!(omitted.township, None);
+        assert_eq!(omitted.village, None);
+        let selected: OrgUpdate = serde_json::from_value(json!({
+            "township": "转塘街道", "village": "龙王沙社区",
+        })).unwrap();
+        assert_eq!(selected.township.as_deref(), Some("转塘街道"));
+        assert_eq!(selected.village.as_deref(), Some("龙王沙社区"));
+        let cleared: OrgUpdate = serde_json::from_value(json!({"township": "", "village": ""})).unwrap();
+        assert_eq!(cleared.township.as_deref(), Some(""));
+        assert_eq!(cleared.village.as_deref(), Some(""));
+    }
 }
 
 /// PUT /api/organizations/{id}
@@ -303,17 +368,17 @@ async fn update(
         body.longitude.unwrap_or(current_coordinates.0),
         body.latitude.unwrap_or(current_coordinates.1),
     )?;
-    let row: OrgRowTuple = sqlx::query_as(
+    let row: OrgRow = sqlx::query_as(
         "UPDATE organizations SET name = COALESCE($2, name), code = COALESCE($3, code), \
          sort_order = COALESCE($4, sort_order), description = COALESCE($5, description), \
          expires_at = CASE WHEN $6 THEN $7::timestamptz ELSE expires_at END, \
          province = COALESCE($8, province), city = COALESCE($9, city), district = COALESCE($10, district), \
-         address = COALESCE($11, address), \
-         longitude = CASE WHEN $12 THEN $13::double precision ELSE longitude END, \
-         latitude = CASE WHEN $14 THEN $15::double precision ELSE latitude END, updated_at = now() \
+         township = COALESCE($11, township), village = COALESCE($12, village), address = COALESCE($13, address), \
+         longitude = CASE WHEN $14 THEN $15::double precision ELSE longitude END, \
+         latitude = CASE WHEN $16 THEN $17::double precision ELSE latitude END, updated_at = now() \
          WHERE id = $1 \
          RETURNING id, tenant_id, parent_id, name, COALESCE(code,'') AS code, sort_order, \
-         COALESCE(description,'') AS description, status, expires_at, province, city, district, address, longitude, latitude",
+         COALESCE(description,'') AS description, status, expires_at, province, city, district, township, village, address, longitude, latitude",
     )
     .bind(id)
     .bind(&body.name)
@@ -325,6 +390,8 @@ async fn update(
     .bind(body.province.as_deref().map(str::trim))
     .bind(body.city.as_deref().map(str::trim))
     .bind(body.district.as_deref().map(str::trim))
+    .bind(body.township.as_deref().map(str::trim))
+    .bind(body.village.as_deref().map(str::trim))
     .bind(body.address.as_deref().map(str::trim))
     .bind(body.longitude.is_some())
     .bind(body.longitude.flatten())
@@ -337,8 +404,8 @@ async fn update(
     let ua = audit::ua_of(&headers);
     audit::write(&state.pool, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(row.1), organization_id: Some(id),
-        action: "UPDATE_ORGANIZATION", detail: &format!("更新组织: {}", row.3), ip: &ip, user_agent: &ua,
+        tenant_id: Some(row.tenant_id), organization_id: Some(id),
+        action: "UPDATE_ORGANIZATION", detail: &format!("更新组织: {}", row.name), ip: &ip, user_agent: &ua,
     }).await;
     Ok(Json(org_json(&row)))
 }

@@ -57,6 +57,7 @@ import { formatDateTime } from "@/lib/format"
 import { expiryBadge, ExpiryCell, isoToLocalInput } from "@/lib/expiry"
 import { coordinateField, coordinateOrNull, coordinatePoint, hasCoordinatePair, locationText } from "@/lib/location"
 import { LocationPicker } from "@/components/LocationPicker"
+import { RegionPicker } from "@/components/RegionPicker"
 import { toast } from "sonner"
 import type { DeptNode, OrgNode, TenantRecord } from "@/api/types"
 
@@ -73,6 +74,8 @@ const orgNodeSchema = nodeSchema.extend({
   province: z.string().max(100, "省份名称过长"),
   city: z.string().max(100, "城市名称过长"),
   district: z.string().max(100, "区县名称过长"),
+  township: z.string().max(128, "乡镇街道名称过长"),
+  village: z.string().max(128, "村社区名称过长"),
   address: z.string().max(300, "详细地址过长"),
   longitude: coordinateField("经度", -180, 180),
   latitude: coordinateField("纬度", -90, 90),
@@ -176,17 +179,18 @@ export default function OrganizationsPage() {
 
   /* ---------- 组织 CRUD ---------- */
   const [orgDialog, setOrgDialog] = React.useState(false)
+  const [regionVersion, setRegionVersion] = React.useState<string | null>(null)
   const [orgEditing, setOrgEditing] = React.useState<OrgNode | null>(null)
   const [orgParent, setOrgParent] = React.useState<string | null>(null)
   const orgForm = useForm<OrgNodeForm>({
     resolver: zResolver(orgNodeSchema),
-    defaultValues: { name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
+    defaultValues: { name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
   })
 
   const openOrgCreate = (parentId: string | null) => {
     setOrgEditing(null)
     setOrgParent(parentId)
-    orgForm.reset({ name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
+    orgForm.reset({ name: "", code: "", sortOrder: 0, description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
     setOrgDialog(true)
   }
   const openOrgEdit = (node: EditableNode) => {
@@ -199,7 +203,7 @@ export default function OrganizationsPage() {
       code: full.code,
       sortOrder: full.sortOrder ?? 0,
       description: full.description ?? "",
-      province: full.province ?? "", city: full.city ?? "", district: full.district ?? "", address: full.address ?? "",
+      province: full.province ?? "", city: full.city ?? "", district: full.district ?? "", township: full.township ?? "", village: full.village ?? "", address: full.address ?? "",
       longitude: full.longitude == null ? "" : String(full.longitude), latitude: full.latitude == null ? "" : String(full.latitude),
       expiresAt: isoToLocalInput(full.expiresAt),
       adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "",
@@ -217,7 +221,7 @@ export default function OrganizationsPage() {
         code: v.code,
         sortOrder: v.sortOrder,
         description: v.description || "",
-        province: v.province, city: v.city, district: v.district, address: v.address,
+        province: v.province, city: v.city, district: v.district, township: v.township, village: v.village, address: v.address,
         longitude: coordinateOrNull(v.longitude), latitude: coordinateOrNull(v.latitude),
         expiresAt: v.expiresAt ? new Date(v.expiresAt).toISOString() : null,
         administrator: !orgEditing && orgParent && v.adminUsername?.trim() ? {
@@ -630,25 +634,22 @@ export default function OrganizationsPage() {
               />
               <div className="space-y-3 border-t pt-4">
                 <p className="text-sm font-medium">地点标注</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["province", "city", "district"] as const).map((name, index) => <FormField key={name} control={orgForm.control} name={name} render={({ field }) => <FormItem>
-                    <FormLabel>{["省份", "城市", "区县"][index]}</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>} />)}
-                </div>
+                <RegionPicker version={regionVersion} onVersionChange={setRegionVersion} />
                 <FormField control={orgForm.control} name="address" render={({ field }) => <FormItem>
                   <FormLabel>详细地址</FormLabel><FormControl><Input placeholder="街道、门牌号等" {...field} /></FormControl><FormMessage />
                 </FormItem>} />
                 <LocationPicker
+                  regionVersion={regionVersion}
                   value={coordinatePoint(orgForm.watch("longitude"), orgForm.watch("latitude"))}
                   searchHint={locationText(orgForm.watch())}
                   onChange={(point) => {
                     orgForm.setValue("longitude", point ? String(point.longitude) : "", { shouldDirty: true })
                     orgForm.setValue("latitude", point ? String(point.latitude) : "", { shouldDirty: true })
-                    for (const key of ["province", "city", "district", "address"] as const) {
+                    for (const key of ["province", "city", "district", "township", "village", "address"] as const) {
                       const value = point?.location?.[key]
-                      if (value) orgForm.setValue(key, value, { shouldDirty: true })
+                      if (value !== undefined) orgForm.setValue(key, value, { shouldDirty: true })
                     }
-                    void orgForm.trigger(["longitude", "latitude", "province", "city", "district", "address"])
+                    void orgForm.trigger(["longitude", "latitude", "province", "city", "district", "township", "village", "address"])
                   }}
                 />
                 <div className="grid grid-cols-2 gap-2">

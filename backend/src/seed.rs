@@ -95,7 +95,7 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         .bind(&hashes)
         .execute(&mut *tx)
         .await?;
-    let tenant = scalar_uuid(&mut tx, "INSERT INTO tenants(name,code,description,is_platform) VALUES('Dante 云平台','dante','平台控制层',true) RETURNING id").await?;
+    let tenant = scalar_uuid(&mut tx, "INSERT INTO tenants(name,code,description,is_platform) VALUES('平台管理租户','admin-tenant','平台控制层',true) RETURNING id").await?;
     let root = insert_org(&mut tx, tenant, None, "平台总部", "HQ", 1, "平台管理组织").await?;
     let system = insert_app(&mut tx, "system", "系统管理", "LayoutGrid", "/system", 1).await?;
     let hermes = insert_app(&mut tx, "hermes", "消息中心", "MessageSquare", "/hermes", 2).await?;
@@ -171,6 +171,13 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
             "/system/menus",
             "ListTree",
             "system:menu",
+        ),
+        (
+            system,
+            "平台设置",
+            "/system/settings",
+            "Settings",
+            "system:settings",
         ),
         (
             system,
@@ -271,7 +278,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     // 平台租户: 全库唯一 (迁移 0007 部分唯一索引约束), 可跨租户管理
     let tenant = scalar_uuid(
         &mut tx,
-        "INSERT INTO tenants (name, code, description, is_platform) VALUES ('Dante 云平台', 'dante', '多租户多层级组织多应用权限演示平台', true) RETURNING id",
+        "INSERT INTO tenants (name, code, description, is_platform) VALUES ('平台管理租户', 'admin-tenant', '多租户多层级组织多应用权限演示平台', true) RETURNING id",
     )
     .await?;
 
@@ -294,6 +301,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let cfg_dir = insert_menu(&mut tx, sys, None, "DIR", "平台配置", "", "Settings", "", "", 4, true).await?;
     let app_mgmt = insert_menu(&mut tx, sys, Some(cfg_dir), "MENU", "应用管理", "/system/applications", "Grid3x3", "", "system:application", 1, true).await?;
     let menu_mgmt = insert_menu(&mut tx, sys, Some(cfg_dir), "MENU", "菜单管理", "/system/menus", "ListTree", "", "system:menu", 2, true).await?;
+    let platform_settings = insert_menu(&mut tx, sys, Some(cfg_dir), "MENU", "平台设置", "/system/settings", "Settings", "", "system:settings", 3, true).await?;
     let open_dir = insert_menu(&mut tx, sys, None, "DIR", "开放平台", "", "KeyRound", "", "", 5, true).await?;
     let oauth_clients_menu = insert_menu(&mut tx, sys, Some(open_dir), "MENU", "OAuth 客户端", "/system/oauth/clients", "Key", "", "system:oauth", 1, true).await?;
     let device_session_menu = insert_menu(&mut tx, sys, Some(open_dir), "MENU", "设备与会话", "/system/oauth/tokens", "MonitorSmartphone", "", "system:oauth", 2, true).await?;
@@ -350,7 +358,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     // ===== 角色菜单 =====
     for m in [
         dashboard, org_dir, tenant_mgmt, tenant_auth_btn, org_mgmt, dept_mgmt, authz_mgmt,
-        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, open_dir,
+        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, platform_settings, open_dir,
         oauth_clients_menu, device_session_menu, audit_menu, monitor_menu,
         a_overview, a_reports_dir, a_sales, a_ops, a_sources, h_inbox, h_notify,
     ] {
@@ -376,7 +384,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     }
     for m in [
         dashboard, org_dir, tenant_mgmt, tenant_auth_btn, org_mgmt, dept_mgmt, authz_mgmt,
-        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, open_dir,
+        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, platform_settings, open_dir,
         oauth_clients_menu, device_session_menu, audit_menu, monitor_menu,
         a_overview, a_reports_dir, a_sales, a_ops, a_sources, h_inbox, h_notify,
     ] {
@@ -390,7 +398,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     }
     for m in [
         dashboard, org_dir, tenant_mgmt, tenant_auth_btn, org_mgmt, dept_mgmt, authz_mgmt,
-        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, open_dir,
+        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, platform_settings, open_dir,
         oauth_clients_menu, device_session_menu, audit_menu, monitor_menu,
         a_overview, a_reports_dir, a_sales, a_ops, a_sources, h_inbox, h_notify,
     ] {
@@ -461,7 +469,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     }
 
     // ===== OAuth 客户端 (secret 存 SHA-256) =====
-    insert_client(&mut tx, "dante-web", Some("dante-web-secret"), "Dante Web 控制台",
+    insert_client(&mut tx, "dante-web", Some("dante-web-secret"), "Web 控制台",
         "Web 应用演示客户端 (授权码 + PKCE)", "CONFIDENTIAL",
         "https://oauthdebugger.com/callback,http://localhost:9000/callback",
         "authorization_code,refresh_token", "profile,email", 7200, 604800).await?;
@@ -477,7 +485,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     tx.commit().await?;
     tracing::info!(
-        "种子数据写入完成: 2 租户(含 1 平台租户) / 3 应用 / 25 菜单 / 7 组织 / 6 部门 / 6 用户 / 4 角色 / 4 OAuth 客户端"
+        "种子数据写入完成: 2 租户(含 1 平台租户) / 3 应用 / 26 菜单 / 7 组织 / 6 部门 / 6 用户 / 4 角色 / 4 OAuth 客户端"
     );
     Ok(())
 }

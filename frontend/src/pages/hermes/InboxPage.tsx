@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/states"
 import { DemoBadge } from "@/pages/athena/mock"
 import { formatDateTime, formatRelative } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { usePlatformBranding } from "@/hooks/use-platform-branding"
 
 interface MailItem {
   id: string
@@ -19,6 +20,7 @@ interface MailItem {
   title: string
   preview: string
   body: string[]
+  signature?: string
   date: string
   read: boolean
   starred: boolean
@@ -29,15 +31,15 @@ const SEED: MailItem[] = [
   {
     id: "m1",
     from: "平台安全中心",
-    fromEmail: "security@dante.cloud",
+    fromEmail: "security@example.com",
     title: "【安全提醒】检测到新的设备授权请求",
     preview: "智能电视客户端(smart-tv)于今日发起设备码授权,若非本人操作请及时吊销令牌...",
     body: [
       "您好,",
       "我们检测到智能电视客户端 smart-tv 于今日 14:22 通过设备码流程发起了授权请求,并在您批准后获得了访问令牌(scope: profile read)。",
       "若该操作并非您本人发起,请前往「设备与会话」页面立即吊销相关令牌,并建议尽快修改账户密码。",
-      "—— Dante Cloud 平台安全中心",
     ],
+    signature: "平台安全中心",
     date: new Date(Date.now() - 18 * 60_000).toISOString(),
     read: false,
     starred: true,
@@ -46,7 +48,7 @@ const SEED: MailItem[] = [
   {
     id: "m2",
     from: "研发部",
-    fromEmail: "rd@dante.cloud",
+    fromEmail: "rd@example.com",
     title: "Athena 数据分析 v2.4 发布说明",
     preview: "本次更新包含漏斗分析、渠道归因与导出模板三大特性,以及 11 项问题修复...",
     body: [
@@ -66,7 +68,7 @@ const SEED: MailItem[] = [
   {
     id: "m3",
     from: "人事行政部",
-    fromEmail: "hr@dante.cloud",
+    fromEmail: "hr@example.com",
     title: "关于 2026 年 Q1 全员大会安排的通知",
     preview: "全员大会定于 3 月 18 日(周三)14:00 在总部 A101 会议室举行,同步线上直播...",
     body: [
@@ -83,7 +85,7 @@ const SEED: MailItem[] = [
   {
     id: "m4",
     from: "IT 服务台",
-    fromEmail: "itsupport@dante.cloud",
+    fromEmail: "itsupport@example.com",
     title: "工单 #20481 已处理完成:VPN 无法连接",
     preview: "您提交的工单「VPN 无法连接」已处理完成,请重新拨入并确认访问正常...",
     body: [
@@ -99,7 +101,7 @@ const SEED: MailItem[] = [
   {
     id: "m5",
     from: "运营平台",
-    fromEmail: "ops@dante.cloud",
+    fromEmail: "ops@example.com",
     title: "华东区租户新增授权应用提醒",
     preview: "租户「华东商贸集团」新授权了「数据分析」应用,涉及 4 个组织、12 个角色...",
     body: [
@@ -122,6 +124,7 @@ const TAG_TONE: Record<MailItem["tag"], string> = {
 }
 
 export default function InboxPage() {
+  const { platformName } = usePlatformBranding()
   const [items, setItems] = React.useState<MailItem[]>(SEED)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const selected = items.find((i) => i.id === selectedId) ?? null
@@ -246,6 +249,9 @@ export default function InboxPage() {
                       {p}
                     </p>
                   ))}
+                  {selected.signature && (
+                    <p className="text-muted-foreground">—— {platformName} {selected.signature}</p>
+                  )}
                 </div>
               </div>
             </motion.div>

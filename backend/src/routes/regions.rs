@@ -7,11 +7,14 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use crate::{error::AppError, extractors::{ApiJson, CurrentUser}, state::AppState};
+use crate::region_selection::{resolve_local_regions, resolve_regions, township_parent, RegionRecord};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/regions/versions", get(versions).post(create_version))
         .route("/api/regions/versions/{version}", axum::routing::delete(delete_version))
+        .route("/api/regions/options", get(options))
+        .route("/api/regions/resolve", get(resolve))
         .route("/api/regions", get(list).post(create))
         .route("/api/regions/{id}", axum::routing::put(update).delete(remove))
 }
@@ -84,6 +87,84 @@ fn row_json(r: &sqlx::postgres::PgRow) -> Value {
         "nameShort":r.get::<String,_>("name_short"), "level":r.get::<i32,_>("level"),
         "type":r.get::<Option<String>,_>("type"), "typeName":r.get::<Option<String>,_>("type_name"),
         "postCode":r.get::<Option<String>,_>("post_code"), "sourceUrl":r.get::<Option<String>,_>("source_url")})
+}
+
+fn selection_record(r: sqlx::postgres::PgRow) -> RegionRecord {
+    RegionRecord {
+        id: r.get("source_id"), version: r.get("version"), code: r.get("code"),
+        parent_code: r.get("parent_code"), name: r.get("name"), name_pinyin: r.get("name_pinyin"),
+        name_short: r.get("name_short"), level: r.get("level"), kind: r.get("type"),
+        type_name: r.get("type_name"), post_code: r.get("post_code"), source_url: r.get("source_url"),
+    }
+}
+
+async fn selection_version(state: &AppState, requested: Option<&str>) -> Result<String, AppError> {
+    let requested = requested.map(str::trim).filter(|version| !version.is_empty());
+    let version: Option<String> = sqlx::query_scalar(
+        "SELECT v.version FROM region_versions v WHERE v.deleted_at IS NULL \
+         AND ($1::text IS NULL OR v.version=$1) \
+         AND EXISTS(SELECT 1 FROM regions r WHERE r.version=v.version) \
+         ORDER BY v.version DESC LIMIT 1"
+    ).bind(requested).fetch_optional(&state.pool).await?;
+    version.ok_or_else(|| AppError::not_found("地区版本不存在或暂无地区数据"))
+}
+
+async fn options(State(state): State<AppState>, _user: CurrentUser, Query(p): Query<HashMap<String,String>>) -> Result<Json<Value>, AppError> {
+    let version = selection_version(&state, p.get("version").map(String::as_str)).await?;
+    let parent = p.get("parentCode").map(String::as_str);
+    let rows = sqlx::query(
+        "SELECT version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url \
+         FROM regions WHERE version=$1 AND parent_code=COALESCE($2::text,'0') \
+         AND level=CASE WHEN $2::text IS NULL THEN 2 ELSE \
+             (SELECT CASE WHEN parent.level=3 AND NOT EXISTS \
+                 (SELECT 1 FROM regions child WHERE child.version=$1 AND child.parent_code=parent.code AND child.level=4) \
+                 THEN 5 ELSE parent.level+1 END FROM regions parent WHERE parent.version=$1 AND parent.code=$2) END \
+         AND level BETWEEN 2 AND 6 ORDER BY code,source_id"
+    ).bind(&version).bind(parent).fetch_all(&state.pool).await?;
+    Ok(Json(json!({"version": version, "records": rows.into_iter().map(selection_record).collect::<Vec<_>>()})))
+}
+
+async fn resolve(State(state): State<AppState>, _user: CurrentUser, Query(p): Query<HashMap<String,String>>) -> Result<Json<Value>, AppError> {
+    let version = selection_version(&state, p.get("version").map(String::as_str)).await?;
+    // Follow parent indexes instead of scanning the 660k street/village rows.
+    let rows = sqlx::query(
+        "WITH RECURSIVE selection_regions AS ( \
+         SELECT * FROM regions WHERE version=$1 AND parent_code='0' AND level=2 \
+         UNION ALL SELECT r.* FROM regions r JOIN selection_regions parent \
+         ON r.version=parent.version AND r.parent_code=parent.code \
+         WHERE r.level>parent.level AND r.level<=4) \
+         SELECT version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url \
+         FROM selection_regions"
+    ).bind(&version).fetch_all(&state.pool).await?;
+    let mut records: Vec<_> = rows.into_iter().map(selection_record).collect();
+    let province = p.get("province").map(String::as_str).unwrap_or("");
+    let city = p.get("city").map(String::as_str).unwrap_or("");
+    let district = p.get("district").map(String::as_str).unwrap_or("");
+    let township = p.get("township").map(String::as_str).unwrap_or("");
+    let village = p.get("village").map(String::as_str).unwrap_or("");
+    let parent_code = township_parent(&records, &resolve_regions(&records, province, city, district))
+        .map(|region| region.code.clone());
+    if let Some(parent_code) = parent_code {
+        records.extend(local_records(&state, &version, &parent_code, 5).await?);
+        let township_code = resolve_local_regions(&records,
+            resolve_regions(&records, province, city, district), township, "")
+            .township.map(|region| region.code.clone());
+        if let Some(township_code) = township_code {
+            records.extend(local_records(&state, &version, &township_code, 6).await?);
+        }
+    }
+    let path = resolve_local_regions(&records,
+        resolve_regions(&records, province, city, district), township, village);
+    Ok(Json(json!({"version": version, "province": path.province, "city": path.city,
+        "district": path.district, "township": path.township, "village": path.village})))
+}
+
+async fn local_records(state: &AppState, version: &str, parent: &str, level: i32) -> Result<Vec<RegionRecord>, AppError> {
+    let rows = sqlx::query(
+        "SELECT version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url \
+         FROM regions WHERE version=$1 AND parent_code=$2 AND level=$3 ORDER BY code,source_id"
+    ).bind(version).bind(parent).bind(level).fetch_all(&state.pool).await?;
+    Ok(rows.into_iter().map(selection_record).collect())
 }
 
 async fn list(State(state): State<AppState>, _user: CurrentUser, Query(p): Query<HashMap<String,String>>) -> Result<Json<Value>, AppError> {

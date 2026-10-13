@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { resolvedLocation, type ResolvedLocation } from "@/lib/location"
+import { regionsApi } from "@/api/regions"
 import { toast } from "sonner"
 
 export type MapPoint = { longitude: number; latitude: number }
@@ -84,10 +85,12 @@ function MapCanvas({
 export function LocationPicker({
   value,
   searchHint,
+  regionVersion,
   onChange,
 }: {
   value: MapPoint | null
   searchHint?: string
+  regionVersion?: string | null
   onChange: (point: MapSelection | null) => void
 }) {
   const [open, setOpen] = React.useState(false)
@@ -105,20 +108,49 @@ export function LocationPicker({
   const lastSearchAt = React.useRef(0)
   const mapRef = React.useRef<L.Map | null>(null)
   const locationRequest = React.useRef(0)
+  const searchRequest = React.useRef(0)
+  const searchController = React.useRef<AbortController | null>(null)
   const ipController = React.useRef<AbortController | null>(null)
   const reverseController = React.useRef<AbortController | null>(null)
+  const regionController = React.useRef<AbortController | null>(null)
 
-  const cancelLocate = () => {
+  React.useEffect(() => () => {
+    locationRequest.current += 1
+    searchRequest.current += 1
+    searchController.current?.abort()
+    ipController.current?.abort()
+    reverseController.current?.abort()
+    regionController.current?.abort()
+  }, [])
+
+  const cancelLocate = React.useCallback(() => {
     locationRequest.current += 1
     ipController.current?.abort()
     ipController.current = null
     reverseController.current?.abort()
     reverseController.current = null
+    regionController.current?.abort()
+    regionController.current = null
     setLocating(null)
+    setResolving(false)
+  }, [])
+
+  React.useEffect(() => {
+    if (reverseController.current || regionController.current) cancelLocate()
+  }, [regionVersion, cancelLocate])
+
+  const cancelSearch = () => {
+    searchRequest.current += 1
+    searchController.current?.abort()
+    searchController.current = null
+    setSearching(false)
   }
 
   const changeOpen = (next: boolean) => {
-    if (!next) cancelLocate()
+    if (!next) {
+      cancelLocate()
+      cancelSearch()
+    }
     setOpen(next)
   }
 
@@ -149,6 +181,7 @@ export function LocationPicker({
       setLocationError("当前浏览器不支持设备定位，请使用 IP 估算或在地图上选点。")
       return
     }
+    cancelLocate()
     const request = ++locationRequest.current
     setLocating("device")
     setLocationError("")
@@ -183,6 +216,7 @@ export function LocationPicker({
   }
 
   const locateIp = async () => {
+    cancelLocate()
     const request = ++locationRequest.current
     const controller = new AbortController()
     ipController.current?.abort()
@@ -212,6 +246,10 @@ export function LocationPicker({
       return
     }
     lastSearchAt.current = Date.now()
+    const request = ++searchRequest.current
+    const controller = new AbortController()
+    searchController.current?.abort()
+    searchController.current = controller
     setSearching(true)
     setSearchError("")
     setResults([])
@@ -221,65 +259,115 @@ export function LocationPicker({
       url.searchParams.set("limit", "5")
       url.searchParams.set("addressdetails", "1")
       url.searchParams.set("q", query.trim())
-      const response = await fetch(url, { headers: { "Accept-Language": "zh-CN,zh;q=0.9" } })
+      const response = await fetch(url, { signal: controller.signal, headers: { "Accept-Language": "zh-CN,zh;q=0.9" } })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const items = await response.json() as SearchResult[]
+      if (request !== searchRequest.current) return
       setResults(items)
       if (items.length === 0) setSearchError("未找到地点，请换个关键词或直接在地图上选点。")
     } catch {
-      setSearchError("地点搜索暂不可用，仍可拖动地图并点击选点。")
+      if (request === searchRequest.current) setSearchError("地点搜索暂不可用，仍可拖动地图并点击选点。")
     } finally {
-      setSearching(false)
+      if (request === searchRequest.current) setSearching(false)
+      if (searchController.current === controller) searchController.current = null
     }
   }
 
   const chooseResult = (result: SearchResult) => {
-    const point = { latitude: Number(result.lat), longitude: Number(result.lon) }
-    if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) return
+    const point = validPoint(Number(result.lat), Number(result.lon))
+    if (!point) return
     cancelLocate()
-    const rounded = { latitude: Number(point.latitude.toFixed(6)), longitude: Number(point.longitude.toFixed(6)) }
+    cancelSearch()
     setSearchResultLocation(resolvedLocation(result))
-    applyLocation(rounded, "搜索结果", 15, "search")
+    applyLocation(point, "搜索结果", 15, "search")
     setResults([])
   }
 
   const confirmSelection = async () => {
     if (!draft || resolving) return
     cancelLocate()
+    cancelSearch()
     const request = locationRequest.current
+    const point = draft
+    const source = locationSource
+    const searchLocation = source === "search" ? searchResultLocation : null
     const controller = new AbortController()
     reverseController.current = controller
     const timeout = window.setTimeout(() => controller.abort(), 8000)
     setResolving(true)
+    let reverseLocation: ResolvedLocation = {}
+    let reverseFailed = false
     try {
       const url = new URL("/api/maps/reverse", window.location.origin)
       url.searchParams.set("format", "jsonv2")
       url.searchParams.set("addressdetails", "1")
       url.searchParams.set("zoom", "18")
-      url.searchParams.set("lat", String(draft.latitude))
-      url.searchParams.set("lon", String(draft.longitude))
+      url.searchParams.set("lat", String(point.latitude))
+      url.searchParams.set("lon", String(point.longitude))
       const response = await fetch(url, { signal: controller.signal, headers: { "Accept-Language": "zh-CN,zh;q=0.9" } })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json() as unknown
       if (request !== locationRequest.current) return
-      const reverseLocation = resolvedLocation(data, locationSource === "ip")
-      onChange({ ...draft, location: {
-        province: reverseLocation.province || searchResultLocation?.province,
-        city: reverseLocation.city || searchResultLocation?.city,
-        district: reverseLocation.district || searchResultLocation?.district,
-        address: locationSource === "ip" ? undefined : (reverseLocation.address || searchResultLocation?.address),
-      } })
+      if (controller.signal.aborted || !data || typeof data !== "object" || "error" in data) throw new Error("Address unavailable")
+      reverseLocation = resolvedLocation(data, source === "ip")
     } catch {
       if (request !== locationRequest.current) return
-      onChange(draft)
-      toast.warning("坐标已回填，地址解析失败，请手动填写地址")
+      reverseFailed = true
     } finally {
       window.clearTimeout(timeout)
       if (reverseController.current === controller) reverseController.current = null
-      if (request === locationRequest.current) {
-        setResolving(false)
-        changeOpen(false)
+    }
+    if (request !== locationRequest.current) return
+
+    const parsed: ResolvedLocation = {
+      province: reverseLocation.province || searchLocation?.province,
+      city: reverseLocation.city || searchLocation?.city,
+      district: reverseLocation.district || searchLocation?.district,
+      township: source === "ip" ? undefined : (reverseLocation.township || searchLocation?.township),
+      village: source === "ip" ? undefined : (reverseLocation.village || searchLocation?.village),
+      address: source === "ip" ? undefined : (reverseLocation.address || searchLocation?.address),
+    }
+    if (reverseFailed && !searchLocation) {
+      onChange(point)
+      toast.warning("坐标已回填，地址解析失败，请手动选择地区并填写地址")
+      changeOpen(false)
+      return
+    }
+
+    const resolver = new AbortController()
+    regionController.current = resolver
+    const regionTimeout = window.setTimeout(() => resolver.abort(), 8000)
+    try {
+      const regions = await regionsApi.resolve({
+        version: regionVersion || undefined,
+        province: parsed.province,
+        city: parsed.city,
+        district: parsed.district,
+        township: parsed.township,
+        village: parsed.village,
+      }, { signal: resolver.signal })
+      if (request !== locationRequest.current) return
+      if (resolver.signal.aborted) throw new Error("Region matching timed out")
+      onChange({ ...point, location: {
+        province: regions.province?.name ?? "",
+        city: regions.city?.name ?? "",
+        district: regions.district?.name ?? "",
+        township: source === "ip" ? "" : (regions.township?.name ?? ""),
+        village: source === "ip" ? "" : (regions.village?.name ?? ""),
+        address: parsed.address,
+      } })
+      if (!regions.province || (parsed.city && !regions.city) || (parsed.district && !regions.district)
+        || (parsed.township && !regions.township) || (parsed.village && !regions.village)) {
+        toast.warning("坐标和地址已回填，部分地区未能匹配地区管理数据，请手动选择")
       }
+    } catch {
+      if (request !== locationRequest.current) return
+      onChange({ ...point, location: { address: parsed.address } })
+      toast.warning("坐标和可用地址已回填，地区匹配失败，已保留原地区，请手动选择")
+    } finally {
+      window.clearTimeout(regionTimeout)
+      if (regionController.current === resolver) regionController.current = null
+      if (request === locationRequest.current) changeOpen(false)
     }
   }
 
@@ -299,10 +387,10 @@ export function LocationPicker({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>在地图上选择位置</DialogTitle>
-          <DialogDescription>搜索地点或拖动地图，再点击目标位置放置标记。确认时会解析地址并回填表单；坐标采用 WGS-84。</DialogDescription>
+          <DialogDescription>搜索地点或拖动地图，再点击目标位置放置标记。确认后匹配已有地区并回填地址和坐标；坐标采用 WGS-84。</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Input value={query} onChange={(event) => setQuery(event.target.value)}
+          <Input value={query} onChange={(event) => { cancelSearch(); setQuery(event.target.value); setResults([]); setSearchError("") }}
             onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search() } }}
             placeholder="搜索省市、街道或地标" aria-label="搜索地图地点" />
           <Button type="button" variant="secondary" onClick={() => void search()} disabled={!query.trim() || searching}>
@@ -329,7 +417,7 @@ export function LocationPicker({
             onClick={() => chooseResult(result)}>{result.display_name}</button>)}
         </div>}
         {open && <div className="relative overflow-hidden rounded-lg border">
-          <MapCanvas initial={value} selected={draft} onChoose={(point) => { cancelLocate(); setDraft(point); setLocationInfo("地图手选"); setLocationSource("map") }} onReady={(map) => { mapRef.current = map }} />
+          <MapCanvas initial={value} selected={draft} onChoose={(point) => { cancelLocate(); cancelSearch(); setResults([]); setSearchResultLocation(null); setDraft(point); setLocationInfo("地图手选"); setLocationSource("map"); setLocationError("") }} onReady={(map) => { mapRef.current = map }} />
           <div className="pointer-events-none absolute bottom-3 left-3 z-[400] rounded-md bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur-sm">
             {draft ? `${locationInfo || "选中"} · ${draft.longitude.toFixed(6)}, ${draft.latitude.toFixed(6)}` : "点击地图放置标记"}
           </div>

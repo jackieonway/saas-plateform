@@ -42,7 +42,7 @@ export const monitorApi = {
     const disposition = res.headers.get("content-disposition") ?? ""
     const filename =
       /filename="?([^";]+)"?/.exec(disposition)?.[1] ??
-      `dante-tenant-insights-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.csv`
+      `tenant-insights-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.csv`
     return { blob, filename }
   },
 }

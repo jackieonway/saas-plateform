@@ -1,4 +1,4 @@
-import { api, qs } from "@/lib/api"
+import { api, qs, type RequestOptions } from "@/lib/api"
 
 export interface RegionVersion { version: string; label: string; sourceVersion: string | null; count: number }
 export interface RegionRecord {
@@ -7,8 +7,21 @@ export interface RegionRecord {
   typeName: string | null; postCode: string | null; sourceUrl: string | null
 }
 export type RegionPayload = Omit<RegionRecord, "id">
+export interface RegionOptions { version: string | null; records: RegionRecord[] }
+export interface RegionResolution {
+  version: string | null
+  province: RegionRecord | null
+  city: RegionRecord | null
+  district: RegionRecord | null
+  township: RegionRecord | null
+  village: RegionRecord | null
+}
 export const regionsApi = {
   versions: () => api.get<RegionVersion[]>("/api/regions/versions"),
+  options: (params: { version?: string; parentCode?: string } = {}, options?: RequestOptions) =>
+    api.get<RegionOptions>(`/api/regions/options${qs(params)}`, options),
+  resolve: (params: { version?: string; province?: string; city?: string; district?: string; township?: string; village?: string }, options?: RequestOptions) =>
+    api.get<RegionResolution>(`/api/regions/resolve${qs(params)}`, options),
   createVersion: (body: {version: string; label: string; sourceVersion?: string}) => api.post("/api/regions/versions", body),
   removeVersion: (version: string) => api.del(`/api/regions/versions/${encodeURIComponent(version)}`),
   list: (params: {version: string; parentCode?: string; search?: string; page?: number; size?: number}) =>

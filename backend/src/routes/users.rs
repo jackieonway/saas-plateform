@@ -308,6 +308,12 @@ async fn create(
     let gender = parse_gender(&body.gender)?;
     let hash = pw::hash_password(&body.password)?;
     let platform = state.is_platform_context(&user).await?;
+    let welcome_title = if platform {
+        None
+    } else {
+        let branding = crate::platform_settings::load_branding(&state.pool).await?;
+        Some(format!("欢迎加入 {}", branding.platform_name))
+    };
     let mut tx = state.pool.begin().await?;
     let row: (Uuid, String) = sqlx::query_as(
         "INSERT INTO users (username, password_hash, real_name, email, phone, gender) \
@@ -321,7 +327,7 @@ async fn create(
     .bind(&gender)
     .fetch_one(&mut *tx)
     .await?;
-    if !platform {
+    if let Some(welcome_title) = welcome_title {
         sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
             .bind(row.0)
             .bind(user.org_id)
@@ -331,7 +337,7 @@ async fn create(
             &mut tx,
             &[(row.0, user.tenant_id, user.org_id)],
             "INFO",
-            "欢迎加入 Dante Cloud",
+            &welcome_title,
             &format!(
                 "管理员为您创建了账号「{}」。首次登录后建议前往个人中心修改初始密码。",
                 username

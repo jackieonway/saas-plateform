@@ -49,11 +49,12 @@ import { formatDateTime, useDebounced } from "@/lib/format"
 import { ExpiryCell, isoToLocalInput } from "@/lib/expiry"
 import { coordinateField, coordinateOrNull, coordinatePoint, hasCoordinatePair, locationText } from "@/lib/location"
 import { LocationPicker } from "@/components/LocationPicker"
+import { RegionPicker } from "@/components/RegionPicker"
 import { toast } from "sonner"
 import type { TenantRecord } from "@/api/types"
 
 const tenantSchema = z.object({
-  name: z.string().min(1, "请输入租户名称").max(64, "名称过长"),
+  name: z.string().trim().min(1, "请输入租户名称").max(100, "名称最多 100 个字符"),
   code: z
     .string()
     .min(2, "请输入租户编码")
@@ -63,6 +64,8 @@ const tenantSchema = z.object({
   province: z.string().max(100, "省份名称过长"),
   city: z.string().max(100, "城市名称过长"),
   district: z.string().max(100, "区县名称过长"),
+  township: z.string().max(128, "乡镇街道名称过长"),
+  village: z.string().max(128, "村社区名称过长"),
   address: z.string().max(300, "详细地址过长"),
   longitude: coordinateField("经度", -180, 180),
   latitude: coordinateField("纬度", -90, 90),
@@ -107,15 +110,16 @@ export default function TenantsPage() {
 
   /* ---- 新建 / 编辑 ---- */
   const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [regionVersion, setRegionVersion] = React.useState<string | null>(null)
   const [editing, setEditing] = React.useState<TenantRecord | null>(null)
   const form = useForm<TenantForm>({
     resolver: zResolver(tenantSchema),
-    defaultValues: { name: "", code: "", description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
+    defaultValues: { name: "", code: "", description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" },
   })
 
   const openCreate = () => {
     setEditing(null)
-    form.reset({ name: "", code: "", description: "", province: "", city: "", district: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
+    form.reset({ name: "", code: "", description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "", rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "" })
     setDialogOpen(true)
   }
   const openEdit = (t: TenantRecord) => {
@@ -124,7 +128,7 @@ export default function TenantsPage() {
       name: t.name,
       code: t.code,
       description: t.description ?? "",
-      province: t.province ?? "", city: t.city ?? "", district: t.district ?? "", address: t.address ?? "",
+      province: t.province ?? "", city: t.city ?? "", district: t.district ?? "", township: t.township ?? "", village: t.village ?? "", address: t.address ?? "",
       longitude: t.longitude == null ? "" : String(t.longitude), latitude: t.latitude == null ? "" : String(t.latitude),
       expiresAt: isoToLocalInput(t.expiresAt),
       rootOrganizationName: "", adminUsername: "", adminPassword: "", adminRealName: "", adminEmail: "",
@@ -137,7 +141,7 @@ export default function TenantsPage() {
       /* datetime-local("2026-12-31T23:59") → ISO; 空串 → null(清除/永久) */
       const body = {
         name: values.name, code: values.code, description: values.description,
-        province: values.province, city: values.city, district: values.district, address: values.address,
+        province: values.province, city: values.city, district: values.district, township: values.township, village: values.village, address: values.address,
         longitude: coordinateOrNull(values.longitude), latitude: coordinateOrNull(values.latitude),
         expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
       }
@@ -155,6 +159,8 @@ export default function TenantsPage() {
       toast.success(editing ? "租户已更新" : "租户创建成功")
       setDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ["tenants"] })
+      queryClient.invalidateQueries({ queryKey: ["profile"] })
+      queryClient.invalidateQueries({ queryKey: ["platform-settings"] })
     },
     onError: (e: Error) => toast.error(e.message || "保存失败"),
   })
@@ -449,7 +455,7 @@ export default function TenantsPage() {
                       名称 <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="如: Dante 云平台" {...field} />
+                      <Input placeholder="如: 示例企业" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -464,7 +470,7 @@ export default function TenantsPage() {
                       编码 <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="如: dante-cloud" className="font-mono" {...field} disabled={!!editing} />
+                      <Input placeholder="如: example-tenant" className="font-mono" {...field} disabled={!!editing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -504,25 +510,22 @@ export default function TenantsPage() {
               />
               <div className="space-y-3 border-t pt-4">
                 <p className="text-sm font-medium">地点标注</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["province", "city", "district"] as const).map((name, index) => <FormField key={name} control={form.control} name={name} render={({ field }) => <FormItem>
-                    <FormLabel>{["省份", "城市", "区县"][index]}</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>} />)}
-                </div>
+                <RegionPicker version={regionVersion} onVersionChange={setRegionVersion} />
                 <FormField control={form.control} name="address" render={({ field }) => <FormItem>
                   <FormLabel>详细地址</FormLabel><FormControl><Input placeholder="街道、门牌号等" {...field} /></FormControl><FormMessage />
                 </FormItem>} />
                 <LocationPicker
+                  regionVersion={regionVersion}
                   value={coordinatePoint(form.watch("longitude"), form.watch("latitude"))}
                   searchHint={locationText(form.watch())}
                   onChange={(point) => {
                     form.setValue("longitude", point ? String(point.longitude) : "", { shouldDirty: true })
                     form.setValue("latitude", point ? String(point.latitude) : "", { shouldDirty: true })
-                    for (const key of ["province", "city", "district", "address"] as const) {
+                    for (const key of ["province", "city", "district", "township", "village", "address"] as const) {
                       const value = point?.location?.[key]
-                      if (value) form.setValue(key, value, { shouldDirty: true })
+                      if (value !== undefined) form.setValue(key, value, { shouldDirty: true })
                     }
-                    void form.trigger(["longitude", "latitude", "province", "city", "district", "address"])
+                    void form.trigger(["longitude", "latitude", "province", "city", "district", "township", "village", "address"])
                   }}
                 />
                 <div className="grid grid-cols-2 gap-2">

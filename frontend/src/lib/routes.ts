@@ -3,6 +3,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   "/dashboard": "仪表盘",
   "/profile": "个人中心",
   "/system/tenants": "租户管理",
+  "/system/settings": "平台设置",
   "/system/applications": "应用管理",
   "/system/menus": "菜单管理",
   "/system/organizations": "组织管理",

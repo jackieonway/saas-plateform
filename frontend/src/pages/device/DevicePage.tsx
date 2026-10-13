@@ -11,6 +11,7 @@ import { BrandWordmark } from "@/components/brand"
 import { deviceApi } from "@/api/public"
 import { useAuthStore } from "@/stores/auth"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { SCOPE_LABELS, formatRelative } from "@/lib/format"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
@@ -23,6 +24,7 @@ function normalizeCode(raw: string): string {
 }
 
 export default function DevicePage() {
+  const { footerText } = usePlatformBranding()
   const token = useAuthStore((s) => s.token)
   const [params] = useSearchParams()
   const returnTo = `/device${params.get("user_code") ? `?user_code=${params.get("user_code")}` : ""}`
@@ -269,9 +271,9 @@ export default function DevicePage() {
         </div>
       </main>
 
-      <footer className="border-t bg-background px-4 py-3 text-center text-xs text-muted-foreground">
-        © 2026 Dante Cloud · Powered by Rust &amp; React
-      </footer>
+      {footerText && <footer className="break-words border-t bg-background px-4 py-3 text-center text-xs text-muted-foreground">
+        {footerText}
+      </footer>}
     </div>
   )
 }

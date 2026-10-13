@@ -32,6 +32,8 @@ CREATE TABLE tenants (
   province VARCHAR(100) NOT NULL DEFAULT '',
   city VARCHAR(100) NOT NULL DEFAULT '',
   district VARCHAR(100) NOT NULL DEFAULT '',
+  township VARCHAR(128) NOT NULL DEFAULT '',
+  village VARCHAR(128) NOT NULL DEFAULT '',
   address VARCHAR(300) NOT NULL DEFAULT '',
   longitude DOUBLE PRECISION,
   latitude DOUBLE PRECISION,
@@ -82,6 +84,8 @@ CREATE TABLE organizations (
   province VARCHAR(100) NOT NULL DEFAULT '',
   city VARCHAR(100) NOT NULL DEFAULT '',
   district VARCHAR(100) NOT NULL DEFAULT '',
+  township VARCHAR(128) NOT NULL DEFAULT '',
+  village VARCHAR(128) NOT NULL DEFAULT '',
   address VARCHAR(300) NOT NULL DEFAULT '',
   longitude DOUBLE PRECISION,
   latitude DOUBLE PRECISION,
@@ -333,3 +337,9 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 内置 `2023` 版来自原始 `t_region.sql`。源文件有 688,939 行，其中 23,016 行的编码和业务字段完全重复；`scripts/prepare-region-seed.py` 去重后生成 665,923 行的 `backend/assets/regions-2023.copy.gz`。后端启动时在事务中流式导入一次；后续启动不会覆盖后台维护过的数据。新版本可创建空版本或复制现有版本，复制出的版本需要自行核对并维护，不能视为新的官方区划数据。删除版本会删除其地区记录，并保留删除标记，因此删除内置版本后重启不会重新导入。
 
 源文件的 `type` 只包含 `111/112/121/122/123/210/220` 七个城乡分类编码，主要用于村级记录。后台编辑额外提供各层级常见行政区划类型；这些类型使用不超过 12 字符的英文编码，中文名称写入 `type_name`，原始数值编码保持不变。
+
+## 0032 平台展示配置
+
+[`0032_platform_settings.sql`](../backend/migrations/0032_platform_settings.sql) 创建单行 `platform_settings` 表。主键 `singleton` 固定为 `true`，保存 `platform_name`（100 字符）、`platform_description`（300）、`logo_url`（2048）、`login_title`（100）、`login_description`（300）、`footer_text`（500）和更新时间。匿名接口只读取这些展示字段；修改需平台管理上下文和 `system:settings` 权限。
+
+平台租户名称继续由 `tenants.name` 保存，避免出现两份名称。此迁移将 `is_platform = true` 的租户编码改为 `admin-tenant`，保留 UUID 和关联数据；原默认名称改为 `平台管理租户`，自定义名称保持原值。管理接口在一个事务中保存展示配置和租户名称。后台入口和升级说明见[平台品牌与管理租户设置](./platform-settings.md)。

@@ -11,6 +11,7 @@ pub mod menus;
 pub mod maps;
 pub mod monitor;
 pub mod notifications;
+mod platform_settings;
 mod onboarding;
 pub mod oauth2;
 pub mod oauth_admin;
@@ -53,6 +54,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(oauth2::consent_routes())
         .merge(device::routes())
         .merge(notifications::routes())
+        .merge(platform_settings::routes())
         .merge(monitor::routes())
         .merge(audit::routes())
 }

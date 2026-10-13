@@ -20,7 +20,7 @@
  */
 import { createHash, randomBytes } from "node:crypto"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
-import { authCodeFlowPage, callbackPage, clientCredentialsPage, deviceFlowPage, externalApiPage, homePage, passwordFlowPage } from "./pages.ts"
+import { authCodeFlowPage, callbackPage, clientCredentialsPage, deviceFlowPage, externalApiPage, homePage, passwordFlowPage, renderBrandedPage } from "./pages.ts"
 
 /* ===== 常量 (端口硬编码, 不读环境变量) ===== */
 const PORT = 3004
@@ -65,7 +65,26 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(text)
 }
 
-function sendHtml(res: ServerResponse, page: string): void {
+/** 品牌读取仅在页面请求时执行；后台不可用时按时返回默认页面。 */
+async function loadPlatformName(): Promise<string> {
+  try {
+    const upstream = await fetch(`${BACKEND}/api/platform/branding`, {
+      signal: AbortSignal.timeout(1200),
+      headers: { Accept: "application/json" },
+    })
+    if (upstream.ok) {
+      const branding: unknown = await upstream.json()
+      if (branding && typeof branding === "object" && "platformName" in branding &&
+          typeof branding.platformName === "string" && branding.platformName.trim()) {
+        return branding.platformName.trim()
+      }
+    }
+  } catch { /* 首次启动或后台不可用时使用中性文案，不阻塞服务启动。 */ }
+  return "管理平台"
+}
+
+async function sendHtml(res: ServerResponse, template: string): Promise<void> {
+  const page = renderBrandedPage(template, await loadPlatformName())
   res.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
     "Content-Length": Buffer.byteLength(page),
@@ -357,13 +376,13 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
   const method = req.method ?? "GET"
 
   if (method === "GET" || method === "HEAD") {
-    if (path === "/") return sendHtml(res, homePage)
-    if (path === "/device-flow") return sendHtml(res, deviceFlowPage)
-    if (path === "/auth-code-flow") return sendHtml(res, authCodeFlowPage)
-    if (path === "/callback") return sendHtml(res, callbackPage)
-    if (path === "/client-credentials") return sendHtml(res, clientCredentialsPage)
-    if (path === "/password-flow") return sendHtml(res, passwordFlowPage)
-    if (path === "/external-api") return sendHtml(res, externalApiPage)
+    if (path === "/") return void sendHtml(res, homePage)
+    if (path === "/device-flow") return void sendHtml(res, deviceFlowPage)
+    if (path === "/auth-code-flow") return void sendHtml(res, authCodeFlowPage)
+    if (path === "/callback") return void sendHtml(res, callbackPage)
+    if (path === "/client-credentials") return void sendHtml(res, clientCredentialsPage)
+    if (path === "/password-flow") return void sendHtml(res, passwordFlowPage)
+    if (path === "/external-api") return void sendHtml(res, externalApiPage)
     if (path === "/health") return sendJson(res, 200, { status: "UP", service: "oauth-playground" })
     if (path === "/favicon.ico") {
       res.writeHead(204)

@@ -1,5 +1,5 @@
 /**
- * micro-vue 子应用 — Dante Cloud 微前端演示 (Vue 3 全局构建, 无构建步骤)
+ * micro-vue 子应用 — 微前端演示 (Vue 3 全局构建, 无构建步骤)
  *
  * 生命周期契约 (与主应用共享, 必须精确一致):
  *   window.__DANTE_MICRO_APP__ = {

@@ -6,8 +6,10 @@ mod error;
 mod extractors;
 mod notifications;
 mod observability;
+mod platform_settings;
 mod releases;
 mod region_seed;
+mod region_selection;
 mod release_archives;
 mod routes;
 mod seed;
@@ -27,6 +29,9 @@ mod notification_tests;
 
 #[cfg(test)]
 mod production_security_tests;
+
+#[cfg(test)]
+mod platform_settings_tests;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -169,7 +174,7 @@ async fn main() -> anyhow::Result<()> {
 
     let addr: SocketAddr = config.bind_addr.parse()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("Dante Cloud 后端已启动: http://{}", addr);
+    tracing::info!("平台后端已启动: http://{}", addr);
     let app = app
         .layer(cors_layer(&config))
         .layer(axum::middleware::from_fn_with_state(

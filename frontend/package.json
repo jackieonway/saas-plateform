@@ -11,6 +11,9 @@
     "test:micro:browser": "node ../tests/micro-host-browser.mjs",
     "test:notifications": "node --test ../tests/notification-context.mjs",
     "test:notifications:browser": "node ../tests/notification-frontend-browser.mjs",
+    "test:platform:browser": "node ../tests/platform-settings-browser.mjs",
+    "test:regions": "node --test ../tests/map-location-regions.mjs",
+    "test:regions:browser": "node ../tests/region-location-browser.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx"
   },

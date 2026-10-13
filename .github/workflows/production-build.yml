@@ -46,11 +46,13 @@ jobs:
           cargo check --locked --tests
           cargo test --locked --bin dante-cloud-backend
 
-      - name: Check production authorization against isolated PostgreSQL
+      - name: Check production authorization and platform settings against isolated PostgreSQL
         working-directory: backend
         env:
           TEST_DATABASE_URL: postgres://postgres:isolated-ci-password@127.0.0.1:5432/postgres
-        run: cargo test --locked production_security_tests -- --ignored --test-threads=1
+        run: |
+          cargo test --locked production_security_tests -- --ignored --test-threads=1
+          cargo test --locked platform_settings_tests -- --ignored --test-threads=1
 
       - name: Check runtime policy and recovery tools
         run: node --test tests/production-native-config.mjs deploy/monitoring/tests/monitor.mjs deploy/recovery/tests/envelope.test.mjs deploy/recovery/tests/schedule.test.mjs deploy/recovery/tests/systemd.test.mjs

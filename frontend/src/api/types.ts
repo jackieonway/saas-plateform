@@ -181,6 +181,8 @@ export interface TenantRecord {
   province: string
   city: string
   district: string
+  township: string
+  village: string
   address: string
   longitude: number | null
   latitude: number | null
@@ -202,6 +204,8 @@ export interface TenantPayload {
   province?: string
   city?: string
   district?: string
+  township?: string
+  village?: string
   address?: string
   longitude?: number | null
   latitude?: number | null
@@ -370,6 +374,8 @@ export interface OrgNode {
   province: string
   city: string
   district: string
+  township: string
+  village: string
   address: string
   longitude: number | null
   latitude: number | null
@@ -393,6 +399,8 @@ export interface OrgPayload {
   province?: string
   city?: string
   district?: string
+  township?: string
+  village?: string
   address?: string
   longitude?: number | null
   latitude?: number | null
