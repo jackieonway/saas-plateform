@@ -36,6 +36,12 @@ mod platform_settings_tests;
 #[cfg(test)]
 mod entity_creation_tests;
 
+#[cfg(test)]
+mod platform_session_refresh_tests;
+
+#[cfg(test)]
+mod authorization_isolation_tests;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;

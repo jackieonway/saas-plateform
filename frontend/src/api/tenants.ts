@@ -2,6 +2,7 @@ import { api } from "@/lib/api"
 import type { AuthorizationResp, AuthorizationPayload, TenantPayload, EntityCreationResult } from "./types"
 
 export const tenantsApi = {
+  options: () => api.get<unknown>("/api/tenants/options"),
   list: (params: { page?: number; size?: number; keyword?: string; status?: string }) =>
     api.get<unknown>(
       `/api/tenants${paramsToString({ page: params.page, size: params.size, keyword: params.keyword, status: params.status })}`

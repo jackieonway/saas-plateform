@@ -153,14 +153,13 @@ export default function DashboardPage() {
   })
   const permissionsQuery = usePermissionsQuery()
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
-  const isSuper = profile?.user.isSuperAdmin ?? false
+  const isSuper = !!profile?.user.isSuperAdmin && !!profile?.tenant.isPlatform
   /* 权限未就绪时一律视为无权限: 避免「先全部可见、加载后消失」的按钮闪现。
-     (permissions.size === 0 的全放行仅适用于已加载完成的空权限集,保留其历史语义) */
+     空权限集也不授予快捷操作。 */
   const permsReady = permissionsQuery.isSuccess || permissionsQuery.isError
   const can = (p: string) => {
     if (isSuper) return true
     if (!permsReady) return false
-    if (permissions.size === 0) return true
     return permissions.has(p)
   }
 

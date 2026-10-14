@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu as MenuIcon,
   Moon,
+  PanelLeftOpen,
   ShieldAlert,
   TriangleAlert,
   UserCog,
@@ -62,9 +63,13 @@ import type { MenuNode, NotificationRecord, NotificationType } from "@/api/types
 export function TopBar({
   onOpenMobileNav,
   onOpenCommandPalette,
+  menuCollapsed = false,
+  onExpandMenu,
 }: {
   onOpenMobileNav: () => void
   onOpenCommandPalette: () => void
+  menuCollapsed?: boolean
+  onExpandMenu?: () => void
 }) {
   const { pathname } = useLocation()
   const { platformName } = usePlatformBranding()
@@ -111,6 +116,18 @@ export function TopBar({
       >
         <MenuIcon className="size-5" />
       </Button>
+
+      {menuCollapsed && onExpandMenu && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="hidden lg:inline-flex"
+              aria-label="展开菜单" aria-expanded="false" onClick={onExpandMenu}>
+              <PanelLeftOpen className="size-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>展开菜单</TooltipContent>
+        </Tooltip>
+      )}
 
       {/* 面包屑 */}
       <nav aria-label="面包屑" className="min-w-0 flex-1">
@@ -520,7 +537,7 @@ function OrgContextChip() {
 
   /* 「管理组织」入口按权限显隐: 超管直通; 权限未就绪按无权限处理(防按钮闪现),
      其余需 system:organization(与 Task 15 permsReady 门控模式同款) */
-  const isSuper = profile.user.isSuperAdmin
+  const isSuper = profile.user.isSuperAdmin && !!profile.tenant.isPlatform
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
   const permsReady = permissionsQuery.isSuccess || permissionsQuery.isError
   const canManageOrgs = isSuper || (permsReady && permissions.has("system:organization"))

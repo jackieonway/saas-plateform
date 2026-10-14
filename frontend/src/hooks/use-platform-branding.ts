@@ -1,6 +1,8 @@
 import { useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { platformApi, type PlatformBranding } from "@/api/platform"
+import { useTheme } from "@/components/theme-provider"
+import { DEFAULT_PRIMARY_COLOR, platformThemeVariables } from "@/lib/platform-theme"
 
 export const PLATFORM_BRANDING_QUERY_KEY = ["platform-branding"] as const
 
@@ -11,6 +13,7 @@ export const DEFAULT_PLATFORM_BRANDING: PlatformBranding = {
   loginTitle: "欢迎回来",
   loginDescription: "登录平台，管理您的租户与应用权限",
   footerText: "",
+  primaryColor: DEFAULT_PRIMARY_COLOR,
 }
 
 function useBrandingQuery(refresh = false) {
@@ -32,6 +35,12 @@ export function usePlatformBranding(): PlatformBranding {
 /** 常驻应用根节点，持续同步后台配置，并更新浏览器描述与图标。 */
 export function usePlatformBrandingMetadata() {
   const { data = DEFAULT_PLATFORM_BRANDING } = useBrandingQuery(true)
+  const { resolvedTheme } = useTheme()
+  useEffect(() => {
+    const root = document.documentElement
+    const variables = platformThemeVariables(data.primaryColor, resolvedTheme === "dark")
+    for (const [name, value] of Object.entries(variables)) root.style.setProperty(name, value)
+  }, [data.primaryColor, resolvedTheme])
   useEffect(() => {
     let description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
     if (!description) {

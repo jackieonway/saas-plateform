@@ -35,11 +35,13 @@ const originalSettings = {
   logoUrl: "/__branding/logo.svg", loginTitle: "欢迎登录星河",
   loginDescription: "使用企业账号进入工作空间", footerText: "© 2026 星河企业",
   platformTenantCode: "admin-tenant", platformTenantName: "星河平台管理租户",
+  primaryColor: "#008577",
 }
 const labels = {
   platformName: "平台名称", platformDescription: "平台描述", logoUrl: "Logo 地址",
   loginTitle: "登录页标题", loginDescription: "登录页说明", footerText: "页脚文案",
   platformTenantName: "平台租户名称",
+  primaryColor: "主题主色",
 }
 function branding(settings) {
   const { platformTenantCode: _code, platformTenantName: _tenant, ...publicSettings } = settings
@@ -83,12 +85,12 @@ async function withFixture(options, run) {
   const page = await context.newPage()
   page.setDefaultTimeout(12_000)
   const state = { authenticated: true, isPlatform: true, hasPermission: true, settings: structuredClone(originalSettings),
-    requests: [], saves: [], errors: [], routeErrors: [], failSave: false, ...options }
+    requests: [], saves: [], errors: [], routeErrors: [], failSave: false, theme: "light", ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.addInitScript(({ authenticated }) => {
+  await context.addInitScript(({ authenticated, theme }) => {
     if (authenticated) localStorage.setItem("dante-token", "test-platform-settings-session")
-    localStorage.setItem("dante-theme", "light")
-  }, { authenticated: state.authenticated })
+    localStorage.setItem("dante-theme", theme)
+  }, { authenticated: state.authenticated, theme: state.theme })
   // A notification transport is unrelated to branding; prevent any live service connection.
   await context.routeWebSocket(/\/socket\.io\//, (socket) => socket.close())
   await context.route((url) => url.origin === origin && url.pathname.startsWith("/__branding/"), (route) => {
@@ -161,6 +163,32 @@ async function expectLogin(page, settings) {
   assert.equal(await page.locator('link[rel="icon"]').getAttribute("href"), settings.logoUrl || "/logo.svg")
 }
 
+async function expectThemeContrast(page, dark) {
+  const ratio = await page.evaluate(() => {
+    const root = document.documentElement
+    const channels = (hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255)
+    const luminance = (rgb) => {
+      const values = rgb.map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+      return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722
+    }
+    const contrast = (first, second) => {
+      const a = luminance(first), b = luminance(second)
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+    }
+    const variable = (name) => channels(root.style.getPropertyValue(name))
+    const sidebarPrimary = variable("--sidebar-primary"), sidebar = variable("--sidebar")
+    const selected = sidebar.map((channel, index) => channel * 0.8 + sidebarPrimary[index] * 0.2)
+    return {
+      primary: contrast(variable("--primary"), variable("--primary-foreground")),
+      sidebar: contrast(sidebarPrimary, sidebar), selected: contrast(sidebarPrimary, selected),
+      dark: root.classList.contains("dark"), mode: localStorage.getItem("dante-theme"),
+    }
+  })
+  assert(ratio.primary >= 4.5 && ratio.sidebar >= 4.5 && ratio.selected >= 4.5, "Custom colors must retain readable buttons, sidebar labels and selected text.")
+  assert.equal(ratio.dark, dark)
+  assert.equal(ratio.mode, dark ? "dark" : "light", "Theme saves must preserve the user's preferred mode.")
+}
+
 const scenarios = {
   public_branding: async () => withFixture({ authenticated: false }, async ({ page, state }) => {
     await expectLogin(page, state.settings)
@@ -199,11 +227,12 @@ const scenarios = {
       platformName: "远航管理平台", platformDescription: "跨组织统一管理入口", logoUrl: "/__branding/updated-logo.svg",
       loginTitle: "欢迎进入远航", loginDescription: "请选择您的工作组织", footerText: "© 2026 远航工作空间",
       platformTenantName: "远航平台运营租户",
+      primaryColor: "#2563EB",
     }
     for (const [field, value] of Object.entries(next)) await page.getByLabel(labels[field], { exact: true }).fill(` ${value} `)
     await page.getByRole("button", { name: "保存设置", exact: true }).click()
     await page.getByText("平台设置已保存", { exact: true }).waitFor()
-    assert.deepEqual(state.saves, [next], "Save must serialize exactly the seven trimmed configurable fields.")
+    assert.deepEqual(state.saves, [next], "Save must serialize exactly the configurable fields, including the trimmed theme color.")
     await expectTitle(page, `平台设置 · ${next.platformName}`)
     await page.waitForFunction((tenantName) => document.querySelector('button[aria-label="切换组织上下文"]')?.textContent.includes(tenantName), next.platformTenantName)
     assert.equal(await code.inputValue(), "admin-tenant")
@@ -242,6 +271,66 @@ const scenarios = {
     assert.equal(await page.getByLabel("Logo 地址", { exact: true }).inputValue(), originalSettings.logoUrl)
     assert.equal(await submit.isDisabled(), true)
   }),
+  theme_presets_preview_save: async () => withFixture({}, async ({ page, state }) => {
+    await readySettings(page)
+    const originalPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue("--primary"))
+    const preview = page.getByLabel("导航主题预览", { exact: true })
+    for (const [name, color] of [["海青", "#008577"], ["远山蓝", "#2563EB"], ["鸢尾紫", "#7C3AED"], ["琥珀", "#B45309"], ["玫瑰", "#BE185D"], ["松绿", "#15803D"]]) {
+      const preset = page.getByRole("button", { name: `${name}主题`, exact: true })
+      await preset.click()
+      assert.equal(await preset.getAttribute("aria-pressed"), "true", "The chosen theme must be visibly selected.")
+      assert.equal(await page.getByLabel("主题主色", { exact: true }).inputValue(), color)
+      const previewColor = await preview.evaluate((element) => getComputedStyle(element).getPropertyValue("--primary").trim())
+      assert(/^#[0-9a-f]{6}$/i.test(previewColor), "The theme preview must use a safe computed color.")
+      assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue("--primary")), originalPrimary, "Unsaved themes must remain local to the preview.")
+    }
+    await page.getByRole("button", { name: "取消修改", exact: true }).click()
+    assert.equal(await page.getByLabel("主题主色", { exact: true }).inputValue(), originalSettings.primaryColor)
+    await page.getByRole("button", { name: "远山蓝主题", exact: true }).click()
+    if (process.env.PLATFORM_THEME_SCREENSHOT) {
+      await page.evaluate(() => document.querySelector("main")?.scrollTo(0, 0))
+      await page.screenshot({ path: process.env.PLATFORM_THEME_SCREENSHOT })
+    }
+    await page.getByRole("button", { name: "保存设置", exact: true }).click()
+    await page.getByText("平台设置已保存", { exact: true }).waitFor()
+    assert.equal(state.saves[0].primaryColor, "#2563EB")
+    await page.waitForFunction((original) => document.documentElement.style.getPropertyValue("--primary") !== original, originalPrimary)
+    const savedPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue("--primary"))
+    await page.goto(origin + "/login")
+    await expectLogin(page, state.settings)
+    await page.waitForFunction((primary) => document.documentElement.style.getPropertyValue("--primary") === primary, savedPrimary)
+    assert.equal(await page.evaluate(() => localStorage.getItem("dante-theme")), "light", "A shared theme must preserve the user's mode.")
+  }),
+  theme_custom_contrast_dark: async () => withFixture({ theme: "dark" }, async ({ page, state }) => {
+    await readySettings(page)
+    const input = page.getByLabel("主题主色", { exact: true })
+    const submit = page.getByRole("button", { name: "保存设置", exact: true })
+    for (const invalid of ["red", "#fff", "#GGGGGG"]) {
+      await input.fill(invalid)
+      await submit.click()
+      await page.getByText("请输入 #RRGGBB 格式的颜色，如 #008577", { exact: true }).waitFor()
+      assert.equal(state.saves.length, 0, "Invalid colors must not reach the update API.")
+    }
+    for (const color of ["#ffffff", "#000000", "#b4530a"]) {
+      const saveCount = state.saves.length
+      await input.fill(color)
+      await submit.click()
+      await page.waitForFunction(() => document.querySelector('input[name="primaryColor"]')?.value === document.querySelector('input[name="primaryColor"]')?.value.toUpperCase())
+      assert.equal(state.saves.length, saveCount + 1)
+      assert.equal(state.saves.at(-1).primaryColor, color.toUpperCase(), "Custom colors must be normalized before saving.")
+      await expectThemeContrast(page, true)
+    }
+  }),
+  theme_custom_contrast_light: async () => withFixture({}, async ({ page, state }) => {
+    await readySettings(page)
+    for (const color of ["#FFFFFF", "#000000", "#FFFF00"]) {
+      await page.getByLabel("主题主色", { exact: true }).fill(color)
+      await page.getByRole("button", { name: "保存设置", exact: true }).click()
+      await page.waitForFunction((savedColor) => document.querySelector('input[name="primaryColor"]')?.value === savedColor && document.querySelector('button[type="submit"]')?.disabled, color)
+      assert.equal(state.saves.at(-1).primaryColor, color)
+      await expectThemeContrast(page, false)
+    }
+  }),
   failed_save: async () => withFixture({ failSave: true }, async ({ page, state }) => {
     await readySettings(page)
     await page.getByLabel("平台名称", { exact: true }).fill("等待重试的平台")
@@ -261,7 +350,7 @@ const scenarios = {
     assert.equal(state.requests.some((request) => request.pathname === "/api/platform/settings"), false, "Customer tenant users must not request platform settings even when their fixture menu contains the route.")
   }),
   permission_denied: async () => withFixture({ hasPermission: false }, async ({ page, state }) => {
-    await page.getByText("暂无平台设置权限", { exact: true }).waitFor()
+    await page.getByText("无访问权限", { exact: true }).waitFor()
     assert.equal(await page.getByRole("button", { name: "保存设置", exact: true }).count(), 0)
     assert.equal(state.requests.some((request) => request.pathname === "/api/platform/settings"), false, "Platform membership alone must not allow reading or modifying settings.")
   }),

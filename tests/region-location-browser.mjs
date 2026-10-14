@@ -160,7 +160,7 @@ async function fixture(kind, options = {}) {
       return fulfill(route, state.resolved, state.resolveStatus)
     }
     const original = (value) => state.legacy ? { ...value, province: "浙江", city: "杭州" } : value
-    if (url.pathname === "/api/tenants" && request.method() === "GET") return fulfill(route, { records: [original(tenant)], total: 1, page: 1, size: 100 })
+    if (["/api/tenants", "/api/tenants/options"].includes(url.pathname) && request.method() === "GET") return fulfill(route, { records: [original(tenant)], total: 1, page: 1, size: 100 })
     if (url.pathname === "/api/organizations/tree") return fulfill(route, [original(organization)])
     if (url.pathname === "/api/departments/tree") return fulfill(route, [])
     if ((url.pathname === `/api/tenants/${tenant.id}` || url.pathname === `/api/organizations/${organization.id}`) && request.method() === "PUT") {

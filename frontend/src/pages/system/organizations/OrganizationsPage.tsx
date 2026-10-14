@@ -134,7 +134,7 @@ export default function OrganizationsPage() {
 
   const tenantsQuery = useQuery({
     queryKey: ["tenants", "options"],
-    queryFn: async () => asPage<TenantRecord>(await tenantsApi.list({ page: 1, size: 100 })).records,
+    queryFn: async () => asPage<TenantRecord>(await tenantsApi.options()).records,
     staleTime: 60_000,
     retry: 1,
   })

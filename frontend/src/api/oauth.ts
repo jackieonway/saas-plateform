@@ -1,6 +1,7 @@
 import { api } from "@/lib/api"
 import type {
   DeviceCodeRecord,
+  AdminPlatformSession,
   OAuthClientCreateResp,
   OAuthClientPayload,
   OAuthClientRecord,
@@ -20,7 +21,7 @@ export const oauthApi = {
   tokens: (resourceOwner?: string) =>
     api.get<unknown>(`/api/oauth/tokens${resourceOwner ? `?resourceOwner=${encodeURIComponent(resourceOwner)}` : ""}`),
   /** 会话视图:按用户聚合的活跃/吊销令牌概览 (system:oauth) */
-  sessions: () => api.get<{ sessions: OAuthSession[] }>("/api/oauth/tokens/sessions"),
+  sessions: () => api.get<{ sessions: OAuthSession[]; platformSessions?: AdminPlatformSession[] }>("/api/oauth/tokens/sessions"),
   revokeToken: (id: string) => api.del(`/api/oauth/tokens/${id}`),
   /** 会话踢出: 吊销指定用户全部未吊销令牌 (system:oauth) */
   kickSessions: (userId: string) =>

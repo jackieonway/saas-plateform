@@ -1,14 +1,23 @@
 import * as React from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { AnimatePresence, motion } from "framer-motion"
-import { ChevronDown, ChevronRight, ExternalLink, FolderOpen, Search } from "lucide-react"
+import { ChevronDown, ChevronRight, ExternalLink, FolderOpen, PanelLeftClose, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { AppIcon } from "@/lib/icons"
 import { EmptyState } from "@/components/states"
 import { openExternalLink } from "@/lib/external-link"
 import { cn } from "@/lib/utils"
 import type { AppBrief, MenuNode } from "@/api/types"
+
+function readCollapsedMenus(storageKey: string | null): Set<string> {
+  if (!storageKey) return new Set()
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(storageKey) ?? "[]")
+    return new Set(Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [])
+  } catch { return new Set() }
+}
 
 function filterMenus(nodes: MenuNode[], keyword: string): MenuNode[] {
   if (!keyword.trim()) return nodes
@@ -35,6 +44,8 @@ export function AppSidebar({
   isLoading,
   isError,
   onRetry,
+  onCollapse,
+  navigationScope,
   userDisplayName,
   className,
 }: {
@@ -43,6 +54,9 @@ export function AppSidebar({
   isLoading: boolean
   isError: boolean
   onRetry: () => void
+  onCollapse?: () => void
+  /** Persist directory preferences only within the same user/tenant/org/app. */
+  navigationScope?: string
   userDisplayName: string
   className?: string
 }) {
@@ -63,13 +77,29 @@ export function AppSidebar({
     >
       {/* 当前应用 */}
       <div className="flex items-center gap-3 border-b border-sidebar-border px-4 py-3.5">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary/15 text-sidebar-primary">
           <AppIcon name={app?.icon} size={18} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{app?.name ?? "未选择应用"}</p>
           <p className="truncate font-mono text-[11px] text-sidebar-foreground/50">{app?.code ?? "—"}</p>
         </div>
+        {onCollapse && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="收起菜单"
+                aria-expanded="true"
+                onClick={onCollapse}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/60 outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              >
+                <PanelLeftClose className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">收起菜单</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* 搜索 */}
@@ -124,14 +154,15 @@ export function AppSidebar({
             }
           />
         ) : (
-          <MenuList nodes={filtered} pathname={pathname} onNavigate={go} />
+          <MenuList key={navigationScope ?? "unscoped"} nodes={filtered} pathname={pathname} onNavigate={go}
+            forceExpanded={!!keyword.trim()} storageKey={navigationScope ? `dante-menu-folds:${navigationScope}` : null} />
         )}
       </nav>
 
       {/* 用户小条 */}
       <div className="flex items-center gap-2.5 border-t border-sidebar-border px-3 py-2.5">
         <Avatar className="size-7 border border-sidebar-border">
-          <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">
+          <AvatarFallback className="bg-sidebar-primary/15 text-[11px] font-semibold text-sidebar-primary">
             {(userDisplayName || "?").slice(0, 1).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -145,17 +176,51 @@ function MenuList({
   nodes,
   pathname,
   onNavigate,
+  forceExpanded,
+  storageKey,
 }: {
   nodes: MenuNode[]
   pathname: string
   onNavigate: (path: string) => void
+  forceExpanded: boolean
+  storageKey: string | null
 }) {
+  const [collapsed, setCollapsed] = React.useState(() => readCollapsedMenus(storageKey))
+  React.useEffect(() => {
+    if (!storageKey) return
+    const sync = (event: Event) => {
+      if (event instanceof StorageEvent ? event.key === storageKey || event.key === null
+        : (event as CustomEvent<string>).detail === storageKey) {
+        setCollapsed(readCollapsedMenus(storageKey))
+      }
+    }
+    window.addEventListener("storage", sync)
+    window.addEventListener("dante-menu-folds-change", sync)
+    return () => {
+      window.removeEventListener("storage", sync)
+      window.removeEventListener("dante-menu-folds-change", sync)
+    }
+  }, [storageKey])
+  const toggle = (id: string) => {
+    const next = new Set(collapsed)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setCollapsed(next)
+    try {
+      if (storageKey) {
+        localStorage.setItem(storageKey, JSON.stringify([...next]))
+        window.dispatchEvent(new CustomEvent("dante-menu-folds-change", { detail: storageKey }))
+      }
+    }
+    catch { /* Keep navigation usable when browser storage is unavailable. */ }
+  }
   return (
     <ul className="space-y-0.5" role="list">
       {nodes
         .filter((n) => n.type !== "BUTTON")
         .map((node) => (
-          <MenuItem key={node.id} node={node} pathname={pathname} onNavigate={onNavigate} depth={0} />
+          <MenuItem key={node.id} node={node} pathname={pathname} onNavigate={onNavigate} depth={0}
+            collapsed={collapsed} onToggle={toggle} forceExpanded={forceExpanded} />
         ))}
     </ul>
   )
@@ -166,13 +231,19 @@ function MenuItem({
   pathname,
   onNavigate,
   depth,
+  collapsed,
+  onToggle,
+  forceExpanded,
 }: {
   node: MenuNode
   pathname: string
   onNavigate: (path: string) => void
   depth: number
+  collapsed: Set<string>
+  onToggle: (id: string) => void
+  forceExpanded: boolean
 }) {
-  const [open, setOpen] = React.useState(true)
+  const open = forceExpanded || !collapsed.has(node.id)
   const childMenus = (node.children ?? []).filter((c) => c.type !== "BUTTON")
   const isDir = node.type === "DIR"
   // 外链菜单无路由态, active 恒 false
@@ -185,7 +256,8 @@ function MenuItem({
           <button
             type="button"
             aria-expanded={open}
-            onClick={() => setOpen((o) => !o)}
+            disabled={forceExpanded}
+            onClick={() => onToggle(node.id)}
             className="group flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             style={{ paddingLeft: 8 + depth * 14 }}
           >
@@ -218,6 +290,9 @@ function MenuItem({
                       pathname={pathname}
                       onNavigate={onNavigate}
                       depth={depth + 1}
+                      collapsed={collapsed}
+                      onToggle={onToggle}
+                      forceExpanded={forceExpanded}
                     />
                   ))}
                 </ul>
@@ -237,7 +312,7 @@ function MenuItem({
           className={cn(
             "relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors",
             active
-              ? "bg-primary/15 font-medium text-primary"
+              ? "bg-sidebar-primary/15 font-medium text-sidebar-primary"
               : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           )}
           style={{ paddingLeft: 8 + depth * 14 }}
@@ -245,10 +320,10 @@ function MenuItem({
           {active && (
             <motion.span
               layoutId="sidebar-active"
-              className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary"
+              className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-sidebar-primary"
             />
           )}
-          <AppIcon name={node.icon} className={cn("size-4 shrink-0", active ? "text-primary" : "text-sidebar-foreground/60")} size={16} />
+          <AppIcon name={node.icon} className={cn("size-4 shrink-0", active ? "text-sidebar-primary" : "text-sidebar-foreground/60")} size={16} />
           <span className="truncate">{node.title}</span>
           {node.linkUrl && (
             <ExternalLink className="size-3 shrink-0 text-muted-foreground" aria-label="外链" />

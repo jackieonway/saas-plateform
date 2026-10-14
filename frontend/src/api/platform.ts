@@ -7,6 +7,7 @@ export interface PlatformBranding {
   loginTitle: string
   loginDescription: string
   footerText: string
+  primaryColor: string
 }
 
 export interface PlatformSettings extends PlatformBranding {

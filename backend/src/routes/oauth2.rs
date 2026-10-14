@@ -15,6 +15,7 @@ use crate::error::AppError;
 use crate::extractors::{bearer_token, ApiJson, CurrentUser};
 use crate::routes::oauth_admin::{fetch_client, ClientFull};
 use crate::state::AppState;
+use crate::session;
 use crate::util::{audit, hash, jwt};
 
 /// /oauth 前缀的标准 OAuth2 端点 (form-urlencoded)
@@ -640,11 +641,33 @@ async fn token(
         Err(resp) => return Ok(resp),
     };
     let ua = audit::ua_of(&headers);
-    let client = authenticate_client(&state, &headers, &form).await?;
     let grant = form.get("grant_type").cloned().unwrap_or_default();
     if grant.is_empty() {
         return Err(OAuthError::invalid_request("缺少 grant_type"));
     }
+    if grant == "refresh_token" && form.get("refresh_token").is_some_and(|token| session::is_platform_refresh(token)) {
+        // Platform refresh grants are public browser sessions, never OAuth
+        // application grants. Supplying client credentials cannot convert one.
+        if form.contains_key("client_id") || form.contains_key("client_secret") || parse_basic_auth(&headers).is_some() {
+            return Err(OAuthError::invalid_request("平台会话刷新不能携带 OAuth 客户端凭据"));
+        }
+        if form.contains_key("scope") {
+            return Err(OAuthError::invalid_request("平台会话刷新不能修改 scope"));
+        }
+        let refreshed = session::refresh(&state, &form["refresh_token"]).await.map_err(|error| match error {
+            AppError::Server(_) => OAuthError::server("platform session refresh failed"),
+            _ => OAuthError::invalid_grant("平台刷新令牌无效或已失效，请重新登录"),
+        })?;
+        return Ok((
+            [(header::CACHE_CONTROL, "no-store"), (header::PRAGMA, "no-cache")],
+            Json(json!({
+                "access_token": refreshed.access_token, "refresh_token": refreshed.refresh_token,
+                "expires_in": refreshed.expires_in, "refresh_expires_in": refreshed.refresh_expires_in,
+                "token_type": "Bearer",
+            })),
+        ).into_response());
+    }
+    let client = authenticate_client(&state, &headers, &form).await?;
     if !client.has_grant(&grant) {
         return Err(OAuthError::bad_request("unauthorized_client", "该客户端未启用此授权模式"));
     }

@@ -8,6 +8,7 @@ import { motion } from "framer-motion"
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   Building2,
   CheckCircle2,
   Eye,
@@ -18,6 +19,7 @@ import {
   Loader2,
   Lock,
   MonitorSmartphone,
+  Search,
   Server,
   ShieldCheck,
   Tv,
@@ -36,6 +38,7 @@ import { useDocumentTitle } from "@/hooks/use-document-title"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { ApiError } from "@/lib/api"
 import type { LoginResp, Membership } from "@/api/types"
 
 const REMEMBER_KEY = "dante-remember-username"
@@ -67,11 +70,13 @@ export default function LoginPage() {
   const queryClient = useQueryClient()
   const [params] = useSearchParams()
   const returnTo = params.get("return") || "/"
-  const setToken = useAuthStore((s) => s.setToken)
+  const setSession = useAuthStore((s) => s.setSession)
   useDocumentTitle("登录")
 
-  const [step, setStep] = React.useState<"form" | "select">("form")
+  const [step, setStep] = React.useState<"form" | "tenant" | "organization">("form")
   const [loginData, setLoginData] = React.useState<LoginResp | null>(null)
+  const [selectedTenantId, setSelectedTenantId] = React.useState<string | null>(null)
+  const [selectionSearch, setSelectionSearch] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
   const [showPassword, setShowPassword] = React.useState(false)
   const [selecting, setSelecting] = React.useState<string | null>(null)
@@ -92,8 +97,7 @@ export default function LoginPage() {
   })
   const remember = watch("remember")
 
-  // 单租户单组织自动跳过选择
-  const memberships = loginData?.memberships ?? []
+  const memberships = React.useMemo(() => loginData?.memberships ?? [], [loginData])
   const tenantGroups = React.useMemo(() => {
     const groups = new Map<string, { tenantId: string; tenantName: string; items: Membership[] }>()
     for (const m of memberships) {
@@ -103,13 +107,26 @@ export default function LoginPage() {
     return [...groups.values()]
   }, [memberships])
 
-  React.useEffect(() => {
-    if (step === "select" && loginData && tenantGroups.length === 1 && tenantGroups[0].items.length === 1) {
-      const only = tenantGroups[0].items[0]
-      void selectContext(only.organizationId, loginData, only.userId)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, loginData])
+  const selectedTenant = tenantGroups.find((group) => group.tenantId === selectedTenantId)
+  const searchTerm = selectionSearch.trim().toLocaleLowerCase()
+  const filteredTenants = tenantGroups.filter((group) => group.tenantName.toLocaleLowerCase().includes(searchTerm))
+  const filteredMemberships = (selectedTenant?.items ?? []).filter((membership) =>
+    [membership.organizationName, membership.organizationPath, membership.departmentName,
+      membership.realName, membership.username].some((value) => value?.toLocaleLowerCase().includes(searchTerm)))
+
+  const chooseTenant = (tenantId: string) => {
+    setSelectedTenantId(tenantId)
+    setSelectionSearch("")
+    setError(null)
+    setStep("organization")
+  }
+
+  const reselectTenant = () => {
+    setSelectedTenantId(null)
+    setSelectionSearch("")
+    setError(null)
+    setStep("tenant")
+  }
 
   const onSubmit = async (data: FormData) => {
     setError(null)
@@ -122,7 +139,9 @@ export default function LoginPage() {
         return
       }
       setLoginData(resp)
-      setStep("select")
+      setSelectedTenantId(null)
+      setSelectionSearch("")
+      setStep("tenant")
     } catch (e) {
       setError(e instanceof Error ? e.message : "登录失败,请稍后重试")
     }
@@ -139,14 +158,20 @@ export default function LoginPage() {
     try {
       const ctx = await authApi.selectContext(organizationId, data.ticket, userId)
       // 清空上一会话的所有缓存,避免残留他人数据
+      await queryClient.cancelQueries()
       queryClient.clear()
-      setToken(ctx.accessToken)
+      setSession(ctx.accessToken, ctx.refreshToken)
       toast.success(`欢迎回来,${ctx.user.realName || ctx.user.username}`)
       navigate(returnTo, { replace: true })
     } catch (e) {
-      setError(e instanceof Error ? `${e.message}(请重新登录)` : "建立会话失败")
-      setStep("form")
-      setLoginData(null)
+      if (e instanceof ApiError && e.status === 401) {
+        setError(`${e.message}，请重新登录`)
+        setStep("form")
+        setLoginData(null)
+        setSelectedTenantId(null)
+      } else {
+        setError(e instanceof Error ? e.message : "建立会话失败，请重试")
+      }
     } finally {
       setSelecting(null)
     }
@@ -358,15 +383,24 @@ export default function LoginPage() {
                 transition={{ duration: 0.35 }}
               >
                 <div className="mb-6 flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => { setStep("form"); setLoginData(null); setError(null) }}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <Button variant="ghost" size="sm" className="h-7 px-2" disabled={selecting !== null}
+                      onClick={() => {
+                        if (step === "organization") reselectTenant()
+                        else { setStep("form"); setLoginData(null); setError(null); setSelectionSearch("") }
+                      }}>
                       <ArrowLeft className="size-4" />
-                      返回
+                      {step === "organization" ? "重新选择租户" : "返回登录"}
                     </Button>
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className={cn(step === "tenant" && "font-medium text-primary")}>1 租户</span>
+                      <ArrowRight className="size-3" aria-hidden />
+                      <span className={cn(step === "organization" && "font-medium text-primary")}>2 组织</span>
+                    </span>
                   </div>
-                  <h2 className="text-xl font-semibold tracking-tight">选择登录组织</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">{step === "tenant" ? "选择登录租户" : "选择登录组织"}</h2>
                   <p className="text-sm text-muted-foreground">
-                    欢迎回来,{loginData ? "" : ""}您属于多个组织,请选择本次会话的组织上下文
+                    {step === "tenant" ? "账号已验证，请先选择本次登录的租户" : "请选择组织，确认后进入系统"}
                   </p>
                 </div>
 
@@ -377,54 +411,83 @@ export default function LoginPage() {
                   </Alert>
                 )}
 
-                <div className="max-h-[52vh] space-y-5 overflow-y-auto scroll-area pr-1">
-                  {tenantGroups.map((g) => (
-                    <section key={g.tenantId}>
-                      <div className="mb-2 flex items-center gap-2">
+                {step === "organization" && selectedTenant && (
+                  <div className="mb-4 flex items-start gap-2 rounded-lg border bg-primary/5 px-3 py-2.5">
+                    <Building2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium">{selectedTenant.tenantName}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {new Set(selectedTenant.items.map((item) => item.organizationId)).size} 个可选组织
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <Input value={selectionSearch} onChange={(event) => setSelectionSearch(event.target.value)}
+                    aria-label={step === "tenant" ? "搜索租户" : "搜索组织或登录身份"}
+                    placeholder={step === "tenant" ? "搜索租户名称" : "搜索组织、部门或登录身份"}
+                    className="pl-9" disabled={selecting !== null} />
+                </div>
+
+                <div className="mb-2 text-xs text-muted-foreground" aria-live="polite">
+                  {step === "tenant" ? `${filteredTenants.length} 个租户` : `${filteredMemberships.length} 个组织登录选项`}
+                </div>
+                <div className="max-h-[44vh] space-y-2 overflow-y-auto scroll-area pr-1">
+                  {step === "tenant" ? filteredTenants.map((group) => (
+                    <button key={group.tenantId} type="button" onClick={() => chooseTenant(group.tenantId)}
+                      className="group flex w-full items-center gap-3 rounded-xl border bg-card p-3.5 text-left outline-none transition-all hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                         <Building2 className="size-4 text-primary" />
-                        <h3 className="text-sm font-semibold">{g.tenantName}</h3>
-                        <span className="text-xs text-muted-foreground">({g.items.length} 个组织)</span>
-                      </div>
-                      <div className="space-y-2">
-                        {g.items.map((m) => (
-                          <button
-                            key={`${m.userId ?? ""}:${m.organizationId}`}
-                            type="button"
-                            disabled={selecting !== null}
-                            onClick={() => selectContext(m.organizationId, loginData!, m.userId)}
-                            className={cn(
-                              "group flex w-full items-center gap-3 rounded-xl border bg-card p-3.5 text-left outline-none transition-all hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                            )}
-                          >
-                            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                              <Building2 className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block break-words text-sm font-medium">{group.tenantName}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {new Set(group.items.map((item) => item.organizationId)).size} 个组织
+                        </span>
+                      </span>
+                      <ArrowRight className="size-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" aria-hidden />
+                    </button>
+                  )) : filteredMemberships.map((m) => (
+                    <button
+                      key={`${m.userId ?? ""}:${m.organizationId}`}
+                      type="button"
+                      disabled={selecting !== null}
+                      onClick={() => loginData && selectContext(m.organizationId, loginData, m.userId)}
+                      className="group flex w-full items-center gap-3 rounded-xl border bg-card p-3.5 text-left outline-none transition-all hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                    >
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Building2 className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-sm font-medium">{m.organizationName}</span>
+                          {m.departmentName && (
+                            <span className="rounded border bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
+                              {m.departmentName}
                             </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-sm font-medium">{m.organizationName}</span>
-                                {m.departmentName && (
-                                  <span className="rounded border bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
-                                    {m.departmentName}
-                                  </span>
-                                )}
-                              </span>
-                              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                                {m.organizationPath}
-                              </span>
-                              {(loginData?.accountCount ?? 1) > 1 && <span className="mt-0.5 block text-xs text-muted-foreground">
-                                登录身份：{m.realName || m.username}（{m.username}）
-                              </span>}
-                            </span>
-                            {selecting === `${m.userId ?? ""}:${m.organizationId}` ? (
-                              <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
-                            ) : (
-                              <CheckCircle2 className="size-4 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-primary" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </section>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                          {m.organizationPath}
+                        </span>
+                        {(loginData?.accountCount ?? 1) > 1 && <span className="mt-0.5 block text-xs text-muted-foreground">
+                          登录身份：{m.realName || m.username}（{m.username}）
+                        </span>}
+                      </span>
+                      {selecting === `${m.userId ?? ""}:${m.organizationId}` ? (
+                        <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+                      ) : (
+                        <CheckCircle2 className="size-4 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-primary" />
+                      )}
+                    </button>
                   ))}
+                  {(step === "tenant" ? filteredTenants : filteredMemberships).length === 0 && (
+                    <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                      {step === "tenant" ? "未找到匹配的租户" : "未找到匹配的组织或登录身份"}
+                    </p>
+                  )}
                 </div>
               </motion.div>
             )}

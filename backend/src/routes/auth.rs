@@ -341,7 +341,7 @@ async fn context(
     .await?
     .ok_or_else(|| AppError::forbidden("您在该组织没有成员身份"))?;
     let (org_id, org_name, org_path, tenant_id, tenant_name, tenant_code, tenant_is_platform, org_expires, tenant_expires) = org;
-    // 过期拦截: 选定的组织或其租户已到期 → 拒绝签发会话令牌 (会话内不逐请求校验, 到期后重新登录/切换即被拦)
+    // 会话与刷新均受组织祖先链及租户有效期约束。
     if org_expires.is_some_and(|e| e <= Utc::now()) {
         return Err(AppError::forbidden("该组织已到期, 无法切换"));
     }
@@ -351,7 +351,8 @@ async fn context(
 
     let now = Utc::now().timestamp();
     let ttl = state.config.session_ttl_hours * 3600;
-    if ttl <= 0 {
+    let refresh_ttl = state.config.refresh_token_ttl_seconds;
+    if ttl <= 0 || refresh_ttl <= 0 {
         return Err(AppError::bad_request("会话有效期配置无效"));
     }
     let ip = audit::client_ip(&headers);
@@ -364,7 +365,7 @@ async fn context(
                 $7::timestamptz, $8::timestamptz), $5, $6) \
          RETURNING id, expires_at",
     )
-    .bind(user_id).bind(tenant_id).bind(org_id).bind(ttl as f64).bind(&ip).bind(&ua)
+    .bind(user_id).bind(tenant_id).bind(org_id).bind(ttl.max(refresh_ttl) as f64).bind(&ip).bind(&ua)
     .bind(org_expires).bind(tenant_expires)
     .fetch_one(&mut *tx).await?;
     if let Some(old_id) = old_session_id {
@@ -376,6 +377,13 @@ async fn context(
             return Err(AppError::unauthorized("会话已失效，请重新登录"));
         }
     }
+    let access_expiry = (now + ttl).min(expires_at.timestamp());
+    let refresh_expiry = DateTime::from_timestamp((now + refresh_ttl).min(expires_at.timestamp()), 0)
+        .ok_or_else(|| AppError::bad_request("刷新令牌有效期配置无效"))?;
+    if access_expiry <= now || refresh_expiry <= Utc::now() {
+        return Err(AppError::forbidden("租户或组织有效期不足，无法签发会话"));
+    }
+    let refresh_token = session::issue_refresh_in_tx(&mut tx, session_id, session_version, refresh_expiry).await?;
     let session = jwt::Claims {
         sub: user_id.to_string(),
         typ: "session".into(),
@@ -387,7 +395,7 @@ async fn context(
         ver: Some(session_version),
         aud: None,
         jti: None,
-        exp: expires_at.timestamp(),
+        exp: access_expiry,
         iat: now,
     };
     let access_token = jwt::sign(&session, &state.config.jwt_secret)?;
@@ -403,7 +411,9 @@ async fn context(
 
     Ok(Json(json!({
         "accessToken": access_token,
-        "expiresIn": ttl,
+        "expiresIn": access_expiry - now,
+        "refreshToken": refresh_token,
+        "refreshExpiresIn": refresh_expiry.timestamp() - now,
         "user": {
             "id": user_id, "username": username, "realName": real_name, "email": email,
             "phone": phone, "avatar": avatar, "gender": gender, "isSuperAdmin": is_super,
@@ -489,7 +499,13 @@ async fn menus(
         .ok_or_else(|| AppError::bad_request("缺少 applicationId 参数"))?;
 
     let rows = if user.is_super_admin {
-        authorization::all_app_menu_rows(&state.pool, app_id).await?
+        if state.is_platform_context(&user).await? {
+            authorization::all_app_menu_rows(&state.pool, app_id).await?
+        } else {
+            authorization::granted_menu_rows(
+                &state.pool, user.tenant_id, user.org_id, Some(app_id),
+            ).await?
+        }
     } else {
         authorization::effective_menu_rows(
             &state.pool, user.user_id, user.tenant_id, user.org_id, Some(app_id),
@@ -501,18 +517,8 @@ async fn menus(
 /// GET /api/auth/permissions
 async fn permissions(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
     let roles = state.effective_roles(user.user_id, user.org_id).await?;
-    let perms: Vec<String> = if user.is_super_admin {
-        let rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT DISTINCT permission FROM menus WHERE status = 'ENABLED' AND permission <> '' ORDER BY permission",
-        )
-        .fetch_all(&state.pool)
-        .await?;
-        rows.into_iter().map(|(p,)| p).collect()
-    } else {
-        let mut v: Vec<String> = state.permissions_of(user.user_id, user.org_id).await?.into_iter().collect();
-        v.sort();
-        v
-    };
+    let mut perms: Vec<String> = state.context_permissions(&user).await?.into_iter().collect();
+    perms.sort();
     Ok(Json(json!({"permissions": perms, "roles": roles})))
 }
 
@@ -635,11 +641,6 @@ type MySessionTuple = (
     Option<String>,
 );
 
-type PlatformSessionTuple = (
-    Uuid, Uuid, String, Uuid, String, DateTime<Utc>, DateTime<Utc>,
-    Option<DateTime<Utc>>, String, String, bool,
-);
-
 /// GET /api/auth/my-sessions — 本人 OAuth 令牌按客户端聚合的会话视图
 ///
 /// 个人安全中心自助查询: 仅本人令牌行 (user_id = 当前用户, client_credentials 的
@@ -684,33 +685,9 @@ async fn my_sessions(State(state): State<AppState>, user: CurrentUser) -> Result
             },
         )
         .collect();
-    let platform_rows: Vec<PlatformSessionTuple> = sqlx::query_as(
-        "SELECT s.id, s.tenant_id, t.name, s.organization_id, o.name, \
-         s.issued_at, s.expires_at, s.revoked_at, s.ip, s.user_agent, \
-         (s.revoked_at IS NULL AND s.expires_at > now() \
-          AND t.status = 'ENABLED' AND org_chain_active(o.id) \
-          AND (t.expires_at IS NULL OR t.expires_at > now()) \
-          AND EXISTS(SELECT 1 FROM memberships m WHERE m.user_id = s.user_id \
-                     AND m.organization_id = s.organization_id)) AS active \
-         FROM platform_sessions s \
-         JOIN tenants t ON t.id = s.tenant_id \
-         JOIN organizations o ON o.id = s.organization_id \
-         WHERE s.user_id = $1 ORDER BY s.issued_at DESC, s.id DESC LIMIT 100",
-    )
-    .bind(user.user_id)
-    .fetch_all(&state.pool)
-    .await?;
-    let platform_sessions: Vec<Value> = platform_rows.into_iter()
-        .map(|(id, tenant_id, tenant_name, organization_id, organization_name,
-              issued_at, expires_at, revoked_at, ip, user_agent, active)| {
-            json!({
-                "id": id, "tenantId": tenant_id, "tenantName": tenant_name,
-                "organizationId": organization_id, "organizationName": organization_name,
-                "issuedAt": issued_at, "expiresAt": expires_at, "revokedAt": revoked_at,
-                "ip": ip, "userAgent": user_agent, "active": active,
-                "isCurrent": id == user.session_id,
-            })
-        }).collect();
+    let platform_sessions = session::device_sessions(
+        &state.pool, Some(user.user_id), user.user_id, user.session_id,
+    ).await?;
     Ok(Json(json!({"sessions": sessions, "revokedTotal": revoked_total,
                    "platformSessions": platform_sessions})))
 }

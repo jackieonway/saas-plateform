@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import App from "./App";
+import { authStore as sessionStore } from "@/stores/auth";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -15,6 +16,14 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
+});
+
+// A context change must synchronously discard all data fetched by the prior
+// tenant, including pages that use unscoped legacy query keys.
+sessionStore.subscribe((state, previous) => {
+  if (state.contextEpoch === previous.contextEpoch) return;
+  void queryClient.cancelQueries();
+  queryClient.clear();
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -358,3 +358,9 @@ CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 
 
 `0036_scoped_super_administrator_names.sql` 将现有角色名称、成员职位中的“租户管理员”“组织管理员”统一为“超级管理员”。角色 ID、`tenant_admin`/`org_admin` 等角色编码、成员关系和菜单授权保持不变；`users.is_super_admin` 不变，普通租户和组织的超级管理员仍受原有作用域限制。
+
+
+`0037_platform_session_refresh.sql` 新增 `platform_session_refresh_tokens`：绑定 `platform_sessions` 和账号版本，只保存 SHA-256 摘要、签发/绝对到期/消费时间。轮换在事务内串行消费旧令牌并签发新令牌，会话或成员撤销后旧刷新凭证立即不可用。
+
+
+`0039_platform_theme.sql` 为 `platform_settings` 增加 `primary_color VARCHAR(7) NOT NULL DEFAULT '#008577'`，数据库 CHECK 限制六位十六进制颜色。旧客户端省略颜色字段时仍保留配置。

@@ -20,9 +20,6 @@ async fn has_partition_perm(
     user: &CurrentUser,
     perm: &'static str,
 ) -> Result<bool, AppError> {
-    if user.is_super_admin {
-        return Ok(true);
-    }
     match state.require(user, perm).await {
         Ok(()) => Ok(true),
         Err(AppError::Forbidden(_)) => Ok(false),
@@ -32,7 +29,7 @@ async fn has_partition_perm(
 
 /// GET /api/search?q=<关键词>&limit=<每类上限 1..10, 默认 5> — 全局实体搜索 (命令面板)
 /// 四个分区按权限分级: users 需 system:user / tenants 需 system:tenant /
-/// organizations 需 system:organization / roles 需 system:role; 无权限分区返回空数组, 超管直通
+/// organizations 需 system:organization / roles 需 system:role; 无权限分区返回空数组
 async fn search(
     State(state): State<AppState>,
     user: CurrentUser,

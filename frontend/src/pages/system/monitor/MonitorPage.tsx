@@ -538,7 +538,7 @@ function TenantInsightsTab() {
   /* 导出权限:system:monitor */
   const permissionsQuery = usePermissionsQuery()
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
-  const isSuper = useAuthStore((s) => s.profile?.user.isSuperAdmin) ?? false
+  const isSuper = useAuthStore((s) => !!s.profile?.user.isSuperAdmin && !!s.profile?.tenant.isPlatform)
   const canExport = isSuper || permissions.has("system:monitor")
 
   const [exporting, setExporting] = React.useState(false)

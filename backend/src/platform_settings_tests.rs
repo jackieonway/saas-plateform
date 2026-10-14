@@ -401,7 +401,8 @@ fn updated_settings() -> Value {
         "loginTitle": "欢迎登录星河",
         "loginDescription": "使用你的企业账号登录",
         "footerText": "© 2026 星河平台",
-        "platformTenantName": "星河平台管理租户"
+        "platformTenantName": "星河平台管理租户",
+        "primaryColor": "#2563EB"
     })
 }
 
@@ -459,6 +460,7 @@ async fn branding_persists_and_renamed_tenant_refreshes_existing_profiles() -> R
             "loginTitle",
             "loginDescription",
             "footerText",
+            "primaryColor",
         ];
         ensure!(
             branding
@@ -610,6 +612,9 @@ async fn settings_require_platform_permission_and_reject_partial_invalid_updates
             ),
             ("logoUrl", json!("/branding/%2e%2e/logo.svg")),
             ("platformTenantCode", json!("changed-platform-code")),
+            ("primaryColor", json!("#fff")),
+            ("primaryColor", json!("red")),
+            ("primaryColor", json!("#123456;--primary:red")),
         ] {
             let mut body = updated_settings();
             body[field] = value;
@@ -696,8 +701,76 @@ async fn settings_migration_keeps_legacy_platform_name_and_relationships() -> Re
         let app = router(&database.pool)?;
         let branding = ok(&app, Method::GET, "/api/platform/branding", "", None).await?;
         ensure!(branding["platformName"].as_str().is_some_and(|name| !name.is_empty()), "migration did not initialize branding");
+        ensure!(branding["primaryColor"] == "#008577", "migration did not retain the original teal color family");
         Ok(())
     }.await;
+    database.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn theme_color_is_public_normalized_persisted_and_legacy_updates_preserve_it() -> Result<()> {
+    let database = Database::create(false).await?;
+    let result = async {
+        let h = Harness::create(&database.pool).await?;
+        let initial = h.settings().await?;
+        ensure!(
+            initial["primaryColor"] == "#008577",
+            "default theme differs"
+        );
+        let mut update = updated_settings();
+        update["primaryColor"] = json!("  #b4530a  ");
+        let saved = ok(
+            &h.app,
+            Method::PUT,
+            "/api/platform/settings",
+            &h.admin_token,
+            Some(update),
+        )
+        .await?;
+        ensure!(
+            saved["primaryColor"] == "#B4530A",
+            "color was not normalized"
+        );
+        let second = router(&database.pool)?;
+        let branding = ok(&second, Method::GET, "/api/platform/branding", "", None).await?;
+        ensure!(
+            branding["primaryColor"] == "#B4530A",
+            "anonymous pages did not receive the committed theme"
+        );
+        let mut legacy = updated_settings();
+        legacy
+            .as_object_mut()
+            .ok_or_else(|| anyhow!("invalid fixture"))?
+            .remove("primaryColor");
+        let legacy_saved = ok(
+            &h.app,
+            Method::PUT,
+            "/api/platform/settings",
+            &h.admin_token,
+            Some(legacy),
+        )
+        .await?;
+        ensure!(
+            legacy_saved["primaryColor"] == "#B4530A",
+            "legacy update reset the theme"
+        );
+        let persisted: String =
+            sqlx::query_scalar("SELECT primary_color FROM platform_settings WHERE singleton")
+                .fetch_one(&database.pool)
+                .await?;
+        ensure!(persisted == "#B4530A", "theme was not stored in PostgreSQL");
+        let unsafe_write =
+            sqlx::query("UPDATE platform_settings SET primary_color='red' WHERE singleton")
+                .execute(&database.pool)
+                .await;
+        ensure!(
+            unsafe_write.is_err(),
+            "database accepted an unsafe color value"
+        );
+        Ok(())
+    }
+    .await;
     database.finish(result).await
 }
 

@@ -64,7 +64,7 @@ const TOKEN_COLUMNS: ColumnDef[] = [
 export default function TokensPage() {
   const queryClient = useQueryClient()
   /* 视图状态提升: 会话视图「查看令牌」需要跨 Tab 钻取(切到令牌流水并按用户名过滤) */
-  const [view, setView] = React.useState("flow")
+  const [view, setView] = React.useState("sessions")
   const [subView, setSubView] = React.useState("tokens")
   const [userFilter, setUserFilter] = React.useState("")
 
@@ -93,7 +93,7 @@ export default function TokensPage() {
     <div>
       <PageHeader
         title="设备与会话"
-        description="平台签发的 OAuth 访问 / 刷新令牌、RFC 8628 设备码与按用户聚合的会话概览"
+        description="查看后台登录设备、第三方应用会话与设备授权信息"
         icon={<Smartphone className="size-5" />}
         actions={
           <div className="flex items-center gap-2">
@@ -138,7 +138,8 @@ export default function TokensPage() {
             </TabsContent>
           </Tabs>
         </TabsContent>
-        <TabsContent value="sessions" className="mt-0">
+        <TabsContent value="sessions" className="mt-0 space-y-4">
+          <PlatformDevicesTable />
           <SessionsTable onInspectUser={inspectUser} />
         </TabsContent>
       </Tabs>
@@ -158,6 +159,42 @@ export default function TokensPage() {
       />
     </div>
   )
+}
+
+/** Platform logins are durable sessions, separate from third-party OAuth tokens. */
+function PlatformDevicesTable() {
+  const query = useQuery({
+    queryKey: ["oauth-sessions"],
+    queryFn: () => oauthApi.sessions(),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    retry: 1,
+  })
+  const records = query.data?.platformSessions ?? []
+  const [activeOnly, setActiveOnly] = React.useState(true)
+  const visible = activeOnly ? records.filter((session) => session.active) : records
+  return <section className="rounded-xl border bg-card" aria-label="平台登录设备">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+      <div><h2 className="text-sm font-semibold">平台登录设备</h2>
+        <p className="text-xs text-muted-foreground">后台登录会话 · 活跃 {records.filter((session) => session.active).length} / {records.length}</p>
+      </div>
+      <div className="flex items-center gap-2"><Switch id="platform-devices-active" checked={activeOnly} onCheckedChange={setActiveOnly} /><Label htmlFor="platform-devices-active">仅活跃</Label></div>
+    </div>
+    {query.isPending ? <TableSkeleton cols={6} /> : query.isError ?
+      <ErrorState message={query.error instanceof Error ? query.error.message : undefined} onRetry={() => query.refetch()} /> : visible.length === 0 ?
+      <EmptyState title={activeOnly ? "当前没有活跃登录设备" : "暂无后台登录记录"} description={activeOnly ? "可关闭“仅活跃”查看已撤销或过期的登录设备。" : "用户登录后台后会在这里显示。"} /> :
+      <div className="table-scroll max-h-[28rem] overflow-auto scroll-area"><Table>
+        <TableHeader><TableRow><TableHead>用户</TableHead><TableHead>租户 / 组织</TableHead><TableHead>设备与 IP</TableHead><TableHead>登录时间</TableHead><TableHead>到期时间</TableHead><TableHead>状态</TableHead></TableRow></TableHeader>
+        <TableBody>{visible.map((session) => <TableRow key={session.id}>
+          <TableCell><p className="font-medium">{session.realName || session.username}</p><p className="text-xs text-muted-foreground">{session.username}</p></TableCell>
+          <TableCell><p>{session.tenantName}</p><p className="text-xs text-muted-foreground">{session.organizationName}</p></TableCell>
+          <TableCell><p className="max-w-64 truncate text-xs" title={session.userAgent}>{session.userAgent || "未知设备"}</p><p className="text-xs text-muted-foreground">{session.ip || "未知 IP"}</p></TableCell>
+          <TableCell className="whitespace-nowrap text-xs">{formatDateTime(session.issuedAt)}</TableCell>
+          <TableCell className="whitespace-nowrap text-xs">{formatDateTime(session.expiresAt)}</TableCell>
+          <TableCell><Badge variant="outline">{session.isCurrent ? "当前设备" : session.active ? "在线" : session.revokedAt ? "已撤销" : "已失效"}</Badge></TableCell>
+        </TableRow>)}</TableBody>
+      </Table></div>}
+  </section>
 }
 
 /* ============ 令牌表 ============ */
@@ -418,7 +455,7 @@ function SessionsTable({ onInspectUser }: { onInspectUser: (username: string) =>
   const { density } = useTableDensity()
   const listQuery = useQuery({
     queryKey: ["oauth-sessions"],
-    queryFn: async () => asArray<OAuthSession>(await oauthApi.sessions(), "sessions"),
+    queryFn: () => oauthApi.sessions(),
     staleTime: 15_000,
     retry: 1,
   })
@@ -426,7 +463,7 @@ function SessionsTable({ onInspectUser }: { onInspectUser: (username: string) =>
   const [kicking, setKicking] = React.useState<OAuthSession | null>(null)
   /* 仅活跃筛选:临时视图,不持久化,不影响 queryKey */
   const [activeOnly, setActiveOnly] = React.useState(false)
-  const sessions = listQuery.data ?? []
+  const sessions = listQuery.data?.sessions ?? []
   const visibleSessions = React.useMemo(
     () => (activeOnly ? sessions.filter((s) => s.activeAccess + s.activeRefresh > 0) : sessions),
     [activeOnly, sessions]

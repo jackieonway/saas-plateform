@@ -20,10 +20,32 @@ use crate::util::audit;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/tenants", get(list).post(create))
+        .route("/api/tenants/options", get(options))
         .route("/api/tenants/{id}", put(update).delete(delete))
         .route("/api/tenants/{id}/status", put(update_status))
         .route("/api/tenants/{id}/initialize-administrator", post(initialize_administrator))
         .route("/api/tenants/{id}/authorizations", get(get_authorizations).put(put_authorizations))
+}
+
+/// Minimal tenant choices for authorized tenant-scoped management pages.
+/// An ordinary context can only select its own tenant, including global administrators.
+async fn options(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+    let platform = state.is_platform_context(&user).await?;
+    if !(platform && user.is_super_admin) {
+        let permissions = state.context_permissions(&user).await?;
+        if !["system:tenant", "system:organization", "system:department", "system:user", "system:role", "system:authorization", "system:audit"]
+            .iter().any(|permission| permissions.contains(*permission)) {
+            return Err(AppError::forbidden("无租户选择权限"));
+        }
+    }
+    let scope = if platform { None } else { Some(user.tenant_id) };
+    let rows: Vec<(Uuid, String, String, bool)> = sqlx::query_as(
+        "SELECT id,name,COALESCE(code,''),is_platform FROM tenants \
+         WHERE ($1::uuid IS NULL OR id=$1) ORDER BY created_at,id",
+    ).bind(scope).fetch_all(&state.pool).await?;
+    Ok(Json(json!(rows.into_iter().map(|(id,name,code,is_platform)| {
+        json!({"id":id,"name":name,"code":code,"isPlatform":is_platform})
+    }).collect::<Vec<_>>())))
 }
 
 const LIST_SELECT: &str = "SELECT t.id, t.name, t.code, t.tenant_type, t.contact_name, t.contact_phone, t.contact_email, COALESCE(t.description,'') AS description, t.status, t.is_platform, t.created_at, t.expires_at, \
@@ -62,17 +84,14 @@ struct TenantRow {
 }
 
 /// GET /api/tenants — 分页; 非平台租户仅能看到自己的租户 (只读视角)
-/// 非平台上下文免权限检查: 只读视野不含他租户任何数据, 供租户内用户查看本租户概览;
-/// 平台上下文需 system:tenant (全租户视野), 写操作一律需权限 + 平台上下文双重防线。
+/// 所有上下文均需 system:tenant；写操作另需平台上下文。
 async fn list(
     State(state): State<AppState>,
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     let platform = state.is_platform_context(&user).await?;
-    if platform {
-        RequirePermission("system:tenant").check(&state, &user).await?;
-    }
+    RequirePermission("system:tenant").check(&state, &user).await?;
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
     let st = params.get("status").cloned().unwrap_or_default();

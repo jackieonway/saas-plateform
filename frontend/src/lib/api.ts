@@ -34,62 +34,117 @@ function redirectToLogin() {
   window.location.assign(`/login?return=${returnTo}`)
 }
 
+type SessionSnapshot = { token: string; refreshToken: string; epoch: number }
+let renewal: { refreshToken: string; epoch: number; promise: Promise<string> } | null = null
+
+function contextChanged(): DOMException {
+  return new DOMException("登录上下文已变化", "AbortError")
+}
+
+function snapshotCurrent(snapshot: SessionSnapshot): boolean {
+  const state = authStore.getState()
+  return state.contextEpoch === snapshot.epoch && state.token === snapshot.token && state.refreshToken === snapshot.refreshToken
+}
+
+/** Concurrent expired requests share one rotating refresh. A late result from an
+ * old context must never overwrite the newly selected tenant's credentials. */
+async function renewSession(snapshot: SessionSnapshot): Promise<string> {
+  if (renewal?.refreshToken === snapshot.refreshToken && renewal.epoch === snapshot.epoch) return renewal.promise
+  const entry = { refreshToken: snapshot.refreshToken, epoch: snapshot.epoch, promise: Promise.resolve("") }
+  entry.promise = (async () => {
+    let response: Response
+    try {
+      response = await fetch("/oauth/token", {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: snapshot.refreshToken }),
+      })
+    } catch {
+      if (!snapshotCurrent(snapshot)) throw contextChanged()
+      throw new ApiError("会话刷新失败，请检查网络后重试", "NETWORK_ERROR", 0)
+    }
+    if (!snapshotCurrent(snapshot)) throw contextChanged()
+    let data: Record<string, unknown>
+    try { data = await response.json() } catch { data = {} }
+    if (!snapshotCurrent(snapshot)) throw contextChanged()
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 401) {
+        authStore.getState().logout()
+        redirectToLogin()
+      }
+      throw new ApiError("会话刷新失败，请重新登录或稍后重试", "SESSION_REFRESH_FAILED", response.status)
+    }
+    if (typeof data.access_token !== "string" || !data.access_token ||
+        typeof data.refresh_token !== "string" || !data.refresh_token) {
+      throw new ApiError("会话刷新响应无效，请稍后重试", "INVALID_REFRESH_RESPONSE", 502)
+    }
+    if (!authStore.getState().rotateTokens(data.access_token, data.refresh_token, snapshot.token, snapshot.refreshToken, snapshot.epoch)) {
+      throw contextChanged()
+    }
+    return data.access_token
+  })()
+  renewal = entry
+  try { return await entry.promise } finally { if (renewal === entry) renewal = null }
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, rawBody, contentType, bearer, skipAuth, suppress401, signal } = options
-
-  const headers: Record<string, string> = { Accept: "application/json" }
-  if (body !== undefined) headers["Content-Type"] = "application/json"
-  if (rawBody !== undefined && contentType) headers["Content-Type"] = contentType
-
-  const storeToken = authStore.getState().token
-  const contextEpoch = authStore.getState().contextEpoch
-  const token = bearer !== undefined ? bearer : skipAuth ? null : storeToken
-  if (token) headers["Authorization"] = `Bearer ${token}`
-
-  let resp: Response
-  try {
-    resp = await fetch(path, {
-      method,
-      headers,
-      body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined),
-      signal,
-    })
-  } catch (e) {
-    if ((e as Error).name === "AbortError") throw e
-    throw new ApiError("网络请求失败,请检查网络或服务状态", "NETWORK_ERROR", 0)
+  const initial = authStore.getState()
+  const epoch = initial.contextEpoch
+  const storeToken = initial.token
+  let token = bearer !== undefined ? bearer : skipAuth ? null : storeToken
+  const sessionRequest = !!token && !skipAuth && token === storeToken
+  const checkContext = () => {
+    if (signal?.aborted || (sessionRequest && authStore.getState().contextEpoch !== epoch)) throw contextChanged()
   }
-
-  // 204 / 空响应
-  const text = await resp.text()
+  const send = async (): Promise<Response> => {
+    checkContext()
+    const headers: Record<string, string> = { Accept: "application/json" }
+    if (body !== undefined) headers["Content-Type"] = "application/json"
+    if (rawBody !== undefined && contentType) headers["Content-Type"] = contentType
+    if (token) headers.Authorization = `Bearer ${token}`
+    try {
+      return await fetch(path, { method, headers, body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined), signal })
+    } catch (error) {
+      checkContext()
+      if ((error as Error).name === "AbortError") throw error
+      throw new ApiError("网络请求失败,请检查网络或服务状态", "NETWORK_ERROR", 0)
+    }
+  }
+  let response = await send()
+  checkContext()
+  if (response.status === 401 && sessionRequest && initial.refreshToken) {
+    const current = authStore.getState()
+    // Another request may already have completed this same session's rotation.
+    if (current.token && current.token !== storeToken) token = current.token
+    else token = await renewSession({ token: storeToken!, refreshToken: initial.refreshToken, epoch })
+    checkContext()
+    response = await send()
+    checkContext()
+  }
+  const text = await response.text()
+  checkContext()
   let data: unknown = undefined
   if (text) {
-    try {
-      data = JSON.parse(text)
-    } catch {
-      data = text
-    }
+    try { data = JSON.parse(text) } catch { data = text }
   }
-
-  if (!resp.ok) {
-    let message = `请求失败 (HTTP ${resp.status})`
+  if (!response.ok) {
+    let message = `请求失败 (HTTP ${response.status})`
     let code = "SERVER_ERROR"
     if (data && typeof data === "object" && "message" in data) {
-      const m = (data as Record<string, unknown>).message
-      if (typeof m === "string") message = m
-      const c = (data as Record<string, unknown>).code
-      if (typeof c === "string") code = c
+      const value = data as Record<string, unknown>
+      if (typeof value.message === "string") message = value.message
+      if (typeof value.code === "string") code = value.code
     }
-    if (resp.status === 401 && !skipAuth && !suppress401 && token === storeToken &&
-        authStore.getState().token === storeToken && authStore.getState().contextEpoch === contextEpoch &&
-        !authStore.getState().contextSwitching) {
+    if (response.status === 401 && sessionRequest && !suppress401 &&
+        authStore.getState().token === token && !authStore.getState().contextSwitching) {
       authStore.getState().logout()
       redirectToLogin()
     }
-    const candidate = resp.headers.get("x-request-id")
+    const candidate = response.headers.get("x-request-id")
     const requestId = candidate && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate) ? candidate : undefined
-    throw new ApiError(requestId ? `${message}（请求编号：${requestId}）` : message, code, resp.status, requestId)
+    throw new ApiError(requestId ? `${message}（请求编号：${requestId}）` : message, code, response.status, requestId)
   }
-
   return data as T
 }
 

@@ -14,6 +14,7 @@ pub(crate) struct PlatformBranding {
     pub(crate) login_title: String,
     pub(crate) login_description: String,
     pub(crate) footer_text: String,
+    pub(crate) primary_color: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -35,6 +36,8 @@ pub(crate) struct SettingsUpdate {
     login_description: String,
     footer_text: String,
     platform_tenant_name: String,
+    #[serde(default)]
+    primary_color: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -45,6 +48,7 @@ struct SettingsRow {
     login_title: String,
     login_description: String,
     footer_text: String,
+    primary_color: String,
     platform_tenant_name: String,
     platform_tenant_code: String,
 }
@@ -59,6 +63,7 @@ impl From<SettingsRow> for PlatformSettings {
                 login_title: row.login_title,
                 login_description: row.login_description,
                 footer_text: row.footer_text,
+                primary_color: row.primary_color,
             },
             platform_tenant_name: row.platform_tenant_name,
             platform_tenant_code: row.platform_tenant_code,
@@ -70,7 +75,7 @@ impl From<SettingsRow> for PlatformSettings {
 pub(crate) async fn load_branding(pool: &PgPool) -> Result<PlatformBranding, AppError> {
     Ok(sqlx::query_as(
         "SELECT platform_name, platform_description, logo_url, login_title, login_description, \
-         footer_text FROM platform_settings WHERE singleton = true",
+         footer_text, primary_color FROM platform_settings WHERE singleton = true",
     )
     .fetch_one(pool)
     .await?)
@@ -79,7 +84,7 @@ pub(crate) async fn load_branding(pool: &PgPool) -> Result<PlatformBranding, App
 pub(crate) async fn load_settings(pool: &PgPool) -> Result<PlatformSettings, AppError> {
     let row: SettingsRow = sqlx::query_as(
         "SELECT s.platform_name, s.platform_description, s.logo_url, s.login_title, \
-         s.login_description, s.footer_text, t.name AS platform_tenant_name, \
+         s.login_description, s.footer_text, s.primary_color, t.name AS platform_tenant_name, \
          t.code AS platform_tenant_code FROM platform_settings s \
          JOIN tenants t ON t.is_platform WHERE s.singleton = true",
     )
@@ -175,6 +180,17 @@ fn normalize_logo(value: &str) -> Result<String, AppError> {
     Err(bad_logo())
 }
 
+fn normalize_theme_color(value: &str) -> Result<String, AppError> {
+    let value = value.trim();
+    if value.len() != 7
+        || !value.starts_with('#')
+        || !value.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
+    {
+        return Err(AppError::bad_request("主题主色必须为 #RRGGBB 格式的颜色"));
+    }
+    Ok(value.to_ascii_uppercase())
+}
+
 impl SettingsUpdate {
     fn normalize(self) -> Result<Self, AppError> {
         Ok(Self {
@@ -195,6 +211,11 @@ impl SettingsUpdate {
                 100,
                 true,
             )?,
+            primary_color: self
+                .primary_color
+                .as_deref()
+                .map(normalize_theme_color)
+                .transpose()?,
         })
     }
 }
@@ -217,8 +238,8 @@ pub(crate) async fn update_settings(
     let branding = sqlx::query_as(
         "UPDATE platform_settings SET platform_name = $1, platform_description = $2, \
          logo_url = $3, login_title = $4, login_description = $5, footer_text = $6, \
-         updated_at = now() WHERE singleton = true \
-         RETURNING platform_name, platform_description, logo_url, login_title, login_description, footer_text",
+         primary_color = COALESCE($7, primary_color), updated_at = now() WHERE singleton = true \
+         RETURNING platform_name, platform_description, logo_url, login_title, login_description, footer_text, primary_color",
     )
     .bind(body.platform_name)
     .bind(body.platform_description)
@@ -226,6 +247,7 @@ pub(crate) async fn update_settings(
     .bind(body.login_title)
     .bind(body.login_description)
     .bind(body.footer_text)
+    .bind(body.primary_color)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -238,7 +260,7 @@ pub(crate) async fn update_settings(
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_logo, normalize_text, SettingsUpdate};
+    use super::{normalize_logo, normalize_text, normalize_theme_color, SettingsUpdate};
     use serde_json::json;
 
     fn update() -> serde_json::Value {
@@ -258,6 +280,31 @@ mod tests {
         assert!(normalize_text("", "说明", 300, false).is_ok());
         assert!(normalize_text("\n名称", "名称", 100, true).is_err());
         assert!(normalize_text("名\0称", "名称", 100, true).is_err());
+    }
+
+    #[test]
+    fn theme_color_normalizes_safe_hex_and_rejects_css_input() {
+        assert_eq!(normalize_theme_color("  #abCdEf  ").unwrap(), "#ABCDEF");
+        for value in ["#008577", "#FFFFFF", "#000000"] {
+            assert!(normalize_theme_color(value).is_ok());
+        }
+        for value in [
+            "",
+            "red",
+            "#fff",
+            "#GGGGGG",
+            "#1234567",
+            "rgb(1,2,3)",
+            "#123456;--primary:red",
+            "#中0000",
+        ] {
+            assert!(normalize_theme_color(value).is_err(), "accepted {value}");
+        }
+        let update: SettingsUpdate = serde_json::from_value(update()).unwrap();
+        assert!(
+            update.normalize().unwrap().primary_color.is_none(),
+            "legacy updates must preserve the saved theme"
+        );
     }
 
     #[test]

@@ -207,8 +207,8 @@ async fn publisher_access(
     {
         return Err(AppError::unauthorized("凭证已过期"));
     }
-    let identity: Option<(String, bool, String, String)> = sqlx::query_as(
-        "SELECT u.username,u.is_super_admin,a.name,a.code FROM users u \
+    let identity: Option<(String, bool, String, String, bool)> = sqlx::query_as(
+        "SELECT u.username,u.is_super_admin,a.name,a.code,t.is_platform FROM users u \
          JOIN platform_sessions s ON s.user_id=u.id AND s.id=$5 \
            AND s.tenant_id=$2 AND s.organization_id=$3 AND s.revoked_at IS NULL AND s.expires_at>statement_timestamp() \
          JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 \
@@ -229,7 +229,7 @@ async fn publisher_access(
     ).bind(actor.user_id).bind(actor.tenant_id).bind(actor.organization_id)
         .bind(actor.application_id).bind(actor.session_id).bind(&actor.token_hash).bind(actor.token_expires_at)
         .fetch_optional(&mut **tx).await?;
-    let Some((username, super_admin, app_name, app_code)) = identity else {
+    let Some((username, super_admin, app_name, app_code, platform)) = identity else {
         if actor.token_hash.is_some() {
             return Err(AppError::unauthorized("应用凭证或上下文已失效"));
         }
@@ -240,13 +240,14 @@ async fn publisher_access(
          UNION ALL SELECT o.id,o.parent_id FROM organizations o JOIN anc ON o.id=anc.parent_id) \
          SELECT EXISTS(SELECT 1 FROM menus menu WHERE menu.application_id=$4 \
           AND menu.status='ENABLED' AND menu.permission='notification:publish' AND \
-          ($5 OR EXISTS(SELECT 1 FROM role_menus rm JOIN roles r ON r.id=rm.role_id AND r.status='ENABLED' \
+          ($6 OR (EXISTS(SELECT 1 FROM tenant_menus tm WHERE tm.menu_id=menu.id AND tm.tenant_id=$2) \
+           AND EXISTS(SELECT 1 FROM organization_menus om WHERE om.menu_id=menu.id AND om.organization_id=$3) \
+           AND ($5 OR EXISTS(SELECT 1 FROM role_menus rm JOIN roles r ON r.id=rm.role_id AND r.status='ENABLED' \
            JOIN anc ON anc.id=r.organization_id JOIN user_roles ur ON ur.role_id=r.id AND ur.user_id=$1 \
-           JOIN tenant_menus tm ON tm.menu_id=rm.menu_id AND tm.tenant_id=$2 \
-           JOIN organization_menus om ON om.menu_id=rm.menu_id AND om.organization_id=$3 \
-           WHERE rm.menu_id=menu.id)))"
+           WHERE rm.menu_id=menu.id)))))"
     ).bind(actor.user_id).bind(actor.tenant_id).bind(actor.organization_id)
-        .bind(actor.application_id).bind(super_admin).fetch_one(&mut **tx).await?;
+        .bind(actor.application_id).bind(super_admin).bind(super_admin && platform)
+        .fetch_one(&mut **tx).await?;
     if !permission {
         return Err(AppError::forbidden(
             "无当前应用 notification:publish 操作权限",

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
-import { Building2, Image, Loader2, Save, Settings2, ShieldCheck } from "lucide-react"
+import { Building2, Check, Image, Loader2, Palette, Save, Settings2, ShieldCheck } from "lucide-react"
 import { z } from "zod"
 import { toast } from "sonner"
 import { platformApi, type PlatformSettings, type PlatformSettingsPayload } from "@/api/platform"
@@ -14,9 +14,11 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useTheme } from "@/components/theme-provider"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
 import { DEFAULT_PLATFORM_BRANDING, PLATFORM_BRANDING_QUERY_KEY } from "@/hooks/use-platform-branding"
 import { zResolver } from "@/lib/form"
+import { DEFAULT_PRIMARY_COLOR, isThemeColor, platformThemeVariables, THEME_COLOR_PRESETS } from "@/lib/platform-theme"
 import { useAuthStore } from "@/stores/auth"
 
 function validLogoUrl(value: string): boolean {
@@ -59,6 +61,7 @@ const settingsSchema = z.object({
   loginDescription: textField("登录页说明", 300),
   footerText: textField("页脚文案", 500),
   platformTenantName: textField("平台租户名称", 100, true),
+  primaryColor: z.string().trim().refine(isThemeColor, "请输入 #RRGGBB 格式的颜色，如 #008577").transform((value) => value.toUpperCase()),
 })
 
 function writableSettings(settings: PlatformSettings): PlatformSettingsPayload {
@@ -70,10 +73,12 @@ function writableSettings(settings: PlatformSettings): PlatformSettingsPayload {
     loginDescription: settings.loginDescription,
     footerText: settings.footerText,
     platformTenantName: settings.platformTenantName,
+    primaryColor: settings.primaryColor || DEFAULT_PRIMARY_COLOR,
   }
 }
 
 export default function PlatformSettingsPage() {
+  const { resolvedTheme } = useTheme()
   const queryClient = useQueryClient()
   const token = useAuthStore((s) => s.token)
   const epoch = useAuthStore((s) => s.contextEpoch)
@@ -106,7 +111,7 @@ export default function PlatformSettingsPage() {
       const { platformTenantName: _name, platformTenantCode: _code, ...branding } = settings
       queryClient.setQueryData(PLATFORM_BRANDING_QUERY_KEY, branding)
       const current = useAuthStore.getState()
-      if (current.token === variables.sessionToken && current.contextEpoch === variables.contextEpoch) {
+      if (current.contextEpoch === variables.contextEpoch) {
         queryClient.setQueryData(["platform-settings", variables.contextEpoch], settings)
         form.reset(writableSettings(settings))
       }
@@ -124,6 +129,7 @@ export default function PlatformSettingsPage() {
   })
 
   const values = form.watch()
+  const previewTheme = platformThemeVariables(values.primaryColor, resolvedTheme === "dark")
   const [failedPreviewUrl, setFailedPreviewUrl] = React.useState<string | null>(null)
   const previewLogo = validLogoUrl(values.logoUrl) && values.logoUrl && failedPreviewUrl !== values.logoUrl
 
@@ -147,7 +153,7 @@ export default function PlatformSettingsPage() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="平台设置"
-        description="统一管理平台品牌、登录页文案与平台租户名称"
+        description="统一管理平台品牌、主题颜色、登录页文案与平台租户名称"
         icon={<Settings2 className="size-5" />}
         badge={<Badge variant="secondary">全平台生效</Badge>}
       />
@@ -169,6 +175,37 @@ export default function PlatformSettingsPage() {
                     <FormItem><FormLabel>平台租户名称</FormLabel><FormControl><Input {...field} placeholder="如：平台管理租户" /></FormControl><FormDescription>同步展示在租户管理与组织切换中。</FormDescription><FormMessage /></FormItem>
                   )} />
                 </div>
+              </section>
+
+              <section className="rounded-xl border bg-card p-5">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Palette className="size-4 text-primary" />主题颜色</div>
+                <p className="mb-5 text-xs leading-relaxed text-muted-foreground">选择主色，统一按钮、链接、导航选中项与侧栏强调色。系统自动生成明暗配色，保留用户的明暗模式偏好。</p>
+                <FormField control={form.control} name="primaryColor" render={({ field }) => (
+                  <FormItem>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="快捷主题颜色">
+                      {THEME_COLOR_PRESETS.map((preset) => {
+                        const selected = field.value?.toUpperCase() === preset.color.toUpperCase()
+                        return <button key={preset.color} type="button" aria-label={`${preset.name}主题`} aria-pressed={selected}
+                          onClick={() => field.onChange(preset.color)}
+                          className={`flex items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}>
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-black/10" style={{ backgroundColor: preset.color }}>
+                            {selected && <Check className="size-4 text-white" />}
+                          </span>
+                          <span><span className="block text-sm font-medium">{preset.name}</span><span className="mt-0.5 block text-[11px] text-muted-foreground">{preset.description}</span></span>
+                        </button>
+                      })}
+                    </div>
+                    <FormLabel className="mt-4 block">主题主色</FormLabel>
+                    <div className="flex items-center gap-3">
+                      <input type="color" aria-label="自定义主题色" value={isThemeColor(field.value) ? field.value.trim() : DEFAULT_PRIMARY_COLOR}
+                        onChange={(event) => field.onChange(event.target.value.toUpperCase())}
+                        className="h-10 w-12 shrink-0 cursor-pointer rounded-md border bg-background p-1" />
+                      <FormControl><Input {...field} className="max-w-48 font-mono" maxLength={32} placeholder="#008577" /></FormControl>
+                    </div>
+                    <FormDescription>可自定义十六进制颜色；系统会调整过亮或过暗的颜色，保证文字清晰。</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </section>
 
               <section className="rounded-xl border bg-card p-5">
@@ -203,7 +240,7 @@ export default function PlatformSettingsPage() {
             </div>
 
             <aside className="space-y-4 lg:sticky lg:top-0">
-              <div className="overflow-hidden rounded-xl border bg-card">
+              <div className="overflow-hidden rounded-xl border bg-card" style={previewTheme}>
                 <div className="border-b bg-muted/30 px-5 py-3 text-sm font-medium">品牌预览</div>
                 <div className="space-y-7 p-5">
                   <div className="flex items-center gap-3">
@@ -211,6 +248,12 @@ export default function PlatformSettingsPage() {
                       {previewLogo ? <img src={values.logoUrl} alt="Logo 预览" className="size-8 object-contain" onError={() => setFailedPreviewUrl(values.logoUrl)} /> : <BrandMark className="size-8" logoUrl="" />}
                     </span>
                     <div className="min-w-0"><p className="break-words text-sm font-semibold">{values.platformName || "平台名称"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{values.platformDescription}</p></div>
+                  </div>
+                  <div className="overflow-hidden rounded-lg bg-sidebar p-3 text-sidebar-foreground" aria-label="导航主题预览">
+                    <p className="px-2 pb-3 pt-1 text-[11px] font-medium text-sidebar-foreground/60">系统管理</p>
+                    <div className="rounded-md px-3 py-2 text-xs text-sidebar-foreground/75">用户管理</div>
+                    <div className="relative rounded-md bg-sidebar-primary/15 px-3 py-2 text-xs font-medium text-sidebar-primary"><span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-sidebar-primary" />角色管理</div>
+                    <div className="rounded-md px-3 py-2 text-xs text-sidebar-foreground/75">平台设置</div>
                   </div>
                   <div className="rounded-lg border bg-background p-4">
                     <p className="break-words text-lg font-semibold">{values.loginTitle || "登录页标题"}</p>

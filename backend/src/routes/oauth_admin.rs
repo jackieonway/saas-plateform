@@ -516,7 +516,7 @@ type SessionRowTuple = (
     i64,
 );
 
-/// GET /api/oauth/tokens/sessions — 按用户聚合的 OAuth 会话视图
+/// GET /api/oauth/tokens/sessions — OAuth 用户聚合与平台登录设备会话。
 ///
 /// INNER JOIN users 自然排除 client_credentials (user_id IS NULL) 的令牌行;
 /// clients 为全历史客户端 (含已吊销); activeAccess/activeRefresh 仅计
@@ -551,7 +551,10 @@ async fn list_sessions(State(state): State<AppState>, user: CurrentUser) -> Resu
             },
         )
         .collect();
-    Ok(Json(json!({ "sessions": sessions })))
+    let platform_sessions = session::device_sessions(
+        &state.pool, None, user.user_id, user.session_id,
+    ).await?;
+    Ok(Json(json!({ "sessions": sessions, "platformSessions": platform_sessions })))
 }
 
 /// DELETE /api/oauth/tokens/{id} — 吊销

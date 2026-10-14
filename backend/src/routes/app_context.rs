@@ -35,9 +35,9 @@ pub(crate) async fn current_context(
         return Err(AppError::forbidden("应用受众不匹配"));
     }
 
-    let identity: (String, String, String, String, String, String, String, bool) = sqlx::query_as(
+    let identity: (String, String, String, String, String, String, String, bool, bool) = sqlx::query_as(
         "SELECT u.username, COALESCE(u.real_name,''), t.code, t.name, o.name, \
-         COALESCE(org_path(o.id),''), a.name, u.is_super_admin \
+         COALESCE(org_path(o.id),''), a.name, u.is_super_admin, t.is_platform \
          FROM users u JOIN tenants t ON t.id = $2 \
          JOIN organizations o ON o.id = $3 AND o.tenant_id = t.id \
          JOIN applications a ON a.id = $4 \
@@ -45,8 +45,12 @@ pub(crate) async fn current_context(
     ).bind(binding.user_id).bind(binding.tenant_id).bind(binding.organization_id)
      .bind(binding.application_id).fetch_one(&state.pool).await?;
 
-    let menu_rows = if identity.7 {
+    let menu_rows = if identity.7 && identity.8 {
         authorization::all_app_menu_rows(&state.pool, binding.application_id).await?
+    } else if identity.7 {
+        authorization::granted_menu_rows(
+            &state.pool, binding.tenant_id, binding.organization_id, Some(binding.application_id),
+        ).await?
     } else {
         authorization::effective_menu_rows(
             &state.pool, binding.user_id, binding.tenant_id,

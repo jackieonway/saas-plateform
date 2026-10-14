@@ -13,7 +13,7 @@ export const authApi = {
   login: (username: string, password: string) =>
     api.post<LoginResp>("/api/auth/login", { username, password }, { skipAuth: true, suppress401: true }),
 
-  /** 登录第二步:用 credential ticket 选择组织建立会话 */
+  /** 选择租户、组织后:用 credential ticket 建立可刷新的会话 */
   selectContext: (organizationId: string, ticket: string, userId?: string) =>
     api.post<ContextResp>("/api/auth/context", { organizationId, userId }, { bearer: ticket, suppress401: true }),
 

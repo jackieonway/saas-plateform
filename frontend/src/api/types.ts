@@ -91,6 +91,8 @@ export interface AppBrief {
 
 export interface ContextResp {
   accessToken: string
+  refreshToken?: string
+  refreshExpiresIn?: number
   expiresIn: number
   user: AuthUser
   tenant: TenantBrief
@@ -607,6 +609,12 @@ export interface OAuthSessionTokenResp {
 }
 
 /** OAuth 会话视图:按用户聚合的令牌概览 (GET /api/oauth/tokens/sessions) */
+export interface AdminPlatformSession extends PlatformSessionRecord {
+  userId: string
+  username: string
+  realName: string
+}
+
 export interface OAuthSession {
   userId: string
   username: string

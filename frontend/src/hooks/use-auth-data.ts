@@ -11,7 +11,7 @@ export function useProfileQuery() {
   const switching = useAuthStore((s) => s.contextSwitching)
   return useQuery({
     queryKey: ["profile", epoch],
-    queryFn: ({ signal }) => authApi.profile(token!, signal),
+    queryFn: ({ signal }) => authApi.profile(undefined, signal),
     enabled: !!token && !switching,
     staleTime: 20_000,
     refetchInterval: 20_000,
@@ -26,7 +26,7 @@ export function useMenusQuery(applicationId: string | null | undefined) {
   return useQuery({
     queryKey: ["auth-menus", applicationId, epoch],
     queryFn: async ({ signal }) =>
-      sortMenuTree(asArray<MenuNode>(await authApi.menus(applicationId!, token!, signal), "menus")),
+      sortMenuTree(asArray<MenuNode>(await authApi.menus(applicationId!, undefined, signal), "menus")),
     enabled: !!token && !!applicationId && !switching,
     staleTime: 20_000,
     refetchInterval: 20_000,
@@ -40,7 +40,7 @@ export function usePermissionsQuery() {
   const switching = useAuthStore((s) => s.contextSwitching)
   return useQuery({
     queryKey: ["permissions", epoch],
-    queryFn: ({ signal }): Promise<PermissionsResp> => authApi.permissions(token!, signal),
+    queryFn: ({ signal }): Promise<PermissionsResp> => authApi.permissions(undefined, signal),
     enabled: !!token && !switching,
     staleTime: 20_000,
     refetchInterval: 20_000,
@@ -57,15 +57,16 @@ export function useSwitchContext() {
     const token = state.token
     if (!token) throw new Error("会话已失效，请重新登录")
     state.beginContextSwitch()
+    const switchEpoch = useAuthStore.getState().contextEpoch
     try {
       await queryClient.cancelQueries()
       queryClient.clear()
       const resp = await authApi.switchContext(organizationId, token)
-      if (useAuthStore.getState().token !== token) throw new Error("会话已变化，请重试")
-      useAuthStore.getState().setToken(resp.accessToken)
+      if (useAuthStore.getState().contextEpoch !== switchEpoch) throw new Error("会话已变化，请重试")
+      useAuthStore.getState().setSession(resp.accessToken, resp.refreshToken)
       return resp
     } finally {
-      if (useAuthStore.getState().token === token) useAuthStore.getState().endContextSwitch()
+      if (useAuthStore.getState().contextEpoch === switchEpoch) useAuthStore.getState().endContextSwitch()
     }
   }
 }

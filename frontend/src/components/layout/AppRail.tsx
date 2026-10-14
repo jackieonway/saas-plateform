@@ -47,7 +47,7 @@ export function AppRail({
                     className={cn(
                       "group relative flex size-11 shrink-0 items-center justify-center rounded-xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                       active
-                        ? "bg-primary/20 text-primary"
+                        ? "bg-sidebar-primary/20 text-sidebar-primary"
                         : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     )}
                   >

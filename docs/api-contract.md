@@ -21,7 +21,13 @@ Body: `{"organizationId":"<uuid>","userId":"<登录选择项的 uuid，可选>"}
 1. 登录后立即选择: login 响应中的 `ticket`(credentialTicket JWT, typ=credential 或 credential_multi, 10分钟有效) 放 Header `Authorization: Bearer <ticket>`;
 2. 已登录会话切换组织: 携带 session JWT,校验用户在目标组织有 membership(用于顶栏无缝切换组织)。
 返回:
-`{"accessToken":"<sessionJWT>","expiresIn":43200,"user":{...},"tenant":{...},"organization":{...}}`
+`{"accessToken":"<sessionJWT>","expiresIn":43200,"refreshToken":"psr_<随机令牌>","refreshExpiresIn":604800,"user":{...},"tenant":{...},"organization":{...}}`
+
+### POST /oauth/token（平台会话刷新）
+
+表单 `grant_type=refresh_token&refresh_token=<context 返回的 psr_ 令牌>`，无需客户端 ID 或密钥。返回 `access_token`、`refresh_token`、`expires_in`、`refresh_expires_in`、`token_type: "Bearer"`，刷新令牌一次性轮换，绝对有效期不会续长。旧令牌重复使用、会话撤销、密码版本变化、成员移除、租户或组织失效时拒绝刷新。平台刷新令牌与 OAuth 应用刷新令牌独立；该请求不能附带 OAuth 客户端凭据或 scope。实际期限受 `SESSION_TTL_HOURS`、`REFRESH_TOKEN_TTL_SECONDS` 与租户/组织有效期约束。
+
+前端并发过期请求共用一次刷新，并仅重试原请求一次；刷新时保留现有组织上下文与页面数据。网络或服务临时错误保留会话以便重试，刷新凭证确已失效才返回登录。切换上下文时清除旧查询，旧响应不得写入新上下文。
 
 ### GET /api/auth/profile (Bearer session)
 → `{"user":{"id","username","realName","email","phone","avatar","gender","isSuperAdmin"},"tenant":{"id","name","code"},"organization":{"id","name","path"},"applications":[{"id","code","name","icon","basePath"}],"memberships":[{"organizationId","organizationName","organizationPath","tenantId","tenantName"}]}`
@@ -40,11 +46,12 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 ## 2. 平台管理模块 (需相应权限码)
 
-权限码(挂在菜单 permission 上,后端按模块校验,超管 bypass):
+权限码(挂在菜单 permission 上，后端按模块校验；超管绕过只适用于实际平台租户上下文):
 `system:tenant` `system:organization` `system:department` `system:user` `system:role` `system:menu` `system:application` `system:oauth` `system:monitor`
 
 ### 2.1 租户 /tenants
-- GET `/api/tenants?page&size&keyword` → 分页 `{id,name,code,tenantType,contactName,contactPhone,contactEmail,description,province,city,district,township,village,address,longitude,latitude,status,createdAt,organizationCount,userCount,authorizedAppCount}`；经纬度未标注时均为 `null`。
+- GET `/api/tenants/options` → 最小下拉选项 `[{id,name,code,isPlatform}]`，需拥有组织、部门、用户、角色、授权、审计或租户管理中的任一相关权限；普通租户上下文仅返回当前租户。
+- GET `/api/tenants?page&size&keyword`（所有上下文均需 `system:tenant`）→ 分页 `{id,name,code,tenantType,contactName,contactPhone,contactEmail,description,province,city,district,township,village,address,longitude,latitude,status,createdAt,organizationCount,userCount,authorizedAppCount}`；经纬度未标注时均为 `null`。
 - POST `/api/tenants` `{name,code,tenantType?,contactName?,contactPhone?,contactEmail?,description,province?,city?,district?,township?,village?,address?,longitude?,latitude?}`；`tenantType` 支持 `PERSONAL`（个人）、`COMPANY`（公司）、`PUBLIC_INSTITUTION`（事业单位）、`GOVERNMENT`（政府）、`OTHER`（其他），缺省为 `COMPANY`。事务内自动以租户名称建立根组织，初始化租户范围的内置超级管理员角色及基础管理授权；根组织继承租户地点和对应类型（个人映射为其他）。联系人字段为 `contactName`、`contactPhone`、`contactEmail`。新建表单要求姓名及至少一个登录标识；联系人完整时，事务内自动创建或匹配用户、根组织成员关系及「超级管理员」授权。电话优先用作新账号用户名，没有电话时使用 Email；用户名被占用时分配独立用户名。创建响应附加 `administrator:{userId,username,roleName,created,initialPassword?}`，新账号随机初始密码只返回这一次。旧客户端完全省略联系人仍可创建未分配用户的管理员角色。后续账号资料和权限由用户、角色管理维护。PUT `/api/tenants/:id` 可更新类型、联系人及地点；修改联系人不自动改动已有账号或授权，联系人字段省略保留、空字符串清除。省略类型或乡村字段时保留原值，乡村传空字符串清除；DELETE `/api/tenants/:id`(级联删组织/授权/角色)。根组织名称后续可在组织管理中独立维护。
 - PUT `/api/tenants/:id/status` `{"status":"ENABLED|DISABLED"}`
 
@@ -207,3 +214,12 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 - 响应包含 `administrator`。新账号返回一次 `initialPassword`；复用账号保留原密码。已有已初始化管理员时返回 `alreadyInitialized: true`，不重复创建人员或修改授权。
 - 已有单独维护的管理员、不可用管理员角色、联系人缺失或租户没有唯一根组织时，返回可操作的错误提示。旧实体缺少内置角色时补建角色，仅同步现有组织授权范围，不扩大租户或组织授权。
 - 初始化在事务内锁定组织，租户入口、根组织入口和并发重复请求共用相同幂等检查。更换联系人后再执行也不会替换已初始化管理员。
+
+
+成员关系维护保留仍存在的 membership ID 与数据授权；修改部门、职位、增加其他组织不撤销有效会话。移除组织成员时只撤销该组织上下文的会话，不能通过保留页面绕过撤销。
+
+
+设备与会话管理的 `GET /api/oauth/tokens/sessions` 在原 `sessions` OAuth 聚合数组之外返回 `platformSessions` 登录设备数组，含用户、租户、组织、IP、User-Agent、时间、有效状态和当前设备标识。全局列表仍需平台上下文及 `system:oauth`；本人设备通过 `/api/auth/my-sessions` 按用户过滤。页面默认会话视图同时展示后台登录设备与第三方会话，设备码页仍用于 RFC 8628 授权。
+
+
+平台品牌与设置接口新增 `primaryColor`（六位十六进制 `#RRGGBB`）。`GET /api/platform/branding` 对公开页面返回生效颜色，`GET/PUT /api/platform/settings` 仍需平台上下文及 `system:settings`。PUT 省略该字段保留原值，非法颜色返回400；支持海青、远山蓝、鸢尾紫、琥珀、玫瑰、松绿六组快捷预设与自定义颜色，保存后更新主要按钮、菜单选中态、图标和侧栏主题，保持用户选择的明暗模式。

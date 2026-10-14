@@ -115,15 +115,15 @@ impl AppState {
         Ok(authorization::permissions_of(&rows))
     }
 
-    /// 权限校验 (超管直通)
+    /// 权限校验；全局超管只在平台租户上下文直通。
     pub async fn require(&self, user: &CurrentUser, perm: &'static str) -> Result<(), AppError> {
         // OAuth clients and token administration are global platform resources;
         // a tenant menu/role grant cannot make them tenant-owned resources.
         if perm == "system:oauth" { self.require_platform(user).await?; }
-        if user.is_super_admin {
+        if user.is_super_admin && self.is_platform_context(user).await? {
             return Ok(());
         }
-        let perms = self.permissions_of(user.user_id, user.org_id).await?;
+        let perms = self.context_permissions(user).await?;
         if perms.contains(perm) {
             Ok(())
         } else {
@@ -131,12 +131,9 @@ impl AppState {
         }
     }
 
-    /// 当前会话是否处于平台租户上下文 (超管视为平台级):
+    /// 当前会话是否处于平台租户上下文:
     /// 平台租户成员可跨租户管理, 其余租户只能操作本租户数据。
     pub async fn is_platform_context(&self, user: &CurrentUser) -> Result<bool, AppError> {
-        if user.is_super_admin {
-            return Ok(true);
-        }
         let platform: Option<bool> =
             sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
                 .bind(user.tenant_id)
@@ -145,13 +142,32 @@ impl AppState {
         Ok(platform.unwrap_or(false))
     }
 
-    /// 跨租户写操作防线: 仅平台租户(或超管)可继续, 其余返回 403
+    /// 跨租户写操作防线: 仅当前平台租户上下文可继续, 其余返回 403
     pub async fn require_platform(&self, user: &CurrentUser) -> Result<(), AppError> {
         if self.is_platform_context(user).await? {
             Ok(())
         } else {
             Err(AppError::forbidden("仅平台租户可执行跨租户操作"))
         }
+    }
+
+    /// The selected context bounds global administrator permissions as well as menus.
+    pub async fn context_permissions(&self, user: &CurrentUser) -> Result<HashSet<String>, AppError> {
+        if user.is_super_admin {
+            if self.is_platform_context(user).await? {
+                let permissions: Vec<String> = sqlx::query_scalar(
+                    "SELECT DISTINCT m.permission FROM menus m \
+                     JOIN applications app ON app.id=m.application_id AND app.status='ENABLED' \
+                     WHERE m.status='ENABLED' AND m.permission<>'' ORDER BY m.permission",
+                ).fetch_all(&self.pool).await?;
+                return Ok(permissions.into_iter().collect());
+            }
+            let rows = authorization::granted_menu_rows(
+                &self.pool, user.tenant_id, user.org_id, None,
+            ).await?;
+            return Ok(authorization::permissions_of(&rows));
+        }
+        self.permissions_of(user.user_id, user.org_id).await
     }
 
     /// 管理接口的资源归属检查。跨租户资源与不存在资源统一表现为 404。

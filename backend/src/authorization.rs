@@ -42,9 +42,31 @@ pub async fn all_app_menu_rows(pool: &PgPool, app_id: Uuid) -> Result<Vec<Value>
     let rows: Vec<MenuRow> = sqlx::query_as(
         "SELECT m.id, m.parent_id, m.type, m.title, COALESCE(m.path,''), COALESCE(m.icon,''), \
          COALESCE(m.permission,''), m.link_url, m.link_target, m.sort_order, m.visible, m.created_at \
-         FROM menus m WHERE m.application_id = $1 AND m.status = 'ENABLED' \
+         FROM menus m JOIN applications app ON app.id = m.application_id AND app.status = 'ENABLED' \
+         WHERE m.application_id = $1 AND m.status = 'ENABLED' \
          ORDER BY m.sort_order, m.created_at",
     ).bind(app_id).fetch_all(pool).await?;
+    Ok(rows_to_json(rows))
+}
+
+/// A global administrator still observes the selected tenant and organization grants.
+/// Only the user-role layer is bypassed; application and menu grants remain mandatory.
+pub async fn granted_menu_rows(
+    pool: &PgPool, tenant_id: Uuid, org_id: Uuid, app_id: Option<Uuid>,
+) -> Result<Vec<Value>, AppError> {
+    let rows: Vec<MenuRow> = sqlx::query_as(
+        "SELECT DISTINCT m.id, m.parent_id, m.type, m.title, COALESCE(m.path,''), \
+         COALESCE(m.icon,''), COALESCE(m.permission,''), m.link_url, m.link_target, \
+         m.sort_order, m.visible, m.created_at FROM menus m \
+         JOIN applications app ON app.id = m.application_id AND app.status = 'ENABLED' \
+         JOIN organizations org ON org.id = $2 AND org.tenant_id = $1 \
+         JOIN tenant_applications ta ON ta.application_id = app.id AND ta.tenant_id = $1 \
+         JOIN organization_applications oa ON oa.application_id = app.id AND oa.organization_id = $2 \
+         JOIN tenant_menus tm ON tm.menu_id = m.id AND tm.tenant_id = $1 \
+         JOIN organization_menus om ON om.menu_id = m.id AND om.organization_id = $2 \
+         WHERE m.status = 'ENABLED' AND ($3::uuid IS NULL OR m.application_id = $3) \
+         ORDER BY m.sort_order, m.created_at",
+    ).bind(tenant_id).bind(org_id).bind(app_id).fetch_all(pool).await?;
     Ok(rows_to_json(rows))
 }
 

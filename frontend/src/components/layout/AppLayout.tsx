@@ -11,6 +11,7 @@ import { AppRail } from "@/components/layout/AppRail"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { TopBar } from "@/components/layout/TopBar"
 import { CommandPalette } from "@/components/layout/CommandPalette"
+import { RoutePermissionGuard } from "@/components/layout/RoutePermissionGuard"
 import { ErrorState } from "@/components/states"
 import { useAuthStore } from "@/stores/auth"
 import { BrandMark } from "@/components/brand"
@@ -29,6 +30,7 @@ export default function AppLayout() {
   const { platformName } = usePlatformBranding()
   const token = useAuthStore((s) => s.token)
   const contextEpoch = useAuthStore((s) => s.contextEpoch)
+  const contextSwitching = useAuthStore((s) => s.contextSwitching)
   const profile = useAuthStore((s) => s.profile)
   const setProfile = useAuthStore((s) => s.setProfile)
   const currentApplicationId = useAuthStore((s) => s.currentApplicationId)
@@ -58,8 +60,9 @@ export default function AppLayout() {
   const inferredPathRef = React.useRef<string | null>(null)
   React.useEffect(() => {
     if (!profile?.applications?.length) return
-    if (inferredPathRef.current === pathname) return
-    inferredPathRef.current = pathname
+    const routeContext = `${contextEpoch}:${pathname}`
+    if (inferredPathRef.current === routeContext) return
+    inferredPathRef.current = routeContext
     const match = profile.applications.find(
       (a) =>
         a.basePath &&
@@ -68,7 +71,7 @@ export default function AppLayout() {
     )
     if (match && match.id !== currentApplicationId) setCurrentApplication(match.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, profile?.applications])
+  }, [pathname, profile?.applications, contextEpoch])
 
   /** 切换应用:若当前页面不属于新应用,则跳转到该应用首个可导航菜单 */
   const handleSelectApp = React.useCallback(
@@ -94,7 +97,7 @@ export default function AppLayout() {
           })
           const current = useAuthStore.getState()
           if (current.contextSwitching || current.contextEpoch !== selectedEpoch ||
-              current.token !== selectedToken || current.currentApplicationId !== appId) return
+              current.currentApplicationId !== appId) return
           const firstPath = (function walk(nodes: MenuNode[]): string | null {
             for (const n of nodes) {
               // 外链菜单无对应路由(BLANK 新窗口/SELF 走 /embed), 切换应用时跳过
@@ -110,7 +113,7 @@ export default function AppLayout() {
         } catch {
           const current = useAuthStore.getState()
           if (!current.contextSwitching && current.contextEpoch === selectedEpoch &&
-              current.token === selectedToken && current.currentApplicationId === appId) {
+              current.currentApplicationId === appId) {
             toast.error("应用菜单获取失败，已退出旧应用")
             navigate("/")
           }
@@ -137,10 +140,10 @@ export default function AppLayout() {
   const pageTransitionKey = React.useMemo(() => {
     if (pathname === "/micro" || pathname.startsWith("/micro/")) {
       const seg = pathname.split("/") // ['', 'micro', appCode, ...]
-      return `/${seg[1]}/${seg[2] ?? ""}`
+      return `${contextEpoch}:/${seg[1]}/${seg[2] ?? ""}`
     }
-    return pathname
-  }, [pathname])
+    return `${contextEpoch}:${pathname}`
+  }, [pathname, contextEpoch])
 
 
   const [sidebarOpen, setSidebarOpen] = React.useState(() => {
@@ -216,7 +219,7 @@ export default function AppLayout() {
   }
 
   /* ---------- 会话加载 ---------- */
-  if (!profile && profileQuery.isLoading) {
+  if (contextSwitching || (!profile && !profileQuery.isSuccess && !profileQuery.isError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
         <span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -224,7 +227,7 @@ export default function AppLayout() {
         </span>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          正在恢复会话...
+          {contextSwitching ? "正在切换组织..." : "正在恢复会话..."}
         </div>
       </div>
     )
@@ -256,6 +259,9 @@ export default function AppLayout() {
   }
 
   const userDisplayName = profile?.user.realName || profile?.user.username || ""
+  const navigationScope = profile && app
+    ? [profile.user.id, profile.tenant.id, profile.organization.id, app.id].map(encodeURIComponent).join(":")
+    : undefined
 
   const sidebar = (
     <AppSidebar
@@ -264,6 +270,8 @@ export default function AppLayout() {
       isLoading={menusQuery.isLoading}
       isError={menusQuery.isError}
       onRetry={() => menusQuery.refetch()}
+      onCollapse={() => setSidebarOpen(false)}
+      navigationScope={navigationScope}
       userDisplayName={userDisplayName}
     />
   )
@@ -288,7 +296,7 @@ export default function AppLayout() {
           <SheetContent side="left" className="w-[280px] gap-0 bg-sidebar p-0 text-sidebar-foreground">
             <SheetHeader className="border-b border-sidebar-border px-4 py-3">
               <SheetTitle className="flex items-center gap-2.5 text-sidebar-foreground">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary/15 text-sidebar-primary">
                   <BrandMark className="size-5" />
                 </span>
                 <span className="truncate" title={platformName}>{platformName}</span>
@@ -307,7 +315,7 @@ export default function AppLayout() {
                     }}
                     className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
                       a.id === currentApplicationId
-                        ? "bg-primary/20 text-primary"
+                        ? "bg-sidebar-primary/20 text-sidebar-primary"
                         : "bg-sidebar-accent/60 text-sidebar-foreground/70"
                     }`}
                   >
@@ -315,13 +323,14 @@ export default function AppLayout() {
                   </button>
                 ))}
               </div>
-              <div className="min-h-0 flex-1 [&_button]:!text-sidebar-foreground [&_.text-muted-foreground]:text-sidebar-foreground/60">
+              <div className="min-h-0 flex-1 [&_.text-muted-foreground]:text-sidebar-foreground/60">
                 <AppSidebar
                   app={app}
                   menus={menusQuery.data ?? []}
                   isLoading={menusQuery.isLoading}
                   isError={menusQuery.isError}
                   onRetry={() => menusQuery.refetch()}
+                  navigationScope={navigationScope}
                   userDisplayName={userDisplayName}
                   className="w-full border-r-0"
                 />
@@ -335,24 +344,28 @@ export default function AppLayout() {
           <TopBar
             onOpenMobileNav={() => setMobileNavOpen(true)}
             onOpenCommandPalette={() => setPaletteOpen(true)}
+            menuCollapsed={!sidebarOpen}
+            onExpandMenu={() => setSidebarOpen(true)}
           />
           <main
             id="app-scroll"
             className="flex-1 overflow-y-auto scroll-area p-4 md:p-6"
             aria-live="polite"
           >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={pageTransitionKey}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                className="mx-auto w-full max-w-[1600px]"
-              >
-                <Outlet />
-              </motion.div>
-            </AnimatePresence>
+            <RoutePermissionGuard>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={pageTransitionKey}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="mx-auto w-full max-w-[1600px]"
+                >
+                  <Outlet />
+                </motion.div>
+              </AnimatePresence>
+            </RoutePermissionGuard>
           </main>
         </div>
 

@@ -119,7 +119,7 @@ export default function UsersPage() {
 
   const tenantsQuery = useQuery({
     queryKey: ["tenants", "options"],
-    queryFn: async () => asPage<TenantRecord>(await tenantsApi.list({ page: 1, size: 100 })).records,
+    queryFn: async () => asPage<TenantRecord>(await tenantsApi.options()).records,
     staleTime: 60_000,
     retry: 1,
   })
@@ -985,6 +985,9 @@ function MembershipDialog({
       toast.success("成员关系已保存")
       onSaved()
       queryClient.invalidateQueries({ queryKey: ["user-memberships", user.id] })
+      queryClient.invalidateQueries({ queryKey: ["profile"] })
+      queryClient.invalidateQueries({ queryKey: ["permissions"] })
+      queryClient.invalidateQueries({ queryKey: ["auth-menus"] })
       onClose()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "保存失败")

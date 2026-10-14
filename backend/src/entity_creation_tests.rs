@@ -60,14 +60,14 @@ fn database_error(stage: &str, error: &sqlx::Error) -> anyhow::Error {
     }
 }
 
-struct Database {
-    pool: PgPool,
+pub(crate) struct Database {
+    pub(crate) pool: PgPool,
     admin: PgPool,
     name: String,
 }
 
 impl Database {
-    async fn create(before_types_migration: bool) -> Result<Self> {
+    pub(crate) async fn create(before_types_migration: bool) -> Result<Self> {
         let options = database_options()?;
         let admin = PgPoolOptions::new()
             .max_connections(1)
@@ -117,7 +117,7 @@ impl Database {
         Ok(database)
     }
 
-    async fn finish(self, assertions: Result<()>) -> Result<()> {
+    pub(crate) async fn finish(self, assertions: Result<()>) -> Result<()> {
         ensure!(
             self.name.starts_with("entity_creation_test_")
                 && self
@@ -762,8 +762,9 @@ async fn shared_contact_identifiers_select_only_password_verified_accounts_and_c
         ensure!(selected["user"]["id"] == json!(second_uid) && selected["tenant"]["id"] == json!(second_id),
             "selected tenant reused another account identity");
         let token = selected["accessToken"].as_str().ok_or_else(|| anyhow!("selected session missing"))?;
-        let scoped = request(&h.app, token, Method::GET, "/api/tenants", None, StatusCode::OK).await?;
-        ensure!(scoped["records"].as_array().is_some_and(|items| items.len() == 1 && items[0]["id"] == json!(second_id)),
+        request(&h.app, token, Method::GET, "/api/tenants", None, StatusCode::FORBIDDEN).await?;
+        let scoped = request(&h.app, token, Method::GET, "/api/tenants/options", None, StatusCode::OK).await?;
+        ensure!(scoped.as_array().is_some_and(|items| items.len() == 1 && items[0]["id"] == json!(second_id)),
             "selected account session exposes another tenant");
         request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({
             "organizationId": second_root, "userId": first_user,

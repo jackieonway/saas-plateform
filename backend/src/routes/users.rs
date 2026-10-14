@@ -748,11 +748,17 @@ async fn put_memberships(
     // 去重 (同组织只保留第一条)
     let mut seen = std::collections::HashSet::new();
     let mut tx = state.pool.begin().await?;
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+        .bind(uid).execute(&mut *tx).await?;
+    // Preserve retained membership IDs, data grants and active sessions. The
+    // membership deletion trigger revokes only contexts actually removed.
     sqlx::query("DELETE FROM memberships m USING organizations o \
                  WHERE m.organization_id = o.id AND m.user_id = $1 \
-                 AND ($2::uuid IS NULL OR o.tenant_id = $2)")
+                 AND ($2::uuid IS NULL OR o.tenant_id = $2) \
+                 AND NOT (m.organization_id = ANY($3))")
         .bind(uid)
         .bind(if platform { None } else { Some(user.tenant_id) })
+        .bind(&org_ids)
         .execute(&mut *tx)
         .await?;
     for (i, org) in org_ids.iter().enumerate() {
@@ -760,7 +766,9 @@ async fn put_memberships(
             continue;
         }
         sqlx::query(
-            "INSERT INTO memberships (user_id, organization_id, department_id, position) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO memberships (user_id, organization_id, department_id, position) VALUES ($1, $2, $3, $4) \
+             ON CONFLICT(user_id,organization_id) DO UPDATE \
+             SET department_id=EXCLUDED.department_id, position=EXCLUDED.position",
         )
         .bind(uid)
         .bind(org)
@@ -769,6 +777,13 @@ async fn put_memberships(
         .execute(&mut *tx)
         .await?;
     }
+    sqlx::query(
+        "UPDATE platform_sessions s SET revoked_at=now() WHERE s.user_id=$1 AND s.revoked_at IS NULL \
+         AND NOT EXISTS(SELECT 1 FROM memberships m JOIN organizations o ON o.id=m.organization_id \
+         JOIN tenants t ON t.id=o.tenant_id WHERE m.user_id=s.user_id AND m.organization_id=s.organization_id \
+         AND o.tenant_id=s.tenant_id AND org_chain_active(o.id) AND t.status='ENABLED' \
+         AND (t.expires_at IS NULL OR t.expires_at>now()))",
+    ).bind(uid).execute(&mut *tx).await?;
     tx.commit().await?;
     let after_tenants = if platform { user_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
     audit_user_change(&state, &headers, &user, &merge_tenant_ids(before_tenants, after_tenants),

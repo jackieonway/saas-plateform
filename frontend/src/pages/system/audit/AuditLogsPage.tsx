@@ -129,7 +129,7 @@ export default function AuditLogsPage() {
   /* 租户清单(仅平台上下文拉取): 平台租户 id 集合驱动 Crown 徽章; 失败静默降级为无徽章, 不阻塞表格 */
   const tenantsQuery = useQuery({
     queryKey: ["audit-tenants"],
-    queryFn: async () => asPage<TenantRecord>(await tenantsApi.list({ size: 200 })),
+    queryFn: async () => asPage<TenantRecord>(await tenantsApi.options()),
     staleTime: 60_000,
     retry: 1,
     enabled: isPlatformTenant,

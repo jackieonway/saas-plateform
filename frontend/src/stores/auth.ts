@@ -2,10 +2,12 @@ import { create } from "zustand"
 import type { AppBrief, ProfileResp } from "@/api/types"
 
 const TOKEN_KEY = "dante-token"
+const REFRESH_KEY = "dante-refresh-token"
 const APP_KEY = "dante-current-app"
 
 interface AuthState {
   token: string | null
+  refreshToken: string | null
   profile: ProfileResp | null
   currentApplicationId: string | null
   contextEpoch: number
@@ -13,6 +15,8 @@ interface AuthState {
   beginContextSwitch: () => void
   endContextSwitch: () => void
   setToken: (token: string) => void
+  setSession: (token: string, refreshToken?: string | null) => void
+  rotateTokens: (token: string, refreshToken: string, expectedToken: string, expectedRefresh: string, epoch: number) => boolean
   setProfile: (profile: ProfileResp | null, epoch?: number) => void
   setCurrentApplication: (appId: string | null) => void
   /** 确保当前应用在可用列表内,返回有效应用 id */
@@ -20,9 +24,9 @@ interface AuthState {
   logout: () => void
 }
 
-function readToken(): string | null {
+function readToken(key = TOKEN_KEY): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY)
+    return localStorage.getItem(key)
   } catch {
     return null
   }
@@ -30,6 +34,7 @@ function readToken(): string | null {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: readToken(),
+  refreshToken: readToken(REFRESH_KEY),
   profile: null,
   contextEpoch: 0,
   contextSwitching: false,
@@ -41,13 +46,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   })(),
 
-  setToken: (token) => {
+  setToken: (token) => get().setSession(token),
+
+  setSession: (token, refreshToken = null) => {
     try {
       localStorage.setItem(TOKEN_KEY, token)
-    } catch {
-      /* ignore */
-    }
-    set((state) => ({ token, profile: null, contextSwitching: false, contextEpoch: state.contextEpoch + 1 }))
+      if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken)
+      else localStorage.removeItem(REFRESH_KEY)
+      localStorage.removeItem(APP_KEY)
+    } catch { /* Storage may be unavailable; keep the current in-memory session. */ }
+    set((state) => ({ token, refreshToken, profile: null, currentApplicationId: null,
+      contextSwitching: false, contextEpoch: state.contextEpoch + 1 }))
+  },
+
+  rotateTokens: (token, refreshToken, expectedToken, expectedRefresh, epoch) => {
+    const state = get()
+    if (state.token !== expectedToken || state.refreshToken !== expectedRefresh || state.contextEpoch !== epoch) return false
+    try {
+      localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(REFRESH_KEY, refreshToken)
+    } catch { /* Preserve the usable in-memory session. */ }
+    set({ token, refreshToken })
+    return true
   },
 
   beginContextSwitch: () => set((state) => ({
@@ -87,11 +107,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     try {
       localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(REFRESH_KEY)
       localStorage.removeItem(APP_KEY)
     } catch {
       /* ignore */
     }
-    set((state) => ({ token: null, profile: null, currentApplicationId: null,
+    set((state) => ({ token: null, refreshToken: null, profile: null, currentApplicationId: null,
       contextSwitching: false, contextEpoch: state.contextEpoch + 1 }))
   },
 }))
