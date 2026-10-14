@@ -1,5 +1,5 @@
 /**
- * micro-vue — Dante Cloud 微前端子应用服务 (Vue 3, 端口硬编码 3005)
+ * micro-vue — SaaS Platform 微前端子应用服务 (Vue 3, 端口硬编码 3005)
  *
  * 定位: 「仿乾坤」微前端的演示子应用之一, 证明「任意技术栈」兼容性。
  * 主应用通过 Vite 代理同源访问: /sub/vue/* → 127.0.0.1:3005 (去 /sub/vue 前缀转发)。
@@ -93,4 +93,4 @@ Bun.serve({
   },
 })
 
-console.log(`[micro-vue] listening on http://0.0.0.0:${PORT} (Vue 子应用, HTML 入口 + __DANTE_MICRO_APP__ 契约)`)
+console.log(`[micro-vue] listening on http://0.0.0.0:${PORT} (Vue 子应用, HTML 入口 + __MICRO_APP__ 契约)`)

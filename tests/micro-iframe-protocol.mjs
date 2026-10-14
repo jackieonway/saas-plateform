@@ -41,12 +41,12 @@ function child(options = {}) {
     clearTimeout: (id) => timers.delete(id), Date: clockDate })
   const calls = []
   const lifecycle = options.lifecycle || { mount: (_, value) => calls.push(['mount', value]), update: (value) => calls.push(['update', value]), unmount: () => calls.push(['unmount']) }
-  const bridge = window.DanteMicroIframe.connect({ appCode: 'orders', allowedHostOrigins: ['https://host.test'], lifecycle })
+  const bridge = window.MicroIframe.connect({ appCode: 'orders', allowedHostOrigins: ['https://host.test'], lifecycle })
   const dispatch = (event) => { for (const listener of [...(listeners.get('message') || [])]) listener(event) }
   return { window, parent, calls, bridge, messages, listeners, timers, dispatch,
     advance: (ms) => { now += ms; for (const [id, timer] of timers) if (timer.at <= now) { timers.delete(id); timer.callback() } },
     bootstrap: (port, override = {}) => dispatch({ source: parent, origin: 'https://host.test', ports: [port],
-      data: { kind: 'DANTE_MICRO_CONNECT', nonce: 'valid-nonce-1234567890', appCode: 'orders', contractVersion: '2.0', contextEpoch: 1 }, ...override }) }
+      data: { kind: 'MICRO_CONNECT', nonce: 'valid-nonce-1234567890', appCode: 'orders', contractVersion: '2.0', contextEpoch: 1 }, ...override }) }
 }
 function harness(options = {}) {
   const app = child(options), channels = [], frames = [], outbound = [], bootstraps = [], navigations = [], notifications = []
@@ -101,7 +101,7 @@ test('CSV broker validates export permission and data grant without changing ifr
     await h.app.bridge.downloadCsv(csvFile)
     assert.deepEqual(saved, [{ filename: csvFile.filename, content: csvFile.content }])
     assert.equal(h.frames[0].attributes.sandbox, 'allow-scripts allow-forms')
-    assert.equal(h.outbound.find((message) => message.kind === 'DANTE_MICRO_DOWNLOAD_RESULT').ok, true)
+    assert.equal(h.outbound.find((message) => message.kind === 'MICRO_DOWNLOAD_RESULT').ok, true)
   } finally { await h.cleanup() }
 })
 
@@ -135,9 +135,9 @@ test('CSV host independently rejects unsafe filename, wrong resource and oversiz
       { ...csvFile, filename: 'orders\u0000.csv' }, { ...csvFile, resource: 'another' },
       { ...csvFile, content: '汉'.repeat(2 * 1024 * 1024) }]) {
       const requestId = ++id
-      h.channels[0].port2.postMessage({ kind: 'DANTE_MICRO_DOWNLOAD', nonce, contextEpoch: 1, requestId, ...file })
-      await until(() => h.outbound.some((message) => message.kind === 'DANTE_MICRO_DOWNLOAD_RESULT' && message.requestId === requestId))
-      assert.equal(h.outbound.find((message) => message.kind === 'DANTE_MICRO_DOWNLOAD_RESULT' && message.requestId === requestId).ok, false)
+      h.channels[0].port2.postMessage({ kind: 'MICRO_DOWNLOAD', nonce, contextEpoch: 1, requestId, ...file })
+      await until(() => h.outbound.some((message) => message.kind === 'MICRO_DOWNLOAD_RESULT' && message.requestId === requestId))
+      assert.equal(h.outbound.find((message) => message.kind === 'MICRO_DOWNLOAD_RESULT' && message.requestId === requestId).ok, false)
     }
     assert.equal(saved.length, 0)
     await assert.rejects(h.app.bridge.downloadCsv({ ...csvFile, content: '汉'.repeat(2 * 1024 * 1024) }), /Invalid CSV/)
@@ -153,7 +153,7 @@ test('CSV command replay, wrong nonce and old epoch cannot trigger extra host do
     await h.app.bridge.downloadCsv(csvFile)
     const nonce = h.bootstraps[0].data.nonce
     for (const extra of [{ requestId: 1 }, { requestId: 2, nonce: 'forged' }, { requestId: 3, contextEpoch: 0 }]) {
-      h.channels[0].port2.postMessage({ kind: 'DANTE_MICRO_DOWNLOAD', nonce, contextEpoch: 1, requestId: 4, ...csvFile, ...extra })
+      h.channels[0].port2.postMessage({ kind: 'MICRO_DOWNLOAD', nonce, contextEpoch: 1, requestId: 4, ...csvFile, ...extra })
     }
     await turns()
     assert.equal(saved.length, 1)
@@ -180,12 +180,12 @@ test('child bootstrap authenticates browser source, exact configured origin, non
   const app = child(), channel = new MessageChannel(), received = []
   channel.port1.on('message', (data) => received.push(data))
   for (const invalid of [{ source: {} }, { origin: 'null' }, { origin: 'https://host.test.evil' }, { origin: 'https://evil.test', data: { hostOrigin: 'https://host.test' } },
-    { data: { kind: 'DANTE_MICRO_CONNECT', nonce: 'short', appCode: 'orders', contractVersion: '2.0', contextEpoch: 1 } },
-    { data: { kind: 'DANTE_MICRO_CONNECT', nonce: 'valid-nonce-1234567890', appCode: 'other', contractVersion: '2.0', contextEpoch: 1 } },
+    { data: { kind: 'MICRO_CONNECT', nonce: 'short', appCode: 'orders', contractVersion: '2.0', contextEpoch: 1 } },
+    { data: { kind: 'MICRO_CONNECT', nonce: 'valid-nonce-1234567890', appCode: 'other', contractVersion: '2.0', contextEpoch: 1 } },
     { ports: [] }, { ports: [channel.port2, channel.port2] }]) app.bootstrap(channel.port2, invalid)
   await turns(); assert.deepEqual(received, [])
   app.bootstrap(channel.port2); await until(() => received.length === 1)
-  assert.equal(received[0].kind, 'DANTE_MICRO_READY')
+  assert.equal(received[0].kind, 'MICRO_READY')
   assert.equal(app.listeners.get('message').size, 0)
   app.bridge.dispose(); channel.port1.close(); channel.port2.close()
 })
@@ -193,7 +193,7 @@ test('child bootstrap authenticates browser source, exact configured origin, non
 test('SDK rejects wildcard and noncanonical allowlists instead of guessing host origin', () => {
   const app = child()
   for (const allowedHostOrigins of [[], ['*'], ['https://host.test/path'], ['https://host.test/'], ['null']]) {
-    assert.throws(() => app.window.DanteMicroIframe.connect({ appCode: 'orders', allowedHostOrigins, lifecycle: { mount() {}, unmount() {} } }))
+    assert.throws(() => app.window.MicroIframe.connect({ appCode: 'orders', allowedHostOrigins, lifecycle: { mount() {}, unmount() {} } }))
   }
   app.bridge.dispose()
 })
@@ -210,7 +210,7 @@ test('host uses opaque sandbox and one transferred channel; props DTO excludes s
     assert.equal(h.bootstraps[0].origin, '*')
     assert.equal(h.bootstraps[0].ports.length, 1)
     assert.equal('token' in h.bootstraps[0].data, false)
-    const dto = h.outbound.find((message) => message.kind === 'DANTE_MICRO_MOUNT').props
+    const dto = h.outbound.find((message) => message.kind === 'MICRO_MOUNT').props
     for (const key of ['platformSession', 'clientSecret', 'signal', 'onNavigate', 'onNotify']) assert.equal(key in dto, false)
     assert.equal('platformSession' in dto.user, false)
     assert.equal(dto.token, h.initial.token)
@@ -229,10 +229,10 @@ test('organization scope cap is forwarded on mount and renewal with safe legacy 
     const h = harness({ props: { organizationScopeIds: cap } })
     try {
       await h.mount()
-      assert.deepEqual(h.outbound.find((message) => message.kind === 'DANTE_MICRO_MOUNT').props.organizationScopeIds, expected)
+      assert.deepEqual(h.outbound.find((message) => message.kind === 'MICRO_MOUNT').props.organizationScopeIds, expected)
       assert.deepEqual(h.app.calls[0][1].organizationScopeIds, expected)
       await h.lifecycle.update(props(2, { organizationScopeIds: ['o'] }))
-      const update = h.outbound.find((message) => message.kind === 'DANTE_MICRO_UPDATE').props
+      const update = h.outbound.find((message) => message.kind === 'MICRO_UPDATE').props
       assert.deepEqual(update.organizationScopeIds, ['o'])
       assert.deepEqual(h.app.calls.at(-1)[1].organizationScopeIds, ['o'])
     } finally { await h.cleanup() }
@@ -244,16 +244,16 @@ test('parent rejects forged nonce, stale epochs, cross-application navigation an
   try {
     await h.mount()
     const nonce = h.bootstraps[0].data.nonce, send = (data) => h.channels[0].port2.postMessage({ nonce, contextEpoch: 1, ...data })
-    send({ kind: 'DANTE_MICRO_NOTIFY', nonce: 'forged', message: 'forged', variant: 'info' })
-    send({ kind: 'DANTE_MICRO_NOTIFY', contextEpoch: 0, message: 'old', variant: 'info' })
-    for (const path of ['/admin', '/micro/orders-other', '/micro/orders%2fsettings', '//evil.test', 'https://evil.test', 'javascript:alert(1)', '../other', '/micro/orders/%2e%2e/other', '/micro/orders/a\\..\\other']) send({ kind: 'DANTE_MICRO_NAVIGATE', path })
-    for (const [message, variant] of [['wrong', 'invalid'], ['x'.repeat(1001), 'info'], ['', 'info']]) send({ kind: 'DANTE_MICRO_NOTIFY', message, variant })
-    send({ kind: 'DANTE_MICRO_NAVIGATE', path: 'detail?item=1#section' })
-    send({ kind: 'DANTE_MICRO_NOTIFY', message: 'accepted', variant: 'success' })
+    send({ kind: 'MICRO_NOTIFY', nonce: 'forged', message: 'forged', variant: 'info' })
+    send({ kind: 'MICRO_NOTIFY', contextEpoch: 0, message: 'old', variant: 'info' })
+    for (const path of ['/admin', '/micro/orders-other', '/micro/orders%2fsettings', '//evil.test', 'https://evil.test', 'javascript:alert(1)', '../other', '/micro/orders/%2e%2e/other', '/micro/orders/a\\..\\other']) send({ kind: 'MICRO_NAVIGATE', path })
+    for (const [message, variant] of [['wrong', 'invalid'], ['x'.repeat(1001), 'info'], ['', 'info']]) send({ kind: 'MICRO_NOTIFY', message, variant })
+    send({ kind: 'MICRO_NAVIGATE', path: 'detail?item=1#section' })
+    send({ kind: 'MICRO_NOTIFY', message: 'accepted', variant: 'success' })
     await until(() => h.notifications.length === 1)
     assert.deepEqual(h.navigations, ['/micro/orders/detail?item=1#section'])
     assert.deepEqual(h.notifications, [['accepted', 'success']])
-    h.scope.abort(); send({ kind: 'DANTE_MICRO_NOTIFY', message: 'after stop', variant: 'info' }); await turns()
+    h.scope.abort(); send({ kind: 'MICRO_NOTIFY', message: 'after stop', variant: 'info' }); await turns()
     assert.equal(h.notifications.length, 1)
   } finally { await h.cleanup() }
 })
@@ -280,17 +280,17 @@ test('forged acknowledgements cannot settle a lifecycle and stale DTOs cannot re
   try {
     let settled = false
     const mounting = h.mount().then(() => { settled = true })
-    await until(() => h.outbound.some((message) => message.kind === 'DANTE_MICRO_MOUNT'))
-    const operation = h.outbound.find((message) => message.kind === 'DANTE_MICRO_MOUNT')
+    await until(() => h.outbound.some((message) => message.kind === 'MICRO_MOUNT'))
+    const operation = h.outbound.find((message) => message.kind === 'MICRO_MOUNT')
     for (const forged of [{ nonce: 'wrong' }, { contextEpoch: 0 }, { requestId: operation.requestId + 1 }]) {
-      h.channels[0].port2.postMessage({ kind: 'DANTE_MICRO_ACK', nonce: operation.nonce, contextEpoch: 1, requestId: operation.requestId, ...forged })
+      h.channels[0].port2.postMessage({ kind: 'MICRO_ACK', nonce: operation.nonce, contextEpoch: 1, requestId: operation.requestId, ...forged })
     }
     await turns(); assert.equal(settled, false)
     gate.resolve(); await mounting
     await h.lifecycle.update(props(2))
     const oldDTO = operation.props
-    h.channels[0].port1.postMessage({ kind: 'DANTE_MICRO_UPDATE', nonce: operation.nonce, contextEpoch: 1, requestId: 999, props: oldDTO })
-    h.channels[0].port1.postMessage({ kind: 'DANTE_MICRO_UPDATE', nonce: 'wrong', contextEpoch: 3, requestId: 1000, props: { ...oldDTO, contextEpoch: 3 } })
+    h.channels[0].port1.postMessage({ kind: 'MICRO_UPDATE', nonce: operation.nonce, contextEpoch: 1, requestId: 999, props: oldDTO })
+    h.channels[0].port1.postMessage({ kind: 'MICRO_UPDATE', nonce: 'wrong', contextEpoch: 3, requestId: 1000, props: { ...oldDTO, contextEpoch: 3 } })
     await turns()
     assert.equal(h.app.bridge.current().contextEpoch, 2)
     assert.equal(calls.length, 2)
@@ -315,7 +315,7 @@ test('renewal cancels a slow update immediately, serializes replacement and disc
     assert.deepEqual(calls.map(([kind, value]) => [kind, value?.contextEpoch]), [['mount', 1], ['update', 2], ['update', 3]])
     assert.equal(h.frames.length, 1)
     const nonce = h.bootstraps[0].data.nonce
-    h.channels[0].port1.postMessage({ kind: 'DANTE_MICRO_CONTEXT_ABORT', nonce, contextEpoch: 2 })
+    h.channels[0].port1.postMessage({ kind: 'MICRO_CONTEXT_ABORT', nonce, contextEpoch: 2 })
     await turns(); assert.equal(h.app.bridge.current().contextEpoch, 3)
   } finally { gate.resolve(); await h.cleanup() }
 })
@@ -367,7 +367,7 @@ test('props cancellation interrupts handshake and pending first mount without wa
     const gate = deferred(), controller = new AbortController()
     const h = harness({ autoload, props: { signal: controller.signal }, lifecycle: { mount: async () => gate.promise, unmount() {} } })
     try {
-      const mounting = h.mount(); await until(() => autoload ? h.outbound.some((event) => event.kind === 'DANTE_MICRO_MOUNT') : h.frames.length > 0)
+      const mounting = h.mount(); await until(() => autoload ? h.outbound.some((event) => event.kind === 'MICRO_MOUNT') : h.frames.length > 0)
       controller.abort(); await assert.rejects(mounting, (error) => error.name === 'AbortError')
       assert.equal(h.target.nodes.length, 0)
     } finally { gate.resolve(); await h.cleanup() }

@@ -45,7 +45,7 @@ test('concurrent expired requests share one refresh, retry with rotated token an
   assert.equal((await first).ok, true); assert.equal((await second).ok, true)
   assert.equal(refreshes, 1); assert.equal(f.authStore.getState().contextEpoch, epoch)
   assert.equal(f.authStore.getState().currentApplicationId, 'authorized-app')
-  assert.equal(f.storage.get('dante-refresh-token'), 'psr_rotated'); assert.equal(f.redirects.length, 0)
+  assert.equal(f.storage.get('platform-refresh-token'), 'psr_rotated'); assert.equal(f.redirects.length, 0)
 })
 
 test('retry occurs only once and a still-invalid session clears all credentials', async () => {
@@ -53,7 +53,7 @@ test('retry occurs only once and a still-invalid session clears all credentials'
   const f = fixture(async url => url === '/oauth/token' ? (refreshes++, json(200, { access_token: 'new', refresh_token: 'psr_new' })) : json(401, { message: 'revoked' }))
   await assert.rejects(f.api.api.get('/api/users'), error => error.status === 401)
   assert.equal(refreshes, 1); assert.equal(f.authStore.getState().token, null)
-  assert.equal(f.storage.has('dante-refresh-token'), false); assert.equal(f.redirects.length, 1)
+  assert.equal(f.storage.has('platform-refresh-token'), false); assert.equal(f.redirects.length, 1)
 })
 
 test('late refresh from previous tenant cannot overwrite or log out a new session', async () => {

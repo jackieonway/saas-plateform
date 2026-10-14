@@ -75,7 +75,7 @@ impl AppState {
             map_client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
                 .redirect(reqwest::redirect::Policy::none())
-                .user_agent("DanteCloud/1.0 map-resource-proxy")
+                .user_agent("SaaSPlatform/1.0 map-resource-proxy")
                 .build()
                 .expect("static map client configuration"),
             started_at: chrono::Utc::now(),

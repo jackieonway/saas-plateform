@@ -12,7 +12,7 @@ export type MicroGlobalProxy = Record<string, unknown> & {
   window: unknown
   self: unknown
   globalThis: unknown
-  __DANTE_MICRO_APP__?: unknown
+  __MICRO_APP__?: unknown
 }
 
 type TimerKind = "timeout" | "interval"

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const cli = path.join(workspace, 'scripts', 'package-microapp.mjs')
 const tempBase = realpathSync(os.tmpdir())
-const tempPrefix = 'dante-package-microapp-test-'
+const tempPrefix = 'platform-package-microapp-test-'
 const ownedTempRoots = new Set()
 
 function fixture(t) {

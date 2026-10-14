@@ -167,7 +167,7 @@ export const homePage = layout({
   <a class="card-link" href="/auth-code-flow">
     <div class="card flat">
       <h2>🔐 授权码测试 (Authorization Code + PKCE S256)</h2>
-      <p class="client">client <code>dante-web</code> (CONFIDENTIAL · redirect_uri <code>http://localhost:3004/callback</code>)</p>
+      <p class="client">client <code>platform-web</code> (CONFIDENTIAL · redirect_uri <code>http://localhost:3004/callback</code>)</p>
       <ol class="steps">
         <li>服务端生成 code_verifier + S256 code_challenge + state</li>
         <li>跳转 <code>/oauth/authorize</code> (经前端 :3000 代理) → consent 授权确认页</li>
@@ -499,7 +499,7 @@ export const authCodeFlowPage = layout({
   active: "auth",
   script: authCodeFlowScript,
   body: `
-<h1>授权码流程测试 <span class="h1sub">Authorization Code + PKCE (S256) · client dante-web (CONFIDENTIAL)</span></h1>
+<h1>授权码流程测试 <span class="h1sub">Authorization Code + PKCE (S256) · client platform-web (CONFIDENTIAL)</span></h1>
 <p class="sub">本页模拟第三方 Web 应用: 由本服务服务端生成 PKCE <code>code_verifier</code> (56 位随机) + <code>code_challenge = BASE64URL(SHA256(verifier))</code> + <code>state</code>, 跳转授权服务器 authorize 端点; 用户在前端 consent 页批准后 302 回调 <code>/callback</code> 换取令牌。<strong>发起前请先在 <a href="http://localhost:3000" target="_blank" rel="noopener">前端 :3000</a> 登录 (admin/admin123)</strong> — consent 页需要登录态, 未登录会先跳登录页再回来。</p>
 
 <section class="card">
@@ -519,7 +519,7 @@ export const authCodeFlowPage = layout({
 <section class="card">
   <h2>后续步骤 (自动进行)</h2>
   <p>② 用户在 consent 页「批准授权」→ 302 <code>http://localhost:3004/callback?code=…&amp;state=…</code> · 「拒绝授权」则回调 <code>?error=access_denied</code> (回调页有错误分支展示)<br>
-  ③ 回调页自动用 code + code_verifier + Basic 认证 (dante-web:dante-web-secret) POST <code>/oauth/token</code> 换 access/refresh token<br>
+  ③ 回调页自动用 code + code_verifier + Basic 认证 (platform-web:platform-web-secret) POST <code>/oauth/token</code> 换 access/refresh token<br>
   ④ 回调页调 <code>/oauth/userinfo</code> 展示用户名, 并提供「刷新令牌」按钮验证 refresh_token grant (服务端轮换, 旧 refresh 立即吊销)</p>
 </section>`,
 })
@@ -533,7 +533,7 @@ const callbackScript = `
   "use strict";
   var BACKEND = "http://localhost:3001";
   var REDIRECT_URI = window.location.origin + "/callback";
-  var BASIC = "Basic " + btoa("dante-web:dante-web-secret");
+  var BASIC = "Basic " + btoa("platform-web:platform-web-secret");
   var params = new URLSearchParams(window.location.search);
   var code = params.get("code");
   var stateParam = params.get("state") || "";
@@ -718,7 +718,7 @@ export const callbackPage = layout({
   script: callbackScript,
   body: `
 <h1>授权码回调 <span class="h1sub">/callback · redirect_uri=http://localhost:3004/callback</span></h1>
-<p class="sub">接收授权服务器 302 回调 (<code>?code&amp;state</code> 或 <code>?error&amp;state</code>), 展示授权码并自动向令牌端点交换 (Basic 认证 dante-web + PKCE code_verifier)。授权码 60 秒有效且一次性。</p>
+<p class="sub">接收授权服务器 302 回调 (<code>?code&amp;state</code> 或 <code>?error&amp;state</code>), 展示授权码并自动向令牌端点交换 (Basic 认证 platform-web + PKCE code_verifier)。授权码 60 秒有效且一次性。</p>
 
 <section class="card">
   <h2>① 回调参数</h2>
@@ -732,7 +732,7 @@ export const callbackPage = layout({
 
 <section class="card" id="exchange-card" hidden>
   <h2>② 交换令牌 (authorization_code + PKCE)</h2>
-  <p>POST <code>http://localhost:3001/oauth/token</code> · Authorization: Basic <code>dante-web:dante-web-secret</code> · form: <code>grant_type=authorization_code&amp;code&amp;redirect_uri&amp;code_verifier</code> — 浏览器直连授权服务器。</p>
+  <p>POST <code>http://localhost:3001/oauth/token</code> · Authorization: Basic <code>platform-web:platform-web-secret</code> · form: <code>grant_type=authorization_code&amp;code&amp;redirect_uri&amp;code_verifier</code> — 浏览器直连授权服务器。</p>
   <div class="btnrow">
     <button id="btn-exchange" class="secondary">重新交换令牌 (演示: 授权码一次性, 二次消费应报 invalid_grant)</button>
     <span id="exchange-status" class="status"></span>
@@ -744,7 +744,7 @@ export const callbackPage = layout({
     <div class="kv"><span class="k">GET /oauth/userinfo</span><span class="v" id="p-userinfo"></span></div>
     <details><summary>令牌端点响应 JSON (截断)</summary><pre id="raw-token" class="mono"></pre></details>
     <h2 class="subhead">③ 刷新令牌 (refresh_token grant · 服务端轮换)</h2>
-    <p>POST <code>/oauth/token</code> · form: <code>grant_type=refresh_token&amp;refresh_token=…</code> + Basic 认证。dante-web 启用了 refresh_token 模式, 服务端会轮换: 旧 refresh_token 立即吊销, 返回新的 access + refresh。</p>
+    <p>POST <code>/oauth/token</code> · form: <code>grant_type=refresh_token&amp;refresh_token=…</code> + Basic 认证。platform-web 启用了 refresh_token 模式, 服务端会轮换: 旧 refresh_token 立即吊销, 返回新的 access + refresh。</p>
     <div class="btnrow"><button id="btn-refresh">刷新令牌</button></div>
     <div id="refresh-log" class="logbox"></div>
   </div>

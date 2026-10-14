@@ -1,8 +1,8 @@
 /**
- * micro-vue 子应用 — 微前端演示 (Vue 3 全局构建, 无构建步骤)
+ * micro-vue 子应用 — SaaS Platform 微前端演示 (Vue 3 全局构建, 无构建步骤)
  *
  * 生命周期契约 (与主应用共享, 必须精确一致):
- *   window.__DANTE_MICRO_APP__ = {
+ *   window.__MICRO_APP__ = {
  *     name: string,
  *     mount(container: HTMLElement, props: MicroProps): Promise<void>,
  *     update(props: MicroProps): Promise<void>, unmount(): Promise<void>
@@ -591,7 +591,7 @@
   }
 
   /* ===== 生命周期契约 ===== */
-  window.__DANTE_MICRO_APP__ = {
+  window.__MICRO_APP__ = {
     name: 'micro-vue',
     mount: function (container, props) {
       return new Promise(function (resolve, reject) {

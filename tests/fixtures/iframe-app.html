@@ -7,7 +7,7 @@
   try { parent.__parentMarker = 'compromised'; parent.document.body.innerHTML = 'compromised' } catch (_) { parentBlocked = true }
   try { parent.localStorage.getItem('platform-session'); localStorage.getItem('platform-session') } catch (_) { storageBlocked = true }
   window.__parentMarker = 'child only'
-  var bridge = DanteMicroIframe.connect({
+  var bridge = MicroIframe.connect({
     appCode: 'orders', allowedHostOrigins: ['__HOST_ORIGIN__'], container: document.querySelector('#app'),
     lifecycle: {
       mount: function (container, props) {

@@ -1,9 +1,9 @@
 /**
- * Dante Cloud 微前端契约类型(仿乾坤方案: HTML 入口内核 + 自研沙箱/编排)
+ * SaaS Platform 微前端契约类型(仿乾坤方案: HTML 入口内核 + 自研沙箱/编排)
  *
  * 与后端(21-a)/子应用服务(21-b)的共享契约,字段与行为必须精确一致:
  * - DB: applications.entry_type('ESM'|'HTML') + entry_url(HTML 时如 /sub/vue/)
- * - 子应用暴露 window.__DANTE_MICRO_APP__ = { name, mount(container, props), unmount() }
+ * - 子应用暴露 window.__MICRO_APP__ = { name, mount(container, props), unmount() }
  */
 
 /** 应用入口类型: ESM = 内置 ES 模块直挂; HTML = 微前端页面(沙箱执行) */
@@ -118,7 +118,7 @@ export interface MicroProps {
   onNotify: (message: string, variant?: MicroNotifyVariant) => void
 }
 
-/** 子应用生命周期契约(由子应用在 window.__DANTE_MICRO_APP__ 上暴露) */
+/** 子应用生命周期契约(由子应用在 window.__MICRO_APP__ 上暴露) */
 export interface MicroLifecycle {
   /** 子应用名(展示用) */
   name: string
@@ -136,14 +136,14 @@ export interface MicroLifecycle {
 
 /** ESM 入口模块形状(entry_type=ESM 时动态 import 的模块契约) */
 export interface MicroEsmModule {
-  __DANTE_MICRO_APP__?: MicroLifecycle
+  __MICRO_APP__?: MicroLifecycle
   mount?: MicroLifecycle["mount"]
   unmount?: MicroLifecycle["unmount"]
   update?: MicroLifecycle["update"]
 }
 
 /** 子应用全局生命周期挂载键 */
-export const MICRO_APP_GLOBAL = "__DANTE_MICRO_APP__" as const
+export const MICRO_APP_GLOBAL = "__MICRO_APP__" as const
 
 /** 容器侧从应用列表解析出的入口信息 */
 export interface ApplicationEntryInfo {

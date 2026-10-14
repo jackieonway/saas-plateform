@@ -1,9 +1,9 @@
 import { create } from "zustand"
 import type { AppBrief, ProfileResp } from "@/api/types"
 
-const TOKEN_KEY = "dante-token"
-const REFRESH_KEY = "dante-refresh-token"
-const APP_KEY = "dante-current-app"
+const TOKEN_KEY = "platform-token"
+const REFRESH_KEY = "platform-refresh-token"
+const APP_KEY = "platform-current-app"
 
 interface AuthState {
   token: string | null

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tempBase = realpathSync(os.tmpdir())
-const tempPrefix = 'dante-micro-release-gateways-test-'
+const tempPrefix = 'platform-micro-release-gateways-test-'
 const ownedTempRoots = new Set()
 const caddyBinary = toolPath('CADDY_BIN', 'target/phase9-gateway-tools/caddy/caddy.exe')
 const nginxBinary = toolPath('NGINX_BIN', 'target/phase9-gateway-tools/nginx/nginx-1.28.0/nginx.exe')
@@ -254,8 +254,8 @@ async function gatewayFixture(t, name) {
     writeFileSync(mimeFile, readFileSync(mimeSource))
     const source = readFileSync(path.join(workspace, 'deploy/nginx.conf'), 'utf8')
     assert.match(source, /listen 80;/)
-    assert.match(source, /alias \/srv\/dante\/micro-apps\//)
-    assert.match(source, /root \/srv\/dante\/frontend\/dist;/)
+    assert.match(source, /alias \/srv\/platform\/micro-apps\//)
+    assert.match(source, /root \/srv\/platform\/frontend\/dist;/)
     assert.match(source, /proxy_pass http:\/\/127\.0\.0\.1:3003;/, 'Nginx must retain the Socket.IO proxy upstream')
     assert.match(source, /proxy_pass http:\/\/127\.0\.0\.1:3004;/, 'Nginx must retain the independent business API upstream')
     config = `daemon off;\npid ${quotedPath(path.join(root, 'nginx.pid'))};\nerror_log ${quotedPath(path.join(root, 'nginx-error.log'))} notice;\n` + source
@@ -266,8 +266,8 @@ async function gatewayFixture(t, name) {
       .replaceAll('http://127.0.0.1:3001', `http://${originHost}:${backendPort}`)
       .replaceAll('http://127.0.0.1:3003', `http://${originHost}:${socketPort}`)
       .replaceAll('http://127.0.0.1:3004', `http://${originHost}:${businessPort}`)
-      .replaceAll('root /srv/dante/frontend/dist;', `root ${quotedPath(hostRoot)};`)
-      .replaceAll('alias /srv/dante/micro-apps/$1/versions/$2/$3;', `alias "${slashPath(releaseRoot)}/$1/versions/$2/$3";`)
+      .replaceAll('root /srv/platform/frontend/dist;', `root ${quotedPath(hostRoot)};`)
+      .replaceAll('alias /srv/platform/micro-apps/$1/versions/$2/$3;', `alias "${slashPath(releaseRoot)}/$1/versions/$2/$3";`)
     const prefix = `${slashPath(root)}/`
     validationArgs = ['-t', '-p', prefix, '-c', configFile]
     startArgs = ['-p', prefix, '-c', configFile]

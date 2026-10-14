@@ -1,9 +1,9 @@
 /**
- * micro-jquery 子应用 — 微前端「遗留系统」演示 (jQuery, 无构建步骤)
+ * micro-jquery 子应用 — SaaS Platform 微前端「遗留系统」演示 (jQuery, 无构建步骤)
  * 模拟十年前的内部工单处理系统, 证明遗留栈也能接入新权限链路。
  *
  * 生命周期契约 (与主应用共享, 必须精确一致):
- *   window.__DANTE_MICRO_APP__ = {
+ *   window.__MICRO_APP__ = {
  *     name: string,
  *     mount(container: HTMLElement, props: MicroProps): Promise<void>,
  *     update(props: MicroProps): Promise<void>, unmount(): Promise<void>
@@ -471,7 +471,7 @@
   }
 
   /* ===== 生命周期契约 ===== */
-  window.__DANTE_MICRO_APP__ = {
+  window.__MICRO_APP__ = {
     name: 'micro-jquery',
     mount: function (container, props) {
       return new Promise(function (resolve, reject) {

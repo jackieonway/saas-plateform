@@ -1,8 +1,8 @@
 [package]
-name = "dante-cloud-backend"
+name = "saas-platform-backend"
 version = "1.0.0"
 edition = "2021"
-description = "Dante Cloud 多租户多组织权限平台 Rust 后端 (Axum + SQLx + PostgreSQL)"
+description = "SaaS Platform 多租户多组织权限平台 Rust 后端 (Axum + SQLx + PostgreSQL)"
 
 [dependencies]
 axum = "0.8"

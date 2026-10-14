@@ -94,8 +94,8 @@ async function fixture(pathname, options = {}) {
   state.releaseMenus = () => releaseMenus?.()
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript((authenticated) => {
-    if (authenticated) localStorage.setItem("dante-token", "guard-session")
-    localStorage.setItem("dante-theme", "light")
+    if (authenticated) localStorage.setItem("platform-token", "guard-session")
+    localStorage.setItem("platform-theme", "light")
   }, options.authenticated !== false)
   await context.routeWebSocket(() => true, () => {})
   await context.route((url) => url.origin === origin && url.pathname === "/src/main.tsx", async (route) => {
@@ -116,7 +116,7 @@ async function fixture(pathname, options = {}) {
     state.entries++
     await route.fulfill({ status: 200, contentType: "text/html", body: `<!doctype html><html><body><script>
       var active;
-      window.__DANTE_MICRO_APP__ = { name: "guard-menu-probe",
+      window.__MICRO_APP__ = { name: "guard-menu-probe",
         mount: function(container, props) { active = container; container.innerHTML = '<p data-testid="guard-micro-mounted">' + props.routePath + '</p>'; },
         update: function(props) { active.querySelector('[data-testid="guard-micro-mounted"]').textContent = props.routePath; },
         unmount: function() { if (active) active.replaceChildren(); }
@@ -452,7 +452,7 @@ try {
     assert.equal(Math.round(after.width - before.width), 248, "Collapsed menus give their width back to content")
     await page.getByRole("button", { name: "展开菜单", exact: true }).click()
     await sidebar.waitFor()
-    assert.equal(await page.evaluate(() => localStorage.getItem("dante-sidebar")), "open")
+    assert.equal(await page.evaluate(() => localStorage.getItem("platform-sidebar")), "open")
     noBusinessRequests(state)
   })
   await check("whole-menu collapse persists across reload", "/profile", { menus: sidebarMenus }, async ({ page, state }) => {
@@ -512,7 +512,7 @@ try {
   await check("mobile drawer works independently of desktop collapse", "/profile", { menus: sidebarMenus,
     viewport: { width: 390, height: 844 } }, async ({ page, state }) => {
     await page.getByRole("button", { name: "打开导航", exact: true }).waitFor()
-    await page.evaluate(() => localStorage.setItem("dante-sidebar", "collapsed"))
+    await page.evaluate(() => localStorage.setItem("platform-sidebar", "collapsed"))
     await page.reload({ waitUntil: "domcontentloaded" })
     await page.getByRole("button", { name: "打开导航", exact: true }).click()
     const sidebar = page.getByRole("complementary", { name: "菜单导航", exact: true })

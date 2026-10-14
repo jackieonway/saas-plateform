@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dante Cloud 微前端子应用 · Vue 3 (HTML 入口 + 沙箱, __DANTE_MICRO_APP__ 契约, 端口 3005, bun --hot 静态服务)",
+  "description": "SaaS Platform 微前端子应用 · Vue 3 (HTML 入口 + 沙箱, __MICRO_APP__ 契约, 端口 3005, bun --hot 静态服务)",
   "scripts": {
     "dev": "bun --hot index.ts",
     "test": "node --test smoke-test.cjs"

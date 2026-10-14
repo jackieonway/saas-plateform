@@ -130,7 +130,7 @@ async fn call(
 }
 
 async fn exercise(platform: bool) -> Result<()> {
-    let database = Database::create(false).await?;
+    let database = Database::create().await?;
     let pool = &database.pool;
     let result = async {
         let tenant: Uuid = sqlx::query_scalar(

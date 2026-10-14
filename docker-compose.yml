@@ -1,16 +1,16 @@
 # Production configuration. No demonstration credentials or HTTP fallback.
 # Copy deploy/compose.env.example to an ignored 0600 environment file and fill
 # every required secret/origin. See docs/architecture.md#deployment for rollout.
-# docker compose --env-file /secure/dante.env config --quiet
-# docker compose --env-file /secure/dante.env --profile work-orders up -d --build
+# docker compose --env-file /secure/platform.env config --quiet
+# docker compose --env-file /secure/platform.env --profile work-orders up -d --build
 # Container execution must be validated on the target Docker runner.
 services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-dante}
+      POSTGRES_USER: ${POSTGRES_USER:-platform}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a dedicated PostgreSQL password}
-      POSTGRES_DB: ${POSTGRES_DB:-dante_cloud}
+      POSTGRES_DB: ${POSTGRES_DB:-saas_platform}
       TZ: Asia/Shanghai
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:

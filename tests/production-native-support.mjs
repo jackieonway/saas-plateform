@@ -33,7 +33,7 @@ export async function prepareBrowser({root,environment}) {
   mkdirSync(nss,{recursive:true,mode:0o700}); environment.XDG_DATA_HOME=dataRoot
   const certutil=process.env.PRODUCTION_CERTUTIL_BIN
   assert.ok(certutil && existsSync(certutil),'The owned NSS certutil runtime is required')
-  for(const args of [['-N','--empty-password','-d',`sql:${nss}`],['-A','-d',`sql:${nss}`,'-n','Dante owned acceptance CA','-t','C,,','-i',process.env.PRODUCTION_CA_FILE]]) {
+  for(const args of [['-N','--empty-password','-d',`sql:${nss}`],['-A','-d',`sql:${nss}`,'-n','Platform owned acceptance CA','-t','C,,','-i',process.env.PRODUCTION_CA_FILE]]) {
     const result=spawnSync(certutil,args,{encoding:'utf8',timeout:10000,env:runtimeEnvironment(process.env)})
     assert.equal(result.status,0,'Import only the dedicated acceptance CA into the owned NSS database')
   }
@@ -48,6 +48,6 @@ export function writeEvidence({root,result,cleanup,qaRoot}) {
 export function persistOwnership(manifest) {
   const directory=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../target/phase12-runtime')
   mkdirSync(directory,{recursive:true})
-  assert.match(path.basename(manifest.root),/^dante-work-orders-platform-e2e-[A-Za-z0-9]+$/)
+  assert.match(path.basename(manifest.root),/^platform-work-orders-platform-e2e-[A-Za-z0-9]+$/)
   writeFileSync(path.join(directory,`native-ownership-${path.basename(manifest.root)}.json`),JSON.stringify(manifest,null,2)+'\n',{mode:0o600})
 }

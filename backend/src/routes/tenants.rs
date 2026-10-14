@@ -355,7 +355,7 @@ mod coordinate_tests {
     #[test]
     fn platform_tenant_code_is_reserved_and_fixed() {
         assert!(validate_tenant_identity("平台管理租户", "admin-tenant", true).is_ok());
-        assert!(validate_tenant_identity("平台管理租户", "dante", true).is_err());
+        assert!(validate_tenant_identity("平台管理租户", "platform", true).is_err());
         assert!(validate_tenant_identity("业务租户", "admin-tenant", false).is_err());
         assert!(validate_tenant_identity("业务租户", "business", false).is_ok());
         assert!(validate_tenant_identity(" ", "business", false).is_err());

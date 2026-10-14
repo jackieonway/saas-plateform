@@ -88,8 +88,8 @@ async function withFixture(options, run) {
     requests: [], saves: [], errors: [], routeErrors: [], failSave: false, theme: "light", ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript(({ authenticated, theme }) => {
-    if (authenticated) localStorage.setItem("dante-token", "test-platform-settings-session")
-    localStorage.setItem("dante-theme", theme)
+    if (authenticated) localStorage.setItem("platform-token", "test-platform-settings-session")
+    localStorage.setItem("platform-theme", theme)
   }, { authenticated: state.authenticated, theme: state.theme })
   // A notification transport is unrelated to branding; prevent any live service connection.
   await context.routeWebSocket(/\/socket\.io\//, (socket) => socket.close())
@@ -181,7 +181,7 @@ async function expectThemeContrast(page, dark) {
     return {
       primary: contrast(variable("--primary"), variable("--primary-foreground")),
       sidebar: contrast(sidebarPrimary, sidebar), selected: contrast(sidebarPrimary, selected),
-      dark: root.classList.contains("dark"), mode: localStorage.getItem("dante-theme"),
+      dark: root.classList.contains("dark"), mode: localStorage.getItem("platform-theme"),
     }
   })
   assert(ratio.primary >= 4.5 && ratio.sidebar >= 4.5 && ratio.selected >= 4.5, "Custom colors must retain readable buttons, sidebar labels and selected text.")
@@ -299,7 +299,7 @@ const scenarios = {
     await page.goto(origin + "/login")
     await expectLogin(page, state.settings)
     await page.waitForFunction((primary) => document.documentElement.style.getPropertyValue("--primary") === primary, savedPrimary)
-    assert.equal(await page.evaluate(() => localStorage.getItem("dante-theme")), "light", "A shared theme must preserve the user's mode.")
+    assert.equal(await page.evaluate(() => localStorage.getItem("platform-theme")), "light", "A shared theme must preserve the user's mode.")
   }),
   theme_custom_contrast_dark: async () => withFixture({ theme: "dark" }, async ({ page, state }) => {
     await readySettings(page)

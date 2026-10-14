@@ -1,4 +1,4 @@
-# Dante Cloud
+# SaaS Platform
 
 基于 Rust、PostgreSQL、React 的多租户、多组织权限与微应用平台。
 
@@ -32,7 +32,7 @@
 ## 仓库结构
 
 ```text
-backend/                    Rust 平台 API 与增量迁移
+backend/                    Rust 平台 API 与统一初始化 SQL
 frontend/                   React 宿主与内置 ESM 模块
 business-apps/work-orders/  独立业务前端、后端和部署工具
 mini-services/             通知服务、OAuth 和微应用演示
@@ -51,7 +51,7 @@ tests/                     契约、数据库、浏览器和网关测试
 在 backend 目录设置环境或本地 .env，示例中的密码和密钥须自行替换：
 
 ```dotenv
-DATABASE_URL=postgresql://dante:YOUR_PASSWORD@127.0.0.1:5432/dante_cloud
+DATABASE_URL=postgresql://platform:YOUR_PASSWORD@127.0.0.1:5432/saas_platform
 JWT_SECRET=YOUR_RANDOM_SECRET
 BIND_ADDR=0.0.0.0:3001
 AUTO_CREATE_DATABASE=false
@@ -68,9 +68,9 @@ npm ci
 npm run dev
 ```
 
-宿主默认 http://localhost:3000，平台就绪 http://localhost:3001/api/health。宿主代理可通过 BACKEND_PROXY_TARGET 指定。数据库已存在时平台执行增量迁移；需要受控首次建库时显式启用 AUTO_CREATE_DATABASE，账号必须具有相应权限。
+宿主默认 http://localhost:3000，平台就绪 http://localhost:3001/api/health。宿主代理可通过 BACKEND_PROXY_TARGET 指定。空库启动时平台通过 SQLx 执行 [统一初始化 SQL](backend/migrations/0001_init.sql)；需要受控首次建库时显式启用 AUTO_CREATE_DATABASE，账号必须具有相应权限。
 
-配置优先级为系统/服务环境优先；生产不自动加载 .env，使用绝对 DANTE_ENV_FILE 或服务管理器明确配置。开发空库可能初始化演示数据，生产使用独立初始化参数和安全门禁，详见 [运行部署](docs/architecture.md#deployment)。
+配置优先级为系统/服务环境优先；生产不自动加载 .env，使用绝对 APP_ENV_FILE 或服务管理器明确配置。开发空库可能初始化演示数据，生产使用独立初始化参数和安全门禁，详见 [运行部署](docs/architecture.md#deployment)。
 
 实时服务和独立业务服务另行启动：
 
@@ -79,13 +79,15 @@ npm run dev
 - [工单后端启动与数据库](business-apps/work-orders/backend/README.md)
 - [工单应用登记与授权](business-apps/work-orders/deploy/README.md)
 
+本版本采用新的单一初始化基线，旧数据库须删除后重建，不能直接沿用旧 SQLx 迁移记录。默认数据库为 `saas_platform`，环境文件参数为 `APP_ENV_FILE`，后端程序为 `saas-platform-backend`。已有私有配置须同步更新；浏览器会话和偏好采用 `platform-*` 存储键，更新后需要重新登录。微应用宿主与 SDK 须一同更新，使用 `MicroIframe`、`MICRO_*` 消息和 `__MICRO_APP__` 生命周期导出。
+
 ## 发布与运维
 
 当前 Compose 使用 production 配置及显式 secret，生产前端镜像采用 Caddyfile.production。平台、通知和网关默认编排，工单 API/本地业务库按 profile 选择。使用 [环境模板](deploy/compose.env.example)准备私有配置，并在目标环境验证实际镜像、容器与 HTTPS。
 
 ```sh
-docker compose --env-file /secure/dante.env config --quiet
-docker compose --env-file /secure/dante.env --profile work-orders up -d --build
+docker compose --env-file /secure/platform.env config --quiet
+docker compose --env-file /secure/platform.env --profile work-orders up -d --build
 ```
 
 原生部署、监控和恢复工具分别见 [deploy/native](deploy/native/README.md)、[deploy/monitoring](deploy/monitoring/README.md)和 [架构文档的恢复章节](docs/architecture.md#recovery)。历史本机原生验收不等于现网或 Docker 已部署。

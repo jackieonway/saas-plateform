@@ -22,7 +22,7 @@ const stripMapProxyCredentials = (request: ClientRequest) => {
   request.removeHeader("x-real-ip");
   request.removeHeader("x-forwarded-for");
 };
-const mapProxyHeaders = { "User-Agent": "DanteCloud/1.0 map-resource-proxy" };
+const mapProxyHeaders = { "User-Agent": "SaaSPlatform/1.0 map-resource-proxy" };
 const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || "http://127.0.0.1:3001";
 
 export default defineConfig({

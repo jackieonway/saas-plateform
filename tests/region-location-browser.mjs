@@ -100,7 +100,7 @@ async function fixture(kind, options = {}) {
     reverseStatus: 200, resolved: resolution(["440000", "440300", "440305", "440305001", "440305001001"]), resolveStatus: 200,
     holdSearch: false, heldSearch: [], legacy: false, ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.addInitScript(() => { localStorage.setItem("dante-token", "test-region-session"); localStorage.setItem("dante-theme", "light") })
+  await context.addInitScript(() => { localStorage.setItem("platform-token", "test-region-session"); localStorage.setItem("platform-theme", "light") })
   // The fixture entry is intentionally fixed while developers may edit files.
   // A Vite HMR reload would restore its original App dependency graph.
   await context.routeWebSocket(() => true, () => {})

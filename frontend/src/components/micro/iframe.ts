@@ -95,7 +95,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
     stopped = true
     // 卸载不等待 ACK：父节点可已被移除，frame 销毁负责最终回收其执行环境。
     if (port && current) {
-      try { send("DANTE_MICRO_UNMOUNT", current.contextEpoch) } catch { /* already closed */ }
+      try { send("MICRO_UNMOUNT", current.contextEpoch) } catch { /* already closed */ }
     }
     clearContext()
     clearDownloads()
@@ -125,7 +125,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
     current = props
     const cancel = () => {
       if (current !== props || stopped) return
-      try { send("DANTE_MICRO_CONTEXT_ABORT", props.contextEpoch) } catch { /* closed */ }
+      try { send("MICRO_CONTEXT_ABORT", props.contextEpoch) } catch { /* closed */ }
       for (const [id, task] of pending) if (task.epoch === props.contextEpoch) settle(id, abortError())
       // 续期在已挂载实例上推送新 context；首次握手不能等待已取消的旧 context。
       if (!mounted) dispose()
@@ -155,7 +155,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
   const downloadCsv = (data: Record<string, unknown>) => {
     const id = data.requestId
     if (!Number.isSafeInteger(id) || (id as number) <= 0) return
-    const acknowledge = (ok: boolean) => send("DANTE_MICRO_DOWNLOAD_RESULT", data.contextEpoch as number,
+    const acknowledge = (ok: boolean) => send("MICRO_DOWNLOAD_RESULT", data.contextEpoch as number,
       { requestId: id, ok, ...(ok ? {} : { code: "CSV_DOWNLOAD_DENIED" }) })
     if ((id as number) <= lastDownloadId) { acknowledge(false); return }
     lastDownloadId = id as number
@@ -190,20 +190,20 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
   const receive = (event: MessageEvent) => {
     const data = event.data
     if (!data || typeof data !== "object" || data.nonce !== nonce || !usable(data.contextEpoch)) return
-    if (data.kind === "DANTE_MICRO_READY" && !ready && handshake && data.appCode === appCode && data.contractVersion === "2.0") {
+    if (data.kind === "MICRO_READY" && !ready && handshake && data.appCode === appCode && data.contractVersion === "2.0") {
       ready = true
       clearTimeout(handshake.timer)
       handshake.resolve()
       handshake = null
-    } else if (data.kind === "DANTE_MICRO_ACK" || data.kind === "DANTE_MICRO_ERROR") {
+    } else if (data.kind === "MICRO_ACK" || data.kind === "MICRO_ERROR") {
       const task = pending.get(data.requestId)
       if (task?.epoch !== data.contextEpoch) return
-      settle(data.requestId, data.kind === "DANTE_MICRO_ERROR" ? new Error("Iframe application lifecycle failed") : undefined)
-    } else if (ready && data.kind === "DANTE_MICRO_NAVIGATE") {
+      settle(data.requestId, data.kind === "MICRO_ERROR" ? new Error("Iframe application lifecycle failed") : undefined)
+    } else if (ready && data.kind === "MICRO_NAVIGATE") {
       navigate(data.path)
-    } else if (ready && mounted && data.kind === "DANTE_MICRO_DOWNLOAD") {
+    } else if (ready && mounted && data.kind === "MICRO_DOWNLOAD") {
       downloadCsv(data)
-    } else if (ready && data.kind === "DANTE_MICRO_NOTIFY" && typeof data.message === "string" &&
+    } else if (ready && data.kind === "MICRO_NOTIFY" && typeof data.message === "string" &&
         data.message.length > 0 && data.message.length <= 1000 && variants.has(data.variant)) {
       current!.onNotify(data.message, data.variant)
     }
@@ -213,7 +213,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
     if (!usable(props.contextEpoch) || current !== props || !ready) { reject(abortError()); return }
     const id = ++nextRequest
     const timer = setTimeout(() => {
-      const error = new Error(`Iframe application ${kind === "DANTE_MICRO_MOUNT" ? "mount" : "update"} timed out`)
+      const error = new Error(`Iframe application ${kind === "MICRO_MOUNT" ? "mount" : "update"} timed out`)
       settle(id, error)
       dispose(error)
     }, options.operationTimeoutMs ?? 15_000)
@@ -268,7 +268,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
         if (!usable(props.contextEpoch)) { dispose(); return }
         transferred = true
         try {
-          frame!.contentWindow!.postMessage({ kind: "DANTE_MICRO_CONNECT", nonce, appCode,
+          frame!.contentWindow!.postMessage({ kind: "MICRO_CONNECT", nonce, appCode,
             contractVersion: "2.0", contextEpoch: props.contextEpoch }, "*", [channel.port2])
         } catch { channel.port2.close(); dispose(new Error("Iframe application handshake could not be delivered")) }
       }
@@ -279,7 +279,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
       target.replaceChildren(frame)
       try {
         await connected
-        await request("DANTE_MICRO_MOUNT", props)
+        await request("MICRO_MOUNT", props)
         mounted = true
       } catch (error) {
         if (!transferred) channel.port2.close()
@@ -291,7 +291,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
       try { activate(props) } catch (error) { return Promise.reject(error) }
       return serialized(async () => {
         if (!mounted || stopped) throw abortError()
-        await request("DANTE_MICRO_UPDATE", props)
+        await request("MICRO_UPDATE", props)
       })
     },
     unmount: () => { dispose() },

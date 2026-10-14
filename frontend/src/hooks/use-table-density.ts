@@ -3,9 +3,9 @@ import * as React from "react"
 /** 表格密度:comfortable(舒适,默认) / compact(紧凑) */
 export type TableDensity = "compact" | "comfortable"
 
-const STORAGE_KEY = "dante-table-density"
+const STORAGE_KEY = "platform-table-density"
 /** 同窗口内自定义广播事件(storage 事件仅跨标签页触发) */
-const CHANGE_EVENT = "dante-table-density-change"
+const CHANGE_EVENT = "platform-table-density-change"
 
 function readDensity(): TableDensity {
   try {

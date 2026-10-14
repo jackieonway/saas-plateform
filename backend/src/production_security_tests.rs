@@ -652,7 +652,7 @@ async fn production_stock_client_secrets_are_rejected_without_mutation() -> Resu
         // secret hashes without repeating an unrelated Argon audit for every case.
         sqlx::query("UPDATE users SET status='DISABLED' WHERE username=$1")
             .bind(ADMIN_NAME).execute(&database.pool).await?;
-        for (client_id,plain) in [("dante-web","dante-web-secret"),("api-service","api-service-secret"),("resource-portal","resource-portal-secret"),("micro-vue-shell","micro-vue-shell-secret"),("micro-jquery-shell","micro-jquery-shell-secret"),("micro-report-shell","micro-report-shell-secret"),("renamed-installed-micro-client","micro-vue-shell-secret")] {
+        for (client_id,plain) in [("platform-web","platform-web-secret"),("api-service","api-service-secret"),("resource-portal","resource-portal-secret"),("micro-vue-shell","micro-vue-shell-secret"),("micro-jquery-shell","micro-jquery-shell-secret"),("micro-report-shell","micro-report-shell-secret"),("renamed-installed-micro-client","micro-vue-shell-secret")] {
             sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type) VALUES($1,$2,$1,'CONFIDENTIAL') ON CONFLICT(client_id) DO UPDATE SET client_secret_hash=EXCLUDED.client_secret_hash,status='ENABLED'")
                 .bind(client_id).bind(hash::sha256_hex(plain)).execute(&database.pool).await?;
             let before = snapshot(&database.pool).await?;

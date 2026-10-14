@@ -546,7 +546,7 @@ function teardown(): Promise<void> {
   return task
 }
 
-export const __DANTE_MICRO_APP__: MicroLifecycle = {
+export const __MICRO_APP__: MicroLifecycle = {
   name: "report-center",
 
   async mount(container: HTMLElement, props: MicroProps) {
@@ -579,6 +579,6 @@ export const __DANTE_MICRO_APP__: MicroLifecycle = {
 
 /** 兼容容器 3b 通道的裸导出形状(mod.mount / mod.unmount / mod.update) */
 export const mount = (container: HTMLElement, props: MicroProps) =>
-  __DANTE_MICRO_APP__.mount(container, props)
-export const unmount = () => __DANTE_MICRO_APP__.unmount()
-export const update = (props: MicroProps) => __DANTE_MICRO_APP__.update?.(props)
+  __MICRO_APP__.mount(container, props)
+export const unmount = () => __MICRO_APP__.unmount()
+export const update = (props: MicroProps) => __MICRO_APP__.update?.(props)

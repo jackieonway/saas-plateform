@@ -126,13 +126,13 @@ pub fn production_mode(app_env: &str, application_env: &str) -> bool {
 
 /// OS/service values win. Production never searches ancestor directories for .env.
 pub fn load_environment() -> anyhow::Result<()> {
-    if let Ok(path) = std::env::var("DANTE_ENV_FILE") {
+    if let Ok(path) = std::env::var("APP_ENV_FILE") {
         anyhow::ensure!(
             Path::new(&path).is_absolute(),
-            "DANTE_ENV_FILE must be an absolute path"
+            "APP_ENV_FILE must be an absolute path"
         );
         dotenvy::from_path(&path)
-            .map_err(|_| anyhow::anyhow!("DANTE_ENV_FILE cannot be loaded"))?;
+            .map_err(|_| anyhow::anyhow!("APP_ENV_FILE cannot be loaded"))?;
         return Ok(());
     }
     if production_mode(
@@ -155,7 +155,7 @@ pub fn load_environment() -> anyhow::Result<()> {
         };
         anyhow::ensure!(
             !production_mode(&effective("APP_ENV"), &effective("APPLICATION_ENVIRONMENT")),
-            "production requires OS environment or explicit DANTE_ENV_FILE"
+            "production requires OS environment or explicit APP_ENV_FILE"
         );
         dotenvy::from_path(path)
             .map_err(|_| anyhow::anyhow!("local environment file cannot be loaded"))?;
@@ -255,11 +255,11 @@ impl Config {
             database_url: value(
                 env,
                 "DATABASE_URL",
-                "postgres://dante@127.0.0.1:5432/dante_cloud",
+                "postgres://platform@127.0.0.1:5432/saas_platform",
             ),
             auto_create_database: boolean(env, "AUTO_CREATE_DATABASE", false)?,
             bind_addr: value(env, "BIND_ADDR", "0.0.0.0:3001"),
-            jwt_secret: value(env, "JWT_SECRET", "dante-cloud-dev-secret-change-me"),
+            jwt_secret: value(env, "JWT_SECRET", "saas-platform-dev-secret-change-me"),
             metrics_token: value(env, "METRICS_TOKEN", ""),
             bootstrap_admin_username: optional(env, "BOOTSTRAP_ADMIN_USERNAME"),
             bootstrap_admin_password: optional(env, "BOOTSTRAP_ADMIN_PASSWORD"),

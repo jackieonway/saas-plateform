@@ -108,8 +108,8 @@ async function fixture(options = {}) {
   Object.assign(state.departments.get(currentA.id), options.departments)
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript((token) => {
-    localStorage.setItem("dante-token", token)
-    localStorage.setItem("dante-theme", "light")
+    localStorage.setItem("platform-token", token)
+    localStorage.setItem("platform-theme", "light")
   }, sessions[0].token)
   await context.routeWebSocket(() => true, () => {})
   await context.route((url) => url.origin === origin && url.pathname === "/src/main.tsx", async (route) => {

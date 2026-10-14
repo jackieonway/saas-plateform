@@ -1,7 +1,6 @@
 //! Tenant and organization creation regressions on an owned PostgreSQL database.
 //! Run with `cargo test entity_creation_tests -- --ignored --nocapture`.
 //! Credentials come from TEST_DATABASE_URL or ignored root .env.test, never logs.
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -67,7 +66,7 @@ pub(crate) struct Database {
 }
 
 impl Database {
-    pub(crate) async fn create(before_types_migration: bool) -> Result<Self> {
+    pub(crate) async fn create() -> Result<Self> {
         let options = database_options()?;
         let admin = PgPoolOptions::new()
             .max_connections(1)
@@ -95,16 +94,7 @@ impl Database {
             }
         };
         let database = Self { pool, admin, name };
-        let mut migrator = sqlx::migrate!("./migrations");
-        if before_types_migration {
-            migrator.migrations = Cow::Owned(
-                migrator
-                    .iter()
-                    .filter(|migration| migration.version < 34)
-                    .cloned()
-                    .collect(),
-            );
-        }
+        let migrator = sqlx::migrate!("./migrations");
         if !matches!(
             tokio::time::timeout(Duration::from_secs(30), migrator.run(&database.pool)).await,
             Ok(Ok(()))
@@ -372,7 +362,7 @@ async fn verify_unassigned_grants(
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn creation_without_administrator_preserves_grants_and_supports_later_assignment(
 ) -> Result<()> {
-    let database = Database::create(false).await?;
+    let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
         let h = Harness::create(pool).await?;
@@ -461,7 +451,7 @@ async fn creation_without_administrator_preserves_grants_and_supports_later_assi
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn entity_types_persist_update_and_reject_invalid_values_without_provisioning_users(
 ) -> Result<()> {
-    let database = Database::create(false).await?;
+    let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
         let h = Harness::create(pool).await?;
@@ -546,8 +536,8 @@ async fn entity_types_persist_update_and_reject_invalid_values_without_provision
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
-async fn type_migration_classifies_existing_rows_and_enforces_database_constraints() -> Result<()> {
-    let database = Database::create(true).await?;
+async fn initial_schema_entity_types_default_and_enforce_database_constraints() -> Result<()> {
+    let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
         let tenant: Uuid = sqlx::query_scalar(
@@ -556,29 +546,6 @@ async fn type_migration_classifies_existing_rows_and_enforces_database_constrain
         let org: Uuid = sqlx::query_scalar(
             "INSERT INTO organizations(tenant_id,name) VALUES($1,'历史根组织') RETURNING id")
             .bind(tenant).fetch_one(pool).await?;
-        let child: Uuid = sqlx::query_scalar("INSERT INTO organizations(tenant_id,parent_id,name) VALUES($1,$2,'历史子组织') RETURNING id")
-            .bind(tenant).bind(org).fetch_one(pool).await?;
-        let user: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash) VALUES('legacy-admin-label','unchanged-hash') RETURNING id").fetch_one(pool).await?;
-        let mut legacy_roles = Vec::new();
-        for (target, name, code) in [(org, "租户管理员", "tenant_admin"), (child, "组织管理员", "org_admin")] {
-            let role: Uuid = sqlx::query_scalar("INSERT INTO roles(tenant_id,organization_id,name,code,built_in) VALUES($1,$2,$3,$4,true) RETURNING id")
-                .bind(tenant).bind(target).bind(name).bind(code).fetch_one(pool).await?;
-            sqlx::query("INSERT INTO memberships(user_id,organization_id,position) VALUES($1,$2,$3)").bind(user).bind(target).bind(name).execute(pool).await?;
-            sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)").bind(user).bind(role).bind(target).execute(pool).await?;
-            legacy_roles.push((role,target,code));
-        }
-        tokio::time::timeout(Duration::from_secs(30), sqlx::migrate!("./migrations").run(pool))
-            .await.map_err(|_| anyhow!("isolated types migration timed out"))??;
-        for (role,target,code) in legacy_roles {
-            let migrated: (String,String,String,bool,String) = sqlx::query_as(
-                "SELECT r.name,r.code,m.position,u.is_super_admin,u.password_hash FROM roles r \
-                 JOIN user_roles ur ON ur.role_id=r.id JOIN users u ON u.id=ur.user_id \
-                 JOIN memberships m ON m.user_id=u.id AND m.organization_id=r.organization_id \
-                 WHERE r.id=$1 AND r.organization_id=$2")
-                .bind(role).bind(target).fetch_one(pool).await?;
-            ensure!(migrated == ("超级管理员".into(),code.into(),"超级管理员".into(),false,"unchanged-hash".into()),
-                "administrator label migration changed identity, password, platform privilege, or assignment");
-        }
         let defaults: (String, String) = sqlx::query_as(
             "SELECT t.tenant_type,o.organization_type FROM tenants t \
              JOIN organizations o ON o.tenant_id=t.id WHERE t.id=$1 AND o.id=$2")
@@ -610,7 +577,7 @@ async fn type_migration_classifies_existing_rows_and_enforces_database_constrain
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn contacts_initialize_administrators_and_support_telephone_and_email_login() -> Result<()> {
-    let database = Database::create(false).await?;
+    let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
         let h = Harness::create(pool).await?;
@@ -696,7 +663,7 @@ async fn contacts_initialize_administrators_and_support_telephone_and_email_logi
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn shared_contact_identifiers_select_only_password_verified_accounts_and_contexts(
 ) -> Result<()> {
-    let database = Database::create(false).await?;
+    let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
         let h = Harness::create(pool).await?;
@@ -804,7 +771,7 @@ async fn shared_contact_identifiers_select_only_password_verified_accounts_and_c
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn explicit_administrator_initialization_is_idempotent_and_preserves_accounts() -> Result<()>
 {
-    let database = Database::create(false).await?;
+    let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
         let h = Harness::create(pool).await?;

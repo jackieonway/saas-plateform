@@ -413,6 +413,8 @@ impl Harness {
         let org_only_app = application(pool, "release-org-only", "ESM", "/legacy/org.js").await?;
         let no_role_app = application(pool, "release-no-role", "ESM", "/legacy/no-role.js").await?;
         let management_menu = menu(pool, system_app, "system:application").await?;
+        grant_application(pool, platform_tenant, platform_org, system_app).await?;
+        grant_menu(pool, platform_tenant, platform_org, None, management_menu).await?;
         let main_menu = menu(pool, main_app, "release:read").await?;
         let no_role_menu = menu(pool, no_role_app, "release:no-role").await?;
         for (tenant, org, user) in [(tenant_a, org_a, admin_a), (tenant_b, org_b, admin_b)] {
@@ -768,7 +770,7 @@ async fn other_origin_resource(
     let (mime, body) = if path.ends_with("/main.js") {
         (
             "application/javascript",
-            "window.__DANTE_MICRO_APP__ = { mount: function () {}, unmount: function () {} };",
+            "window.__MICRO_APP__ = { mount: function () {}, unmount: function () {} };",
         )
     } else if path.ends_with(".js") {
         (
@@ -924,7 +926,7 @@ async fn fixture_resource(
             "application/javascript; charset=utf-8"
         };
         let body = if file == "main.js" {
-            "window.__DANTE_MICRO_APP__ = { mount: function () {}, unmount: function () {} };"
+            "window.__MICRO_APP__ = { mount: function () {}, unmount: function () {} };"
         } else {
             "export async function mount() {} export async function unmount() {}"
         };

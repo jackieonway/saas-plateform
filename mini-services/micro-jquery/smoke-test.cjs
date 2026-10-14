@@ -67,7 +67,7 @@ function setup() {
     onNotify: (...args) => notifications.push(args), onNavigate() {},
   }
   return {
-    lifecycle: window.__DANTE_MICRO_APP__, props, requests, signal, timers, events, notifications, container,
+    lifecycle: window.__MICRO_APP__, props, requests, signal, timers, events, notifications, container,
     find: selector => container.querySelector(selector),
     click(selector) { return events.get('click.mfjq' + selector).handler.call(element()) },
     change(selector, value) { return events.get('change.mfjq' + selector).handler.call({ value }) },

@@ -1,4 +1,4 @@
-const sql = new Bun.SQL("postgres://dante@127.0.0.1:5432/dante_cloud")
+const sql = new Bun.SQL("postgres://platform@127.0.0.1:5432/saas_platform")
 console.log("=== organizations columns ===")
 console.log((await sql`SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'organizations' ORDER BY ordinal_position`).map(r => `${r.column_name} ${r.data_type}${r.is_nullable === "NO" ? " NOT NULL" : ""}`).join("\n"))
 console.log("\n=== root orgs per tenant (multi-root check) ===")

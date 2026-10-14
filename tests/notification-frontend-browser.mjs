@@ -140,8 +140,8 @@ async function fixture(options = {}) {
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()) })
   page.on("requestfailed", (request) => failedRequests.push({ pathname: new URL(request.url()).pathname, error: request.failure()?.errorText }))
   await context.addInitScript(({ token }) => {
-    localStorage.setItem("dante-token", token)
-    localStorage.setItem("dante-theme", "light")
+    localStorage.setItem("platform-token", token)
+    localStorage.setItem("platform-theme", "light")
     window.__notificationUi = { swings: 0 }
     const observed = new WeakSet()
     new MutationObserver((changes) => {

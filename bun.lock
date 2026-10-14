@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "dante-cloud",
+      "name": "saas-platform",
       "dependencies": {
         "jsonwebtoken": "^9.0.3",
         "postgres": "^3.4.9",

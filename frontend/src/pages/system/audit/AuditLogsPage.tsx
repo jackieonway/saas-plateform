@@ -97,13 +97,13 @@ export default function AuditLogsPage() {
   /* 列显隐存储一次性迁移: 旧合并列 tenantOrg → tenant + org(幂等; 迁移后广播事件令 hook 重读) */
   React.useEffect(() => {
     try {
-      const raw = localStorage.getItem("dante-cols-audit-logs")
+      const raw = localStorage.getItem("platform-cols-audit-logs")
       if (!raw) return
       const parsed: unknown = JSON.parse(raw)
       if (!Array.isArray(parsed) || !parsed.some((k) => k === "tenantOrg")) return
       const migrated = parsed.flatMap((k) => (k === "tenantOrg" ? ["tenant", "org"] : [k]))
-      localStorage.setItem("dante-cols-audit-logs", JSON.stringify(migrated))
-      window.dispatchEvent(new Event("dante-cols-change-audit-logs"))
+      localStorage.setItem("platform-cols-audit-logs", JSON.stringify(migrated))
+      window.dispatchEvent(new Event("platform-cols-change-audit-logs"))
     } catch {
       /* ignore */
     }
@@ -113,15 +113,15 @@ export default function AuditLogsPage() {
    * (标志位防重复回加: 用户主动隐藏 UA 后不会再被迁移加回; 无历史偏好时默认全显无需迁移) */
   React.useEffect(() => {
     try {
-      const FLAG = "dante-cols-audit-logs-ua-added"
+      const FLAG = "platform-cols-audit-logs-ua-added"
       if (localStorage.getItem(FLAG)) return
-      const raw = localStorage.getItem("dante-cols-audit-logs")
+      const raw = localStorage.getItem("platform-cols-audit-logs")
       if (!raw) return
       const parsed: unknown = JSON.parse(raw)
       if (!Array.isArray(parsed) || parsed.includes("ua")) return
-      localStorage.setItem("dante-cols-audit-logs", JSON.stringify([...parsed, "ua"]))
+      localStorage.setItem("platform-cols-audit-logs", JSON.stringify([...parsed, "ua"]))
       localStorage.setItem(FLAG, "1")
-      window.dispatchEvent(new Event("dante-cols-change-audit-logs"))
+      window.dispatchEvent(new Event("platform-cols-change-audit-logs"))
     } catch {
       /* ignore */
     }

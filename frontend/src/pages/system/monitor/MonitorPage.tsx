@@ -703,7 +703,7 @@ const COMPARE_DIMS: CompareDimMeta[] = [
 /* ---- 维度与排序偏好记忆(localStorage) ---- */
 
 /** 对比图偏好持久化 key */
-const COMPARE_PREF_KEY = "dante-compare-pref"
+const COMPARE_PREF_KEY = "platform-compare-pref"
 
 /** 对比图偏好: 维度 + 排序方向 */
 interface ComparePref {

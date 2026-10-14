@@ -233,7 +233,7 @@ impl Harness {
 #[tokio::test]
 #[ignore = "requires isolated PostgreSQL database creation privileges"]
 async fn expired_access_rotates_context_bound_refresh_once() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let assertions = async {
         let h = Harness::create(&db.pool).await?;
         let context = h.context(h.child).await?;
@@ -354,7 +354,7 @@ async fn expired_access_rotates_context_bound_refresh_once() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires isolated PostgreSQL database creation privileges"]
 async fn membership_edits_preserve_retained_sessions_and_data_grants() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let assertions = async {
         let h = Harness::create(&db.pool).await?;
         let root = h.context(h.root).await?;
@@ -397,7 +397,7 @@ async fn membership_edits_preserve_retained_sessions_and_data_grants() -> Result
 #[tokio::test]
 #[ignore = "requires isolated PostgreSQL database creation privileges"]
 async fn revocation_disabled_ancestry_and_absolute_expiry_block_refresh() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let assertions = async {
         let h = Harness::create(&db.pool).await?;
         let logout = h.context(h.root).await?;
@@ -438,7 +438,7 @@ async fn revocation_disabled_ancestry_and_absolute_expiry_block_refresh() -> Res
 #[ignore = "requires isolated PostgreSQL database creation privileges"]
 async fn platform_device_listing_includes_current_device_and_preserves_personal_scope() -> Result<()>
 {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let assertions = async {
         let h = Harness::create(&db.pool).await?;
         sqlx::query("INSERT INTO menus(application_id,title,permission,type) VALUES($1,'设备与会话','system:oauth','MENU')")

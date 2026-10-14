@@ -11,7 +11,7 @@ interface ThemeContextValue {
 
 const ThemeContext = React.createContext<ThemeContextValue | undefined>(undefined)
 
-const STORAGE_KEY = "dante-theme"
+const STORAGE_KEY = "platform-theme"
 
 function getSystemTheme(): ResolvedTheme {
   if (typeof window === "undefined") return "light"

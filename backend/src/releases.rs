@@ -668,7 +668,7 @@ async fn run(config: &Config, release: &ReleaseRow) -> Value {
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(4))
-            .user_agent("Dante-Application-Preflight/1.0");
+            .user_agent("Platform-Application-Preflight/1.0");
         for certificate in &config.micro_ca_certificates {
             client_builder = client_builder.add_root_certificate(certificate.clone());
         }

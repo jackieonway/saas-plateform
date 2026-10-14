@@ -155,7 +155,7 @@ export function AppSidebar({
           />
         ) : (
           <MenuList key={navigationScope ?? "unscoped"} nodes={filtered} pathname={pathname} onNavigate={go}
-            forceExpanded={!!keyword.trim()} storageKey={navigationScope ? `dante-menu-folds:${navigationScope}` : null} />
+            forceExpanded={!!keyword.trim()} storageKey={navigationScope ? `platform-menu-folds:${navigationScope}` : null} />
         )}
       </nav>
 
@@ -195,10 +195,10 @@ function MenuList({
       }
     }
     window.addEventListener("storage", sync)
-    window.addEventListener("dante-menu-folds-change", sync)
+    window.addEventListener("platform-menu-folds-change", sync)
     return () => {
       window.removeEventListener("storage", sync)
-      window.removeEventListener("dante-menu-folds-change", sync)
+      window.removeEventListener("platform-menu-folds-change", sync)
     }
   }, [storageKey])
   const toggle = (id: string) => {
@@ -209,7 +209,7 @@ function MenuList({
     try {
       if (storageKey) {
         localStorage.setItem(storageKey, JSON.stringify([...next]))
-        window.dispatchEvent(new CustomEvent("dante-menu-folds-change", { detail: storageKey }))
+        window.dispatchEvent(new CustomEvent("platform-menu-folds-change", { detail: storageKey }))
       }
     }
     catch { /* Keep navigation usable when browser storage is unavailable. */ }

@@ -12,10 +12,10 @@ export interface RecentVisit {
   count: number
 }
 
-const STORAGE_KEY = "dante-recent-visits"
+const STORAGE_KEY = "platform-recent-visits"
 const MAX_VISITS = 8
 /** 同窗口内自定义广播事件(storage 事件仅跨标签页触发) */
-const CHANGE_EVENT = "dante-recent-visits-change"
+const CHANGE_EVENT = "platform-recent-visits-change"
 
 function readVisits(): RecentVisit[] {
   try {

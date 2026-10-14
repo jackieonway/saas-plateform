@@ -50,7 +50,7 @@ function setup() {
     onNotify: (...args) => notifications.push(args), onNavigate() {},
   }
   return {
-    lifecycle: window.__DANTE_MICRO_APP__, props, requests, signal, timers, mounted, notifications, container: { innerHTML: '' },
+    lifecycle: window.__MICRO_APP__, props, requests, signal, timers, mounted, notifications, container: { innerHTML: '' },
     get instance() { return instance }, render() { return component.render.call(instance) },
     advance(ms) { clockNow += ms; for (const tick of timers.values()) tick() },
   }

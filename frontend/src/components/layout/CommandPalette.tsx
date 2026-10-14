@@ -47,7 +47,7 @@ import type { MenuNode } from "@/api/types"
 
 /* ------------------------------ 最近搜索 ------------------------------ */
 
-const RECENT_SEARCHES_KEY = "dante-recent-searches"
+const RECENT_SEARCHES_KEY = "platform-recent-searches"
 const MAX_RECENT_SEARCHES = 6
 
 function readRecentSearches(): string[] {

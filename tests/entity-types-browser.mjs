@@ -83,8 +83,8 @@ async function fixture(kind, legacy = false) {
   if (legacy) { delete tenantRecord.tenantType; delete childRecord.organizationType }
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript(() => {
-    localStorage.setItem("dante-token", "test-entity-types-session")
-    localStorage.setItem("dante-theme", "light")
+    localStorage.setItem("platform-token", "test-entity-types-session")
+    localStorage.setItem("platform-theme", "light")
   })
   // Disable HMR: a reload would undo the fixture entry's production-page import.
   await context.routeWebSocket(() => true, () => {})
@@ -433,7 +433,7 @@ async function verifyLoginIdentitySelection(sameOrganization, singleMembership =
     await choice.click()
     await waitState(() => state.selections.length === 1, "The selected account and organization must both be submitted.")
     await page.waitForURL(`${origin}/`)
-    assert.equal(await page.evaluate(() => localStorage.getItem("dante-refresh-token")), "selected-refresh-fixture",
+    assert.equal(await page.evaluate(() => localStorage.getItem("platform-refresh-token")), "selected-refresh-fixture",
       "Login should retain the refresh token from the selected context.")
     assert.deepEqual(state.errors, [])
     assert.deepEqual(state.unexpected, [])

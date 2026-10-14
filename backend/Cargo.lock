@@ -345,7 +345,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dante-cloud-backend"
+name = "saas-platform-backend"
 version = "1.0.0"
 dependencies = [
  "anyhow",

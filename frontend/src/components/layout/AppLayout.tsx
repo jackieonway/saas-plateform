@@ -148,14 +148,14 @@ export default function AppLayout() {
 
   const [sidebarOpen, setSidebarOpen] = React.useState(() => {
     try {
-      return localStorage.getItem("dante-sidebar") !== "collapsed"
+      return localStorage.getItem("platform-sidebar") !== "collapsed"
     } catch {
       return true
     }
   })
   React.useEffect(() => {
     try {
-      localStorage.setItem("dante-sidebar", sidebarOpen ? "open" : "collapsed")
+      localStorage.setItem("platform-sidebar", sidebarOpen ? "open" : "collapsed")
     } catch {
       /* ignore */
     }

@@ -1,5 +1,5 @@
 /**
- * Dante Cloud API 强类型定义；接口入口与边界见 docs/architecture.md#api-catalog。
+ * SaaS Platform API 强类型定义；接口入口与边界见 docs/architecture.md#api-catalog。
  */
 
 import type { OrganizationType, TenantType } from "@/lib/entity-types"

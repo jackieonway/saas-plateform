@@ -29,32 +29,32 @@ TOKEN=$(echo "$CTX" | jq -r '.accessToken')
 AUTH="Authorization: Bearer $TOKEN"
 
 TENANTS=$(req "$BASE/api/tenants?size=50" -H "$AUTH")
-DANTE_ID=$(echo "$TENANTS" | jq -r '.records[] | select(.code=="dante") | .id')
+PLATFORM_ID=$(echo "$TENANTS" | jq -r '.records[] | select(.code=="admin-tenant") | .id')
 STAR_ID=$(echo "$TENANTS" | jq -r '.records[] | select(.code=="star-mfg") | .id')
-[ -n "$DANTE_ID" ] && [ -n "$STAR_ID" ] && ok "取得两租户 id (dante=$DANTE_ID star=$STAR_ID)" || bad "租户 id 解析失败"
+[ -n "$PLATFORM_ID" ] && [ -n "$STAR_ID" ] && ok "取得两租户 id (platform=$PLATFORM_ID star=$STAR_ID)" || bad "租户 id 解析失败"
 jqa "租户 list 行含 expiresAt(null=永久)" "$TENANTS" '.records[0].expiresAt' "null"
 
-TREE=$(req "$BASE/api/organizations/tree?tenantId=$DANTE_ID" -H "$AUTH")
+TREE=$(req "$BASE/api/organizations/tree?tenantId=$PLATFORM_ID" -H "$AUTH")
 ROOT_ORG=$(echo "$TREE" | jq -r '[.[] | select(.parentId==null)][0].id')
-[ -n "$ROOT_ORG" ] && [ "$ROOT_ORG" != "null" ] && ok "Dante 平台根组织 id=$ROOT_ORG" || bad "根组织解析失败"
+[ -n "$ROOT_ORG" ] && [ "$ROOT_ORG" != "null" ] && ok "Platform 平台根组织 id=$ROOT_ORG" || bad "根组织解析失败"
 jqa "组织 tree 节点含 expiresAt" "$TREE" '.[0].expiresAt' "null"
 
 echo
 echo "===== 1. 根组织唯一 ====="
 # 1a. parent 缺省创建第二个根组织 → 409
-R1=$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$DANTE_ID\",\"name\":\"[18a]第二个根组织\"}")
-check "1a 根组织重复创建被拒" "409" "$(req -o /dev/null -w '%{http_code}' -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$DANTE_ID\",\"name\":\"[18a]第二个根组织-b\"}")"
+R1=$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$PLATFORM_ID\",\"name\":\"[18a]第二个根组织\"}")
+check "1a 根组织重复创建被拒" "409" "$(req -o /dev/null -w '%{http_code}' -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$PLATFORM_ID\",\"name\":\"[18a]第二个根组织-b\"}")"
 contains "1a 409 文案含「根组织」提示" "$R1" "该租户已存在根组织"
 # parent 显式空串同样视为根
-R1B=$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$DANTE_ID\",\"name\":\"[18a]空串根组织\",\"parentId\":\"\"}")
+R1B=$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$PLATFORM_ID\",\"name\":\"[18a]空串根组织\",\"parentId\":\"\"}")
 contains "1b parentId 空串(=根)同样 409" "$R1B" "该租户已存在根组织"
 
 # 1c. 带 parent 的子组织 → 200 + expiresAt 回显
-R2=$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$DANTE_ID\",\"parentId\":\"$ROOT_ORG\",\"name\":\"[18a]测试子组织\",\"code\":\"t18a-child\",\"expiresAt\":\"2030-01-01T00:00:00Z\"}")
-check "1c 子组织创建成功" "200" "$(req -o /dev/null -w '%{http_code}' -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$DANTE_ID\",\"parentId\":\"$ROOT_ORG\",\"name\":\"[18a]探针\"}")"
+R2=$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$PLATFORM_ID\",\"parentId\":\"$ROOT_ORG\",\"name\":\"[18a]测试子组织\",\"code\":\"t18a-child\",\"expiresAt\":\"2030-01-01T00:00:00Z\"}")
+check "1c 子组织创建成功" "200" "$(req -o /dev/null -w '%{http_code}' -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$PLATFORM_ID\",\"parentId\":\"$ROOT_ORG\",\"name\":\"[18a]探针\"}")"
 CHILD_ID=$(echo "$R2" | jq -r '.id')
 jqa "1c 子组织响应 expiresAt 回显" "$R2" '.expiresAt' "2030-01-01T00:00:00Z"
-PROBE_ID=$(echo "$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$DANTE_ID\",\"parentId\":\"$ROOT_ORG\",\"name\":\"[18a]探针\"}")" | jq -r '.id')
+PROBE_ID=$(echo "$(req -X POST $BASE/api/organizations -H "$J" -H "$AUTH" -d "{\"tenantId\":\"$PLATFORM_ID\",\"parentId\":\"$ROOT_ORG\",\"name\":\"[18a]探针\"}")" | jq -r '.id')
 
 # 1d. 组织 update 三态: 缺省不更新 / 显式 null 清除 / 重新设置
 R3=$(req -X PUT $BASE/api/organizations/$CHILD_ID -H "$J" -H "$AUTH" -d '{"name":"[18a]测试子组织-改名"}')
@@ -133,12 +133,12 @@ req -X PUT $BASE/api/organizations/$STAR_ORG -H "$J" -H "$AUTH" -d '{"expiresAt"
 req -X DELETE $BASE/api/organizations/$CHILD_ID -H "$AUTH" > /dev/null
 req -X DELETE $BASE/api/organizations/$PROBE_ID -H "$AUTH" > /dev/null
 FINAL=$(req "$BASE/api/tenants?size=50" -H "$AUTH")
-jqa "3 还原: 两租户 expiresAt 均为 null" "$FINAL" '[.records[] | select(.code=="dante" or .code=="star-mfg") | .expiresAt] | unique | .[0]' "null"
+jqa "3 还原: 两租户 expiresAt 均为 null" "$FINAL" '[.records[] | select(.code=="admin-tenant" or .code=="star-mfg") | .expiresAt] | unique | .[0]' "null"
 jqa "3 还原: 租户数回到 2" "$FINAL" '.total' "2"
 FTREE=$(req "$BASE/api/organizations/tree?tenantId=$STAR_ID" -H "$AUTH")
 jqa "3 还原: 星辰组织 expiresAt null" "$FTREE" '.[0].expiresAt' "null"
-DTREE=$(req "$BASE/api/organizations/tree?tenantId=$DANTE_ID" -H "$AUTH")
-jqa "3 还原: Dante 组织树节点数回到 6" "$DTREE" '[.. | objects | select(has("id"))] | length' "6"
+DTREE=$(req "$BASE/api/organizations/tree?tenantId=$PLATFORM_ID" -H "$AUTH")
+jqa "3 还原: Platform 组织树节点数回到 6" "$DTREE" '[.. | objects | select(has("id"))] | length' "6"
 
 echo "===== 4. 登录正常路径回归 ====="
 LG=$(req -X POST $BASE/api/auth/login -H "$J" -d '{"username":"admin","password":"admin123"}')
@@ -148,7 +148,7 @@ contains "4 回归: admin 登录+context 正常" "$GC" '"accessToken"'
 LZ=$(req -X POST $BASE/api/auth/login -H "$J" -d '{"username":"chenjiu","password":"Cj@12345"}')
 contains "4 回归: chenjiu 登录正常(非空 memberships)" "$LZ" '"memberships"'
 LW=$(req -X POST $BASE/api/auth/login -H "$J" -d '{"username":"wangwu","password":"Ww@12345"}')
-contains "4 回归: wangwu(Dante 租户)登录正常" "$LW" '"ticket"'
+contains "4 回归: wangwu(Platform 租户)登录正常" "$LW" '"ticket"'
 
 echo
 echo "===== 结果: PASS=$PASS FAIL=$FAIL ====="

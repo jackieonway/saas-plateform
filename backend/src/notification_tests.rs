@@ -1,7 +1,6 @@
 //! Phase 10 notifications and Phase 11 scoped app-member regressions on isolated PostgreSQL.
 //! Run explicitly with `cargo test notification_tests -- --ignored --nocapture`.
 //! TEST_DATABASE_URL is read from the environment or ignored root .env.test; never printed.
-use std::borrow::Cow;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,7 +61,7 @@ fn database_error(stage: &str, error: &sqlx::Error) -> anyhow::Error {
 }
 
 impl Database {
-    async fn create(before_notification_migration: bool) -> Result<Self> {
+    async fn create() -> Result<Self> {
         let options = database_options()?;
         let admin = PgPoolOptions::new()
             .max_connections(1)
@@ -89,16 +88,7 @@ impl Database {
             }
         };
         let database = Self { pool, admin, name };
-        let mut migrator = sqlx::migrate!("./migrations");
-        if before_notification_migration {
-            migrator.migrations = Cow::Owned(
-                migrator
-                    .iter()
-                    .filter(|m| m.version < 22)
-                    .cloned()
-                    .collect(),
-            );
-        }
+        let migrator = sqlx::migrate!("./migrations");
         if migrator.run(&database.pool).await.is_err() {
             let _ = database
                 .finish(Err(anyhow!("isolated test migrations failed")))
@@ -567,7 +557,7 @@ fn body(key: &str, target: Value) -> Value {
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn notification_application_authorization_and_four_scopes() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result: Result<()> = async {
         let h = Harness::create(&db.pool).await?;
         let token = h.app_token(&h.publisher_session.token,APP_CODE).await?;
@@ -640,7 +630,7 @@ async fn notification_application_authorization_and_four_scopes() -> Result<()> 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn notification_tenant_grants_obey_selected_organization_subtree() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result: Result<()> = async {
         let h = Harness::create(&db.pool).await?;
         let ancestor: Uuid = sqlx::query_scalar("SELECT parent_id FROM organizations WHERE id=$1")
@@ -711,7 +701,7 @@ async fn notification_tenant_grants_obey_selected_organization_subtree() -> Resu
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn notification_idempotency_namespaces_concurrency_and_transaction_failures() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result: Result<()> = async {
         let h = Harness::create(&db.pool).await?;
         let token = h.app_token(&h.publisher_session.token,APP_CODE).await?;
@@ -856,8 +846,8 @@ async fn unread(h: &Harness, token: &str) -> Result<i64> {
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
-async fn notification_legacy_migration_and_context_inbox_boundaries() -> Result<()> {
-    let db = Database::create(true).await?;
+async fn notification_unowned_rows_and_context_inbox_boundaries() -> Result<()> {
+    let db = Database::create().await?;
     let result: Result<()>=async {
         let h=Harness::create(&db.pool).await?;
         let no_membership=user(&db.pool,"notification-legacy-unassigned",false,&[]).await?;
@@ -870,10 +860,10 @@ async fn notification_legacy_migration_and_context_inbox_boundaries() -> Result<
         let before:Value=sqlx::query_scalar(snapshot_sql).bind(&legacy_ids).fetch_one(&db.pool).await?;
         sqlx::migrate!("./migrations").run(&db.pool).await?;
         let after:Value=sqlx::query_scalar(snapshot_sql).bind(&legacy_ids).fetch_one(&db.pool).await?;
-        ensure!(before==after, "legacy migration altered message content or read timestamps");
+        ensure!(before==after, "restart altered message content or read timestamps");
         let preserved:i64=sqlx::query_scalar("SELECT count(*) FROM notifications WHERE id=ANY($1) AND source_kind='LEGACY' AND tenant_id IS NULL AND organization_id IS NULL AND application_id IS NULL AND publication_id IS NULL")
             .bind(&legacy_ids).fetch_one(&db.pool).await?;
-        ensure!(preserved==3, "migration inferred or copied legacy ownership");
+        ensure!(preserved==3, "unowned rows acquired notification ownership");
         ensure!(inbox(&h,&h.second_session.token).await?["total"]==0 && unread(&h,&h.recipient_session.token).await?==0, "legacy data entered a contextual inbox");
         let legacy=ok(&h.router,Method::GET,"/api/notifications/legacy?page=1&size=100",&h.platform_session.token,None).await?;
         ensure!(legacy["total"]==3, "platform legacy audit did not preserve the old rows");
@@ -917,7 +907,7 @@ async fn notification_legacy_migration_and_context_inbox_boundaries() -> Result<
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn notification_socket_context_validates_live_session_and_delivery_visibility() -> Result<()>
 {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result:Result<()>=async {
         let h=Harness::create(&db.pool).await?;
         let path="/api/notifications/socket-context";
@@ -980,7 +970,7 @@ async fn notification_socket_context_validates_live_session_and_delivery_visibil
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn notification_input_limits_and_context_constraints_fail_before_partial_publish(
 ) -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result:Result<()>=async {
         let h=Harness::create(&db.pool).await?;
         let token=h.app_token(&h.publisher_session.token,APP_CODE).await?;
@@ -1036,7 +1026,7 @@ async fn notification_input_limits_and_context_constraints_fail_before_partial_p
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn notification_system_call_sites_preserve_context_and_domain_transactions() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result:Result<()>=async {
         let h=Harness::create(&db.pool).await?;
         let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON','Manage users','system:user') RETURNING id").bind(h.main_app).fetch_one(&db.pool).await?;
@@ -1097,7 +1087,7 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn notification_seed_does_not_create_new_unowned_messages() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result: Result<()> = async {
         crate::seed::run(&db.pool).await?;
         let before: i64 = sqlx::query_scalar("SELECT count(*) FROM notifications")
@@ -1165,7 +1155,7 @@ fn app_members_path(org: Uuid, action: &str, user: Option<Uuid>) -> String {
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn app_members_scopes_minimal_dto_and_recipient_validity() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result:Result<()>=async {
         let h=Harness::create(&db.pool).await?;
         app_members_setup(&h).await?;
@@ -1223,7 +1213,7 @@ async fn app_members_scopes_minimal_dto_and_recipient_validity() -> Result<()> {
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn app_members_authorization_and_next_request_revocation() -> Result<()> {
-    let db = Database::create(false).await?;
+    let db = Database::create().await?;
     let result:Result<()>=async {
         let h=Harness::create(&db.pool).await?;
         let menus=app_members_setup(&h).await?;

@@ -8,9 +8,9 @@ export interface ColumnDef {
   required?: boolean
 }
 
-const STORAGE_PREFIX = "dante-cols-"
+const STORAGE_PREFIX = "platform-cols-"
 /** 同窗口内自定义广播事件(storage 事件仅跨标签页触发) */
-const CHANGE_EVENT_PREFIX = "dante-cols-change-"
+const CHANGE_EVENT_PREFIX = "platform-cols-change-"
 
 function storageKey(table: string): string {
   return STORAGE_PREFIX + table
@@ -45,7 +45,7 @@ function writeVisible(table: string, visible: Iterable<string>) {
 
 /**
  * 表格列显隐(按表持久化):
- * - localStorage key `dante-cols-${table}` 存 visible 数组 JSON, 无存储时默认全显;
+ * - localStorage key `platform-cols-${table}` 存 visible 数组 JSON, 无存储时默认全显;
  * - required 列永不可隐藏(读取时强制补齐);
  * - 本窗口自定义事件 + 跨标签页 storage 事件实时同步;
  * - 切换即时生效,无闪烁。

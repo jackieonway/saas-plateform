@@ -12,7 +12,7 @@ const DEMO_USERS: &[(&str, &str)] = &[
     ("chenjiu", "Cj@12345"),
 ];
 const DEMO_CLIENT_SECRETS: &[&str] = &[
-    "dante-web-secret",
+    "platform-web-secret",
     "api-service-secret",
     "resource-portal-secret",
     "micro-vue-shell-secret",
@@ -275,7 +275,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
 
     // ===== 租户 =====
-    // 平台租户: 全库唯一 (迁移 0007 部分唯一索引约束), 可跨租户管理
+    // 平台租户: 全库唯一 (初始化 SQL 部分唯一索引约束), 可跨租户管理
     let tenant = scalar_uuid(
         &mut tx,
         "INSERT INTO tenants (name, code, description, is_platform) VALUES ('平台管理租户', 'admin-tenant', '多租户多层级组织多应用权限演示平台', true) RETURNING id",
@@ -336,11 +336,11 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let _delivery1 = insert_dept(&mut tx, east, None, "交付一组", "DLV1", 1).await?;
 
     // ===== 用户 (密码 Argon2 现算) =====
-    let admin = insert_user(&mut tx, "admin", "admin123", "超级管理员", "admin@dante.cloud", "", "UNKNOWN", true).await?;
-    let zhangsan = insert_user(&mut tx, "zhangsan", "Zs@12345", "张三", "zhangsan@dante.cloud", "13800000001", "MALE", false).await?;
-    let lisi = insert_user(&mut tx, "lisi", "Ls@12345", "李四", "lisi@dante.cloud", "13800000002", "FEMALE", false).await?;
-    let wangwu = insert_user(&mut tx, "wangwu", "Ww@12345", "王五", "wangwu@dante.cloud", "13800000003", "MALE", false).await?;
-    let tianqi = insert_user(&mut tx, "tianqi", "Tq@12345", "田七", "tianqi@dante.cloud", "13800000004", "MALE", false).await?;
+    let admin = insert_user(&mut tx, "admin", "admin123", "超级管理员", "admin@example.test", "", "UNKNOWN", true).await?;
+    let zhangsan = insert_user(&mut tx, "zhangsan", "Zs@12345", "张三", "zhangsan@example.test", "13800000001", "MALE", false).await?;
+    let lisi = insert_user(&mut tx, "lisi", "Ls@12345", "李四", "lisi@example.test", "13800000002", "FEMALE", false).await?;
+    let wangwu = insert_user(&mut tx, "wangwu", "Ww@12345", "王五", "wangwu@example.test", "13800000003", "MALE", false).await?;
+    let tianqi = insert_user(&mut tx, "tianqi", "Tq@12345", "田七", "tianqi@example.test", "13800000004", "MALE", false).await?;
 
     // ===== 成员关系 =====
     insert_membership(&mut tx, admin, root, Some(rd_dept), "超级管理员").await?;
@@ -469,7 +469,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     }
 
     // ===== OAuth 客户端 (secret 存 SHA-256) =====
-    insert_client(&mut tx, "dante-web", Some("dante-web-secret"), "Web 控制台",
+    insert_client(&mut tx, "platform-web", Some("platform-web-secret"), "Web 控制台",
         "Web 应用演示客户端 (授权码 + PKCE)", "CONFIDENTIAL",
         "https://oauthdebugger.com/callback,http://localhost:9000/callback",
         "authorization_code,refresh_token", "profile,email", 7200, 604800).await?;

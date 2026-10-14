@@ -394,7 +394,7 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
         ? await loadHostEsm(entryInfo.entryUrl)
         : await import(/* @vite-ignore */ entryInfo.entryUrl)) as MicroEsmModule
       check()
-      const lifecycle = mod.__DANTE_MICRO_APP__ ??
+      const lifecycle = mod.__MICRO_APP__ ??
         (mod.mount && mod.unmount ? { name: entryInfo.name, mount: mod.mount, unmount: mod.unmount, update: mod.update } : null)
       if (!lifecycle) throw new Error("ESM 模块缺少 mount/unmount 生命周期")
       return lifecycle

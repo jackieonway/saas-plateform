@@ -1,5 +1,5 @@
 #!/bin/bash
-# Dante Cloud 全部服务启动脚本 (沙箱安全版)
+# SaaS Platform 全部服务启动脚本 (沙箱安全版)
 # 重要: 本沙箱会在工具会话结束后回收普通后台子进程 (nohup/setsid+& 均无效),
 # 必须使用 double-fork 模式: ( ( exec setsid CMD > log 2>&1 < /dev/null ) & )
 cd /home/z/my-project

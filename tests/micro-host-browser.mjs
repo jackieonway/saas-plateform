@@ -198,7 +198,7 @@ function probeHtml(withUpdate, entryLabel = "base") {
       }, 60); });
     } };
     ${withUpdate ? "lifecycle.update = function (props) { record('update', props); };" : ""}
-    window.__DANTE_MICRO_APP__ = lifecycle;
+    window.__MICRO_APP__ = lifecycle;
   })();</script></body></html>`
 }
 
@@ -208,7 +208,7 @@ function isolatedHtml(entryLabel) {
       let node, current, instanceId = crypto.randomUUID();
       let parentBlocked = false, storageBlocked = false;
       try { parent.__phase9HostMarker = 'compromised'; parent.document.body.innerHTML = 'compromised'; } catch (_) { parentBlocked = true; }
-      try { parent.localStorage.getItem('dante-token'); localStorage.getItem('dante-token'); } catch (_) { storageBlocked = true; }
+      try { parent.localStorage.getItem('platform-token'); localStorage.getItem('platform-token'); } catch (_) { storageBlocked = true; }
       window.__phase9ChildGlobal = 'child only';
       const report = (kind, props) => parent.postMessage({ kind: 'PHASE9_IFRAME_EVENT', event: {
         kind, instanceId, entryLabel: ${JSON.stringify(entryLabel)}, appCode: props.appCode,
@@ -234,7 +234,7 @@ function isolatedHtml(entryLabel) {
         node.textContent = props.organization.name + ' · ' + ${JSON.stringify(entryLabel)};
         report(kind, props);
       }
-      window.__phase9Bridge = DanteMicroIframe.connect({ appCode: 'isolated',
+      window.__phase9Bridge = MicroIframe.connect({ appCode: 'isolated',
         allowedHostOrigins: [${JSON.stringify(origin)}], container: document.querySelector('#app'), lifecycle: {
           mount: function (container, props) {
             container.innerHTML = '<div id="isolated-state"></div><input id="isolated-input" aria-label="保留输入">';
@@ -314,8 +314,8 @@ async function fixture(options = {}) {
   const leases = new Map()
   await context.addInitScript(() => {
     if (window.top !== window) return
-    localStorage.setItem("dante-token", "test-session-A")
-    localStorage.setItem("dante-theme", "light")
+    localStorage.setItem("platform-token", "test-session-A")
+    localStorage.setItem("platform-theme", "light")
     window.__phase8Events = []
     window.__phase8Control = { nextId: 0 }
     window.__phase9HostMarker = 'protected-host-instance'
@@ -719,7 +719,7 @@ async function verifyAuthorizationFailures() {
       await page.waitForURL("**/dashboard")
       await page.getByText("当前应用授权已失效，已退出应用", { exact: true }).waitFor()
       assert.equal((await events(page)).filter((entry) => entry.kind === "mount").length, 0)
-      assert.equal(await page.evaluate(() => localStorage.getItem("dante-token") !== null), true,
+      assert.equal(await page.evaluate(() => localStorage.getItem("platform-token") !== null), true,
         "Application authorization errors must preserve the independently valid platform session.")
       console.log(`PASS real host: application context ${failStatus} exits micro route with an explicit toast`)
     })
@@ -846,7 +846,7 @@ async function verifyIsolatedDefault() {
 }
 
 function buildVueReleases() {
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dante-micro-host-releases-'))
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'platform-micro-host-releases-'))
   const output = path.join(temp, 'releases')
   try {
     for (const version of ['1.0.0', '1.0.1']) {
@@ -856,12 +856,12 @@ function buildVueReleases() {
       const original = readFileSync(appPath, 'utf8')
       assert.ok(original.includes('微前端子应用 · HTML 入口 + 沙箱'), 'Real Vue header source must exist before preparing new version bytes.')
       const instrument = `\n;(function () {
-        var original = window.__DANTE_MICRO_APP__, current, instanceId;
+        var original = window.__MICRO_APP__, current, instanceId;
         var events = window.__phase9VueEvents, control = window.__phase9VueControl;
         function record(kind, props) { events.push({ kind: kind, instanceId: instanceId,
           resourceVersion: ${JSON.stringify(version)}, deploymentVersion: props.deploymentVersion,
           entryVersionId: props.entryVersionId, signalAborted: props.signal.aborted, contextEpoch: props.contextEpoch }); }
-        window.__DANTE_MICRO_APP__ = { name: original.name,
+        window.__MICRO_APP__ = { name: original.name,
           mount: async function (container, props) { current = props; control.current = props; instanceId = ++control.nextId;
             await original.mount(container, props); record('mount', props); },
           update: async function (props) { current = props; control.current = props; await original.update(props); record('update', props); },
@@ -885,7 +885,7 @@ function buildVueReleases() {
 
 function cleanupReleaseTemp(temp) {
   const absolute = path.resolve(temp), parent = path.resolve(os.tmpdir())
-  assert.ok(absolute.startsWith(parent + path.sep) && path.basename(absolute).startsWith('dante-micro-host-releases-'), 'Only the verified test temporary directory may be removed.')
+  assert.ok(absolute.startsWith(parent + path.sep) && path.basename(absolute).startsWith('platform-micro-host-releases-'), 'Only the verified test temporary directory may be removed.')
   rmSync(absolute, { recursive: true, force: true })
 }
 
@@ -1090,7 +1090,7 @@ async function verifyReleaseManagementUI() {
       }
       assert.equal(await page.getByRole('button', { name: '发布版本', exact: true }).count(), 0)
       assert.equal(denied.requests.some((request) => request.pathname.includes('/releases') || request.pathname.includes('/deployments')), false)
-      assert.equal(await page.evaluate(() => localStorage.getItem('dante-token') !== null), true)
+      assert.equal(await page.evaluate(() => localStorage.getItem('platform-token') !== null), true)
       if (!access.isPlatform) {
         await page.getByRole('button', { name: '新建微应用', exact: true }).first().click()
         const dialog = page.getByRole('dialog')

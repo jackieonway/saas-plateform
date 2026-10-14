@@ -1,4 +1,4 @@
-# Dante Cloud 系统架构与应用接入
+# SaaS Platform 系统架构与应用接入
 
 本文是平台架构、身份与权限、微应用、业务后端、通知、发布和运行恢复的统一文档入口。整理日期为 2026-10-14，依据现有源码、配置与既有文档；历史测试结果单独标明日期，不代表本次重新执行或当前环境已部署。
 
@@ -134,24 +134,14 @@ erDiagram
 
 ### 3.3 迁移和升级
 
-当前迁移编号到 `0039`，编号不等于文件数量，历史存在编号间隙。完整结构由已执行迁移的顺序与校验和确定，禁止将旧数据库设计文档中的初始 SQL 当作最新全量 DDL。
+平台数据库以 [backend/migrations/0001_init.sql](../backend/migrations/0001_init.sql) 作为统一初始化基线。该文件直接创建最终表结构、主键、外键、租户与组织边界约束、索引、函数和触发器，并初始化内置微应用与全局展示配置。租户、账号、角色、授权链与 OAuth 客户端由 `src/seed.rs` 按开发或生产初始化流程创建。
 
-| 迁移范围 | 作用 |
-| --- | --- |
-| `0001`～`0012` | 核心身份/OAuth、通知、平台租户、菜单和早期微应用 |
-| `0013` | 同租户/同组织复合外键、树无环与存量预检 |
-| `0014`～`0015` | 平台持久会话、账号版本和状态失效 |
-| `0016`～`0019` | 应用专用 token、会话绑定、撤销、旧 token 升级 |
-| `0020` | 独立数据授权 |
-| `0021`～`0023` | 独立发布、持久通知发布与请求审计关联 |
-| `0024`～`0026` | 报表中心运行模式演进，最终随宿主 ESM 构建 |
-| `0027`～`0031` | 租户/组织地点、地区版本及删除状态 |
-| `0032`～`0036` | 品牌、五级地区、实体类型、联系人及管理员名称 |
-| `0037`、`0039` | 平台会话刷新、品牌主题主色 |
+初始化 SQL 面向 PostgreSQL 17 及以上的空数据库；本次基线替换要求删除旧数据库后重建，不能复用旧 `_sqlx_migrations` 记录。应用首次启动通过 SQLx 执行该文件并登记版本 `1`；再次启动只校验已执行基线，不会重复初始化或覆盖自定义配置。初始化失败时不开放监听。
 
-存量关系先执行 [只读审计 SQL](./sql/tenant-relationship-audit.sql)。审计检测跨租户父节点、跨组织部门、成员部门、角色归属、环路和不一致授权；修复需单独审核事务，不自动删除异常关系。迁移失败时停止本次启动，不开放监听。
+默认数据库为 `saas_platform`，环境文件路径使用绝对 `APP_ENV_FILE`。可执行程序为 `saas-platform-backend`；浏览器键与指标分别使用 `platform-*` 和 `platform_*`。升级后重新登录，宿主和微应用 SDK 一同切换到 `MicroIframe`、`MICRO_*` 和 `__MICRO_APP__`。
 
-已执行迁移不能修改，包括文件中的历史文档引用注释。需要修复结构或回退约束时新增后续迁移。程序回滚不等于数据库回滚。
+后续结构变化从 `0002` 开始新增迁移；已在新库执行的基线不得修改。程序回滚不等于数据库回滚。
+
 
 <a id="authorization"></a>
 ## 4. 授权边界
@@ -333,7 +323,7 @@ Bearer 提取
 | 独立 React/Vue/Angular/Svelte/Solid/jQuery | 推荐，自带运行时和样式 | 不作为独立上传方式 |
 | 平台内部 React 模块 | 可以独立化 | 适合共享宿主 React/UI |
 | 交付 | 单入口静态 ZIP/tar.gz | `frontend/src/micro-apps/{code}.tsx` |
-| 生命周期 | iframe SDK `connect` | 模块导出 `__DANTE_MICRO_APP__` 或方法 |
+| 生命周期 | iframe SDK `connect` | 模块导出 `__MICRO_APP__` 或方法 |
 | 更新 | 独立上传、预检、激活 | 重新构建发布宿主 |
 | 默认信任 | `IFRAME`，opaque sandbox | `TRUSTED`，直接执行自有代码 |
 
@@ -343,7 +333,7 @@ Bearer 提取
 
 宿主在 `/micro/{code}/*` 从个人授权应用列表取入口，申请 token 并取得有效上下文，两步成功才加载。HTML iframe sandbox 为 `allow-scripts allow-forms`，没有同源身份；专属 MessageChannel 传递 token 与 DTO，不将 token 放入 URL。
 
-子应用复制 [iframe-bridge.js](../examples/micro-app-sdk/iframe-bridge.js)，通过 `DanteMicroIframe.connect` 声明 `appCode`、精确 `allowedHostOrigins`、容器和生命周期。来源包含协议/域名/端口，无路径；localhost 和 127.0.0.1 不是同一来源。直接打开子入口没有宿主上下文，等待是正常行为。
+子应用复制 [iframe-bridge.js](../examples/micro-app-sdk/iframe-bridge.js)，通过 `MicroIframe.connect` 声明 `appCode`、精确 `allowedHostOrigins`、容器和生命周期。来源包含协议/域名/端口，无路径；localhost 和 127.0.0.1 不是同一来源。直接打开子入口没有宿主上下文，等待是正常行为。
 
 `mount/unmount` 必需，`update` 建议实现。生命周期可异步，Promise 在真实完成后结束；SDK 串行调用，但新上下文立即取消旧 signal。没有 update 则卸载后重挂，可能丢输入。
 
@@ -386,7 +376,7 @@ CSV 先由业务 API 按范围过滤，再调用 `bridge.downloadCsv({resource,f
 
 ESM 注册器仅发现当前目录 `./*.tsx`，文件名与编码一致，包含在宿主构建的 lazy chunks 中。`/src/micro-apps/{code}.tsx` 是注册标识，生产不需要公开 TSX 源文件。可共享宿主依赖，但不同 React root 的 Provider 要显式配置。
 
-历史 TRUSTED HTML 通过 `window.__DANTE_MICRO_APP__` 暴露生命周期，加载器按 classic script 执行，拒绝 module/modulepreload；它主要用于自有历史集成。需要 eval 的可信 HTML 还须显式网关 CSP 决策，新标准 Vite 应用优先 iframe。
+历史 TRUSTED HTML 通过 `window.__MICRO_APP__` 暴露生命周期，加载器按 classic script 执行，拒绝 module/modulepreload；它主要用于自有历史集成。需要 eval 的可信 HTML 还须显式网关 CSP 决策，新标准 Vite 应用优先 iframe。
 
 Next/Nuxt/Astro 能整理为单入口静态应用时按 HTML 接入；多 HTML 导出不能直接满足上传限制。SSR、Server Actions 或 Node API 要独立部署服务，静态包上传不会启动服务。H5 可以接入，小程序/原生 App 需其它客户端方案。
 
@@ -543,7 +533,7 @@ npm run dev
 
 ### 11.2 配置优先级与生产门禁
 
-系统/服务环境优先。生产不自动搜索 .env；需要文件时通过绝对 DANTE_ENV_FILE 明确加载。开发只加载当前工作目录 .env，文件不能隐式将环境变成生产。APP_ENV 或 APPLICATION_ENVIRONMENT 任一 production 即启用生产检查。
+系统/服务环境优先。生产不自动搜索 .env；需要文件时通过绝对 APP_ENV_FILE 明确加载。开发只加载当前工作目录 .env，文件不能隐式将环境变成生产。APP_ENV 或 APPLICATION_ENVIRONMENT 任一 production 即启用生产检查。
 
 | 配置 | 生产要求 |
 | --- | --- |
@@ -580,8 +570,8 @@ HTML no-cache，不可变版本资源可一年 immutable，错误 no-store。公
 Compose 编排平台 PostgreSQL、backend、notification-ws、web，可选 work-orders API 与本地业务 DB profile。实际必填项来自 [compose.env.example](../deploy/compose.env.example) 和 [docker-compose.yml](../docker-compose.yml)。检查和运行是两项不同门禁：
 
 ```sh
-docker compose --env-file /secure/dante.env config --quiet
-docker compose --env-file /secure/dante.env --profile work-orders up -d --build
+docker compose --env-file /secure/platform.env config --quiet
+docker compose --env-file /secure/platform.env --profile work-orders up -d --build
 ```
 
 选用内置业务数据库时同时启用对应 local-db profile，否则配置外部独立业务库。版本目录预先存在，服务账号有明确 ACL；不能让重建宿主镜像清空历史目录。
@@ -591,9 +581,9 @@ docker compose --env-file /secure/dante.env --profile work-orders up -d --build
 [deploy/native](../deploy/native) 提供白名单干净构建、配置渲染、Nginx/Caddy 和 systemd 模板。构建锁依赖、拒绝 secret 和既有 node_modules/dist 混入；新输出目录不可覆盖旧产物。
 
 ```sh
-node deploy/native/build.mjs --out-dir /srv/dante-builds/new-release --cargo /usr/bin/cargo
-node deploy/native/render.mjs --config /srv/dante/deployment.json --out-dir /srv/dante/configuration
-nginx -t -p /srv/dante/ -c /srv/dante/configuration/nginx.conf
+node deploy/native/build.mjs --out-dir /srv/platform-builds/new-release --cargo /usr/bin/cargo
+node deploy/native/render.mjs --config /srv/platform/deployment.json --out-dir /srv/platform/configuration
+nginx -t -p /srv/platform/ -c /srv/platform/configuration/nginx.conf
 ```
 
 按最小权限服务身份分离平台、通知、业务、网关，环境配置私有，平台签名密钥不交给其它服务。启动先保证平台迁移成功与 HTTPS 网关可达，再让通知探针收敛并启动已关联客户端的业务服务。
@@ -613,7 +603,7 @@ live 只说明进程，ready 核对实际依赖。业务探针检查业务表/�
 
 X-Request-Id 使用合法 UUID 或生成新值，响应、平台调用和审计关联该 ID。日志使用静态路由、状态和时延，归属只在验证后记录；不记录 token、secret、数据库 URL、请求体、业务通知正文或动态查询内容。指标 label 不放用户、租户、组织或资源 ID。
 
-Rust 指标包括 dante_http_requests_total/request_duration_seconds、鉴权/权限失败、数据库状态、受限微应用运行事件。Node 指标包括 saas_http_*、database/platform/health、通知连接、LISTEN 和提示丢弃；浏览器上报不是权威健康证明。
+Rust 指标包括 platform_http_requests_total/request_duration_seconds、鉴权/权限失败、数据库状态、受限微应用运行事件。Node 指标包括 saas_http_*、database/platform/health、通知连接、LISTEN 和提示丢弃；浏览器上报不是权威健康证明。
 
 当前内省每客户端默认配额为 600 次/分钟，不是早期 30 次/分钟；另有 IP 总尝试、失败认证和并发认证门禁。返回 429 时遵循 Retry-After，容量需要结合每次业务请求的内省/上下文调用评估，不能通过正向缓存绕过即时撤销。
 
@@ -814,7 +804,7 @@ function render(props) {
   if (props.signal.aborted) abort()
 }
 
-const bridge = window.DanteMicroIframe.connect({
+const bridge = window.MicroIframe.connect({
   appCode: "orders",
   allowedHostOrigins: ["https://saas.example.com"],
   container: document.getElementById("app"),
@@ -878,7 +868,7 @@ function renderContext(props: MicroProps) {
   if (props.signal.aborted) abort()
 }
 
-window.DanteMicroIframe.connect({
+window.MicroIframe.connect({
   appCode: "orders",
   allowedHostOrigins: ["https://saas.example.com"],
   container: document.getElementById("app")!,
@@ -897,7 +887,7 @@ window.DanteMicroIframe.connect({
 })
 ```
 
-`MicroProps` 按仓库完整类型建立本应用的类型契约；`window.DanteMicroIframe` 需要在应用 `.d.ts` 文件中声明，不能把这个片段当成包含所有类型声明的独立项目。独立应用宜保留自有类型文件并在 SDK 升级时核对，不要形成对宿主构建目录的运行时依赖。
+`MicroProps` 按仓库完整类型建立本应用的类型契约；`window.MicroIframe` 需要在应用 `.d.ts` 文件中声明，不能把这个片段当成包含所有类型声明的独立项目。独立应用宜保留自有类型文件并在 SDK 升级时核对，不要形成对宿主构建目录的运行时依赖。
 
 `App` 内通过 Context 或状态容器向业务组件提供 `platform`。请求副作用应依赖当前上下文并清理旧任务；不要将旧 props 永久保存在模块常量中。开发时使用 StrictMode，需要保证 effect 的注册与清理可重复执行。
 
@@ -924,7 +914,7 @@ function apply(props) {
   if (props.signal.aborted) abort()
 }
 
-window.DanteMicroIframe.connect({
+window.MicroIframe.connect({
   appCode: "orders",
   allowedHostOrigins: ["https://saas.example.com"],
   container: document.getElementById("app"),
@@ -1070,7 +1060,7 @@ function render(props: MicroProps) {
   if (props.signal.aborted) abort()
 }
 
-export const __DANTE_MICRO_APP__: MicroLifecycle = {
+export const __MICRO_APP__: MicroLifecycle = {
   name: "orders",
   mount(container, props) {
     root = createRoot(container)

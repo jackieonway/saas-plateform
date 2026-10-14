@@ -1,9 +1,9 @@
 /**
- * oauth-playground — Dante Cloud OAuth 测试服务 (端口硬编码 3004)
+ * oauth-playground — SaaS Platform OAuth 测试服务 (端口硬编码 3004)
  *
  * 定位: 授权服务器 (:3001) 的纯消费方, 演练四条 OAuth 流程:
  *   1. 设备授权 RFC 8628 (client smart-tv, PUBLIC)
- *   2. 授权码 + PKCE S256 (client dante-web, CONFIDENTIAL, redirect_uri=http://localhost:3004/callback)
+ *   2. 授权码 + PKCE S256 (client platform-web, CONFIDENTIAL, redirect_uri=http://localhost:3004/callback)
  *   3. 客户端凭据 client_credentials (client api-service, CONFIDENTIAL, 服务间调用场景)
  *   4. 资源密码 password (client resource-portal, CONFIDENTIAL, 高信任第一方应用场景)
  *
@@ -26,8 +26,8 @@ import { authCodeFlowPage, callbackPage, clientCredentialsPage, deviceFlowPage, 
 const PORT = 3004
 const BACKEND = "http://localhost:3001" // Rust Axum OAuth 授权服务器
 const FRONTEND = "http://localhost:3000" // Vite 前端 (consent / device 批准页, /oauth /api 代理)
-const CLIENT_ID = "dante-web"
-const CLIENT_SECRET = "dante-web-secret"
+const CLIENT_ID = "platform-web"
+const CLIENT_SECRET = "platform-web-secret"
 const REDIRECT_URI = "http://localhost:3004/callback"
 const DEVICE_CLIENT_ID = "smart-tv"
 const API_SERVICE_CLIENT_ID = "api-service"

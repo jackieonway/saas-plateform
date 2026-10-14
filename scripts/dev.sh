@@ -1,5 +1,5 @@
 #!/bin/bash
-# Dante Cloud 开发环境启动脚本: PostgreSQL -> Rust 后端(3001) -> Vite 前端(3000)
+# SaaS Platform 开发环境启动脚本: PostgreSQL -> Rust 后端(3001) -> Vite 前端(3000)
 cd "$(dirname "$0")/.."
 
 export PATH="$HOME/.cargo/bin:$PATH"

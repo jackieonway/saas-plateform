@@ -1,5 +1,5 @@
 /**
- * micro-jquery — Dante Cloud 微前端「遗留系统」子应用服务 (jQuery, 端口硬编码 3006)
+ * micro-jquery — SaaS Platform 微前端「遗留系统」子应用服务 (jQuery, 端口硬编码 3006)
  *
  * 定位: 「仿乾坤」微前端的演示子应用之二 —— 十年前风格的内部工单系统,
  * 证明「任意技术栈(含遗留栈)」都能以 HTML 入口 + 沙箱方式接入主应用。
@@ -91,4 +91,4 @@ Bun.serve({
   },
 })
 
-console.log(`[micro-jquery] listening on http://0.0.0.0:${PORT} (jQuery 遗留工单系统, HTML 入口 + __DANTE_MICRO_APP__ 契约)`)
+console.log(`[micro-jquery] listening on http://0.0.0.0:${PORT} (jQuery 遗留工单系统, HTML 入口 + __MICRO_APP__ 契约)`)

@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils"
 import { ApiError } from "@/lib/api"
 import type { LoginResp, Membership } from "@/api/types"
 
-const REMEMBER_KEY = "dante-remember-username"
+const REMEMBER_KEY = "platform-remember-username"
 
 const FEATURES = [
   { icon: Layers, title: "多租户隔离", desc: "租户、组织与应用边界由服务端统一校验" },

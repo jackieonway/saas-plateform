@@ -44,7 +44,7 @@ jobs:
         working-directory: backend
         run: |
           cargo check --locked --tests
-          cargo test --locked --bin dante-cloud-backend
+          cargo test --locked --bin saas-platform-backend
 
       - name: Check production authorization and platform settings against isolated PostgreSQL
         working-directory: backend
@@ -58,15 +58,15 @@ jobs:
         run: node --test tests/production-native-config.mjs deploy/monitoring/tests/monitor.mjs deploy/recovery/tests/envelope.test.mjs deploy/recovery/tests/schedule.test.mjs deploy/recovery/tests/systemd.test.mjs
 
       - name: Build clean immutable release
-        run: node deploy/native/build.mjs --out-dir "$RUNNER_TEMP/dante-release" --cargo "$HOME/.cargo/bin/cargo"
+        run: node deploy/native/build.mjs --out-dir "$RUNNER_TEMP/platform-release" --cargo "$HOME/.cargo/bin/cargo"
 
       - name: Upload build manifest and deployable artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dante-release-${{ github.sha }}
+          name: platform-release-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/dante-release/build-result.json
-            ${{ runner.temp }}/dante-release/source-manifest.json
-            ${{ runner.temp }}/dante-release/artifacts/
+            ${{ runner.temp }}/platform-release/build-result.json
+            ${{ runner.temp }}/platform-release/source-manifest.json
+            ${{ runner.temp }}/platform-release/artifacts/
           if-no-files-found: error
           retention-days: 14

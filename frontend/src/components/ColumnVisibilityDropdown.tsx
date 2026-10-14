@@ -26,7 +26,7 @@ export function ColumnVisibilityDropdown({
   onChange,
   className,
 }: {
-  /** 存储 key(localStorage: dante-cols-${table}) */
+  /** 存储 key(localStorage: platform-cols-${table}) */
   table: string
   columns: ColumnDef[]
   /** 当前可见列 key 数组 */

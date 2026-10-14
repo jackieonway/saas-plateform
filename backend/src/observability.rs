@@ -119,26 +119,26 @@ async fn metrics(State(state): State<AppState>, headers: HeaderMap) -> Result<Re
     }
     let database_up = tokio::time::timeout(Duration::from_secs(1),
         sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&state.pool)).await.is_ok_and(|value| value.is_ok());
-    let mut output = format!("# TYPE dante_service_up gauge\ndante_service_up 1\n# TYPE dante_database_up gauge\ndante_database_up {}\n# TYPE dante_uptime_seconds gauge\ndante_uptime_seconds {}\n",
+    let mut output = format!("# TYPE platform_service_up gauge\nplatform_service_up 1\n# TYPE platform_database_up gauge\nplatform_database_up {}\n# TYPE platform_uptime_seconds gauge\nplatform_uptime_seconds {}\n",
         u8::from(database_up), (chrono::Utc::now() - state.started_at).num_seconds().max(0));
-    output.push_str("# TYPE dante_http_requests_total counter\n# TYPE dante_http_request_duration_seconds histogram\n# TYPE dante_http_authentication_failures_total counter\n# TYPE dante_http_permission_denials_total counter\n");
+    output.push_str("# TYPE platform_http_requests_total counter\n# TYPE platform_http_request_duration_seconds histogram\n# TYPE platform_http_authentication_failures_total counter\n# TYPE platform_http_permission_denials_total counter\n");
     let data = registry().lock().map_err(|_| AppError::Server(anyhow::anyhow!("metrics unavailable")))?;
     for ((route, method, status), value) in &data.requests {
         // MatchedPath is a registered static template; no URI segments, query,
         // tenant UUIDs or request IDs are used as metric labels.
         let labels = format!("route=\"{}\",method=\"{}\",status=\"{}\"", route.replace('"', "\\\""), method, status);
-        output.push_str(&format!("dante_http_requests_total{{{labels}}} {}\n", value.count));
+        output.push_str(&format!("platform_http_requests_total{{{labels}}} {}\n", value.count));
         for (index, bound) in BUCKETS.iter().enumerate() {
-            output.push_str(&format!("dante_http_request_duration_seconds_bucket{{{labels},le=\"{bound}\"}} {}\n", value.buckets[index]));
+            output.push_str(&format!("platform_http_request_duration_seconds_bucket{{{labels},le=\"{bound}\"}} {}\n", value.buckets[index]));
         }
-        output.push_str(&format!("dante_http_request_duration_seconds_bucket{{{labels},le=\"+Inf\"}} {}\ndante_http_request_duration_seconds_sum{{{labels}}} {}\ndante_http_request_duration_seconds_count{{{labels}}} {}\n", value.count, value.seconds, value.count));
-        if *status == 401 { output.push_str(&format!("dante_http_authentication_failures_total{{{labels}}} {}\n", value.count)); }
-        if *status == 403 { output.push_str(&format!("dante_http_permission_denials_total{{{labels}}} {}\n", value.count)); }
+        output.push_str(&format!("platform_http_request_duration_seconds_bucket{{{labels},le=\"+Inf\"}} {}\nplatform_http_request_duration_seconds_sum{{{labels}}} {}\nplatform_http_request_duration_seconds_count{{{labels}}} {}\n", value.count, value.seconds, value.count));
+        if *status == 401 { output.push_str(&format!("platform_http_authentication_failures_total{{{labels}}} {}\n", value.count)); }
+        if *status == 403 { output.push_str(&format!("platform_http_permission_denials_total{{{labels}}} {}\n", value.count)); }
     }
-    output.push_str("# TYPE dante_token_validation_failures_total counter\n");
-    for (reason, count) in &data.token_failures { output.push_str(&format!("dante_token_validation_failures_total{{reason=\"{reason}\"}} {count}\n")); }
-    output.push_str("# TYPE dante_micro_runtime_events_total counter\n");
-    for ((app, kind, stage), count) in &data.runtime_events { output.push_str(&format!("dante_micro_runtime_events_total{{application=\"{app}\",kind=\"{kind}\",stage=\"{stage}\"}} {count}\n")); }
+    output.push_str("# TYPE platform_token_validation_failures_total counter\n");
+    for (reason, count) in &data.token_failures { output.push_str(&format!("platform_token_validation_failures_total{{reason=\"{reason}\"}} {count}\n")); }
+    output.push_str("# TYPE platform_micro_runtime_events_total counter\n");
+    for ((app, kind, stage), count) in &data.runtime_events { output.push_str(&format!("platform_micro_runtime_events_total{{application=\"{app}\",kind=\"{kind}\",stage=\"{stage}\"}} {count}\n")); }
     Ok(([(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], output).into_response())
 }
 
