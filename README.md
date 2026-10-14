@@ -137,6 +137,8 @@ tests/                  现有 shell 运行时检查脚本
 
 独立子应用的开发与上线步骤参见 [微前端接入与上线指南](docs/microfrontend-integration.md)。
 
+React、Vue、Angular 等前端的开发适配、SDK、路由、权限、构建发布与故障排查参见 [前端微应用开发与接入手册](docs/micro-app-developer-guide.md)。
+
 面向真实多租户业务的改造目标、功能需求和验收标准参见 [SaaS 与微前端改造需求分析](docs/saas-microfrontend-requirements.md)。
 
 ## 8. 通知与微前端

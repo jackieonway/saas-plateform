@@ -1,5 +1,7 @@
 # 微前端接入与上线指南
 
+不同技术栈的完整开发步骤、框架适配示例、业务请求封装及验收清单，见[前端微应用开发与接入手册](./micro-app-developer-guide.md)。
+
 HTML 微应用采用[上传 ZIP 或 tar.gz 构建包](./application-independent-deployment.md)：服务端将静态文件置于 `/sub-apps/<code>/versions/<version>/`，由管理员预检、激活或回滚，宿主按当前环境的部署指针加载入口。ESM 模块随宿主前端构建和部署。两种方式都不会自动授予租户、组织或角色权限。管理接口与 HTTPS、来源、CORS 规则见[发布 API](./application-release-api.md)。
 
 新建微应用选择 `ESM` 或 `HTML`，无需单独选择运行方式或入口。第一方 ESM 模块以应用编码命名，加入宿主构建后由编码自动关联并直挂运行，随宿主发布；报表中心使用此方式。系统管理和消息中心由宿主路由直接承载，也没有独立入口。HTML 应用上传 ZIP 或 tar.gz 静态包，系统解压并管理环境版本，通过 iframe SDK 接收平台上下文；Vue、jQuery 和独立工单使用此方式。以下可信 HTML 加载方式仅供历史集成迁移参考。
