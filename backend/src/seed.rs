@@ -262,7 +262,7 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
     Ok(())
 }
 
-/// 幂等种子: 仅当 users 表为空时执行 (docs/db-schema.md 种子计划)
+/// 幂等种子: 仅当 users 表为空时执行 (docs/architecture.md#data 种子计划)
 pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let existing: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(pool)
