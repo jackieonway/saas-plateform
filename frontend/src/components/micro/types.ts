@@ -70,6 +70,8 @@ export interface AppAuthorizationContext {
   user: MicroUser
   tenant: MicroTenant
   organization: MicroOrganization
+  /** 当前组织及其下级组织的硬边界；仅平台根上下文可明确返回 null。 */
+  organizationScopeIds?: string[] | null
   roles: MicroRole[]
   permissions: string[]
   dataGrants: MicroDataGrant[]
@@ -101,6 +103,8 @@ export interface MicroProps {
   user: MicroUser
   tenant: MicroTenant
   organization: MicroOrganization
+  /** 所有数据授权都受此组织上限约束；缺少旧上下文字段时只开放当前组织。 */
+  organizationScopeIds: string[] | null
   roles: MicroRole[]
   permissions: string[]
   dataGrants: MicroDataGrant[]

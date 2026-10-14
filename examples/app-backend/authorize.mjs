@@ -19,7 +19,7 @@ async function jsonResponse(response) {
 
 /**
  * 每个受保护请求都重新内省并获取上下文，不缓存正向结果。
- * loadRecord 必须在 SQL 中同时限制 id 和 tenant_id；返回 null 表示不可见。
+ * loadRecord 必须在 SQL 中限制 id、tenant_id 和有效组织范围；返回 null 表示不可见。
  */
 export async function authorizeRecord({
   token, platformUrl, clientId, clientSecret, appCode,
@@ -52,15 +52,27 @@ export async function authorizeRecord({
   if (!Array.isArray(ctx.permissions) || !ctx.permissions.includes(permission)) {
     reject(403, 'OPERATION_DENIED');
   }
-  const grant = Array.isArray(ctx.dataGrants)
-    ? ctx.dataGrants.find((item) => item.resource === resource && item.action === action)
-    : undefined;
-  if (!grant || grant.tenantId !== intro.tenant_id || grant.subjectUserId !== intro.sub) {
+  // null is emitted only for the actual platform root. A context from an older
+  // server without this field is restricted to the current organization.
+  const ceiling = ctx.organizationScopeIds === null ? null
+    : ctx.organizationScopeIds ?? [intro.organization_id];
+  if (ceiling !== null && (!Array.isArray(ceiling) || ceiling.length > 10000 ||
+      !ceiling.every((value) => typeof value === 'string' && value.length > 0) ||
+      !ceiling.includes(intro.organization_id))) reject(401, 'INVALID_CONTEXT');
+  const grants = Array.isArray(ctx.dataGrants)
+    ? ctx.dataGrants.filter((item) => item?.resource === resource && item?.action === action)
+    : [];
+  const grant = grants.length === 1 ? grants[0] : null;
+  if (!grant || grant.tenantId !== intro.tenant_id || grant.subjectUserId !== intro.sub ||
+      !['SELF', 'ORG', 'ORG_SUBTREE', 'TENANT'].includes(grant.scope) ||
+      !Array.isArray(grant.organizationIds)) {
     reject(403, 'DATA_DENIED');
   }
-  const record = await loadRecord({ id: recordId, tenantId: intro.tenant_id });
-  if (!record || record.tenant_id !== intro.tenant_id) reject(404, 'RESOURCE_NOT_FOUND');
-  const allowed = grant.scope === 'SELF' ? record.owner_user_id === intro.sub
+  const record = await loadRecord({ id: recordId, tenantId: intro.tenant_id, organizationIds: ceiling });
+  if (!record || record.tenant_id !== intro.tenant_id ||
+      (ceiling !== null && !ceiling.includes(record.organization_id))) reject(404, 'RESOURCE_NOT_FOUND');
+  const allowed = grant.scope === 'SELF' ? record.owner_user_id === intro.sub &&
+      (grant.organizationIds.length === 0 || grant.organizationIds.includes(record.organization_id))
     : grant.scope === 'ORG' ? record.organization_id === intro.organization_id
     : grant.scope === 'ORG_SUBTREE' ? grant.organizationIds?.includes(record.organization_id) === true
     : grant.scope === 'TENANT';
@@ -69,10 +81,12 @@ export async function authorizeRecord({
 }
 
 /** 示例查询。业务表必须有可信的租户及资源归属字段。 */
-export async function loadOrder(db, { id, tenantId }) {
+export async function loadOrder(db, { id, tenantId, organizationIds }) {
+  const scoped = Array.isArray(organizationIds);
   const result = await db.query(
-    'SELECT id, tenant_id, organization_id, owner_user_id FROM orders WHERE id = $1 AND tenant_id = $2',
-    [id, tenantId],
+    'SELECT id, tenant_id, organization_id, owner_user_id FROM orders WHERE id = $1 AND tenant_id = $2' +
+      (scoped ? ' AND organization_id = ANY($3::uuid[])' : ''),
+    scoped ? [id, tenantId, organizationIds] : [id, tenantId],
   );
   return result.rows[0] ?? null;
 }

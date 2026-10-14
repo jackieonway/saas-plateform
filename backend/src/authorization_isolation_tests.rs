@@ -1,4 +1,4 @@
-//! Selected tenant authorization isolation on an owned, migrated PostgreSQL database.
+//! Selected tenant/organization authorization isolation on an owned, migrated database.
 //! Run with `cargo test authorization_isolation -- --ignored --nocapture`.
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -291,6 +291,13 @@ async fn authorization_isolation_respects_selected_tenant_and_revocation() -> Re
             .bind(tenant).bind(app_id).execute(pool).await?;
         sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)")
             .bind(org).bind(app_id).execute(pool).await?;
+        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+            .bind(platform).bind(app_id).execute(pool).await?;
+        sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)")
+            .bind(platform_org).bind(app_id).execute(pool).await?;
+        for menu in menus.values() {
+            grant_menu(pool, platform, platform_org, *menu).await?;
+        }
         for permission in ["system:organization", "system:user", "system:role"] {
             grant_menu(pool, tenant, org, menus[permission]).await?;
         }
@@ -351,8 +358,9 @@ async fn authorization_isolation_respects_selected_tenant_and_revocation() -> Re
             "platform context lost legitimate tenant choices");
         call(&app, &platform_session, Method::GET, "/api/applications", None, StatusCode::OK).await?;
         let platform_perms = call(&app, &platform_session, Method::GET, "/api/auth/permissions", None, StatusCode::OK).await?;
-        ensure!(platform_perms["permissions"].as_array().is_some_and(|perms| perms.contains(&json!("system:tenant"))
-            && perms.contains(&json!("denied:data"))), "platform super administrator permissions were unexpectedly capped");
+        ensure!(platform_perms["permissions"].as_array().is_some_and(|perms| perms.len() == menus.len()
+            && perms.contains(&json!("system:tenant")) && !perms.contains(&json!("denied:data"))),
+            "platform super administrator did not respect its current organization grants");
         grant_menu(pool, tenant, org, menus["system:tenant"]).await?;
         let granted_tenants = call(&app, &selected, Method::GET, "/api/tenants", None, StatusCode::OK).await?;
         ensure!(granted_tenants["total"] == 1 && granted_tenants["records"][0]["id"] == json!(tenant),
@@ -404,6 +412,345 @@ async fn authorization_isolation_respects_selected_tenant_and_revocation() -> Re
         let revoked = call(&app, &selected, Method::GET, "/api/auth/permissions", None, StatusCode::OK).await?;
         ensure!(revoked["permissions"] == json!([]), "tenant app revocation did not cap the next request");
         call(&app, &selected, Method::GET, "/api/roles", None, StatusCode::FORBIDDEN).await?;
+        Ok(())
+    }.await;
+    database.finish(result).await
+}
+
+async fn assert_no_management_data(app: &Router, token: &str, app_id: Uuid) -> Result<()> {
+    let permissions = call(
+        app,
+        token,
+        Method::GET,
+        "/api/auth/permissions",
+        None,
+        StatusCode::OK,
+    )
+    .await?;
+    ensure!(
+        permissions["permissions"] == json!([]),
+        "ungranted organization exposed permissions"
+    );
+    let menus = call(
+        app,
+        token,
+        Method::GET,
+        &format!("/api/auth/menus?applicationId={app_id}"),
+        None,
+        StatusCode::OK,
+    )
+    .await?;
+    ensure!(
+        menus["menus"] == json!([]),
+        "ungranted organization exposed menus"
+    );
+    for path in [
+        "/api/users",
+        "/api/tenants",
+        "/api/tenants/options",
+        "/api/applications",
+    ] {
+        call(app, token, Method::GET, path, None, StatusCode::FORBIDDEN).await?;
+    }
+    let search = call(
+        app,
+        token,
+        Method::GET,
+        "/api/search?q=Organization",
+        None,
+        StatusCode::OK,
+    )
+    .await?;
+    ensure!(
+        search == json!({"users":[],"tenants":[],"organizations":[],"roles":[]}),
+        "ungranted organization search exposed management data: {search}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn authorization_isolation_platform_root_and_child_require_direct_org_grants() -> Result<()> {
+    let database = Database::create().await?;
+    let pool = &database.pool;
+    let result = async {
+        let tenant: Uuid = sqlx::query_scalar(
+            "INSERT INTO tenants(name,code,is_platform) VALUES('Organization platform','admin-tenant',true) RETURNING id",
+        ).fetch_one(pool).await?;
+        let root = organization(pool, tenant, None, "Organization root").await?;
+        let child = organization(pool, tenant, Some(root), "Organization child").await?;
+        let admin = user(pool, "organization-global-admin", root, true).await?;
+        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+            .bind(admin).bind(child).execute(pool).await?;
+        let application: Uuid = sqlx::query_scalar(
+            "INSERT INTO applications(name,code) VALUES('Organization system','system') RETURNING id",
+        ).fetch_one(pool).await?;
+        let mut menus = HashMap::new();
+        for permission in ["system:tenant", "system:user", "notification:publish"] {
+            let menu: Uuid = sqlx::query_scalar(
+                "INSERT INTO menus(application_id,title,permission,type) VALUES($1,$2,$2,'MENU') RETURNING id",
+            ).bind(application).bind(permission).fetch_one(pool).await?;
+            menus.insert(permission, menu);
+        }
+        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+            .bind(tenant).bind(application).execute(pool).await?;
+        for org in [root, child] {
+            for menu in menus.values() {
+                grant_menu(pool, tenant, org, *menu).await?;
+            }
+            sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) \
+                         SELECT id,$3,'notification','publish','SELF' FROM memberships WHERE user_id=$1 AND organization_id=$2")
+                .bind(admin).bind(org).bind(application).execute(pool).await?;
+        }
+        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,grant_types,scopes,application_id) \
+                     VALUES('organization-client','Organization client','CONFIDENTIAL','client_credentials','profile',$1)")
+            .bind(application).execute(pool).await?;
+        let config = Config::from_values(&HashMap::from([
+            ("APPLICATION_ENVIRONMENT".into(), "development".into()),
+            ("DATABASE_URL".into(), "postgres://unused/organization-isolation-test".into()),
+            ("JWT_SECRET".into(), SECRET.into()),
+        ]))?;
+        let app = routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config)));
+        let root_session = session(pool, admin, tenant, root).await?;
+        let child_session = session(pool, admin, tenant, child).await?;
+        let contexts = [(root, root_session), (child, child_session)];
+
+        // Tenant application/menu and organization menu grants are insufficient
+        // without the current organization's own application grant, even for a
+        // global administrator in the actual platform tenant.
+        for (_, token) in &contexts {
+            assert_no_management_data(&app, token, application).await?;
+            let profile = call(&app, token, Method::GET, "/api/auth/profile", None, StatusCode::OK).await?;
+            ensure!(profile["applications"] == json!([]), "organization without app grant exposed an app");
+            call(&app, token, Method::POST, "/api/oauth/session-token",
+                Some(json!({"appCode":"system"})), StatusCode::NOT_FOUND).await?;
+        }
+
+        // An application grant alone does not confer any menu or operation.
+        let mut app_tokens = HashMap::new();
+        for (org, token) in &contexts {
+            sqlx::query("DELETE FROM organization_menus WHERE organization_id=$1")
+                .bind(org).execute(pool).await?;
+            sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)")
+                .bind(org).bind(application).execute(pool).await?;
+            assert_no_management_data(&app, token, application).await?;
+            let issue = call(&app, token, Method::POST, "/api/oauth/session-token",
+                Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
+            let app_token = issue["accessToken"].as_str().ok_or_else(|| anyhow!("missing app token"))?.to_owned();
+            let context = call(&app, &app_token, Method::GET, "/api/apps/system/context", None, StatusCode::OK).await?;
+            ensure!(context["permissions"] == json!([]) && context["menus"] == json!([]),
+                "platform app context bypassed current organization menu grants");
+            let publish = json!({"idempotencyKey":format!("organization-ungranted-{org}"),
+                "target":{"kind":"USER","userId":admin,"organizationId":org},
+                "type":"INFO","title":"Organization publication","content":"","link":""});
+            call(&app, &app_token, Method::POST, "/api/apps/system/notifications",
+                Some(publish), StatusCode::FORBIDDEN).await?;
+            app_tokens.insert(*org, app_token);
+        }
+
+        // Parent grants must not grant child menus implicitly. Grant only the
+        // root user menu, confirm the child is denied, then grant the child.
+        grant_menu(pool, tenant, root, menus["system:user"]).await?;
+        call(&app, &contexts[0].1, Method::GET, "/api/users", None, StatusCode::OK).await?;
+        assert_no_management_data(&app, &contexts[1].1, application).await?;
+        grant_menu(pool, tenant, child, menus["system:user"]).await?;
+        for (org, token) in &contexts {
+            call(&app, token, Method::GET, "/api/users", None, StatusCode::OK).await?;
+            call(&app, token, Method::GET, "/api/tenants", None, StatusCode::FORBIDDEN).await?;
+            let app_token = &app_tokens[org];
+            let context = call(&app, app_token, Method::GET, "/api/apps/system/context", None, StatusCode::OK).await?;
+            ensure!(context["permissions"] == json!(["system:user"]),
+                "app context did not restrict global administrator to granted menu");
+            grant_menu(pool, tenant, *org, menus["notification:publish"]).await?;
+            let publish = json!({"idempotencyKey":format!("organization-granted-{org}"),
+                "target":{"kind":"USER","userId":admin,"organizationId":org},
+                "type":"INFO","title":"Organization publication","content":"","link":""});
+            call(&app, app_token, Method::POST, "/api/apps/system/notifications",
+                Some(publish.clone()), StatusCode::OK).await?;
+            sqlx::query("DELETE FROM organization_menus WHERE organization_id=$1 AND menu_id=$2")
+                .bind(org).bind(menus["notification:publish"]).execute(pool).await?;
+            call(&app, app_token, Method::POST, "/api/apps/system/notifications",
+                Some(publish), StatusCode::FORBIDDEN).await?;
+            sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2")
+                .bind(org).bind(application).execute(pool).await?;
+            assert_no_management_data(&app, token, application).await?;
+            call(&app, app_token, Method::GET, "/api/apps/system/context", None, StatusCode::UNAUTHORIZED).await?;
+            call(&app, token, Method::POST, "/api/oauth/session-token",
+                Some(json!({"appCode":"system"})), StatusCode::NOT_FOUND).await?;
+        }
+        Ok(())
+    }.await;
+    database.finish(result).await
+}
+
+async fn assert_oauth_clients_denied(app: &Router, token: &str) -> Result<()> {
+    let client = Uuid::new_v4();
+    for (method, path, body) in [
+        (Method::GET, "/api/oauth/clients".to_owned(), None),
+        (
+            Method::POST,
+            "/api/oauth/clients".to_owned(),
+            Some(json!({
+                "clientName":"Denied client","grantTypes":["client_credentials"],"scopes":["profile"],
+            })),
+        ),
+        (
+            Method::PUT,
+            format!("/api/oauth/clients/{client}"),
+            Some(json!({"clientName":"Denied update"})),
+        ),
+        (Method::DELETE, format!("/api/oauth/clients/{client}"), None),
+        (
+            Method::POST,
+            format!("/api/oauth/clients/{client}/regenerate-secret"),
+            None,
+        ),
+    ] {
+        call(app, token, method, &path, body, StatusCode::FORBIDDEN).await?;
+    }
+    Ok(())
+}
+
+async fn assert_oauth_tokens_denied(app: &Router, token: &str, target: Uuid) -> Result<()> {
+    let missing = Uuid::new_v4();
+    for (method, path, body) in [
+        (Method::GET, "/api/oauth/tokens".to_owned(), None),
+        (Method::GET, "/api/oauth/tokens/sessions".to_owned(), None),
+        (Method::GET, "/api/oauth/device-codes".to_owned(), None),
+        (Method::DELETE, format!("/api/oauth/tokens/{missing}"), None),
+        (Method::POST, "/api/oauth/tokens/purge".to_owned(), None),
+        (
+            Method::POST,
+            "/api/oauth/tokens/kick".to_owned(),
+            Some(json!({"userId":target})),
+        ),
+        (
+            Method::PUT,
+            format!("/api/oauth/device-codes/{missing}/revoke"),
+            None,
+        ),
+    ] {
+        call(app, token, method, &path, body, StatusCode::FORBIDDEN).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn authorization_isolation_shared_oauth_code_requires_the_specific_menu() -> Result<()> {
+    let database = Database::create().await?;
+    let pool = &database.pool;
+    let result = async {
+        let tenant: Uuid = sqlx::query_scalar(
+            "INSERT INTO tenants(name,code,is_platform) VALUES('Shared code platform','admin-tenant',true) RETURNING id",
+        ).fetch_one(pool).await?;
+        let org = organization(pool, tenant, None, "Shared code root").await?;
+        let admin = user(pool, "shared-code-global-admin", org, true).await?;
+        let scoped = user(pool, "shared-code-scoped-admin", org, false).await?;
+        let target = user(pool, "shared-code-session-target", org, false).await?;
+        let application: Uuid = sqlx::query_scalar(
+            "INSERT INTO applications(name,code) VALUES('Shared code system','system') RETURNING id",
+        ).fetch_one(pool).await?;
+        let client_menu: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus(application_id,title,permission,type,path) \
+             VALUES($1,'OAuth clients','system:oauth','MENU','/system/oauth/clients') RETURNING id",
+        ).bind(application).fetch_one(pool).await?;
+        let token_menu: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus(application_id,title,permission,type,path) \
+             VALUES($1,'OAuth devices and sessions','system:oauth','MENU','/system/oauth/tokens') RETURNING id",
+        ).bind(application).fetch_one(pool).await?;
+        let misleading_button: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus(application_id,title,permission,type,path) \
+             VALUES($1,'Shared code operation','system:oauth','BUTTON','/system/oauth/tokens') RETURNING id",
+        ).bind(application).fetch_one(pool).await?;
+        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+            .bind(tenant).bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)")
+            .bind(org).bind(application).execute(pool).await?;
+        for menu in [client_menu, token_menu, misleading_button] {
+            sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
+                .bind(tenant).bind(menu).execute(pool).await?;
+        }
+        for menu in [client_menu, misleading_button] {
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+                .bind(org).bind(menu).execute(pool).await?;
+        }
+        let role: Uuid = sqlx::query_scalar(
+            "INSERT INTO roles(tenant_id,organization_id,name,code) VALUES($1,$2,'OAuth operator','oauth-operator') RETURNING id",
+        ).bind(tenant).bind(org).fetch_one(pool).await?;
+        sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
+            .bind(scoped).bind(role).bind(org).execute(pool).await?;
+        sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2),($1,$3)")
+            .bind(role).bind(client_menu).bind(misleading_button).execute(pool).await?;
+        let config = Config::from_values(&HashMap::from([
+            ("APPLICATION_ENVIRONMENT".into(), "development".into()),
+            ("DATABASE_URL".into(), "postgres://unused/shared-code-isolation-test".into()),
+            ("JWT_SECRET".into(), SECRET.into()),
+        ]))?;
+        let app = routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config)));
+        let admin_session = session(pool, admin, tenant, org).await?;
+        let scoped_session = session(pool, scoped, tenant, org).await?;
+        let target_session = session(pool, target, tenant, org).await?;
+
+        // A granted OAuth client menu and even a BUTTON with the token page's
+        // path cannot unlock device/session data sharing the same permission code.
+        for token in [&admin_session, &scoped_session] {
+            let permissions = call(&app, token, Method::GET, "/api/auth/permissions", None, StatusCode::OK).await?;
+            ensure!(permissions["permissions"] == json!(["system:oauth"]), "fixture lacks the shared permission code");
+            call(&app, token, Method::GET, "/api/oauth/clients", None, StatusCode::OK).await?;
+            assert_oauth_tokens_denied(&app, token, target).await?;
+        }
+        call(&app, &target_session, Method::GET, "/api/auth/profile", None, StatusCode::OK).await?;
+        let created = call(&app, &scoped_session, Method::POST, "/api/oauth/clients", Some(json!({
+            "clientName":"Granted client","grantTypes":["client_credentials"],"scopes":["profile"],
+        })), StatusCode::OK).await?;
+        let client_id = created["id"].as_str().ok_or_else(|| anyhow!("missing client id"))?;
+        call(&app, &scoped_session, Method::PUT, &format!("/api/oauth/clients/{client_id}"),
+            Some(json!({"clientName":"Updated client"})), StatusCode::OK).await?;
+        call(&app, &scoped_session, Method::POST, &format!("/api/oauth/clients/{client_id}/regenerate-secret"),
+            None, StatusCode::OK).await?;
+        call(&app, &scoped_session, Method::DELETE, &format!("/api/oauth/clients/{client_id}"),
+            None, StatusCode::OK).await?;
+
+        // Global administrators bypass only the user-role layer. Normal users
+        // still need the specific token menu in their effective role grants.
+        grant_menu(pool, tenant, org, token_menu).await?;
+        call(&app, &admin_session, Method::GET, "/api/oauth/tokens/sessions", None, StatusCode::OK).await?;
+        assert_oauth_tokens_denied(&app, &scoped_session, target).await?;
+        sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)")
+            .bind(role).bind(token_menu).execute(pool).await?;
+        for token in [&admin_session, &scoped_session] {
+            for path in ["/api/oauth/tokens", "/api/oauth/tokens/sessions", "/api/oauth/device-codes"] {
+                call(&app, token, Method::GET, path, None, StatusCode::OK).await?;
+            }
+        }
+        sqlx::query("DELETE FROM organization_menus WHERE organization_id=$1 AND menu_id=$2")
+            .bind(org).bind(client_menu).execute(pool).await?;
+        for token in [&admin_session, &scoped_session] {
+            assert_oauth_clients_denied(&app, token).await?;
+            call(&app, token, Method::GET, "/api/oauth/tokens/sessions", None, StatusCode::OK).await?;
+        }
+        call(&app, &scoped_session, Method::POST, "/api/oauth/tokens/purge", None, StatusCode::OK).await?;
+        let missing = Uuid::new_v4();
+        call(&app, &scoped_session, Method::DELETE, &format!("/api/oauth/tokens/{missing}"), None, StatusCode::NOT_FOUND).await?;
+        call(&app, &scoped_session, Method::PUT, &format!("/api/oauth/device-codes/{missing}/revoke"), None, StatusCode::NOT_FOUND).await?;
+        call(&app, &scoped_session, Method::POST, "/api/oauth/tokens/kick", Some(json!({"userId":target})), StatusCode::OK).await?;
+        call(&app, &target_session, Method::GET, "/api/auth/profile", None, StatusCode::UNAUTHORIZED).await?;
+
+        // Retaining a shared-code button does not preserve access after the
+        // tenant menu cap or the current organization's app cap is revoked.
+        sqlx::query("DELETE FROM tenant_menus WHERE tenant_id=$1 AND menu_id=$2")
+            .bind(tenant).bind(token_menu).execute(pool).await?;
+        for token in [&admin_session, &scoped_session] {
+            assert_oauth_tokens_denied(&app, token, target).await?;
+        }
+        grant_menu(pool, tenant, org, token_menu).await?;
+        sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2")
+            .bind(org).bind(application).execute(pool).await?;
+        for token in [&admin_session, &scoped_session] {
+            assert_oauth_clients_denied(&app, token).await?;
+            assert_oauth_tokens_denied(&app, token, target).await?;
+        }
         Ok(())
     }.await;
     database.finish(result).await

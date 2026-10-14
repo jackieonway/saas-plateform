@@ -31,12 +31,10 @@ pub fn routes() -> Router<AppState> {
 /// An ordinary context can only select its own tenant, including global administrators.
 async fn options(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
     let platform = state.is_platform_context(&user).await?;
-    if !(platform && user.is_super_admin) {
-        let permissions = state.context_permissions(&user).await?;
-        if !["system:tenant", "system:organization", "system:department", "system:user", "system:role", "system:authorization", "system:audit"]
-            .iter().any(|permission| permissions.contains(*permission)) {
-            return Err(AppError::forbidden("无租户选择权限"));
-        }
+    let permissions = state.context_permissions(&user).await?;
+    if !["system:tenant", "system:organization", "system:department", "system:user", "system:role", "system:authorization", "system:audit"]
+        .iter().any(|permission| permissions.contains(*permission)) {
+        return Err(AppError::forbidden("无租户选择权限"));
     }
     let scope = if platform { None } else { Some(user.tenant_id) };
     let rows: Vec<(Uuid, String, String, bool)> = sqlx::query_as(
@@ -50,9 +48,12 @@ async fn options(State(state): State<AppState>, user: CurrentUser) -> Result<Jso
 
 const LIST_SELECT: &str = "SELECT t.id, t.name, t.code, t.tenant_type, t.contact_name, t.contact_phone, t.contact_email, COALESCE(t.description,'') AS description, t.status, t.is_platform, t.created_at, t.expires_at, \
  t.province, t.city, t.district, t.township, t.village, t.address, t.longitude, t.latitude, \
- (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id) AS organization_count, \
- (SELECT count(DISTINCT m.user_id) FROM memberships m JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id) AS user_count, \
- (SELECT count(*) FROM tenant_applications ta WHERE ta.tenant_id = t.id) AS authorized_app_count";
+ (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id AND ($6::uuid[] IS NULL OR o.id = ANY($6))) AS organization_count, \
+ (SELECT count(DISTINCT m.user_id) FROM memberships m JOIN organizations o ON o.id = m.organization_id \
+  WHERE o.tenant_id = t.id AND ($6::uuid[] IS NULL OR o.id = ANY($6))) AS user_count, \
+ (SELECT count(*) FROM tenant_applications ta WHERE ta.tenant_id = t.id \
+  AND ($6::uuid[] IS NULL OR EXISTS (SELECT 1 FROM organization_applications oa \
+       WHERE oa.organization_id = $7 AND oa.application_id = ta.application_id))) AS authorized_app_count";
 
 #[derive(sqlx::FromRow, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,8 +96,9 @@ async fn list(
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
     let st = params.get("status").cloned().unwrap_or_default();
-    // 平台租户看全部; 其余租户强制仅看自己 (忽略任何传入过滤, 防跨租户枚举)
+    // 平台根看全部；其余上下文仅看本租户，统计值限制在当前组织子树。
     let scope: Option<Uuid> = if platform { None } else { Some(user.tenant_id) };
+    let org_scope = state.scoped_org_ids(&user).await?;
     let rows: Vec<TenantRow> = sqlx::query_as(&format!(
         "{LIST_SELECT} FROM tenants t \
          WHERE ($1 = '' OR t.name ILIKE '%' || $1 || '%' OR t.code ILIKE '%' || $1 || '%') \
@@ -109,6 +111,8 @@ async fn list(
     .bind(offset)
     .bind(&st)
     .bind(scope)
+    .bind(&org_scope)
+    .bind(user.org_id)
     .fetch_all(&state.pool)
     .await?;
     let total: i64 = sqlx::query_scalar(
@@ -227,7 +231,7 @@ async fn create(
         .fetch_one(&mut *tx).await?;
     onboarding::initialize_tenant(&mut tx, row.id, root_id).await?;
     let administrator = onboarding::provision_contact_administrator(
-        &mut tx, &state.config, row.id, root_id, &contact, "tenant_admin", true,
+        &mut tx, &state.config, row.id, root_id, &contact, "tenant_admin", None,
     ).await?;
     tx.commit().await?;
     row.organization_count = 1;
@@ -868,7 +872,7 @@ async fn initialize_administrator(
     RequirePermission("system:role").check(&state, &user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     state.require_platform(&user).await?;
-    let allow_global = state.is_platform_context(&user).await?;
+    let existing_org_scope = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
     let (name, contact_name, contact_phone, contact_email): (String, String, String, String) = sqlx::query_as(
         "SELECT name,contact_name,contact_phone,contact_email FROM tenants WHERE id=$1 FOR UPDATE",
@@ -881,7 +885,7 @@ async fn initialize_administrator(
     let role_code = "tenant_admin";
     let contact = Contact { contact_name, contact_phone, contact_email }.normalized();
     let administrator = onboarding::initialize_existing_administrator(
-        &mut tx, &state.config, tenant_id, org_id, &contact, role_code, allow_global,
+        &mut tx, &state.config, tenant_id, org_id, &contact, role_code, existing_org_scope.as_deref(),
     ).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();

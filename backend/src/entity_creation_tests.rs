@@ -277,6 +277,10 @@ impl Harness {
         .bind(application)
         .fetch_one(pool)
         .await?;
+        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)").bind(platform).bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)").bind(org).bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT $1,id FROM menus WHERE application_id=$2").bind(platform).bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) SELECT $1,id FROM menus WHERE application_id=$2").bind(org).bind(application).execute(pool).await?;
         let config = Config::from_values(&HashMap::from([
             ("APPLICATION_ENVIRONMENT".into(), "development".into()),
             (

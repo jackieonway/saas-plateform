@@ -25,6 +25,7 @@ import { auditApi } from "@/api/audit"
 import { tenantsApi } from "@/api/tenants"
 import { asPage } from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
+import { hasPlatformContext } from "@/lib/platform-context"
 import { AppIcon } from "@/lib/icons"
 import { parseUserAgent } from "@/lib/user-agent"
 import { auditActionLabel, auditActionIcon, auditActionTone } from "@/components/layout/TopBar"
@@ -83,8 +84,8 @@ export default function AuditLogsPage() {
   const debounced = useDebounced(keyword, 300)
   const token = useAuthStore((s) => s.token)
   const [exporting, setExporting] = React.useState(false)
-  /* 平台租户上下文(AuthorizationsPage 同款判定): 租户列与租户筛选器仅平台用户可见 */
-  const isPlatformTenant = useAuthStore((s) => s.profile?.tenant?.isPlatform ?? false)
+  /* 仅平台根组织上下文展示跨租户筛选，其他组织使用服务端限定的范围。 */
+  const isPlatformTenant = useAuthStore((s) => hasPlatformContext(s.profile))
   /* 表格密度 + 列显隐 */
   const { density } = useTableDensity()
   const { visibleSet: auditCols, isVisible, setVisible } = useColumnVisibility("audit-logs", AUDIT_COLUMNS)

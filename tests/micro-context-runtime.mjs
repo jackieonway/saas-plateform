@@ -158,6 +158,11 @@ test('full prop signature notices same-length menu/permission changes and token 
   assert.notEqual(first, microPropsSignature({ ...props, permissions: ['order:write'] }))
   assert.notEqual(first, microPropsSignature({ ...props, token: 'token-2' }))
   assert.notEqual(first, microPropsSignature({ ...props, organization: { id: 'org-b' } }))
+  assert.notEqual(first, microPropsSignature({ ...props, organizationScopeIds: ['org-a', 'org-child'] }))
+  assert.notEqual(microPropsSignature({ ...props, organizationScopeIds: ['org-a'] }),
+    microPropsSignature({ ...props, organizationScopeIds: ['org-b'] }))
+  assert.notEqual(microPropsSignature({ ...props, organizationScopeIds: ['org-a'] }),
+    microPropsSignature({ ...props, organizationScopeIds: null }))
 })
 
 test('portable SDK aborts delayed JSON on renewal and sends only the current application token', async () => {

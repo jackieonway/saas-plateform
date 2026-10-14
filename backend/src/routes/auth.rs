@@ -327,8 +327,8 @@ async fn context(
         return Err(AppError::unauthorized("凭证已撤销，请重新登录"));
     }
 
-    let org = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, String, bool, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>(
-        "SELECT o.id, o.name, org_path(o.id), o.tenant_id, t.name, t.code, t.is_platform, org_chain_expires_at(o.id), t.expires_at \
+    let org = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, String, bool, bool, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>(
+        "SELECT o.id, o.name, org_path(o.id), o.tenant_id, t.name, t.code, t.is_platform, o.parent_id IS NULL, org_chain_expires_at(o.id), t.expires_at \
          FROM memberships m \
          JOIN organizations o ON o.id = m.organization_id \
          JOIN tenants t ON t.id = o.tenant_id \
@@ -340,7 +340,7 @@ async fn context(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::forbidden("您在该组织没有成员身份"))?;
-    let (org_id, org_name, org_path, tenant_id, tenant_name, tenant_code, tenant_is_platform, org_expires, tenant_expires) = org;
+    let (org_id, org_name, org_path, tenant_id, tenant_name, tenant_code, tenant_is_platform, org_is_root, org_expires, tenant_expires) = org;
     // 会话与刷新均受组织祖先链及租户有效期约束。
     if org_expires.is_some_and(|e| e <= Utc::now()) {
         return Err(AppError::forbidden("该组织已到期, 无法切换"));
@@ -414,6 +414,7 @@ async fn context(
         "expiresIn": access_expiry - now,
         "refreshToken": refresh_token,
         "refreshExpiresIn": refresh_expiry.timestamp() - now,
+        "platformContext": tenant_is_platform && org_is_root,
         "user": {
             "id": user_id, "username": username, "realName": real_name, "email": email,
             "phone": phone, "avatar": avatar, "gender": gender, "isSuperAdmin": is_super,
@@ -474,8 +475,10 @@ async fn profile(State(state): State<AppState>, user: CurrentUser) -> Result<Jso
         .collect();
 
     let memberships = fetch_memberships(&state.pool, user.user_id).await?;
+    let platform_context = state.can_manage_platform(&user).await?;
 
     Ok(Json(json!({
+        "platformContext": platform_context,
         "user": {
             "id": user.user_id, "username": username, "realName": real_name, "email": email,
             "phone": phone, "avatar": avatar, "gender": gender, "isSuperAdmin": is_super,
@@ -499,13 +502,9 @@ async fn menus(
         .ok_or_else(|| AppError::bad_request("缺少 applicationId 参数"))?;
 
     let rows = if user.is_super_admin {
-        if state.is_platform_context(&user).await? {
-            authorization::all_app_menu_rows(&state.pool, app_id).await?
-        } else {
-            authorization::granted_menu_rows(
-                &state.pool, user.tenant_id, user.org_id, Some(app_id),
-            ).await?
-        }
+        authorization::granted_menu_rows(
+            &state.pool, user.tenant_id, user.org_id, Some(app_id),
+        ).await?
     } else {
         authorization::effective_menu_rows(
             &state.pool, user.user_id, user.tenant_id, user.org_id, Some(app_id),

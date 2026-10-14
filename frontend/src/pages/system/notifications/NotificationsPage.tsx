@@ -197,8 +197,7 @@ export default function NotificationsPage() {
 
   const permissionsQuery = usePermissionsQuery()
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
-  const isSuper = useAuthStore((s) => !!s.profile?.user.isSuperAdmin && !!s.profile?.tenant.isPlatform)
-  const canManage = isSuper || permissions.has("notification:publish")
+  const canManage = permissions.has("notification:publish")
 
   const listQuery = useQuery({
     queryKey: [...(context?.key ?? ["notifications", "inactive"]), "list", tab, typeFilter, debouncedQ, page, size],
@@ -1458,8 +1457,8 @@ function SendNotificationDialog({
   const profile = useAuthStore((s) => s.profile)
   const permissionsQuery = usePermissionsQuery()
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
-  const canListUsers = (!!profile?.user.isSuperAdmin && !!profile?.tenant.isPlatform) || permissions.has("system:user")
-  const canListOrganizations = (!!profile?.user.isSuperAdmin && !!profile?.tenant.isPlatform) || permissions.has("system:organization")
+  const canListUsers = permissions.has("system:user")
+  const canListOrganizations = permissions.has("system:organization")
   const [kind, setKind] = React.useState<TargetKind>("USER")
   const [applicationId, setApplicationId] = React.useState("")
   const [idempotencyKey, setIdempotencyKey] = React.useState<string>(() => crypto.randomUUID())

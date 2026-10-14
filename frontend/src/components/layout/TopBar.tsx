@@ -535,12 +535,11 @@ function OrgContextChip() {
 
   if (!profile) return null
 
-  /* 「管理组织」入口按权限显隐: 超管直通; 权限未就绪按无权限处理(防按钮闪现),
+  /* 「管理组织」入口按权限显隐: 所有账号均按组织有效权限判断; 权限未就绪按无权限处理(防按钮闪现),
      其余需 system:organization(与 Task 15 permsReady 门控模式同款) */
-  const isSuper = profile.user.isSuperAdmin && !!profile.tenant.isPlatform
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
   const permsReady = permissionsQuery.isSuccess || permissionsQuery.isError
-  const canManageOrgs = isSuper || (permsReady && permissions.has("system:organization"))
+  const canManageOrgs = permsReady && permissions.has("system:organization")
 
   return (
     <Popover>

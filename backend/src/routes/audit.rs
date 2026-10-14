@@ -41,7 +41,30 @@ const AUDIT_WHERE: &str = "($1 = '' OR username ILIKE '%' || $1 || '%' OR detail
      AND ($2 = '' OR action = $2) \
      AND ($3::uuid IS NULL OR tenant_id = $3) \
      AND ($5::uuid IS NULL OR request_id = $5) \
-     AND ($6::uuid IS NULL OR application_id = $6)";
+     AND ($6::uuid IS NULL OR application_id = $6) \
+     AND ($7::uuid[] IS NULL OR organization_id = ANY($7) OR ($8 AND organization_id IS NULL))";
+
+/// Only a tenant root may include legacy tenant-level rows with no organization.
+/// Descendant contexts cannot attribute those rows to their own data boundary.
+async fn organization_scope(
+    state: &AppState,
+    user: &CurrentUser,
+) -> Result<(Option<Vec<Uuid>>, bool), AppError> {
+    let ids = state.scoped_org_ids(user).await?;
+    let include_unassigned = if ids.is_some() {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT parent_id IS NULL FROM organizations WHERE id=$1 AND tenant_id=$2",
+        )
+        .bind(user.org_id)
+        .bind(user.tenant_id)
+        .fetch_optional(&state.pool)
+        .await?
+        .unwrap_or(false)
+    } else {
+        true
+    };
+    Ok((ids, include_unassigned))
+}
 
 fn correlation_filter(params: &HashMap<String, String>, key: &str) -> Result<Option<Uuid>, AppError> {
     match params.get(key).filter(|value| !value.is_empty()) {
@@ -91,6 +114,7 @@ async fn export_csv(
     let (tf_sql, tf_val) = tenant_filter_clause(&tf)?;
     let request_id = correlation_filter(&params, "request_id")?;
     let application_id = correlation_filter(&params, "application_id")?;
+    let (org_scope, include_unassigned) = organization_scope(&state, &user).await?;
     let rows: Vec<AuditRowTuple> = sqlx::query_as(&format!(
         "SELECT id, COALESCE(username,''), tenant_id, COALESCE(tenant_name,''), COALESCE(organization_name,''), \
          action, COALESCE(detail,''), COALESCE(ip,''), created_at, COALESCE(user_agent,''), request_id, application_id \
@@ -102,6 +126,8 @@ async fn export_csv(
     .bind(tf_val)
     .bind(request_id)
     .bind(application_id)
+    .bind(&org_scope)
+    .bind(include_unassigned)
     .fetch_all(&state.pool)
     .await?;
 
@@ -150,11 +176,12 @@ async fn list(
     let (tf_sql, tf_val) = tenant_filter_clause(&tf)?;
     let request_id = correlation_filter(&params, "request_id")?;
     let application_id = correlation_filter(&params, "application_id")?;
+    let (org_scope, include_unassigned) = organization_scope(&state, &user).await?;
     let where_clause = format!("{AUDIT_WHERE}{tf_sql}");
     let rows: Vec<AuditRowTuple> = sqlx::query_as(&format!(
         "SELECT id, COALESCE(username,''), tenant_id, COALESCE(tenant_name,''), COALESCE(organization_name,''), \
          action, COALESCE(detail,''), COALESCE(ip,''), created_at, COALESCE(user_agent,''), request_id, application_id \
-         FROM audit_logs WHERE {where_clause} ORDER BY created_at DESC, id DESC LIMIT $7 OFFSET $8"
+         FROM audit_logs WHERE {where_clause} ORDER BY created_at DESC, id DESC LIMIT $9 OFFSET $10"
     ))
     .bind(&kw)
     .bind(&action)
@@ -162,6 +189,8 @@ async fn list(
     .bind(tf_val)
     .bind(request_id)
     .bind(application_id)
+    .bind(&org_scope)
+    .bind(include_unassigned)
     .bind(size)
     .bind(offset)
     .fetch_all(&state.pool)
@@ -173,6 +202,8 @@ async fn list(
         .bind(tf_val)
         .bind(request_id)
         .bind(application_id)
+        .bind(&org_scope)
+        .bind(include_unassigned)
         .fetch_one(&state.pool)
         .await?;
     let records: Vec<Value> = rows

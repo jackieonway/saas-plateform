@@ -22,6 +22,7 @@
   "user": { "id": "...", "username": "...", "displayName": "..." },
   "tenant": { "id": "...", "code": "...", "name": "..." },
   "organization": { "id": "...", "name": "...", "path": "..." },
+  "organizationScopeIds": ["current-organization-id", "descendant-organization-id"],
   "roles": [],
   "permissions": ["order:read"],
   "dataGrants": [{
@@ -38,12 +39,14 @@
 
 | scope | 服务端边界 |
 | --- | --- |
-| `SELF` | `subjectUserId`；业务资源必须声明并校验可验证的用户归属字段。 |
+| `SELF` | `subjectUserId` 与当前组织子树的交集；业务资源必须声明并校验可验证的用户归属字段及组织归属字段。 |
 | `ORG` | 当前组织 ID，且记录租户 ID 必须等于当前租户。 |
 | `ORG_SUBTREE` | 当前组织及其有效子孙组织 ID，始终限当前租户；祖先角色不会改变范围起点。 |
-| `TENANT` | 当前租户 ID。 |
+| `TENANT` | 实际平台根上下文保留本租户范围；其他上下文转换为 `ORG_SUBTREE`。 |
 
-`organizationIds` 仅在 `ORG` 与 `ORG_SUBTREE` 下填充。应用必须在服务端把资源的 `tenant_id`、`organization_id`、`owner_user_id` 等实际字段映射到上述边界；没有可靠归属字段时拒绝对应操作。映射与业务查询的落地属于 Phase 7/11。不能把 `dataGrants` 当作操作权限，也不能用一个资源的授权访问另一个资源。
+`organizationScopeIds` 是当前登录组织的数据上限，包含当前组织及其有效子孙组织；祖先、平级组织和其他租户均不在其中。业务服务须对所有 scope 叠加该组织过滤，即便记录属于当前用户，`SELF` 也不能访问上级或平级组织的记录。仅实际平台根上下文可返回 `null`；缺少该字段的旧上下文须保守限制为当前组织。此上限参与 `contextVersion` 计算。
+
+`organizationIds` 在 `ORG`、`ORG_SUBTREE` 和非平台根的 `SELF` 下填充；平台根的 `SELF` 和 `TENANT` 为空数组。应用必须在服务端把资源的 `tenant_id`、`organization_id`、`owner_user_id` 等实际字段映射到上述边界；没有可靠归属字段时拒绝对应操作。列表、统计、详情、修改、删除、导出和处理人目录均须执行相同范围检查。映射与业务查询的落地属于 Phase 7/11。不能把 `dataGrants` 当作操作权限，也不能用一个资源的授权访问另一个资源。
 
 ## 部署与升级
 

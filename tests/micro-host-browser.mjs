@@ -76,7 +76,10 @@ function profile(group, apps = applications) {
 function menu(appCode, label) {
   return [{ id: `menu-${appCode}`, parentId: null, type: "MENU", title: label,
     path: `/micro/${appCode}/detail`, icon: "Boxes", permission: "probe:read",
-    sortOrder: 1, visible: true, children: [] }]
+    sortOrder: 1, visible: true, children: [] },
+    { id: `menu-${appCode}-home`, parentId: null, type: "MENU", title: `${label}首页`,
+      path: `/micro/${appCode}`, icon: "Boxes", permission: "probe:read",
+      sortOrder: 2, visible: true, children: [] }]
 }
 
 function releaseManagementFixture({ isPlatform = true, hasPermission = true } = {}) {
@@ -327,6 +330,12 @@ async function fixture(options = {}) {
   })
   await context.routeWebSocket("**/*XTransformPort=3003*", (socket) => socket.close())
   await context.route("**/*XTransformPort=3003*", (route) => route.abort())
+  await context.route((url) => url.origin === origin && url.pathname === "/src/main.tsx", async (route) => {
+    const response = await route.fetch()
+    const body = (await response.text()).replace("ReactDOM.createRoot", "window.__phase8QueryClient = queryClient;\nReactDOM.createRoot")
+    assert.match(body, /window\.__phase8QueryClient/)
+    await route.fulfill({ response, body })
+  })
   await context.route("**/__phase8/**", async (route) => {
     const isStatic = new URL(route.request().url()).pathname.includes("probe-static")
     if (new URL(route.request().url()).pathname.endsWith("/app.js")) {
@@ -372,6 +381,8 @@ async function fixture(options = {}) {
     const url = new URL(request.url())
     const bearer = request.headers().authorization?.replace(/^Bearer /, "")
     const group = bearer === "test-session-B" ? "B" : "A"
+    if (url.pathname === "/api/platform/branding") return fulfill(route, { platformName: "微应用验收平台",
+      platformDescription: "隔离浏览器验收", logoUrl: "", loginTitle: "登录", loginDescription: "选择组织", footerText: "" })
     if (await handleReleaseManagement(route, state, fulfill)) return
     if (url.pathname === "/api/__phase8-delayed401") {
       state.pending401 = deferred()
@@ -393,10 +404,11 @@ async function fixture(options = {}) {
         state.menusRelease = deferred()
         await state.menusRelease.promise
       }
-      return fulfill(route, menu(app.code, state.label))
+      return fulfill(route, [...menu(app.code, state.label), { id: `dashboard-${app.code}`, parentId: null,
+        type: "MENU", title: "工作台", path: "/dashboard", icon: "Gauge", permission: "dashboard:view", sortOrder: 3, visible: true }])
     }
     if (url.pathname === "/api/auth/permissions") return fulfill(route,
-      { permissions: state.management ? (state.management.hasPermission ? ['system:application'] : []) : ["probe:read"], roles: [] })
+      { permissions: state.management ? (state.management.hasPermission ? ['system:application'] : []) : ["probe:read", "dashboard:view"], roles: [] })
     if (url.pathname === "/api/external/menus") {
       const lease = leases.get(bearer)
       assert(lease, "Real micro applications must call APIs with their application token.")
@@ -520,7 +532,7 @@ async function verifyUpdatesAndSwitch() {
     state.label = "菜单改名但数量不变"
     await waitEvent(page, { kind: "update", contextVersion: "A-v2" })
     const menuUpdate = (await events(page)).find((entry) => entry.kind === "update" && entry.contextVersion === "A-v2")
-    assert.deepEqual(menuUpdate.menuTitles, [state.label])
+    assert.deepEqual(menuUpdate.menuTitles, [state.label, `${state.label}首页`])
     assert.equal(menuUpdate.menuTitles.length, initial.menuTitles.length)
     await waitEvent(page, { kind: "update", tokenChanged: true })
     const beforeSwitch = await events(page)
@@ -531,7 +543,7 @@ async function verifyUpdatesAndSwitch() {
     await waitState(() => state.held, "An old application context response must be in flight before switching.")
     await page.evaluate(async () => {
       const { request } = await import("/src/lib/api.ts")
-      window.__phase8Control.old401Result = request("/api/__phase8-delayed401").catch((error) => error.status)
+      window.__phase8Control.old401Result = request("/api/__phase8-delayed401").catch((error) => error.name)
     })
     await waitState(() => state.held401, "Old platform request must be pending before switching.")
     const oldSignalAborted = await page.evaluate(async () => {
@@ -544,7 +556,8 @@ async function verifyUpdatesAndSwitch() {
     assert.equal(oldSignalAborted, true, "Begin switching must immediately invalidate the old lifetime.")
     await page.waitForFunction(() => !document.querySelector('[data-testid="phase8-probe"][data-org="org-A"]'))
     state.pending401.resolve()
-    assert.equal(await page.evaluate(() => window.__phase8Control.old401Result), 401)
+    assert.equal(await page.evaluate(() => window.__phase8Control.old401Result), "AbortError",
+      "A late response from the prior organization is rejected before it can handle its 401.")
     assert.equal(await page.evaluate(async () => {
       const { useAuthStore } = await import("/src/stores/auth.ts")
       return useAuthStore.getState().token === "test-session-A" && useAuthStore.getState().contextSwitching
@@ -580,6 +593,11 @@ async function verifyApplicationSelectionRace() {
       "Leaving a valid application must not produce an authorization-failure toast.")
     const rail = page.getByRole("complementary", { name: "应用导航", exact: true })
     state.holdMenusApp = "application-probe-static"
+    // Route guards now prefetch granted menus, so deliberately expire this cache
+    // to keep the late-response race meaningful without waiting for a timer.
+    await page.evaluate(() => window.__phase8QueryClient.invalidateQueries({
+      queryKey: ["auth-menus", "application-probe-static"], refetchType: "none",
+    }))
     await rail.getByRole("button", { name: "切换到应用 重挂验收应用", exact: true }).click()
     await waitState(() => state.heldMenus, "First selected application's menus must be delayed.")
     await rail.getByRole("button", { name: "切换到应用 上下文验收应用", exact: true }).click()
@@ -719,10 +737,9 @@ async function verifyAuthorizationFailures() {
       useAuthStore.getState().beginContextSwitch()
       useAuthStore.getState().setToken("test-session-B")
     })
-    await page.waitForURL("**/dashboard")
-    await page.getByText("当前组织无法访问此应用，已退出应用", { exact: true }).waitFor()
+    await page.getByText("无访问权限", { exact: true }).waitFor()
     assert.equal(await page.locator('[data-testid="phase8-probe"]').count(), 0)
-    console.log("PASS real host: unavailable application after organization switch exits micro route")
+    console.log("PASS real host: unavailable application after organization switch denies before mounting")
   })
 }
 
@@ -1066,7 +1083,11 @@ async function verifyReleaseManagementUI() {
     const denied = releaseManagementFixture(access)
     await withFixture({ management: denied, applications: [managementApplication], startPath: '/system/applications' }, async ({ page }) => {
       const message = access.isPlatform ? '无操作权限: system:application' : '仅平台租户可执行跨租户操作'
-      await page.getByRole('alert').getByText(message, { exact: true }).waitFor()
+      if (access.hasPermission) await page.getByRole('alert').getByText(message, { exact: true }).waitFor()
+      else {
+        await page.getByText('无访问权限', { exact: true }).waitFor()
+        assert.deepEqual(denied.requests, [], 'Denied routes must not mount application management or fetch any business data.')
+      }
       assert.equal(await page.getByRole('button', { name: '发布版本', exact: true }).count(), 0)
       assert.equal(denied.requests.some((request) => request.pathname.includes('/releases') || request.pathname.includes('/deployments')), false)
       assert.equal(await page.evaluate(() => localStorage.getItem('dante-token') !== null), true)

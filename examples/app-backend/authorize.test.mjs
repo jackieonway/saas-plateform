@@ -6,6 +6,7 @@ const context = () => ({
   contractVersion: '1.0', contextVersion: 'v1',
   expiresAt: new Date(Date.now() + 30_000).toISOString(), appCode: 'orders',
   user: { id: 'user-a' }, tenant: { id: 'tenant-a' }, organization: { id: 'org-a' },
+  organizationScopeIds: ['org-a', 'org-child'],
   permissions: ['order:read'],
   dataGrants: [{ resource: 'order', action: 'read', scope: 'ORG',
     tenantId: 'tenant-a', subjectUserId: 'user-a', organizationIds: ['org-a'] }],
@@ -76,6 +77,32 @@ test('resource ID tampering cannot cross tenant or SELF ownership', async () => 
     'RESOURCE_NOT_FOUND');
 });
 
+test('selected organization ceiling intersects SELF, subtree and tenant data grants', async () => {
+  for (const scope of ['SELF', 'ORG_SUBTREE', 'TENANT']) {
+    const ctx = context();
+    ctx.dataGrants[0].scope = scope;
+    ctx.dataGrants[0].organizationIds = scope === 'TENANT' ? []
+      : ['org-a', 'org-child', 'org-parent', 'org-sibling'];
+    assert.equal((await authorizeRecord(options({ ctx, row: { ...record(), organization_id: 'org-child' } }))).record.id, 'order-1');
+    for (const organization_id of ['org-parent', 'org-sibling']) {
+      await denied(options({ ctx, row: { ...record(), organization_id } }), 'RESOURCE_NOT_FOUND');
+    }
+  }
+  const ctx = context();
+  ctx.dataGrants[0].scope = 'SELF';
+  ctx.dataGrants[0].organizationIds = [];
+  delete ctx.organizationScopeIds;
+  await denied(options({ ctx, row: { ...record(), organization_id: 'org-child' } }), 'RESOURCE_NOT_FOUND');
+  ctx.organizationScopeIds = null;
+  assert.equal((await authorizeRecord(options({ ctx, row: { ...record(), organization_id: 'org-parent' } }))).record.id, 'order-1');
+});
+
+test('missing selected organization and malformed ceilings fail closed', async () => {
+  for (const organizationScopeIds of [[], ['org-sibling'], 'org-a', ['org-a', null]]) {
+    await denied(options({ ctx: { ...context(), organizationScopeIds } }), 'INVALID_CONTEXT');
+  }
+});
+
 test('reference SQL binds resource ID and authenticated tenant', async () => {
   const calls = [];
   const db = { query: async (sql, args) => {
@@ -85,4 +112,7 @@ test('reference SQL binds resource ID and authenticated tenant', async () => {
   assert.equal((await loadOrder(db, { id: 'order-1', tenantId: 'tenant-a' })).id, 'order-1');
   assert.match(calls[0].sql, /WHERE id = \$1 AND tenant_id = \$2/);
   assert.deepEqual(calls[0].args, ['order-1', 'tenant-a']);
+  await loadOrder(db, { id: 'order-1', tenantId: 'tenant-a', organizationIds: ['org-a', 'org-child'] });
+  assert.match(calls[1].sql, /organization_id = ANY\(\$3::uuid\[\]\)/);
+  assert.deepEqual(calls[1].args, ['order-1', 'tenant-a', ['org-a', 'org-child']]);
 });

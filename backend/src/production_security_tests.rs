@@ -882,7 +882,9 @@ async fn global_oauth_administration_requires_platform_context_and_operation_per
         let config = production_config()?;
         let application: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path) VALUES('production-oauth-admin-gate','OAuth security gate','/gate') RETURNING id")
             .fetch_one(&database.pool).await?;
-        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON','OAuth administration','system:oauth') RETURNING id")
+        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission) VALUES($1,'MENU','OAuth clients','/system/oauth/clients','system:oauth') RETURNING id")
+            .bind(application).fetch_one(&database.pool).await?;
+        let tokens_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission) VALUES($1,'MENU','OAuth tokens','/system/oauth/tokens','system:oauth') RETURNING id")
             .bind(application).fetch_one(&database.pool).await?;
         let platform: Uuid = sqlx::query_scalar("INSERT INTO tenants(code,name,is_platform) VALUES('oauth-admin-platform','Platform',true) RETURNING id")
             .fetch_one(&database.pool).await?;
@@ -897,6 +899,14 @@ async fn global_oauth_administration_requires_platform_context_and_operation_per
         let platform_user = fixture_actor(&database.pool,platform,organizations[0],"oauth-platform-operator",application,menu,true).await?;
         let ordinary_user = fixture_actor(&database.pool,ordinary,organizations[1],"oauth-ordinary-operator",application,menu,true).await?;
         let unprivileged = fixture_actor(&database.pool,platform,organizations[0],"oauth-platform-without-permission",application,menu,false).await?;
+        for (user, tenant, org) in [(platform_user, platform, organizations[0]), (ordinary_user, ordinary, organizations[1])] {
+            sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2) ON CONFLICT DO NOTHING")
+                .bind(tenant).bind(tokens_menu).execute(&database.pool).await?;
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2) ON CONFLICT DO NOTHING")
+                .bind(org).bind(tokens_menu).execute(&database.pool).await?;
+            sqlx::query("INSERT INTO role_menus(role_id,menu_id) SELECT role_id,$2 FROM user_roles WHERE user_id=$1 ON CONFLICT DO NOTHING")
+                .bind(user).bind(tokens_menu).execute(&database.pool).await?;
+        }
         let platform_token = fixture_session(&database.pool,&config,platform_user,platform,organizations[0]).await?;
         let ordinary_token = fixture_session(&database.pool,&config,ordinary_user,ordinary,organizations[1]).await?;
         let unprivileged_token = fixture_session(&database.pool,&config,unprivileged,platform,organizations[0]).await?;

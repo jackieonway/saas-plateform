@@ -20,6 +20,7 @@ import { DEFAULT_PLATFORM_BRANDING, PLATFORM_BRANDING_QUERY_KEY } from "@/hooks/
 import { zResolver } from "@/lib/form"
 import { DEFAULT_PRIMARY_COLOR, isThemeColor, platformThemeVariables, THEME_COLOR_PRESETS } from "@/lib/platform-theme"
 import { useAuthStore } from "@/stores/auth"
+import { hasPlatformContext } from "@/lib/platform-context"
 
 function validLogoUrl(value: string): boolean {
   if (!value) return true
@@ -84,9 +85,8 @@ export default function PlatformSettingsPage() {
   const epoch = useAuthStore((s) => s.contextEpoch)
   const profile = useAuthStore((s) => s.profile)
   const permissionsQuery = usePermissionsQuery()
-  const isPlatformTenant = profile?.tenant.isPlatform ?? false
-  const isSuper = profile?.user.isSuperAdmin ?? false
-  const canManage = isPlatformTenant && (isSuper || permissionsQuery.data?.permissions.includes("system:settings") === true)
+  const isPlatformTenant = hasPlatformContext(profile)
+  const canManage = isPlatformTenant && permissionsQuery.data?.permissions.includes("system:settings") === true
 
   const settingsQuery = useQuery({
     queryKey: ["platform-settings", epoch],
@@ -133,14 +133,14 @@ export default function PlatformSettingsPage() {
   const [failedPreviewUrl, setFailedPreviewUrl] = React.useState<string | null>(null)
   const previewLogo = validLogoUrl(values.logoUrl) && values.logoUrl && failedPreviewUrl !== values.logoUrl
 
-  if (!profile || (isPlatformTenant && !isSuper && permissionsQuery.isPending)) {
+  if (!profile || (isPlatformTenant && permissionsQuery.isPending)) {
     return <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="加载平台设置"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
   }
-  if (isPlatformTenant && !isSuper && permissionsQuery.isError) {
+  if (isPlatformTenant && permissionsQuery.isError) {
     return <ErrorState message="无法获取平台设置权限，请重试" onRetry={() => permissionsQuery.refetch()} />
   }
   if (!canManage) {
-    return <EmptyState title="暂无平台设置权限" description="平台租户中拥有平台设置权限的管理员可修改此配置。" icon={<ShieldCheck className="size-6" />} />
+    return <EmptyState title="暂无平台设置权限" description="平台根组织中拥有平台设置权限的管理员可修改此配置。" icon={<ShieldCheck className="size-6" />} />
   }
   if (settingsQuery.isPending) {
     return <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="加载平台设置"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>

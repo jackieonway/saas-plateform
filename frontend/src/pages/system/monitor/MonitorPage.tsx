@@ -47,8 +47,9 @@ import { StatusBadge } from "@/components/StatusBadge"
 import { CardGridSkeleton, EmptyState, ErrorState, StatSkeleton } from "@/components/states"
 import { monitorApi, type TenantInsight } from "@/api/monitor"
 import { oauthApi } from "@/api/oauth"
-import { useAuthStore } from "@/stores/auth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
+import { useAuthStore } from "@/stores/auth"
+import { hasPlatformContext } from "@/lib/platform-context"
 import { GRANT_TYPE_LABELS, copyText, durationHuman, formatBytes, formatDateTime, formatNumber } from "@/lib/format"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -72,30 +73,31 @@ const GRANT_MATRIX: { grant: string; desc: string; client: string; note: string 
 ]
 
 export default function MonitorPage() {
+  const isPlatformContext = useAuthStore((s) => hasPlatformContext(s.profile))
   return (
     <div className="space-y-6">
       <PageHeader
         title="平台监控"
-        description="后端服务健康状态、数据库连通性、OAuth 2.0 对外能力与租户级洞察"
+        description={isPlatformContext ? "后端服务健康状态、数据库连通性、OAuth 2.0 对外能力与租户级洞察" : "当前组织及下级组织范围内的数据洞察"}
         icon={<Activity className="size-5" />}
       />
 
-      <Tabs defaultValue="status">
+      <Tabs key={isPlatformContext ? "platform" : "scoped"} defaultValue={isPlatformContext ? "status" : "tenants"}>
         <TabsList className="mb-4">
-          <TabsTrigger value="status" className="gap-1.5">
+          {isPlatformContext && <TabsTrigger value="status" className="gap-1.5">
             <Server className="size-4" />
             平台状态
-          </TabsTrigger>
+          </TabsTrigger>}
           <TabsTrigger value="tenants" className="gap-1.5">
             <Landmark className="size-4" />
-            租户洞察
+            {isPlatformContext ? "租户洞察" : "组织洞察"}
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="status" className="mt-0">
+        {isPlatformContext && <TabsContent value="status" className="mt-0">
           <PlatformStatusTab />
-        </TabsContent>
+        </TabsContent>}
         <TabsContent value="tenants" className="mt-0">
-          <TenantInsightsTab />
+          <TenantInsightsTab platformContext={isPlatformContext} />
         </TabsContent>
       </Tabs>
     </div>
@@ -527,7 +529,7 @@ function DatabaseInfoCard({
 
 /* ============ Tab 2: 租户洞察 ============ */
 
-function TenantInsightsTab() {
+function TenantInsightsTab({ platformContext }: { platformContext: boolean }) {
   const insightsQuery = useQuery({
     queryKey: ["monitor-tenant-insights"],
     queryFn: () => monitorApi.tenantInsights(),
@@ -538,8 +540,7 @@ function TenantInsightsTab() {
   /* 导出权限:system:monitor */
   const permissionsQuery = usePermissionsQuery()
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
-  const isSuper = useAuthStore((s) => !!s.profile?.user.isSuperAdmin && !!s.profile?.tenant.isPlatform)
-  const canExport = isSuper || permissions.has("system:monitor")
+  const canExport = permissions.has("system:monitor")
 
   const [exporting, setExporting] = React.useState(false)
   /** 导出租户洞察 CSV(与审计日志导出同款交互) */
@@ -574,9 +575,11 @@ function TenantInsightsTab() {
   }, [insights])
 
   const SUMMARY = [
-    { key: "tenants", label: "租户总数", value: totals.tenants, icon: Landmark, hint: "含已禁用租户" },
+    { key: "tenants", label: platformContext ? "租户总数" : "当前租户", value: totals.tenants, icon: Landmark,
+      hint: platformContext ? "含已禁用租户" : "当前组织及下级组织范围" },
     { key: "users", label: "用户总数", value: totals.users, icon: Users, hint: "按成员关系归属去重" },
-    { key: "logins", label: "近 7 天登录", value: totals.logins7d, icon: LogIn, hint: "全部租户登录次数" },
+    { key: "logins", label: "近 7 天登录", value: totals.logins7d, icon: LogIn,
+      hint: platformContext ? "全部租户登录次数" : "当前组织及下级组织登录次数" },
     { key: "tokens", label: "活跃令牌", value: totals.activeTokens, icon: KeyRound, hint: "未吊销未过期的访问令牌" },
   ]
 
@@ -586,7 +589,9 @@ function TenantInsightsTab() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">规模与活跃度总览</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">各租户用户 / 组织 / 角色 / 近 7 天登录与活跃令牌汇总</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{platformContext
+            ? "各租户用户 / 组织 / 角色 / 近 7 天登录与活跃令牌汇总"
+            : "当前组织及下级组织的用户、角色、近 7 天登录与活跃令牌汇总"}</p>
         </div>
         {canExport && (
           <Tooltip>
@@ -600,7 +605,7 @@ function TenantInsightsTab() {
                 导出 CSV
               </Button>
             </TooltipTrigger>
-            <TooltipContent>导出全部租户洞察数据 (CSV)</TooltipContent>
+            <TooltipContent>{platformContext ? "导出全部租户洞察数据 (CSV)" : "导出当前组织及下级组织洞察数据 (CSV)"}</TooltipContent>
           </Tooltip>
         )}
       </div>

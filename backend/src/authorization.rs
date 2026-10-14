@@ -38,17 +38,6 @@ pub async fn effective_menu_rows(
     Ok(rows_to_json(rows))
 }
 
-pub async fn all_app_menu_rows(pool: &PgPool, app_id: Uuid) -> Result<Vec<Value>, AppError> {
-    let rows: Vec<MenuRow> = sqlx::query_as(
-        "SELECT m.id, m.parent_id, m.type, m.title, COALESCE(m.path,''), COALESCE(m.icon,''), \
-         COALESCE(m.permission,''), m.link_url, m.link_target, m.sort_order, m.visible, m.created_at \
-         FROM menus m JOIN applications app ON app.id = m.application_id AND app.status = 'ENABLED' \
-         WHERE m.application_id = $1 AND m.status = 'ENABLED' \
-         ORDER BY m.sort_order, m.created_at",
-    ).bind(app_id).fetch_all(pool).await?;
-    Ok(rows_to_json(rows))
-}
-
 /// A global administrator still observes the selected tenant and organization grants.
 /// Only the user-role layer is bypassed; application and menu grants remain mandatory.
 pub async fn granted_menu_rows(

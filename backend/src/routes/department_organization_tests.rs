@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, ensure, Result};
 use axum::body::{to_bytes, Body};
-use axum::http::{Request, StatusCode};
+use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use serde_json::{json, Value};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -199,10 +199,23 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
 }
 
 async fn get(app: &Router, token: &str, path: &str, expected: StatusCode) -> Result<Value> {
+    call(app, token, Method::GET, path, None, expected).await
+}
+
+async fn call(
+    app: &Router,
+    token: &str,
+    method: Method,
+    path: &str,
+    payload: Option<Value>,
+    expected: StatusCode,
+) -> Result<Value> {
     let request = Request::builder()
+        .method(method)
         .uri(path)
         .header("authorization", format!("Bearer {token}"))
-        .body(Body::empty())?;
+        .header("content-type", "application/json")
+        .body(payload.map_or_else(Body::empty, |value| Body::from(value.to_string())))?;
     let response = tokio::time::timeout(Duration::from_secs(30), app.clone().oneshot(request))
         .await
         .map_err(|_| anyhow!("department organization request timed out"))??;
@@ -245,6 +258,10 @@ async fn department_organization_choices() -> Result<()> {
             "INSERT INTO menus(application_id,title,permission,type) \
              VALUES($1,'部门管理','system:department','BUTTON') RETURNING id",
         ).bind(app_id).fetch_one(pool).await?;
+        let org_menu: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus(application_id,title,permission,type) \
+             VALUES($1,'组织管理','system:organization','BUTTON') RETURNING id",
+        ).bind(app_id).fetch_one(pool).await?;
         let role: Uuid = sqlx::query_scalar(
             "INSERT INTO roles(tenant_id,organization_id,name) VALUES($1,$2,'部门管理员') RETURNING id",
         ).bind(tenant).bind(current).fetch_one(pool).await?;
@@ -252,11 +269,15 @@ async fn department_organization_choices() -> Result<()> {
             .bind(tenant).bind(app_id).execute(pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
             .bind(tenant).bind(menu).execute(pool).await?;
+        sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
+            .bind(tenant).bind(org_menu).execute(pool).await?;
         for org in [current, leaf] {
             sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)")
                 .bind(org).bind(app_id).execute(pool).await?;
             sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
                 .bind(org).bind(menu).execute(pool).await?;
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+                .bind(org).bind(org_menu).execute(pool).await?;
         }
         sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)")
             .bind(role).bind(menu).execute(pool).await?;
@@ -267,7 +288,8 @@ async fn department_organization_choices() -> Result<()> {
             ("DATABASE_URL".into(), "postgres://unused/department-organization-test".into()),
             ("JWT_SECRET".into(), SECRET.into()),
         ]))?;
-        let app = routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config)));
+        let state = AppState::new(pool.clone(), Arc::new(config));
+        let app = routes::api_router().with_state(state.clone());
         let manager_token = session(pool, manager, tenant, current).await?;
         let denied_token = session(pool, denied, tenant, current).await?;
         let super_token = session(pool, super_admin, tenant, current).await?;
@@ -291,8 +313,97 @@ async fn department_organization_choices() -> Result<()> {
         let super_choices = get(&app, &super_token,
             &format!("/api/departments/organizations?tenantId={other_tenant}&organizationId={foreign}"), StatusCode::OK).await?;
         ensure!(super_choices == choices, "super administrator or client parameters expanded the selector scope");
+        let current_user = crate::extractors::CurrentUser {
+            user_id: super_admin, username: "super-admin".into(), real_name: String::new(),
+            is_super_admin: true, tenant_id: tenant, org_id: current, session_id: Uuid::nil(),
+        };
+        let scoped_ids = state.scoped_org_ids(&current_user).await?.ok_or_else(|| anyhow!("ordinary context was unbounded"))?;
+        ensure!(scoped_ids.len()==3 && [current,child,leaf].iter().all(|org|scoped_ids.contains(org)), "organization helper included ancestors or siblings");
+        let organization_tree = get(&app, &super_token, &format!("/api/organizations/tree?tenantId={tenant}"), StatusCode::OK).await?;
+        ensure!(organization_tree[0]["id"]==json!(current) && organization_tree[0]["parentId"].is_null()
+            && organization_tree[0]["children"][0]["children"][0]["id"]==json!(leaf), "organization tree did not root the selected subtree");
+        for excluded in [root,sibling,foreign] {
+            ensure!(!organization_tree.to_string().contains(&excluded.to_string()), "organization tree leaked {excluded}");
+            get(&app, &super_token, &format!("/api/departments/tree?organizationId={excluded}"), StatusCode::NOT_FOUND).await?;
+            call(&app, &super_token, Method::PUT, &format!("/api/organizations/{excluded}"), Some(json!({"name":"forbidden"})), StatusCode::NOT_FOUND).await?;
+            call(&app, &super_token, Method::DELETE, &format!("/api/organizations/{excluded}"), None, StatusCode::NOT_FOUND).await?;
+            call(&app, &super_token, Method::POST, "/api/organizations", Some(json!({"tenantId":tenant,"parentId":excluded,"name":"forbidden child"})), StatusCode::NOT_FOUND).await?;
+            call(&app, &super_token, Method::POST, "/api/departments", Some(json!({"organizationId":excluded,"name":"forbidden department"})), StatusCode::NOT_FOUND).await?;
+            let department: Uuid = sqlx::query_scalar("INSERT INTO departments(organization_id,name) VALUES($1,'excluded department') RETURNING id")
+                .bind(excluded).fetch_one(pool).await?;
+            call(&app, &super_token, Method::PUT, &format!("/api/departments/{department}"), Some(json!({"name":"forbidden"})), StatusCode::NOT_FOUND).await?;
+            call(&app, &super_token, Method::DELETE, &format!("/api/departments/{department}"), None, StatusCode::NOT_FOUND).await?;
+        }
+        let allowed_department = call(&app, &super_token, Method::POST, "/api/departments", Some(json!({"organizationId":leaf,"name":"leaf department"})), StatusCode::OK).await?;
+        let department = allowed_department["id"].as_str().ok_or_else(||anyhow!("department ID missing"))?;
+        get(&app, &super_token, &format!("/api/departments/tree?organizationId={leaf}"), StatusCode::OK).await?;
+        call(&app, &super_token, Method::PUT, &format!("/api/departments/{department}"), Some(json!({"name":"updated leaf department"})), StatusCode::OK).await?;
+        call(&app, &super_token, Method::DELETE, &format!("/api/departments/{department}"), None, StatusCode::OK).await?;
+        call(&app, &super_token, Method::PUT, &format!("/api/organizations/{leaf}"), Some(json!({"description":"in-scope leaf"})), StatusCode::OK).await?;
+        get(&app, &super_token, &format!("/api/organizations/tree?tenantId={other_tenant}"), StatusCode::NOT_FOUND).await?;
         sqlx::query("UPDATE tenants SET is_platform=true WHERE id=$1")
             .bind(tenant).execute(pool).await?;
+        ensure!(!state.is_platform_context(&current_user).await?, "platform child inherited global resource scope");
+        let child_profile = get(&app, &super_token, "/api/auth/profile", StatusCode::OK).await?;
+        ensure!(child_profile["tenant"]["isPlatform"]==true && child_profile["platformContext"]==false,
+            "platform child profile advertised global management context");
+        for excluded in [root,sibling,foreign] {
+            ensure!(state.ensure_org_scope(&current_user, excluded, "组织").await.is_err(), "platform child helper allowed {excluded}");
+            get(&app, &super_token, &format!("/api/departments/tree?organizationId={excluded}"), StatusCode::NOT_FOUND).await?;
+        }
+        let root_user = crate::extractors::CurrentUser { org_id: root, ..current_user.clone() };
+        ensure!(state.is_platform_context(&root_user).await? && state.scoped_org_ids(&root_user).await?.is_none(), "actual platform root lost global management scope");
+        state.ensure_org_scope(&root_user, foreign, "组织").await?;
+        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+            .bind(super_admin).bind(root).execute(pool).await?;
+        sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)")
+            .bind(root).bind(app_id).execute(pool).await?;
+        for granted in [menu,org_menu] {
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+                .bind(root).bind(granted).execute(pool).await?;
+        }
+        let root_token = session(pool, super_admin, tenant, root).await?;
+        let root_profile = get(&app, &root_token, "/api/auth/profile", StatusCode::OK).await?;
+        ensure!(root_profile["tenant"]["isPlatform"]==true && root_profile["platformContext"]==true,
+            "platform root profile omitted global management context");
+        get(&app, &root_token, &format!("/api/organizations/tree?tenantId={other_tenant}"), StatusCode::OK).await?;
+        get(&app, &root_token, &format!("/api/departments/tree?organizationId={foreign}"), StatusCode::OK).await?;
+        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,application_id,scopes) VALUES('subtree-context-client','Subtree context client','CONFIDENTIAL',$1,'profile')")
+            .bind(app_id).execute(pool).await?;
+        for organization_id in [root,current] {
+            sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) \
+                         SELECT id,$3,'records','read','TENANT' FROM memberships WHERE user_id=$1 AND organization_id=$2")
+                .bind(super_admin).bind(organization_id).bind(app_id).execute(pool).await?;
+        }
+        let issued_child = call(&app, &super_token, Method::POST, "/api/oauth/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
+        let issued_root = call(&app, &root_token, Method::POST, "/api/oauth/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
+        let child_app_token = issued_child["accessToken"].as_str().ok_or_else(||anyhow!("child app token missing"))?;
+        let root_app_token = issued_root["accessToken"].as_str().ok_or_else(||anyhow!("root app token missing"))?;
+        let child_app_context = get(&app, child_app_token, "/api/apps/system/context", StatusCode::OK).await?;
+        let child_hard_scope = child_app_context["organizationScopeIds"].as_array().ok_or_else(||anyhow!("child app hard scope missing"))?;
+        ensure!(child_hard_scope.len()==3 && [current,child,leaf].iter().all(|org|child_hard_scope.contains(&json!(org))),
+            "child app hard organization cap expanded outside the selected subtree");
+        ensure!(child_app_context["dataGrants"][0]["scope"]=="ORG_SUBTREE"
+            && child_app_context["dataGrants"][0]["organizationIds"]==child_app_context["organizationScopeIds"],
+            "TENANT app grant bypassed the selected platform child's cap");
+        let root_app_context = get(&app, root_app_token, "/api/apps/system/context", StatusCode::OK).await?;
+        ensure!(root_app_context["organizationScopeIds"].is_null() && root_app_context["dataGrants"][0]["scope"]=="TENANT",
+            "actual platform root app context lost explicit TENANT grant semantics");
+        sqlx::query("UPDATE membership_data_grants SET scope_type='SELF' WHERE membership_id IN (SELECT id FROM memberships WHERE user_id=$1 AND organization_id=$2)")
+            .bind(super_admin).bind(current).execute(pool).await?;
+        let self_context = get(&app, child_app_token, "/api/apps/system/context", StatusCode::OK).await?;
+        ensure!(self_context["dataGrants"][0]["scope"]=="SELF"
+            && self_context["dataGrants"][0]["organizationIds"]==self_context["organizationScopeIds"]
+            && self_context["contextVersion"]!=child_app_context["contextVersion"],
+            "SELF app grant omitted the hard organization cap or stale context version remained");
+        sqlx::query("UPDATE tenants SET is_platform=false WHERE id=$1").bind(tenant).execute(pool).await?;
+        let ordinary_root_app_context = get(&app, root_app_token, "/api/apps/system/context", StatusCode::OK).await?;
+        ensure!(ordinary_root_app_context["dataGrants"][0]["scope"]=="ORG_SUBTREE"
+            && ordinary_root_app_context["organizationScopeIds"].as_array().is_some_and(|ids|ids.len()==5
+                && [root,current,child,leaf,sibling].iter().all(|org|ids.contains(&json!(org))))
+            && ordinary_root_app_context["contextVersion"]!=root_app_context["contextVersion"],
+            "ordinary root app scope was unbounded or context version did not change");
+        sqlx::query("UPDATE tenants SET is_platform=true WHERE id=$1").bind(tenant).execute(pool).await?;
         let platform_choices = get(&app, &manager_token, "/api/departments/organizations", StatusCode::OK).await?;
         ensure!(platform_choices == choices, "platform context expanded the selector scope");
         let leaf_token = session(pool, manager, tenant, leaf).await?;
@@ -304,6 +415,17 @@ async fn department_organization_choices() -> Result<()> {
         sqlx::query("DELETE FROM role_menus WHERE role_id=$1")
             .bind(role).execute(pool).await?;
         get(&app, &manager_token, "/api/departments/organizations", StatusCode::FORBIDDEN).await?;
+        let switch_source = session(pool, super_admin, tenant, current).await?;
+        let switched_root = call(&app, &switch_source, Method::POST, "/api/auth/context", Some(json!({"organizationId":root})), StatusCode::OK).await?;
+        ensure!(switched_root["platformContext"]==true && switched_root["tenant"]["isPlatform"]==true,
+            "switching to platform root did not return its management context");
+        let switched_root_token = switched_root["accessToken"].as_str().ok_or_else(||anyhow!("switched root access token missing"))?;
+        let switched_child = call(&app, switched_root_token, Method::POST, "/api/auth/context", Some(json!({"organizationId":current})), StatusCode::OK).await?;
+        ensure!(switched_child["platformContext"]==false && switched_child["tenant"]["isPlatform"]==true,
+            "switching to platform child retained root management context");
+        let switched_child_token = switched_child["accessToken"].as_str().ok_or_else(||anyhow!("switched child access token missing"))?;
+        let switched_child_profile = get(&app, switched_child_token, "/api/auth/profile", StatusCode::OK).await?;
+        ensure!(switched_child_profile["platformContext"]==false, "profile and newly selected child context disagree");
         Ok(())
     }.await;
     database.finish(result).await

@@ -102,10 +102,13 @@ async fn tree_handler(
         None => user.tenant_id,
     };
     state.ensure_tenant_scope(&user, tenant_id, "租户").await?;
+    let scope = state.scoped_org_ids(&user).await?;
     let rows: Vec<OrgRow> = sqlx::query_as(&format!(
-        "{ORG_SELECT} FROM organizations o WHERE o.tenant_id = $1 ORDER BY o.sort_order, o.created_at"
+        "{ORG_SELECT} FROM organizations o WHERE o.tenant_id = $1 \
+         AND ($2::uuid[] IS NULL OR o.id = ANY($2)) ORDER BY o.sort_order, o.created_at"
     ))
     .bind(tenant_id)
+    .bind(scope.as_deref())
     .fetch_all(&state.pool)
     .await?;
 
@@ -132,6 +135,9 @@ async fn tree_handler(
         .iter()
         .map(|r| {
             let mut v = org_json(r);
+            if scope.is_some() && r.id == user.org_id {
+                v["parentId"] = Value::Null;
+            }
             v["departmentCount"] = json!(dept_counts.get(&r.id).copied().unwrap_or(0));
             v["userCount"] = json!(member_counts.get(&r.id).copied().unwrap_or(0));
             v
@@ -225,7 +231,8 @@ async fn create(
     validate_organization_type(&body.organization_type)?;
     let contact = body.contact.normalized();
     contact.validate(true)?;
-    let allow_existing_global = state.is_platform_context(&user).await?;
+    let existing_org_scope = state.scoped_org_ids(&user).await?;
+    let allow_existing_global = existing_org_scope.is_none();
     let tenant_id: Uuid = body
         .tenant_id
         .parse()
@@ -240,6 +247,16 @@ async fn create(
         return Err(AppError::bad_request("所属租户不存在"));
     }
     let parent_id = parse_parent(&state.pool, tenant_id, &body.parent_id).await?;
+    if let Some(parent) = parent_id {
+        state.ensure_org_scope(&user, parent, "父组织").await?;
+    } else if !allow_existing_global {
+        let current_is_root: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM organizations WHERE id=$1 AND tenant_id=$2 AND parent_id IS NULL)",
+        ).bind(user.org_id).bind(tenant_id).fetch_one(&state.pool).await?;
+        if !current_is_root {
+            return Err(AppError::bad_request("请在当前组织或下级组织下创建组织"));
+        }
+    }
     // 根组织唯一: 每个租户仅允许一个 parent_id IS NULL 的组织 (应用层前置校验, DB 唯一索引兜底)
     if parent_id.is_none() {
         let root_exists: bool = sqlx::query_scalar(
@@ -290,7 +307,7 @@ async fn create(
     onboarding::initialize_organization(&mut tx, tenant_id, row.id, parent_id).await?;
     let role_code = if parent_id.is_none() { "tenant_admin" } else { "org_admin" };
     let administrator = onboarding::provision_contact_administrator(
-        &mut tx, &state.config, tenant_id, row.id, &contact, role_code, allow_existing_global,
+        &mut tx, &state.config, tenant_id, row.id, &contact, role_code, existing_org_scope.as_deref(),
     ).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -577,19 +594,9 @@ async fn load_org_tenant(pool: &sqlx::PgPool, org_id: Uuid) -> Result<Uuid, AppE
     row.map(|(t,)| t).ok_or_else(|| AppError::not_found("组织不存在"))
 }
 
-/// 非平台上下文的目标组织隔离校验 (不存在交由后续 not_found)
+/// 当前组织子树的目标组织隔离校验。
 async fn ensure_org_in_scope(state: &AppState, user: &CurrentUser, org_id: Uuid) -> Result<(), AppError> {
-    if state.is_platform_context(user).await? {
-        return Ok(());
-    }
-    let tenant: Option<Uuid> = sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
-        .bind(org_id)
-        .fetch_optional(&state.pool)
-        .await?;
-    match tenant {
-        None => Ok(()),
-        Some(t) => state.ensure_tenant_scope(user, t, "组织").await,
-    }
+    state.ensure_org_scope(user, org_id, "组织").await
 }
 
 /// GET /api/organizations/{id}/authorizations — 仅展示租户已授权范围
@@ -835,7 +842,7 @@ async fn initialize_administrator(
     RequirePermission("system:role").check(&state, &user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, id).await?;
-    let allow_global = state.is_platform_context(&user).await?;
+    let existing_org_scope = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
     let (tenant_id, parent_id, name, contact_name, contact_phone, contact_email): (Uuid, Option<Uuid>, String, String, String, String) = sqlx::query_as(
         "SELECT tenant_id,parent_id,name,contact_name,contact_phone,contact_email FROM organizations WHERE id=$1 FOR UPDATE",
@@ -844,7 +851,7 @@ async fn initialize_administrator(
     let role_code = if parent_id.is_none() { "tenant_admin" } else { "org_admin" };
     let contact = Contact { contact_name, contact_phone, contact_email }.normalized();
     let administrator = onboarding::initialize_existing_administrator(
-        &mut tx, &state.config, tenant_id, org_id, &contact, role_code, allow_global,
+        &mut tx, &state.config, tenant_id, org_id, &contact, role_code, existing_org_scope.as_deref(),
     ).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();

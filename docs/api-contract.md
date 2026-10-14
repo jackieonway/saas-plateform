@@ -21,7 +21,9 @@ Body: `{"organizationId":"<uuid>","userId":"<登录选择项的 uuid，可选>"}
 1. 登录后立即选择: login 响应中的 `ticket`(credentialTicket JWT, typ=credential 或 credential_multi, 10分钟有效) 放 Header `Authorization: Bearer <ticket>`;
 2. 已登录会话切换组织: 携带 session JWT,校验用户在目标组织有 membership(用于顶栏无缝切换组织)。
 返回:
-`{"accessToken":"<sessionJWT>","expiresIn":43200,"refreshToken":"psr_<随机令牌>","refreshExpiresIn":604800,"user":{...},"tenant":{...},"organization":{...}}`
+`{"accessToken":"<sessionJWT>","expiresIn":43200,"refreshToken":"psr_<随机令牌>","refreshExpiresIn":604800,"platformContext":true|false,"user":{...},"tenant":{...},"organization":{...}}`
+
+`platformContext` 仅在实际平台租户的根组织上下文为 `true`，表示可继续接受平台管理权限校验；仍须拥有对应应用、菜单和操作权限。`tenant.isPlatform` 只描述租户身份，平台子组织的 `platformContext` 为 `false`。
 
 ### POST /oauth/token（平台会话刷新）
 
@@ -30,11 +32,11 @@ Body: `{"organizationId":"<uuid>","userId":"<登录选择项的 uuid，可选>"}
 前端并发过期请求共用一次刷新，并仅重试原请求一次；刷新时保留现有组织上下文与页面数据。网络或服务临时错误保留会话以便重试，刷新凭证确已失效才返回登录。切换上下文时清除旧查询，旧响应不得写入新上下文。
 
 ### GET /api/auth/profile (Bearer session)
-→ `{"user":{"id","username","realName","email","phone","avatar","gender","isSuperAdmin"},"tenant":{"id","name","code"},"organization":{"id","name","path"},"applications":[{"id","code","name","icon","basePath"}],"memberships":[{"organizationId","organizationName","organizationPath","tenantId","tenantName"}]}`
+→ `{"platformContext":true|false,"user":{"id","username","realName","email","phone","avatar","gender","isSuperAdmin"},"tenant":{"id","name","code","isPlatform"},"organization":{"id","name","path"},"applications":[{"id","code","name","icon","basePath"}],"memberships":[{"organizationId","organizationName","organizationPath","tenantId","tenantName"}]}`
 applications = 租户已授权 ∩ 组织已授权 的启用应用,按 sortOrder 排序。memberships 用于顶栏切换组织。
 
 ### GET /api/auth/menus?applicationId= (Bearer session)
-→ `{"menus":[TreeNode]}` 当前用户在当前组织上下文中、该应用下可见的菜单树(角色∩组织∩租户授权)。
+→ `{"menus":[TreeNode]}` 当前用户在当前组织上下文中、该应用下可见的菜单树(角色∩组织∩租户授权；全局超管仅省略角色层，平台组织也不可省略组织授权)。
 TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","permission","sortOrder","visible","children":[TreeNode]}`
 
 ### GET /api/auth/permissions (Bearer session)
@@ -46,11 +48,11 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 ## 2. 平台管理模块 (需相应权限码)
 
-权限码(挂在菜单 permission 上，后端按模块校验；超管绕过只适用于实际平台租户上下文):
+权限码(挂在菜单 permission 上，后端按模块校验；所有组织均需应用和菜单授权，全局超管只能跳过角色层):
 `system:tenant` `system:organization` `system:department` `system:user` `system:role` `system:menu` `system:application` `system:oauth` `system:monitor`
 
 ### 2.1 租户 /tenants
-- GET `/api/tenants/options` → 最小下拉选项 `[{id,name,code,isPlatform}]`，需拥有组织、部门、用户、角色、授权、审计或租户管理中的任一相关权限；普通租户上下文仅返回当前租户。
+- GET `/api/tenants/options` → 最小下拉选项 `[{id,name,code,isPlatform}]`，需拥有组织、部门、用户、角色、授权、审计或租户管理中的任一相关权限；平台根组织以外的上下文仅返回当前租户。
 - GET `/api/tenants?page&size&keyword`（所有上下文均需 `system:tenant`）→ 分页 `{id,name,code,tenantType,contactName,contactPhone,contactEmail,description,province,city,district,township,village,address,longitude,latitude,status,createdAt,organizationCount,userCount,authorizedAppCount}`；经纬度未标注时均为 `null`。
 - POST `/api/tenants` `{name,code,tenantType?,contactName?,contactPhone?,contactEmail?,description,province?,city?,district?,township?,village?,address?,longitude?,latitude?}`；`tenantType` 支持 `PERSONAL`（个人）、`COMPANY`（公司）、`PUBLIC_INSTITUTION`（事业单位）、`GOVERNMENT`（政府）、`OTHER`（其他），缺省为 `COMPANY`。事务内自动以租户名称建立根组织，初始化租户范围的内置超级管理员角色及基础管理授权；根组织继承租户地点和对应类型（个人映射为其他）。联系人字段为 `contactName`、`contactPhone`、`contactEmail`。新建表单要求姓名及至少一个登录标识；联系人完整时，事务内自动创建或匹配用户、根组织成员关系及「超级管理员」授权。电话优先用作新账号用户名，没有电话时使用 Email；用户名被占用时分配独立用户名。创建响应附加 `administrator:{userId,username,roleName,created,initialPassword?}`，新账号随机初始密码只返回这一次。旧客户端完全省略联系人仍可创建未分配用户的管理员角色。后续账号资料和权限由用户、角色管理维护。PUT `/api/tenants/:id` 可更新类型、联系人及地点；修改联系人不自动改动已有账号或授权，联系人字段省略保留、空字符串清除。省略类型或乡村字段时保留原值，乡村传空字符串清除；DELETE `/api/tenants/:id`(级联删组织/授权/角色)。根组织名称后续可在组织管理中独立维护。
 - PUT `/api/tenants/:id/status` `{"status":"ENABLED|DISABLED"}`
@@ -61,18 +63,18 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
   事务内:取消应用授权时同步清理该应用下菜单授权;取消菜单授权时级联清理下属组织的 organization_menus 与该租户角色的 role_menus。新增授权自动同步到根组织及其租户范围的内置超级管理员角色。
 
 ### 2.3 应用 /applications
-- GET `/api/applications` → 全量列表(含 menuCount)
+- GET `/api/applications` → 全量列表(含 menuCount)，要求平台根组织上下文及 `system:application`。
 - POST `/api/applications` `{code,name,icon,basePath,description,sortOrder,status}`
 - PUT `/api/applications/:id` ; DELETE(级联删菜单与各层级授权)
 
 ### 2.4 菜单 /menus
-- GET `/api/menus/tree?applicationId=` → 全量菜单树(管理端,不受授权过滤)
+- GET `/api/menus/tree?applicationId=` → 全量菜单树(管理端目录)，要求平台根组织上下文及 `system:menu`。
 - POST `/api/menus` `{applicationId,parentId,type,title,path,icon,component,permission,sortOrder,visible}`
 - PUT `/api/menus/:id` ; DELETE `/api/menus/:id`(级联子菜单)
 
 ### 2.5 组织 /organizations (租户下多层级树)
-- GET `/api/organizations/tree?tenantId=` → `[{id,tenantId,parentId,name,code,organizationType,contactName,contactPhone,contactEmail,sortOrder,description,province,city,district,township,village,address,longitude,latitude,status,children:[...]}]`
-- POST `/api/organizations` `{tenantId,parentId,name,code,organizationType?,contactName?,contactPhone?,contactEmail?,sortOrder,description,province?,city?,district?,township?,village?,address?,longitude?,latitude?}`；`organizationType` 支持 `COMPANY`（公司）、`SUBSIDIARY`（子公司）、`BRANCH`（分公司）、`PUBLIC_INSTITUTION`（事业单位）、`GOVERNMENT`（政府）、`OTHER`（其他），缺省为 `COMPANY`。根组织初始化租户范围的内置超级管理员角色，子组织初始化内置组织管理员角色；子组织从父组织继承租户授权范围内的基础管理权限，联系人字段及创建响应与租户一致，自动建立首位管理员账号或匹配同一联系人的可用账号，并分配当前组织的成员关系和内置管理员角色。仅共用电话或邮箱的不同联系人创建独立用户，不自动合并授权。普通租户创建组织时只能复用本租户成员账号，平台上下文可复用全局同一联系人账号。更新时省略类型保留原值；乡村字段缺省为空，更新时省略保留、空字符串清除。
+- GET `/api/organizations/tree?tenantId=` → `[{id,tenantId,parentId,name,code,organizationType,contactName,contactPhone,contactEmail,sortOrder,description,province,city,district,township,village,address,longitude,latitude,status,children:[...]}]`；平台根组织可指定任意租户，其他上下文仅返回当前组织及下级组织，当前组织作为树根（`parentId:null`），不返回上级或平级节点。
+- POST `/api/organizations` `{tenantId,parentId,name,code,organizationType?,contactName?,contactPhone?,contactEmail?,sortOrder,description,province?,city?,district?,township?,village?,address?,longitude?,latitude?}`；`organizationType` 支持 `COMPANY`（公司）、`SUBSIDIARY`（子公司）、`BRANCH`（分公司）、`PUBLIC_INSTITUTION`（事业单位）、`GOVERNMENT`（政府）、`OTHER`（其他），缺省为 `COMPANY`。根组织和子组织均初始化内置超级管理员角色（分别使用 `tenant_admin`、`org_admin` 代码）；子组织从父组织继承租户授权范围内的基础管理权限，联系人字段及创建响应与租户一致，自动建立首位管理员账号或匹配同一联系人的可用账号，并分配当前组织的成员关系和内置管理员角色。仅共用电话或邮箱的不同联系人创建独立用户，不自动合并授权。创建组织和初始化首位管理员时，除平台根组织外只能复用当前组织及下级组织中姓名、电话、Email 均匹配的成员账号；上级或平级独有账号不参与匹配。平台根组织可复用全局同一联系人账号。更新时省略类型保留原值；乡村字段缺省为空，更新时省略保留、空字符串清除。
 - PUT `/api/organizations/:id` 可维护三个联系人字段，省略保留、空字符串清除；修改联系人不自动改动已有用户、密码或管理员授权。DELETE(级联子组织+部门+成员关系+org授权+角色)
 - PUT `/api/organizations/:id/status`
 - 组织新增应用及菜单授权时，自动同步到该组织的内置管理员角色；撤销授权时同步清理。默认管理员角色的菜单由授权维护，不接受手工编辑。
@@ -95,7 +97,7 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 ### 2.8 用户 /users
 - GET `/api/users?page&size&keyword&organizationId&tenantId` → `{id,username,realName,email,phone,gender,status,lastLoginAt,createdAt,memberships:[{organizationId,organizationName,departmentId,departmentName}],roleCount}`
-- POST `/api/users` `{username,password,realName,email,phone,gender}` (普通租户管理员创建后直接加入当前会话组织；平台管理员创建时默认无 membership)
+- POST `/api/users` `{username,password,realName,email,phone,gender}` (平台根组织以外的管理员创建后直接加入当前会话组织；平台根组织创建时默认无 membership)
 - PUT `/api/users/:id` `{realName,email,phone,gender}` ; DELETE
 - PUT `/api/users/:id/status` ; POST `/api/users/:id/reset-password` `{"newPassword"}`
 - GET `/api/users/:id/memberships` → `[{organizationId,tenantId,departmentId,position}]`
@@ -103,9 +105,9 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 - GET `/api/users/:id/roles` → `[{roleId,organizationId}]`
 - PUT `/api/users/:id/roles` `{"items":[{"roleId","organizationId"}]}` (角色所属组织需在用户 membership 组织或其祖先内)
 
-**管理 API 作用域（Phase 3）**：普通租户的用户列表、成员详情、角色详情和角色数量只包含当前租户；修改成员或角色的全量替换请求也只替换当前租户记录。普通租户管理员不能修改跨租户共享账号的全局资料、状态、密码或删除该账号；平台管理员可以执行跨租户操作。另一个租户的组织、部门、角色或用户 ID 与不存在的 ID 均返回 `404 NOT_FOUND`，以免暴露资源归属。平台跨租户修改会按目标租户写入审计记录。
+**管理 API 作用域**：仅实际平台租户的根组织上下文可跨租户管理。所有其他上下文（包括平台子组织和全局超级管理员切换后的上下文）的数据边界是当前组织及其下级组织。用户列表、成员详情、角色详情、角色用户及数量都按该边界返回；修改成员、用户角色或角色用户的替换请求只替换可管理记录，保留范围外关联。账号还有范围外成员关系或角色时，该上下文不能修改全局资料、状态、密码或删除账号。上级、平级、其他租户的组织、部门、角色或用户 ID 与不存在的 ID 均返回 `404 NOT_FOUND`；共享账号的全局修改被拒绝时返回 `403 FORBIDDEN`。平台跨租户修改会按目标租户写入审计记录。
 
-`/api/applications` 和 `/api/menus` 是全局目录管理接口，要求平台上下文及相应权限码。`/api/search` 返回的用户组织名按当前租户过滤，跨租户身份不会带出另一租户的组织名。
+`/api/applications` 和 `/api/menus` 是全局目录管理接口，要求平台根组织上下文及相应权限码。`/api/search` 的用户、组织和角色查询及用户组织名遵守当前组织子树，组织搜索路径从当前组织开始。有权限时可返回所属租户的必要元数据；租户页的组织数、用户数按当前子树统计，应用数按当前组织授权统计。
 
 ### 2.9 角色 /roles (基于授权菜单建立)
 - GET `/api/roles?page&size&keyword&tenantId&organizationId` → `{id,name,code,description,organizationId,organizationName,tenantId,status,builtIn,menuCount,userCount,createdAt}`
@@ -133,7 +135,7 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 ### 2.12 监控 /monitor
 - GET `/api/monitor/overview` → `{"tenantCount","organizationCount","userCount","roleCount","applicationCount","menuCount","oauthClientCount","activeTokenCount","todayLoginCount","recentLogins":[{username,organizationName,ip,createdAt}],"loginTrend7d":[{"date":"09-28","count":n}],"auditTrend7d":[...]}`
 
-`/api/monitor/overview` 和 `/api/monitor/system` 为平台级接口；普通租户可使用 `/api/monitor/tenant-insights` 及其 CSV 导出，仅返回当前租户的数据。审计列表和 CSV 导出同样由服务端限定当前租户。
+`/api/monitor/overview` 和 `/api/monitor/system` 为平台级接口，仅平台根组织上下文可用。其他上下文可使用 `/api/monitor/tenant-insights` 及其 CSV 导出，用户、组织、角色、登录、令牌及趋势仅统计当前组织及其下级组织。审计列表、总数和 CSV 导出使用相同子树边界；子组织不包含无法归属组织的旧租户级审计行，租户根组织可查看本租户这类记录。查询参数不能扩大服务端范围。
 
 ## 3. 标准 OAuth2 对外服务 (前缀 /oauth,form-encoded,RFC 兼容)
 
@@ -210,7 +212,7 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 完善并保存联系人后，可在租户列表或组织详情点击“初始化首位管理员”。修改联系人本身仍不会创建人员。
 
 - `POST /api/tenants/{id}/initialize-administrator`：平台上下文，需 `system:tenant`、`system:user`、`system:role`，使用租户联系人和唯一根组织。
-- `POST /api/organizations/{id}/initialize-administrator`：需 `system:organization`、`system:user`、`system:role`，沿用组织租户隔离，使用组织联系人；根组织和子组织均授予“超级管理员”角色，权限分别限制在对应租户、组织授权范围内。
+- `POST /api/organizations/{id}/initialize-administrator`：需 `system:organization`、`system:user`、`system:role`，遵守当前组织子树隔离及联系人账号匹配范围，使用组织联系人；根组织和子组织均授予“超级管理员”角色，权限分别限制在对应租户、组织授权范围内。
 - 响应包含 `administrator`。新账号返回一次 `initialPassword`；复用账号保留原密码。已有已初始化管理员时返回 `alreadyInitialized: true`，不重复创建人员或修改授权。
 - 已有单独维护的管理员、不可用管理员角色、联系人缺失或租户没有唯一根组织时，返回可操作的错误提示。旧实体缺少内置角色时补建角色，仅同步现有组织授权范围，不扩大租户或组织授权。
 - 初始化在事务内锁定组织，租户入口、根组织入口和并发重复请求共用相同幂等检查。更换联系人后再执行也不会替换已初始化管理员。
@@ -223,3 +225,9 @@ TreeNode: `{"id","parentId","type":"DIR|MENU|BUTTON","title","path","icon","perm
 
 
 平台品牌与设置接口新增 `primaryColor`（六位十六进制 `#RRGGBB`）。`GET /api/platform/branding` 对公开页面返回生效颜色，`GET/PUT /api/platform/settings` 仍需平台上下文及 `system:settings`。PUT 省略该字段保留原值，非法颜色返回400；支持海青、远山蓝、鸢尾紫、琥珀、玫瑰、松绿六组快捷预设与自定义颜色，保存后更新主要按钮、菜单选中态、图标和侧栏主题，保持用户选择的明暗模式。
+
+
+组织授权是所有上下文的硬上限：租户已授权但当前组织未授权的应用，不进入可用应用列表，也不能签发或使用该组织的应用令牌；应用已授权但菜单未授权时，不返回对应菜单或权限码，业务接口与页面访问均拒绝。角色继承、全局超管和平台根组织身份不能绕过该限制。
+
+
+页面访问同时核对权限码与当前组织实际授权的菜单路径，不能因两个菜单共用权限码而互相放行。OAuth 客户端管理接口还要求 `/system/oauth/clients` 菜单；会话、令牌和设备码管理接口还要求 `/system/oauth/tokens` 菜单。微应用按授权菜单路径精确匹配；只有明确配置的 `:参数` 或 `*` 模式可匹配动态地址，父菜单或应用根菜单不自动授权未列出的子页面。应用入口执行前及授权上下文续期时再次校验，未授权页面不加载入口脚本。

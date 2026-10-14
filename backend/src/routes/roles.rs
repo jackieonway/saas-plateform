@@ -43,9 +43,11 @@ struct RoleListRow {
 const LIST_SELECT: &str = "SELECT r.id, r.name, COALESCE(r.code,'') AS code, COALESCE(r.description,'') AS description, \
  r.organization_id, o.name AS organization_name, r.tenant_id, r.status, r.built_in, r.created_at, \
  (SELECT count(*) FROM role_menus rm WHERE rm.role_id = r.id) AS menu_count, \
- (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id) AS user_count";
+ (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id \
+ AND ($4::uuid[] IS NULL OR (ur.organization_id = ANY($4) AND EXISTS( \
+ SELECT 1 FROM memberships um WHERE um.user_id = ur.user_id AND um.organization_id = ANY($4))))) AS user_count";
 
-/// GET /api/roles — 分页 + keyword/tenantId/organizationId; 非平台租户仅看本租户角色
+/// GET /api/roles — 分页 + keyword/tenantId/organizationId; 非平台根组织仅看当前组织及下级组织角色。
 async fn list(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -54,21 +56,27 @@ async fn list(
     RequirePermission("system:role").check(&state, &user).await?;
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
-    let tenant_filter: Option<Uuid> = if state.is_platform_context(&user).await? {
+    let scoped_orgs = state.scoped_org_ids(&user).await?;
+    let tenant_filter: Option<Uuid> = if scoped_orgs.is_none() {
         params.get("tenantId").and_then(|v| Uuid::parse_str(v).ok())
     } else {
         Some(user.tenant_id)
     };
     let org_filter: Option<Uuid> = params.get("organizationId").and_then(|v| Uuid::parse_str(v).ok());
+    if let Some(org) = org_filter {
+        state.ensure_org_scope(&user, org, "组织").await?;
+    }
     let where_clause = "($1 = '' OR r.name ILIKE '%' || $1 || '%' OR r.code ILIKE '%' || $1 || '%') \
-     AND ($2::uuid IS NULL OR r.tenant_id = $2) AND ($3::uuid IS NULL OR r.organization_id = $3)";
+     AND ($2::uuid IS NULL OR r.tenant_id = $2) AND ($3::uuid IS NULL OR r.organization_id = $3) \
+     AND ($4::uuid[] IS NULL OR r.organization_id = ANY($4))";
     let rows: Vec<RoleListRow> = sqlx::query_as(&format!(
         "{LIST_SELECT} FROM roles r JOIN organizations o ON o.id = r.organization_id \
-         WHERE {where_clause} ORDER BY r.created_at, r.id LIMIT $4 OFFSET $5"
+         WHERE {where_clause} ORDER BY r.created_at, r.id LIMIT $5 OFFSET $6"
     ))
     .bind(&kw)
     .bind(tenant_filter)
     .bind(org_filter)
+    .bind(&scoped_orgs)
     .bind(size)
     .bind(offset)
     .fetch_all(&state.pool)
@@ -79,6 +87,7 @@ async fn list(
     .bind(&kw)
     .bind(tenant_filter)
     .bind(org_filter)
+    .bind(&scoped_orgs)
     .fetch_one(&state.pool)
     .await?;
     let records: Vec<Value> = rows.iter().map(|r| serde_json::to_value(r).unwrap_or_default()).collect();
@@ -112,7 +121,7 @@ async fn ensure_role_in_scope(
     user: &CurrentUser,
     role: (Uuid, Uuid, String),
 ) -> Result<(), AppError> {
-    state.ensure_tenant_scope(user, role.1, "角色").await
+    state.ensure_org_scope(user, role.0, "角色").await
 }
 
 /// POST /api/roles
@@ -138,8 +147,7 @@ async fn create(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("组织不存在"))?;
-    // 非平台租户只能在本租户组织上建角色
-    state.ensure_tenant_scope(&user, tenant_id, "组织").await?;
+    state.ensure_org_scope(&user, org_id, "组织").await?;
     let row: RoleListRow = sqlx::query_as(
         "INSERT INTO roles (tenant_id, organization_id, name, code, description) VALUES ($1, $2, $3, $4, $5) \
          RETURNING id, name, COALESCE(code,'') AS code, COALESCE(description,'') AS description, \
@@ -203,12 +211,15 @@ async fn update(
          organization_id, (SELECT name FROM organizations WHERE id = roles.organization_id) AS organization_name, \
          tenant_id, status, built_in, created_at, \
          (SELECT count(*) FROM role_menus rm WHERE rm.role_id = roles.id) AS menu_count, \
-         (SELECT count(*) FROM user_roles ur WHERE ur.role_id = roles.id) AS user_count"
+         (SELECT count(*) FROM user_roles ur WHERE ur.role_id = roles.id \
+         AND ($5::uuid[] IS NULL OR (ur.organization_id = ANY($5) AND EXISTS( \
+         SELECT 1 FROM memberships um WHERE um.user_id = ur.user_id AND um.organization_id = ANY($5))))) AS user_count"
     ))
     .bind(id)
     .bind(&body.name)
     .bind(&body.code)
     .bind(&body.description)
+    .bind(state.scoped_org_ids(&user).await?)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("角色不存在"))?;
@@ -238,10 +249,10 @@ async fn delete(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("角色不存在"))?;
+    ensure_role_in_scope(&state, &user, (org_id, tenant_id, name.clone())).await?;
     if built_in {
         return Err(AppError::conflict("内置角色不允许删除"));
     }
-    ensure_role_in_scope(&state, &user, (org_id, tenant_id, name.clone())).await?;
     sqlx::query("DELETE FROM roles WHERE id = $1")
         .bind(id)
         .execute(&state.pool)
@@ -362,9 +373,12 @@ async fn get_users(
     ensure_role_in_scope(&state, &user, loaded).await?;
     let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
         "SELECT u.id, u.username, COALESCE(u.real_name,'') FROM user_roles ur \
-         JOIN users u ON u.id = ur.user_id WHERE ur.role_id = $1 ORDER BY u.created_at",
+         JOIN users u ON u.id = ur.user_id WHERE ur.role_id = $1 \
+         AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
+         SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.organization_id = ANY($2)))) ORDER BY u.created_at",
     )
     .bind(id)
+    .bind(state.scoped_org_ids(&user).await?)
     .fetch_all(&state.pool)
     .await?;
     let items: Vec<Value> = rows
@@ -408,26 +422,31 @@ async fn put_users(
             unique.push(u);
         }
     }
+    let scoped_orgs = state.scoped_org_ids(&user).await?;
+    let mut tx = state.pool.begin().await?;
     if !unique.is_empty() {
-        let platform = state.is_platform_context(&user).await?;
+        sqlx::query("SELECT id FROM users WHERE id = ANY($1) ORDER BY id FOR UPDATE")
+            .bind(&unique)
+            .execute(&mut *tx)
+            .await?;
         let n: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM users u WHERE u.id = ANY($1) \
-             AND ($2::bool OR EXISTS(SELECT 1 FROM memberships m \
-                 JOIN organizations o ON o.id = m.organization_id \
-                 WHERE m.user_id = u.id AND o.tenant_id = $3))",
+             AND ($2::uuid[] IS NULL OR EXISTS(SELECT 1 FROM memberships m \
+                 WHERE m.user_id = u.id AND m.organization_id = ANY($2)))",
         )
         .bind(&unique)
-        .bind(platform)
-        .bind(tenant_id)
-        .fetch_one(&state.pool)
+        .bind(&scoped_orgs)
+        .fetch_one(&mut *tx)
         .await?;
         if n != unique.len() as i64 {
             return Err(AppError::not_found("用户不存在"));
         }
     }
-    let mut tx = state.pool.begin().await?;
-    sqlx::query("DELETE FROM user_roles WHERE role_id = $1")
+    sqlx::query("DELETE FROM user_roles ur WHERE ur.role_id = $1 \
+        AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
+        SELECT 1 FROM memberships m WHERE m.user_id = ur.user_id AND m.organization_id = ANY($2))))")
         .bind(id)
+        .bind(&scoped_orgs)
         .execute(&mut *tx)
         .await?;
     for uid in &unique {

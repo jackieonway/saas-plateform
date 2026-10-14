@@ -1169,6 +1169,38 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(allowed_orgs.contains(&json!(child_org)) && allowed_orgs.contains(&json!(descendant))
             && !allowed_orgs.contains(&json!(org_a)) && !allowed_orgs.contains(&json!(org_b)),
             "subtree grant leaked parent or other tenant organization");
+        let sibling_org: Uuid = sqlx::query_scalar(
+            "INSERT INTO organizations (tenant_id,parent_id,name) VALUES($1,$2,$3) RETURNING id",
+        ).bind(tenant_a).bind(org_a).bind(format!("sibling-{suffix}"))
+         .fetch_one(&pool).await?;
+        sqlx::query("UPDATE membership_data_grants SET scope_type='TENANT' WHERE membership_id=$1 AND application_id=$2")
+            .bind(child_member).bind(app_a).execute(&pool).await?;
+        let (_, capped_child_context) = call(&app, Method::GET, &context_path, &child_token, None).await?;
+        let capped_orgs = capped_child_context["dataGrants"][0]["organizationIds"].as_array()
+            .ok_or_else(|| anyhow::anyhow!("missing capped subtree organization IDs"))?;
+        ensure!(capped_child_context["dataGrants"][0]["scope"] == "ORG_SUBTREE"
+            && capped_orgs.len()==2 && capped_orgs.contains(&json!(child_org)) && capped_orgs.contains(&json!(descendant))
+            && !capped_orgs.contains(&json!(org_a)) && !capped_orgs.contains(&json!(sibling_org)) && !capped_orgs.contains(&json!(org_b)),
+            "TENANT data grant expanded the selected child's organization boundary");
+        ensure!(capped_child_context["organizationScopeIds"] == json!(capped_orgs),
+            "app context omitted the hard organization cap");
+        sqlx::query("UPDATE membership_data_grants SET scope_type='SELF' WHERE membership_id=$1 AND application_id=$2")
+            .bind(child_member).bind(app_a).execute(&pool).await?;
+        let (_, self_child_context) = call(&app, Method::GET, &context_path, &child_token, None).await?;
+        ensure!(self_child_context["dataGrants"][0]["scope"]=="SELF"
+            && self_child_context["dataGrants"][0]["organizationIds"]==capped_child_context["organizationScopeIds"],
+            "SELF app grant omitted the selected organization's hard boundary");
+        sqlx::query("UPDATE membership_data_grants SET scope_type='TENANT' WHERE membership_id=$1 AND application_id=$2")
+            .bind(child_member).bind(app_a).execute(&pool).await?;
+        sqlx::query(
+            "INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) \
+             VALUES($1,$2,'order','read','TENANT')",
+        ).bind(member_id).bind(app_a).execute(&pool).await?;
+        let (_, ordinary_root_context) = call(&app, Method::GET, &context_path, &token_a2, None).await?;
+        ensure!(ordinary_root_context["dataGrants"][0]["scope"]=="ORG_SUBTREE", "ordinary root app data scope was unbounded");
+        ensure!(ordinary_root_context["organizationScopeIds"].as_array().is_some_and(|ids| ids.contains(&json!(org_a))
+            && ids.contains(&json!(child_org)) && ids.contains(&json!(descendant)) && ids.contains(&json!(sibling_org))
+            && !ids.contains(&json!(org_b))), "ordinary root hard scope did not match its own tenant subtree");
         let (_, child_external_roles) = call(&app, Method::GET, "/api/external/roles", &child_token, None).await?;
         ensure!(child_external_roles["organizations"].as_array().is_some_and(|v| v.len() == 1)
             && child_external_roles["organizations"][0]["id"] == child_org.to_string(),

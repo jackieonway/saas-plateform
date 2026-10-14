@@ -1,10 +1,12 @@
 import type { ReactNode } from "react"
-import { useLocation } from "react-router-dom"
+import { Navigate, useLocation } from "react-router-dom"
 import { Loader2, ShieldAlert } from "lucide-react"
 import { useQueries } from "@tanstack/react-query"
 import { EmptyState, ErrorState } from "@/components/states"
-import { usePermissionsQuery } from "@/hooks/use-auth-data"
+import { useMenusQuery, usePermissionsQuery } from "@/hooks/use-auth-data"
 import { normalizedRoutePath, routePermission } from "@/lib/route-permissions"
+import { microRouteAccess } from "@/lib/micro-route-permissions"
+import { hasPlatformContext } from "@/lib/platform-context"
 import { useAuthStore } from "@/stores/auth"
 import { authApi } from "@/api/auth"
 import { asArray } from "@/lib/api"
@@ -40,29 +42,34 @@ function externalUrl(raw: string | null | undefined): string | null {
 
 function hasExternalMenu(nodes: MenuNode[], url: string): boolean {
   return nodes.some((node) =>
-    (node.type !== "BUTTON" && externalUrl(node.linkUrl) === url) ||
+    (node.type === "MENU" && externalUrl(node.linkUrl) === url) ||
     (!!node.children?.length && hasExternalMenu(node.children, url)))
 }
 
-/** External URLs also need a menu returned by the current authorized context. */
-function EmbedPermissionGuard({ children }: { children: ReactNode }) {
-  const { search } = useLocation()
+function useGrantedApplicationMenus(enabled = true) {
   const token = useAuthStore((s) => s.token)
   const profile = useAuthStore((s) => s.profile)
   const contextEpoch = useAuthStore((s) => s.contextEpoch)
   const switching = useAuthStore((s) => s.contextSwitching)
-  const url = externalUrl(new URLSearchParams(search).get("url"))
-  const menusQueries = useQueries({
+  const queries = useQueries({
     queries: (profile?.applications ?? []).map((app) => ({
       queryKey: ["auth-menus", app.id, contextEpoch],
       queryFn: async ({ signal }: { signal: AbortSignal }) =>
-        asArray<MenuNode>(await authApi.menus(app.id, token!, signal), "menus"),
-      enabled: !!token && !switching && !!url,
+        asArray<MenuNode>(await authApi.menus(app.id, undefined, signal), "menus"),
+      enabled: enabled && !!token && !switching,
       staleTime: 20_000,
       refetchInterval: 20_000,
       retry: 1,
     })),
   })
+  return { profile, switching, queries }
+}
+
+/** External URLs also need a menu returned by the current authorized context. */
+function EmbedPermissionGuard({ children }: { children: ReactNode }) {
+  const { search } = useLocation()
+  const url = externalUrl(new URLSearchParams(search).get("url"))
+  const { profile, switching, queries: menusQueries } = useGrantedApplicationMenus(!!url)
 
   // The existing embed page presents its own missing/invalid URL explanation.
   if (!url) return children
@@ -76,18 +83,65 @@ function EmbedPermissionGuard({ children }: { children: ReactNode }) {
   return children
 }
 
+function hasHostMenu(nodes: MenuNode[], pathname: string): boolean {
+  return nodes.some((menu) => (menu.type === "MENU" && !menu.linkUrl && menu.path &&
+    normalizedRoutePath(menu.path) === pathname) || (!!menu.children?.length && hasHostMenu(menu.children, pathname)))
+}
+
+/** Shared permission codes do not grant a sibling menu that was not authorized. */
+function HostMenuPermissionGuard({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  const { profile, switching, queries } = useGrantedApplicationMenus()
+  if (!profile || switching || queries.some((query) => query.isPending)) return <PermissionLoading />
+  if (queries.some((query) => query.isError)) {
+    return <ErrorState message="访问权限验证失败，请重试" onRetry={() => {
+      for (const query of queries) void query.refetch()
+    }} />
+  }
+  if (!queries.some((query) => query.data && hasHostMenu(query.data, normalizedRoutePath(pathname)))) return <PermissionDenied />
+  return children
+}
+
+/** An application grant alone must never load an unauthorized remote menu page. */
+function MicroPermissionGuard({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  const appCode = normalizedRoutePath(pathname).split("/")[2]
+  const profile = useAuthStore((s) => s.profile)
+  const switching = useAuthStore((s) => s.contextSwitching)
+  const app = profile?.applications.find((candidate) => candidate.code.toLowerCase() === appCode)
+  const menusQuery = useMenusQuery(app?.id)
+
+  if (!profile || switching) return <PermissionLoading />
+  if (!app) return <PermissionDenied />
+  if (menusQuery.isError) {
+    return <ErrorState message="访问权限验证失败，请重试" onRetry={() => menusQuery.refetch()} />
+  }
+  if (!menusQuery.isSuccess) return <PermissionLoading />
+  const access = microRouteAccess(menusQuery.data, app.code, pathname)
+  if (access.redirectTo) return <Navigate to={access.redirectTo} replace />
+  if (!access.allowed) return <PermissionDenied />
+  return children
+}
+
 /** Check effective permissions before a page mounts or requests business data. */
 export function RoutePermissionGuard({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const requiredPermission = routePermission(pathname)
   const permissionsQuery = usePermissionsQuery()
+  const profile = useAuthStore((s) => s.profile)
+  const platformRootOnly = ["/system/settings", "/system/applications", "/system/menus",
+    "/system/oauth/clients", "/system/oauth/tokens"].includes(normalizedRoutePath(pathname))
+  if (platformRootOnly && profile && !hasPlatformContext(profile)) return <PermissionDenied />
 
   if (normalizedRoutePath(pathname) === "/embed") {
     return <EmbedPermissionGuard>{children}</EmbedPermissionGuard>
   }
 
-  // Personal profile/inbox routes have no application grant. Micro applications
-  // validate their authorized application and live context in their own container.
+  if (normalizedRoutePath(pathname).startsWith("/micro/")) {
+    return <MicroPermissionGuard>{children}</MicroPermissionGuard>
+  }
+
+  // Personal profile/inbox routes have no application grant.
   if (!requiredPermission) return children
 
   if (permissionsQuery.isError) {
@@ -107,5 +161,5 @@ export function RoutePermissionGuard({ children }: { children: ReactNode }) {
     return <PermissionDenied />
   }
 
-  return children
+  return <HostMenuPermissionGuard>{children}</HostMenuPermissionGuard>
 }

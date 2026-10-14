@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/stores/auth"
 import { useTheme } from "@/components/theme-provider"
 import { api, ApiError } from "@/lib/api"
+import { microRouteAccess } from "@/lib/micro-route-permissions"
 import type { OAuthSessionTokenResp } from "@/api/types"
 import { MicroContextRuntime, MicroLifecycleSession, microPropsSignature } from "./runtime"
 import type { MicroContextSnapshot } from "./runtime"
@@ -232,6 +233,9 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
     }
     const signal = active.propsSignal!
     const context = value.context
+    if (!microRouteAccess(context.menus, appCode, path).allowed) {
+      throw new ApiError("当前组织未授权访问此应用菜单", "FORBIDDEN", 403)
+    }
     return {
       contractVersion: "2.0", contextVersion: context.contextVersion,
       contextEpoch: value.contextEpoch, expiresAt: context.expiresAt,
@@ -239,6 +243,8 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
       deploymentVersion: entryInfo.deploymentVersion, entryVersionId: entryInfo.entryVersionId,
       token: value.token, appCode, basePath, routePath: path,
       user: context.user, tenant: context.tenant, organization: context.organization,
+      organizationScopeIds: context.organizationScopeIds === null ? null
+        : [...(context.organizationScopeIds ?? [context.organization.id])],
       roles: context.roles, permissions: context.permissions,
       dataGrants: context.dataGrants, menus: context.menus,
       theme: resolvedTheme,
@@ -290,6 +296,9 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
           void queryClient.invalidateQueries({ queryKey: ["profile"] })
           throw new Error("应用运行模式已变更，正在刷新入口配置")
         }
+        if (!microRouteAccess(context.menus, appCode, routeRef.current).allowed) {
+          throw new ApiError("当前组织未授权访问此应用菜单", "FORBIDDEN", 403)
+        }
         return context
       },
       onChange: (value) => {
@@ -320,7 +329,13 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
     profile?.organization.id, entryInfo.runtimeMode, queryClient])
 
   const hasSnapshot = !!snapshot && !snapshot.signal.aborted &&
-    Date.parse(snapshot.context.expiresAt) > Date.now() && Date.parse(snapshot.tokenExpiresAt) > Date.now()
+    Date.parse(snapshot.context.expiresAt) > Date.now() && Date.parse(snapshot.tokenExpiresAt) > Date.now() &&
+    microRouteAccess(snapshot.context.menus, appCode, routePath).allowed
+  React.useEffect(() => {
+    if (snapshot && !snapshot.signal.aborted && !microRouteAccess(snapshot.context.menus, appCode, routePath).allowed) {
+      void runtimeRef.current?.refresh()
+    }
+  }, [snapshot, appCode, routePath])
   React.useEffect(() => {
     if (!hasSnapshot) return
     const container = containerRef.current
@@ -343,7 +358,14 @@ function MicroMountZone({ entryInfo, sessionToken }: { entryInfo: ApplicationEnt
     setSupportsUpdate(false)
     setStats(null)
     const stale = () => controller.signal.aborted || sequence !== seqRef.current
-    const check = () => { if (stale()) throw new DOMException("Unmounted", "AbortError") }
+    const check = () => {
+      if (stale()) throw new DOMException("Unmounted", "AbortError")
+      const current = snapshotRef.current
+      if (!current || current.signal.aborted) throw new DOMException("应用授权上下文不可用", "AbortError")
+      if (!microRouteAccess(current.context.menus, appCode, routeRef.current).allowed) {
+        throw new ApiError("当前组织未授权访问此应用菜单", "FORBIDDEN", 403)
+      }
+    }
     let mountedProps: MicroProps | null = null
 
     void session.mount(async () => {

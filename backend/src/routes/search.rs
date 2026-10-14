@@ -44,12 +44,13 @@ async fn search(
         .and_then(|v| v.parse().ok())
         .filter(|v| (1..=10).contains(v))
         .unwrap_or(5);
-    // 非平台租户: 四个分区全部限定在本租户内 (防跨租户枚举/视野泄漏)
+    // 平台根以外的上下文只查询当前租户，组织实体另受当前组织子树限制。
     let scope: Option<Uuid> = if state.is_platform_context(&user).await? {
         None
     } else {
         Some(user.tenant_id)
     };
+    let org_scope = state.scoped_org_ids(&user).await?;
 
     // users: username/real_name ILIKE, organizationName 取第一个 membership 的组织名
     let mut users: Vec<Value> = Vec::new();
@@ -58,17 +59,21 @@ async fn search(
             "SELECT u.id, u.username, COALESCE(u.real_name,'') AS real_name, \
              (SELECT o.name FROM memberships m JOIN organizations o ON o.id = m.organization_id \
               WHERE m.user_id = u.id AND ($3::uuid IS NULL OR o.tenant_id = $3) \
+              AND ($4::uuid[] IS NULL OR o.id = ANY($4)) \
               ORDER BY m.created_at, m.id LIMIT 1) AS organization_name, \
              u.status \
              FROM users u \
              WHERE (u.username ILIKE '%' || $1 || '%' OR u.real_name ILIKE '%' || $1 || '%') \
              AND ($3::uuid IS NULL OR u.id IN (SELECT m.user_id FROM memberships m \
                   JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = $3)) \
+             AND ($4::uuid[] IS NULL OR EXISTS (SELECT 1 FROM memberships m \
+                  WHERE m.user_id = u.id AND m.organization_id = ANY($4))) \
              ORDER BY u.created_at, u.id LIMIT $2",
         )
         .bind(&q)
         .bind(limit)
         .bind(scope)
+        .bind(&org_scope)
         .fetch_all(&state.pool)
         .await?;
         users = rows
@@ -104,18 +109,29 @@ async fn search(
             .collect();
     }
 
-    // organizations: name/code ILIKE, path 为组织层级路径串 (org_path 函数构造)
+    // Paths begin at the selected organization, so child contexts expose no ancestor labels.
     let mut organizations: Vec<Value> = Vec::new();
     if has_partition_perm(&state, &user, "system:organization").await? {
         let rows: Vec<(Uuid, String, String, String)> = sqlx::query_as(
-            "SELECT id, name, COALESCE(code,'') AS code, org_path(id) AS path FROM organizations \
-             WHERE (name ILIKE '%' || $1 || '%' OR code ILIKE '%' || $1 || '%') \
-             AND ($3::uuid IS NULL OR tenant_id = $3) \
-             ORDER BY created_at, id LIMIT $2",
+            "WITH RECURSIVE scoped_paths AS ( \
+               SELECT o.id, o.name::text AS path FROM organizations o \
+               WHERE ($3::uuid IS NULL OR o.tenant_id = $3) \
+                 AND (($4::uuid[] IS NULL AND o.parent_id IS NULL) OR ($4::uuid[] IS NOT NULL AND o.id = $5)) \
+               UNION ALL \
+               SELECT o.id, p.path || ' / ' || o.name FROM organizations o \
+               JOIN scoped_paths p ON o.parent_id = p.id \
+               WHERE ($3::uuid IS NULL OR o.tenant_id = $3) AND ($4::uuid[] IS NULL OR o.id = ANY($4)) \
+             ) SELECT o.id, o.name, COALESCE(o.code,'') AS code, p.path FROM organizations o \
+             JOIN scoped_paths p ON p.id = o.id \
+             WHERE (o.name ILIKE '%' || $1 || '%' OR o.code ILIKE '%' || $1 || '%') \
+             AND ($3::uuid IS NULL OR o.tenant_id = $3) AND ($4::uuid[] IS NULL OR o.id = ANY($4)) \
+             ORDER BY o.created_at, o.id LIMIT $2",
         )
         .bind(&q)
         .bind(limit)
         .bind(scope)
+        .bind(&org_scope)
+        .bind(user.org_id)
         .fetch_all(&state.pool)
         .await?;
         organizations = rows
@@ -134,11 +150,13 @@ async fn search(
              FROM roles r LEFT JOIN organizations o ON o.id = r.organization_id \
              WHERE (r.name ILIKE '%' || $1 || '%' OR r.code ILIKE '%' || $1 || '%') \
              AND ($3::uuid IS NULL OR r.tenant_id = $3) \
+             AND ($4::uuid[] IS NULL OR r.organization_id = ANY($4)) \
              ORDER BY r.created_at, r.id LIMIT $2",
         )
         .bind(&q)
         .bind(limit)
         .bind(scope)
+        .bind(&org_scope)
         .fetch_all(&state.pool)
         .await?;
         roles = rows

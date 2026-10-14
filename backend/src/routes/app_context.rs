@@ -35,9 +35,9 @@ pub(crate) async fn current_context(
         return Err(AppError::forbidden("应用受众不匹配"));
     }
 
-    let identity: (String, String, String, String, String, String, String, bool, bool) = sqlx::query_as(
+    let identity: (String, String, String, String, String, String, String, bool) = sqlx::query_as(
         "SELECT u.username, COALESCE(u.real_name,''), t.code, t.name, o.name, \
-         COALESCE(org_path(o.id),''), a.name, u.is_super_admin, t.is_platform \
+         COALESCE(org_path(o.id),''), a.name, u.is_super_admin \
          FROM users u JOIN tenants t ON t.id = $2 \
          JOIN organizations o ON o.id = $3 AND o.tenant_id = t.id \
          JOIN applications a ON a.id = $4 \
@@ -45,9 +45,7 @@ pub(crate) async fn current_context(
     ).bind(binding.user_id).bind(binding.tenant_id).bind(binding.organization_id)
      .bind(binding.application_id).fetch_one(&state.pool).await?;
 
-    let menu_rows = if identity.7 && identity.8 {
-        authorization::all_app_menu_rows(&state.pool, binding.application_id).await?
-    } else if identity.7 {
+    let menu_rows = if identity.7 {
         authorization::granted_menu_rows(
             &state.pool, binding.tenant_id, binding.organization_id, Some(binding.application_id),
         ).await?
@@ -87,17 +85,29 @@ pub(crate) async fn current_context(
         "WITH RECURSIVE descendants AS ( \
          SELECT id, tenant_id FROM organizations WHERE id = $1 AND tenant_id = $2 \
            AND status = 'ENABLED' AND (expires_at IS NULL OR expires_at > now()) \
-         UNION ALL SELECT child.id, child.tenant_id FROM organizations child \
+         UNION SELECT child.id, child.tenant_id FROM organizations child \
          JOIN descendants parent ON child.parent_id = parent.id \
          WHERE child.tenant_id = $2 AND child.status = 'ENABLED' \
            AND (child.expires_at IS NULL OR child.expires_at > now())) \
          SELECT id FROM descendants ORDER BY id",
     ).bind(binding.organization_id).bind(binding.tenant_id)
      .fetch_all(&state.pool).await?;
+    let can_manage_platform: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM organizations o JOIN tenants t ON t.id=o.tenant_id \
+         WHERE o.id=$1 AND t.id=$2 AND t.is_platform AND o.parent_id IS NULL)",
+    ).bind(binding.organization_id).bind(binding.tenant_id).fetch_one(&state.pool).await?;
     let data_grants: Vec<Value> = grants.into_iter().map(|(resource, action, scope)| {
+        // Tenant-wide grants cannot expand the selected child organization's
+        // hard data boundary, even when inherited roles cover the whole tenant.
+        let scope = if scope == "TENANT" && !can_manage_platform {
+            "ORG_SUBTREE".to_owned()
+        } else {
+            scope
+        };
         let org_ids: Vec<Uuid> = match scope.as_str() {
             "ORG" => vec![binding.organization_id],
             "ORG_SUBTREE" => subtree.clone(),
+            "SELF" if !can_manage_platform => subtree.clone(),
             _ => Vec::new(),
         };
         json!({
@@ -115,6 +125,7 @@ pub(crate) async fn current_context(
         "organization": binding.organization_id, "application": binding.application_id,
         "identity": identity, "roles": roles, "permissions": permissions,
         "menus": version_menus, "dataGrants": data_grants,
+        "organizationScopeIds": if can_manage_platform { None } else { Some(&subtree) },
     });
     let version = hash::sha256_hex(&version_input.to_string());
     // Live execution/deployment metadata is separate from the authorization hash.
@@ -143,6 +154,7 @@ pub(crate) async fn current_context(
         "roles": roles.into_iter().map(|(id, name, code)| json!({"id": id, "name": name, "code": code})).collect::<Vec<_>>(),
         "permissions": permissions,
         "dataGrants": data_grants,
+        "organizationScopeIds": if can_manage_platform { None } else { Some(&subtree) },
         "menus": authorization::menu_tree(menu_rows),
     }))
 }

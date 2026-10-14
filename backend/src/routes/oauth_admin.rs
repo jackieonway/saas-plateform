@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
+use crate::extractors::{ApiJson, CurrentUser};
 use crate::state::AppState;
 use crate::session;
 use crate::util::{audit, hash};
@@ -27,6 +27,18 @@ pub fn routes() -> Router<AppState> {
         .route("/api/oauth/tokens/{id}", delete(revoke_token))
         .route("/api/oauth/device-codes", get(list_device_codes))
         .route("/api/oauth/device-codes/{id}/revoke", put(revoke_device_code))
+}
+
+const CLIENT_MENU: &str = "/system/oauth/clients";
+const TOKEN_MENU: &str = "/system/oauth/tokens";
+
+async fn require_oauth_menu(
+    state: &AppState,
+    user: &CurrentUser,
+    path: &'static str,
+) -> Result<(), AppError> {
+    state.require(user, "system:oauth").await?;
+    state.require_menu_path(user, path).await
 }
 
 /// OAuth 客户端完整行 (含 secret 哈希, 仅供内部使用)
@@ -92,7 +104,7 @@ pub async fn fetch_client(pool: &sqlx::PgPool, client_id: &str) -> Result<Option
 
 /// GET /api/oauth/clients — 不返回 secret
 async fn list_clients(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     // (id, created_at, application_id, application_name): LEFT JOIN applications 取关联应用名
     let times: Vec<(Uuid, DateTime<Utc>, Option<Uuid>, Option<String>)> = sqlx::query_as(
         "SELECT c.id, c.created_at, c.application_id, a.name \
@@ -212,7 +224,7 @@ async fn create_client(
     user: CurrentUser,
     ApiJson(body): ApiJson<ClientBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     validate_client_body(&body)?;
     let client_id = generate_client_id(&state.pool, &body.client_name).await?;
     let secret = hash::random_token(32);
@@ -296,7 +308,7 @@ async fn update_client(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<ClientUpdate>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(t) = &body.client_type {
         if !["CONFIDENTIAL", "PUBLIC"].contains(&t.as_str()) {
@@ -385,7 +397,7 @@ async fn delete_client(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (client_id,): (String,) =
         sqlx::query_as("DELETE FROM oauth_clients WHERE id = $1 RETURNING client_id")
@@ -410,7 +422,7 @@ async fn regenerate_secret(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let secret = hash::random_token(32);
     let secret_hash = hash::sha256_hex(&secret);
@@ -462,7 +474,7 @@ async fn purge_tokens(
     headers: HeaderMap,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let (tokens_deleted, devices_deleted) = purge_stale_oauth_data(&state.pool).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
@@ -480,7 +492,7 @@ async fn list_tokens(
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let owner = params.get("resourceOwner").cloned().unwrap_or_default();
     let rows: Vec<TokenRowTuple> = sqlx::query_as(
         "SELECT t.id, t.token_type, t.client_id, COALESCE(u.username, '') AS username, \
@@ -523,7 +535,7 @@ type SessionRowTuple = (
 /// revoked=false AND expires_at > now() 的行; lastExpiresAt 无活跃令牌时为 null。
 /// 静态段 sessions 与参数段 {id} 同层, matchit 静态优先, 路由共存不冲突。
 async fn list_sessions(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let rows: Vec<SessionRowTuple> = sqlx::query_as(
         "SELECT t.user_id, u.username, COALESCE(u.real_name, '') AS real_name, \
          array_agg(DISTINCT t.client_id) AS clients, \
@@ -564,7 +576,7 @@ async fn revoke_token(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (client_id,): (String,) = sqlx::query_as(
         "UPDATE oauth_tokens SET revoked = true WHERE id = $1 RETURNING client_id",
@@ -600,7 +612,7 @@ async fn kick_sessions(
     user: CurrentUser,
     ApiJson(body): ApiJson<KickBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     state.require_platform(&user).await?;
     let target: Uuid = body
         .user_id
@@ -641,7 +653,7 @@ type DeviceRowTuple = (Uuid, String, String, String, String, String, String, Dat
 
 /// GET /api/oauth/device-codes
 async fn list_device_codes(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let rows: Vec<DeviceRowTuple> = sqlx::query_as(
         "SELECT d.id, d.user_code, d.client_id, COALESCE(c.client_name, '') AS client_name, \
          COALESCE(d.scope, '') AS scope, \
@@ -674,7 +686,7 @@ async fn revoke_device_code(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:oauth").check(&state, &user).await?;
+    require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (user_code,): (String,) = sqlx::query_as(
         "UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1 RETURNING user_code",

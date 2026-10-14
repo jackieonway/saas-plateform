@@ -60,26 +60,12 @@ async fn organization_options(
 #[path = "department_organization_tests.rs"]
 mod organization_tests;
 
-/// 部门所属租户 (经 organization 链路); 不存在返回 None
-async fn dept_tenant(pool: &sqlx::PgPool, dept_id: Uuid) -> Result<Option<Uuid>, AppError> {
-    let t: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT o.tenant_id FROM departments d JOIN organizations o ON o.id = d.organization_id WHERE d.id = $1",
-    )
-    .bind(dept_id)
-    .fetch_optional(pool)
-    .await?;
-    Ok(t.map(|(t,)| t))
-}
-
-/// 非平台上下文的目标部门隔离校验 (不存在交由后续 not_found)
+/// 部门必须归属当前组织或下级组织；越界与不存在统一返回 404。
 async fn ensure_dept_in_scope(state: &AppState, user: &CurrentUser, dept_id: Uuid) -> Result<(), AppError> {
-    if state.is_platform_context(user).await? {
-        return Ok(());
-    }
-    match dept_tenant(&state.pool, dept_id).await? {
-        None => Ok(()),
-        Some(t) => state.ensure_tenant_scope(user, t, "部门").await,
-    }
+    let org_id: Uuid = sqlx::query_scalar("SELECT organization_id FROM departments WHERE id=$1")
+        .bind(dept_id).fetch_optional(&state.pool).await?
+        .ok_or_else(|| AppError::not_found("部门不存在"))?;
+    state.ensure_org_scope(user, org_id, "部门").await
 }
 
 fn dept_json(r: &DeptRowTuple) -> Value {
@@ -101,10 +87,7 @@ async fn tree_handler(
         .get("organizationId")
         .and_then(|v| Uuid::parse_str(v).ok())
         .ok_or_else(|| AppError::bad_request("缺少 organizationId 参数"))?;
-    let org_tenant: Option<Uuid> = sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
-        .bind(org_id).fetch_optional(&state.pool).await?;
-    let org_tenant = org_tenant.ok_or_else(|| AppError::not_found("组织不存在"))?;
-    state.ensure_tenant_scope(&user, org_tenant, "组织").await?;
+    state.ensure_org_scope(&user, org_id, "组织").await?;
     let rows: Vec<DeptRowTuple> = sqlx::query_as(
         "SELECT d.id, d.organization_id, d.parent_id, d.name, COALESCE(d.code,'') AS code, \
          d.sort_order, COALESCE(d.description,'') AS description, d.status \
@@ -149,7 +132,7 @@ async fn create(
         .fetch_optional(&state.pool)
         .await?;
     let org_tenant = org_tenant.ok_or_else(|| AppError::not_found("组织不存在"))?;
-    state.ensure_tenant_scope(&user, org_tenant, "组织").await?;
+    state.ensure_org_scope(&user, org_id, "组织").await?;
     let parent_id: Option<Uuid> = match &body.parent_id {
         None => None,
         Some(p) if p.trim().is_empty() => None,

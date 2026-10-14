@@ -28,20 +28,19 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/stores/auth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
+import { hasPlatformContext } from "@/lib/platform-context"
 import type { AuthorizationMenu, AuthorizationResp, OrgNode, TenantRecord } from "@/api/types"
 
 export default function AuthorizationsPage() {
   const [params, setParams] = useSearchParams()
 
-  /* 「租户授权」为平台职能: 仅平台租户上下文 且 拥有 system:tenant 权限(或超管)可见
-     非平台租户 / 无权限的平台用户均隐藏 tab, 避免切换后仅得 403 */
-  const isPlatformTenant = useAuthStore((s) => s.profile?.tenant?.isPlatform ?? false)
-  const isSuper = useAuthStore((s) => s.profile?.user.isSuperAdmin ?? false)
+  /* 「租户授权」为平台根组织职能，并且需要 system:tenant 权限。 */
+  const isPlatformTenant = useAuthStore((s) => hasPlatformContext(s.profile))
   const permissionsQuery = usePermissionsQuery()
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
   const permsReady = permissionsQuery.isSuccess || permissionsQuery.isError
   const canTenantAuthz =
-    isPlatformTenant && (isSuper || (permsReady && permissions.has("system:tenant")))
+    isPlatformTenant && permsReady && permissions.has("system:tenant")
 
   const [tab, setTab] = React.useState<"tenant" | "org">(
     params.get("organizationId") ? "org" : "tenant"
@@ -78,17 +77,15 @@ export default function AuthorizationsPage() {
     retry: 1,
   })
   const orgTree = orgTreeQuery.data ?? []
+  const organizationInScope = !!organizationId && orgTreeQuery.isSuccess && hasOrganization(orgTree, organizationId)
 
   // 校验预选组织属于当前租户
   React.useEffect(() => {
-    if (organizationId && orgTree.length > 0) {
-      const exists = (function find(nodes: OrgNode[]): boolean {
-        return nodes.some((n) => n.id === organizationId || (n.children?.length ? find(n.children) : false))
-      })(orgTree)
-      if (!exists) setOrganizationId(null)
+    if (organizationId && orgTreeQuery.isSuccess && !hasOrganization(orgTree, organizationId)) {
+      setOrganizationId(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgTree])
+  }, [orgTree, orgTreeQuery.isSuccess])
 
   const switchTab = (t: string) => {
     const nextTab = (canTenantAuthz ? t : "org") as "tenant" | "org"
@@ -179,7 +176,7 @@ export default function AuthorizationsPage() {
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
             )}
           </div>
-          {organizationId ? (
+          {organizationInScope && organizationId ? (
             <AuthorizationEditor
               key={`org-${organizationId}`}
               targetId={organizationId}
@@ -205,6 +202,10 @@ export default function AuthorizationsPage() {
 
 function toPickerChildren(children?: OrgNode[]): PickerNode[] {
   return (children ?? []).map((c) => ({ id: c.id, name: c.name, code: c.code, children: toPickerChildren(c.children) }))
+}
+
+function hasOrganization(nodes: OrgNode[], id: string): boolean {
+  return nodes.some((node) => node.id === id || (!!node.children?.length && hasOrganization(node.children, id)))
 }
 
 /* ============ 授权编辑器(租户/组织共用) ============ */

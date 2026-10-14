@@ -62,23 +62,32 @@ struct TenantInsightData {
 ///
 /// 口径说明:
 /// - users: users 表无 tenant_id 列, 按 memberships → organizations.tenant_id 归属去重统计;
-/// - organizations / roles: 表自带 tenant_id 直接过滤;
+/// - organizations / roles: 限定当前组织及下级组织；平台根上下文可统计全平台;
 /// - logins7d / logins_trend: audit_logs 自带 tenant_id (LOGIN 审计写入时均携带登录上下文租户);
 /// - active_tokens: oauth_tokens 中绑定该租户、未吊销且未过期的 access 令牌。
-async fn load_tenant_insights(pool: &PgPool, tenant_scope: Option<Uuid>) -> Result<Vec<TenantInsightData>, AppError> {
+/// - 所有成员、日志、令牌与趋势均应用同一组织范围，避免租户总计泄漏上级或平级数据。
+async fn load_tenant_insights(
+    pool: &PgPool,
+    tenant_scope: Option<Uuid>,
+    organization_scope: Option<&[Uuid]>,
+) -> Result<Vec<TenantInsightData>, AppError> {
     let rows: Vec<InsightRow> = sqlx::query_as(
         "SELECT t.id, t.name, COALESCE(t.code, '') AS code, t.status, \
          (SELECT count(DISTINCT m.user_id) FROM memberships m \
-           JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id), \
-         (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id), \
-         (SELECT count(*) FROM roles r WHERE r.tenant_id = t.id), \
+           JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = t.id \
+           AND ($2::uuid[] IS NULL OR o.id = ANY($2))), \
+         (SELECT count(*) FROM organizations o WHERE o.tenant_id = t.id AND ($2::uuid[] IS NULL OR o.id = ANY($2))), \
+         (SELECT count(*) FROM roles r WHERE r.tenant_id = t.id AND ($2::uuid[] IS NULL OR r.organization_id = ANY($2))), \
          (SELECT count(*) FROM audit_logs a WHERE a.action = 'LOGIN' AND a.tenant_id = t.id \
-           AND a.created_at >= date_trunc('day', now()) - interval '6 days'), \
+           AND a.created_at >= date_trunc('day', now()) - interval '6 days' \
+           AND ($2::uuid[] IS NULL OR a.organization_id = ANY($2))), \
          (SELECT count(*) FROM oauth_tokens ot WHERE ot.token_type = 'access' \
-           AND ot.revoked = false AND ot.expires_at > now() AND ot.tenant_id = t.id) \
+           AND ot.revoked = false AND ot.expires_at > now() AND ot.tenant_id = t.id \
+           AND ($2::uuid[] IS NULL OR ot.organization_id = ANY($2))) \
          FROM tenants t WHERE ($1::uuid IS NULL OR t.id = $1) ORDER BY t.created_at",
     )
     .bind(tenant_scope)
+    .bind(organization_scope)
     .fetch_all(pool)
     .await?;
     let tenant_ids: Vec<Uuid> = rows.iter().map(|r| r.0).collect();
@@ -87,10 +96,12 @@ async fn load_tenant_insights(pool: &PgPool, tenant_scope: Option<Uuid>) -> Resu
     let trend_rows: Vec<InsightTrendRow> = sqlx::query_as(
         "SELECT a.tenant_id, date_trunc('day', a.created_at) AS day, count(*)::bigint \
          FROM audit_logs a WHERE a.action = 'LOGIN' AND a.tenant_id = ANY($1) \
+         AND ($2::uuid[] IS NULL OR a.organization_id = ANY($2)) \
          AND a.created_at >= date_trunc('day', now()) - interval '6 days' \
          GROUP BY a.tenant_id, date_trunc('day', a.created_at)",
     )
     .bind(&tenant_ids)
+    .bind(organization_scope)
     .fetch_all(pool)
     .await?;
     let mut trend_map: HashMap<(Uuid, String), i64> = HashMap::new();
@@ -117,14 +128,15 @@ async fn load_tenant_insights(pool: &PgPool, tenant_scope: Option<Uuid>) -> Resu
 }
 
 /// GET /api/monitor/tenant-insights — 按租户的洞察统计 (全部租户含禁用);
-/// 非平台租户仅返回自己租户的洞察 (防跨租户视野)
+/// 非平台根上下文仅返回自己租户内当前组织及下级组织的洞察。
 async fn tenant_insights(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:monitor").check(&state, &user).await?;
     let tenant_scope = if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) };
-    let rows = load_tenant_insights(&state.pool, tenant_scope).await?;
+    let organization_scope = state.scoped_org_ids(&user).await?;
+    let rows = load_tenant_insights(&state.pool, tenant_scope, organization_scope.as_deref()).await?;
     let insights: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -148,7 +160,8 @@ async fn export_tenant_insights_csv(
 ) -> Result<Response, AppError> {
     RequirePermission("system:monitor").check(&state, &user).await?;
     let tenant_scope = if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) };
-    let rows = load_tenant_insights(&state.pool, tenant_scope).await?;
+    let organization_scope = state.scoped_org_ids(&user).await?;
+    let rows = load_tenant_insights(&state.pool, tenant_scope, organization_scope.as_deref()).await?;
     let mut csv = String::from(
         "\u{FEFF}租户名称,租户编码,状态,用户数,组织数,角色数,近7天登录,活跃令牌,近7天登录趋势\n",
     );

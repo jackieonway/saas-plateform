@@ -43,6 +43,7 @@ import { DataPagination } from "@/components/DataPagination"
 import { TableSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { useSyncedKeyword } from "@/hooks/use-synced-keyword"
 import { useAuthStore } from "@/stores/auth"
+import { hasPlatformContext } from "@/lib/platform-context"
 import { tenantsApi } from "@/api/tenants"
 import { asPage } from "@/lib/api"
 import { formatDateTime, useDebounced } from "@/lib/format"
@@ -86,8 +87,8 @@ type TenantForm = z.infer<typeof tenantSchema>
 
 export default function TenantsPage() {
   const queryClient = useQueryClient()
-  // 平台租户上下文: 平台租户(含超管)可管理全部租户, 其余租户仅能查看本租户只读视角
-  const isPlatformContext = useAuthStore((s) => s.profile?.tenant?.isPlatform ?? false)
+  // 平台根组织可管理全部租户，其他组织仅查看服务端返回的当前范围。
+  const isPlatformContext = useAuthStore((s) => hasPlatformContext(s.profile))
   const [page, setPage] = React.useState(1)
   const [size, setSize] = React.useState(10)
   // 关键字与 URL ?q= 双向同步(命令面板实体跳转预填)

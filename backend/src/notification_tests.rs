@@ -434,6 +434,21 @@ impl Harness {
             .bind(audit_menu)
             .execute(pool)
             .await?;
+        grant_application(pool, platform, platform_org, applications[0]).await?;
+        for permission in ["notification:publish", "system:user", "system:role", "system:audit"] {
+            let menu = if permission == "notification:publish" {
+                menus[0]
+            } else if permission == "system:audit" {
+                audit_menu
+            } else {
+                sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON',$2,$2) RETURNING id")
+                    .bind(applications[0]).bind(permission).fetch_one(pool).await?
+            };
+            sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
+                .bind(platform).bind(menu).execute(pool).await?;
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+                .bind(platform_org).bind(menu).execute(pool).await?;
+        }
         let mut config = Config::from_env();
         config.database_url = "postgres://unused/notification-test".into();
         config.jwt_secret = SECRET.into();
@@ -572,34 +587,29 @@ async fn notification_application_authorization_and_four_scopes() -> Result<()> 
             } else {
                 rejected(&h.router,Method::POST,&path,&token,Some(body(&format!("{scope}:child-deny"),user_target(h.child_user,h.child))),reject).await?;
             }
-            if scope == "TENANT" {
-                h.publish(&token,body("tenant-peer",user_target(h.peer_user,h.peer))).await?;
-            } else {
-                rejected(&h.router,Method::POST,&path,&token,Some(body(&format!("{scope}:peer-deny"),user_target(h.peer_user,h.peer))),reject).await?;
-                rejected(&h.router,Method::POST,&path,&token,Some(body(&format!("{scope}:tenant-deny"),json!({"kind":"TENANT"}))),reject).await?;
-            }
+            rejected(&h.router,Method::POST,&path,&token,Some(body(&format!("{scope}:peer-deny"),user_target(h.peer_user,h.peer))),reject).await?;
+            rejected(&h.router,Method::POST,&path,&token,Some(body(&format!("{scope}:tenant-deny"),json!({"kind":"TENANT"}))),reject).await?;
         }
         let direct = h.publish(&token,body("direct-root",org_target(h.root))).await?;
         let rows = h.deliveries(&direct).await?;
         ensure!(rows.iter().all(|(_,org,uid)|*org==h.root && *uid!=h.child_user && *uid!=h.disabled_user), "direct broadcast included subtree/disabled user");
-        let tenant = h.publish(&token,body("tenant-all",json!({"kind":"TENANT"}))).await?;
-        let rows = h.deliveries(&tenant).await?;
-        ensure!(rows.iter().all(|(tid,org,uid)|*tid==h.tenant_a && *org!=h.no_app_org && *uid!=h.disabled_user && *uid!=h.remote_user), "tenant broadcast leaked a recipient");
-        ensure!(rows.iter().filter(|(_,_,uid)|*uid==h.recipient).count()==2, "multi-organization recipient did not have two contextual deliveries");
-        ensure!(tenant["deliveryCount"].as_u64()==Some(rows.len() as u64) && tenant["recipientCount"].as_u64()==Some(rows.iter().map(|(_,_,uid)|*uid).collect::<std::collections::HashSet<_>>().len() as u64), "publication counts differ from actual recipients");
+        ensure!(direct["deliveryCount"].as_u64()==Some(rows.len() as u64) && direct["recipientCount"].as_u64()==Some(rows.iter().map(|(_,_,uid)|*uid).collect::<std::collections::HashSet<_>>().len() as u64), "publication counts differ from actual recipients");
         for (uid,org,key) in [(h.remote_user,h.remote,"cross-tenant"),(h.no_app_user,h.no_app_org,"missing-app"),(h.disabled_user,h.root,"disabled-user")] {
             rejected(&h.router,Method::POST,&path,&token,Some(body(key,user_target(uid,org))),reject).await?;
             ensure!(h.counts(key).await?==(0,0), "rejected target created a publication");
         }
-        sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2").bind(h.peer).bind(h.main_app).execute(&db.pool).await?;
-        rejected(&h.router,Method::POST,&path,&token,Some(body("receiver-app-revoked",user_target(h.peer_user,h.peer))),reject).await?;
-        grant_application(&db.pool,h.tenant_a,h.peer,h.main_app).await?;
-        sqlx::query("UPDATE organizations SET status='DISABLED' WHERE id=$1").bind(h.peer).execute(&db.pool).await?;
-        rejected(&h.router,Method::POST,&path,&token,Some(body("receiver-org-disabled",user_target(h.peer_user,h.peer))),reject).await?;
-        sqlx::query("UPDATE organizations SET status='ENABLED',expires_at=now()-interval '1 hour' WHERE id=$1").bind(h.peer).execute(&db.pool).await?;
-        rejected(&h.router,Method::POST,&path,&token,Some(body("receiver-org-expired",user_target(h.peer_user,h.peer))),reject).await?;
-        sqlx::query("UPDATE organizations SET expires_at=NULL WHERE id=$1").bind(h.peer).execute(&db.pool).await?;
-        let child_token = h.app_token(&h.child_session.token,APP_CODE).await?;
+        sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2").bind(h.child).bind(h.main_app).execute(&db.pool).await?;
+        rejected(&h.router,Method::POST,&path,&token,Some(body("receiver-app-revoked",user_target(h.child_user,h.child))),reject).await?;
+        grant_application(&db.pool,h.tenant_a,h.child,h.main_app).await?;
+        sqlx::query("UPDATE organizations SET status='DISABLED' WHERE id=$1").bind(h.child).execute(&db.pool).await?;
+        rejected(&h.router,Method::POST,&path,&token,Some(body("receiver-org-disabled",user_target(h.child_user,h.child))),reject).await?;
+        sqlx::query("UPDATE organizations SET status='ENABLED',expires_at=now()-interval '1 hour' WHERE id=$1").bind(h.child).execute(&db.pool).await?;
+        rejected(&h.router,Method::POST,&path,&token,Some(body("receiver-org-expired",user_target(h.child_user,h.child))),reject).await?;
+        sqlx::query("UPDATE organizations SET expires_at=NULL WHERE id=$1").bind(h.child).execute(&db.pool).await?;
+        // Disabling a recipient organization intentionally revokes its sessions.
+        // The next operation needs a newly established child context.
+        let renewed_child_session = session(&db.pool,h.publisher,h.tenant_a,h.child,3600,3600).await?;
+        let child_token = h.app_token(&renewed_child_session.token,APP_CODE).await?;
         let context = ok(&h.router,Method::GET,&format!("/api/apps/{APP_CODE}/context"),&child_token,None).await?;
         ensure!(context["permissions"].as_array().is_some_and(|v|v.contains(&json!("notification:publish"))), "ancestor role fixture did not provide the operation");
         rejected(&h.router,Method::POST,&path,&child_token,Some(body("ancestor-no-grant",user_target(h.publisher,h.child))),&[StatusCode::FORBIDDEN]).await?;
@@ -622,6 +632,77 @@ async fn notification_application_authorization_and_four_scopes() -> Result<()> 
         ensure!(admin["sent"]==admin["recipientCount"] && admin["sent"]==1, "session adapter returned incorrect sent count");
         sqlx::query("UPDATE oauth_tokens SET revoked=true WHERE application_id=$1 AND user_id=$2").bind(h.main_app).bind(h.publisher).execute(&db.pool).await?;
         rejected(&h.router,Method::POST,&path,&token,Some(body("revoked-token",user_target(h.recipient,h.root))),&[StatusCode::UNAUTHORIZED]).await?;
+        Ok(())
+    }.await;
+    db.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn notification_tenant_grants_obey_selected_organization_subtree() -> Result<()> {
+    let db = Database::create(false).await?;
+    let result: Result<()> = async {
+        let h = Harness::create(&db.pool).await?;
+        let ancestor: Uuid = sqlx::query_scalar("SELECT parent_id FROM organizations WHERE id=$1")
+            .bind(h.root).fetch_one(&db.pool).await?;
+        let grandchild = organization(&db.pool, h.tenant_a, "nested child", Some(h.child)).await?;
+        let grandchild_user = user(&db.pool, "notification-nested-child", false, &[grandchild]).await?;
+        grant_application(&db.pool, h.tenant_a, grandchild, h.main_app).await?;
+
+        let (platform_user, platform_tenant, platform_root): (Uuid, Uuid, Uuid) = sqlx::query_as(
+            "SELECT user_id,tenant_id,organization_id FROM platform_sessions WHERE id=$1",
+        ).bind(h.platform_session.id).fetch_one(&db.pool).await?;
+        let platform_child = organization(&db.pool, platform_tenant, "platform child", Some(platform_root)).await?;
+        let platform_leaf = organization(&db.pool, platform_tenant, "platform leaf", Some(platform_child)).await?;
+        let platform_peer = organization(&db.pool, platform_tenant, "platform peer", Some(platform_root)).await?;
+        for org in [platform_child, platform_leaf, platform_peer] {
+            sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+                .bind(platform_user).bind(org).execute(&db.pool).await?;
+            grant_application(&db.pool, platform_tenant, org, h.main_app).await?;
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+                .bind(org).bind(h.publish_menu).execute(&db.pool).await?;
+        }
+        let platform_child_session = session(&db.pool, platform_user, platform_tenant, platform_child, 3600, 3600).await?;
+        h.grant(h.publisher, h.child, h.main_app, "TENANT").await?;
+        h.grant(platform_user, platform_child, h.main_app, "TENANT").await?;
+        h.grant(platform_user, platform_root, h.main_app, "TENANT").await?;
+        let path = format!("/api/apps/{APP_CODE}/notifications");
+        for (label, session_token, current, descendant, recipient, outside) in [
+            ("ordinary-branch", h.publisher_session.token.as_str(), h.root, h.child, h.child_user, vec![(ancestor, h.publisher), (h.peer, h.peer_user)]),
+            ("ordinary-child", h.child_session.token.as_str(), h.child, grandchild, grandchild_user, vec![(h.root, h.publisher), (h.peer, h.peer_user)]),
+            ("platform-child", platform_child_session.token.as_str(), platform_child, platform_leaf, platform_user, vec![(platform_root, platform_user), (platform_peer, platform_user)]),
+        ] {
+            let token = h.app_token(session_token, APP_CODE).await?;
+            let context = ok(&h.router, Method::GET, &format!("/api/apps/{APP_CODE}/context"), &token, None).await?;
+            let grant = context["dataGrants"].as_array().and_then(|grants| grants.iter().find(|grant| {
+                grant["resource"] == "notification" && grant["action"] == "publish"
+            })).ok_or_else(|| anyhow!("missing notification grant for {label}"))?;
+            let ids = grant["organizationIds"].as_array().ok_or_else(|| anyhow!("missing subtree IDs for {label}"))?;
+            ensure!(grant["scope"] == "ORG_SUBTREE" && ids.contains(&json!(current)) && ids.contains(&json!(descendant)),
+                "TENANT grant was not capped to selected subtree for {label}");
+            let published = h.publish(&token, body(&format!("{label}:descendant"), user_target(recipient, descendant))).await?;
+            ensure!(h.deliveries(&published).await? == vec![(if label == "platform-child" { platform_tenant } else { h.tenant_a }, descendant, recipient)],
+                "descendant publication delivered outside its target for {label}");
+            for (org, uid) in outside {
+                ensure!(!ids.contains(&json!(org)), "ancestor/sibling leaked into app context for {label}");
+                for (kind, target) in [("user", user_target(uid, org)), ("organization", org_target(org))] {
+                    let key = format!("{label}:{kind}:{org}");
+                    rejected(&h.router, Method::POST, &path, &token, Some(body(&key, target)), &[StatusCode::NOT_FOUND]).await?;
+                    ensure!(h.counts(&key).await? == (0, 0), "rejected out-of-subtree target created records for {label}");
+                }
+            }
+            let key = format!("{label}:tenant");
+            rejected(&h.router, Method::POST, &path, &token, Some(body(&key, json!({"kind":"TENANT"}))), &[StatusCode::FORBIDDEN]).await?;
+            ensure!(h.counts(&key).await? == (0, 0), "child context broadcast to entire tenant for {label}");
+        }
+
+        let token = h.app_token(&h.platform_session.token, APP_CODE).await?;
+        let publication = h.publish(&token, body("platform-root:tenant", json!({"kind":"TENANT"}))).await?;
+        let rows = h.deliveries(&publication).await?;
+        ensure!(rows.len() == 4 && rows.iter().all(|(tenant, _, uid)| *tenant == platform_tenant && *uid == platform_user),
+            "platform-root tenant broadcast did not preserve tenant/recipient isolation");
+        ensure!(publication["recipientCount"] == 1 && publication["deliveryCount"] == 4,
+            "multi-organization recipient publication counts changed");
         Ok(())
     }.await;
     db.finish(result).await
@@ -1109,8 +1190,7 @@ async fn app_members_scopes_minimal_dto_and_recipient_validity() -> Result<()> {
                 rejected(&h.router,Method::GET,&child_path,&token,None,&[StatusCode::NOT_FOUND]).await?;
             } else { ok(&h.router,Method::GET,&child_path,&token,None).await?; }
             let peer_path=app_members_path(h.peer,"create",None);
-            if scope=="TENANT" { ok(&h.router,Method::GET,&peer_path,&token,None).await?; }
-            else { rejected(&h.router,Method::GET,&peer_path,&token,None,&[StatusCode::NOT_FOUND]).await?; }
+            rejected(&h.router,Method::GET,&peer_path,&token,None,&[StatusCode::NOT_FOUND]).await?;
             rejected(&h.router,Method::GET,&app_members_path(h.remote,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
             rejected(&h.router,Method::GET,&app_members_path(h.no_app_org,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
         }
@@ -1132,8 +1212,9 @@ async fn app_members_scopes_minimal_dto_and_recipient_validity() -> Result<()> {
         rejected(&h.router,Method::GET,&app_members_path(h.child,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
         sqlx::query("UPDATE organizations SET status='ENABLED',expires_at=now()-interval '1 second' WHERE id=$1").bind(h.child).execute(&db.pool).await?;
         rejected(&h.router,Method::GET,&app_members_path(h.child,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
-        sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2").bind(h.peer).bind(h.main_app).execute(&db.pool).await?;
-        rejected(&h.router,Method::GET,&app_members_path(h.peer,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        sqlx::query("UPDATE organizations SET expires_at=NULL WHERE id=$1").bind(h.child).execute(&db.pool).await?;
+        sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2").bind(h.child).bind(h.main_app).execute(&db.pool).await?;
+        rejected(&h.router,Method::GET,&app_members_path(h.child,"create",None),&token,None,&[StatusCode::NOT_FOUND]).await?;
         Ok(())
     }.await;
     db.finish(result).await

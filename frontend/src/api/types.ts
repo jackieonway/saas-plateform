@@ -63,7 +63,7 @@ export interface TenantBrief {
   id: string
   name: string
   code: string
-  /** 平台租户标记: 平台租户成员可跨租户管理 (后端会话上下文返回) */
+  /** 平台租户属性；平台管理资格由会话的 platformContext 决定。 */
   isPlatform?: boolean
 }
 
@@ -97,6 +97,8 @@ export interface ContextResp {
   user: AuthUser
   tenant: TenantBrief
   organization: OrgBrief
+  /** 当前会话位于平台租户根组织，具备平台管理上下文。 */
+  platformContext?: boolean
 }
 
 export interface ProfileResp {
@@ -105,6 +107,8 @@ export interface ProfileResp {
   organization: OrgBrief
   applications: AppBrief[]
   memberships: Membership[]
+  /** 平台租户子组织为 false，不能据 tenant.isPlatform 扩大管理范围。 */
+  platformContext?: boolean
 }
 
 export interface MenuNode {

@@ -33,6 +33,8 @@ function propsDTO(props: MicroProps): PropsDTO {
     user: { id: props.user.id, username: props.user.username, displayName: props.user.displayName },
     tenant: { id: props.tenant.id, code: props.tenant.code, name: props.tenant.name },
     organization: { id: props.organization.id, name: props.organization.name, path: props.organization.path },
+    organizationScopeIds: props.organizationScopeIds === null ? null
+      : [...(props.organizationScopeIds ?? [props.organization.id])],
     roles: props.roles.map(({ id, name, code }) => ({ id, name, code })), permissions: [...props.permissions],
     dataGrants: props.dataGrants.map(({ resource, action, scope, subjectUserId, tenantId, organizationIds }) =>
       ({ resource, action, scope, subjectUserId, tenantId, organizationIds: [...organizationIds] })),

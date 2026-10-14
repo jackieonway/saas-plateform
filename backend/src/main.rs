@@ -42,6 +42,12 @@ mod platform_session_refresh_tests;
 #[cfg(test)]
 mod authorization_isolation_tests;
 
+#[cfg(test)]
+mod organization_subtree_user_role_tests;
+
+#[cfg(test)]
+mod organization_subtree_reporting_tests;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;

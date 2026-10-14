@@ -26,7 +26,7 @@ type ContactUserRow = (Uuid, String, String, String, String, String, bool);
 /// The returned password is never persisted, logged, or returned by read APIs.
 pub(super) async fn provision_contact_administrator(
     tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid, org_id: Uuid,
-    contact: &Contact, role_code: &str, allow_existing_global: bool,
+    contact: &Contact, role_code: &str, existing_org_scope: Option<&[Uuid]>,
 ) -> Result<Option<ContactAdministrator>, AppError> {
     if contact.is_empty() { return Ok(None); }
     contact.validate(true)?;
@@ -46,11 +46,19 @@ pub(super) async fn provision_contact_administrator(
          FROM users u WHERE trim(COALESCE(real_name,''))=$1 \
          AND regexp_replace(COALESCE(phone,''), '[[:space:]()\\-]', '', 'g')=$2 \
          AND lower(trim(COALESCE(email,'')))=$3 AND status='ENABLED' AND is_super_admin=false \
-         AND ($5 OR EXISTS(SELECT 1 FROM memberships m JOIN organizations o ON o.id=m.organization_id \
-             WHERE m.user_id=u.id AND o.tenant_id=$4)) LIMIT 2 FOR UPDATE",
-    ).bind(&contact.contact_name).bind(&phone).bind(&contact.contact_email).bind(tenant_id)
-        .bind(allow_existing_global).fetch_all(&mut **tx).await?;
-    let existing = if existing.len() == 1 { existing.into_iter().next() } else { None };
+         AND ($4::uuid[] IS NULL OR EXISTS(SELECT 1 FROM memberships m \
+             WHERE m.user_id=u.id AND m.organization_id=ANY($4))) LIMIT 2 FOR UPDATE",
+    ).bind(&contact.contact_name).bind(&phone).bind(&contact.contact_email).bind(existing_org_scope)
+        .fetch_all(&mut **tx).await?;
+    let mut existing = if existing.len() == 1 { existing.into_iter().next() } else { None };
+    // Membership maintenance takes the same account lock. Recheck after waiting
+    // for it so a concurrently removed member cannot be reused outside scope.
+    if let (Some(candidate), Some(org_ids)) = (&existing, existing_org_scope) {
+        let still_in_scope: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id=ANY($2))",
+        ).bind(candidate.0).bind(org_ids).fetch_one(&mut **tx).await?;
+        if !still_in_scope { existing = None; }
+    }
     let (user_id, username, created, initial_password) = if let Some((id, username, _, _, _, _, _)) = existing {
         (id, username, false, None)
     } else {
@@ -203,7 +211,7 @@ pub(super) async fn sync_org_admin(
 /// administrator or changes an existing account password/profile.
 pub(super) async fn initialize_existing_administrator(
     tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid,
-    org_id: Uuid, contact: &Contact, role_code: &str, allow_existing_global: bool,
+    org_id: Uuid, contact: &Contact, role_code: &str, existing_org_scope: Option<&[Uuid]>,
 ) -> Result<ContactAdministrator, AppError> {
     sqlx::query("SELECT id FROM organizations WHERE id=$1 FOR UPDATE")
         .bind(org_id).fetch_one(&mut **tx).await?;
@@ -242,6 +250,6 @@ pub(super) async fn initialize_existing_administrator(
         }
     }
     sync_org_admin(tx, org_id).await?;
-    provision_contact_administrator(tx, config, tenant_id, org_id, contact, role_code, allow_existing_global)
+    provision_contact_administrator(tx, config, tenant_id, org_id, contact, role_code, existing_org_scope)
         .await?.ok_or_else(|| AppError::bad_request("联系人信息不完整"))
 }

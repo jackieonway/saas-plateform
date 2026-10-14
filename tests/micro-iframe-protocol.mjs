@@ -224,6 +224,21 @@ test('host uses opaque sandbox and one transferred channel; props DTO excludes s
   } finally { await h.cleanup() }
 })
 
+test('organization scope cap is forwarded on mount and renewal with safe legacy fallback', async () => {
+  for (const [cap, expected] of [[undefined, ['o']], [['o', 'child-o'], ['o', 'child-o']], [null, null]]) {
+    const h = harness({ props: { organizationScopeIds: cap } })
+    try {
+      await h.mount()
+      assert.deepEqual(h.outbound.find((message) => message.kind === 'DANTE_MICRO_MOUNT').props.organizationScopeIds, expected)
+      assert.deepEqual(h.app.calls[0][1].organizationScopeIds, expected)
+      await h.lifecycle.update(props(2, { organizationScopeIds: ['o'] }))
+      const update = h.outbound.find((message) => message.kind === 'DANTE_MICRO_UPDATE').props
+      assert.deepEqual(update.organizationScopeIds, ['o'])
+      assert.deepEqual(h.app.calls.at(-1)[1].organizationScopeIds, ['o'])
+    } finally { await h.cleanup() }
+  }
+})
+
 test('parent rejects forged nonce, stale epochs, cross-application navigation and invalid toast messages', async () => {
   const h = harness()
   try {

@@ -115,13 +115,12 @@ impl AppState {
         Ok(authorization::permissions_of(&rows))
     }
 
-    /// 权限校验；全局超管只在平台租户上下文直通。
+    /// 权限校验；任何上下文都必须满足当前组织与租户的应用、菜单授权。
     pub async fn require(&self, user: &CurrentUser, perm: &'static str) -> Result<(), AppError> {
-        // OAuth clients and token administration are global platform resources;
-        // a tenant menu/role grant cannot make them tenant-owned resources.
-        if perm == "system:oauth" { self.require_platform(user).await?; }
-        if user.is_super_admin && self.is_platform_context(user).await? {
-            return Ok(());
+        // These catalogs are global platform resources; a tenant or child
+        // organization menu grant cannot turn them into scoped resources.
+        if matches!(perm, "system:oauth" | "system:settings" | "system:application" | "system:menu") {
+            self.require_platform(user).await?;
         }
         let perms = self.context_permissions(user).await?;
         if perms.contains(perm) {
@@ -131,15 +130,88 @@ impl AppState {
         }
     }
 
-    /// 当前会话是否处于平台租户上下文:
-    /// 平台租户成员可跨租户管理, 其余租户只能操作本租户数据。
+    /// Menus sharing a permission code still require an explicit grant for the
+    /// selected page. Application and tenant/organization caps are unchanged.
+    pub(crate) async fn require_menu_path(
+        &self,
+        user: &CurrentUser,
+        path: &'static str,
+    ) -> Result<(), AppError> {
+        let rows = if user.is_super_admin {
+            authorization::granted_menu_rows(&self.pool, user.tenant_id, user.org_id, None).await?
+        } else {
+            authorization::effective_menu_rows(
+                &self.pool, user.user_id, user.tenant_id, user.org_id, None,
+            ).await?
+        };
+        if rows.iter().any(|menu| menu["type"] == "MENU" && menu["path"] == path) {
+            Ok(())
+        } else {
+            Err(AppError::forbidden(format!("当前组织未授权菜单: {path}")))
+        }
+    }
+
+    /// 跨租户管理只在实际平台租户的根组织上下文生效。
+    /// 切换到平台子组织时，也必须遵守当前组织子树的数据边界。
     pub async fn is_platform_context(&self, user: &CurrentUser) -> Result<bool, AppError> {
-        let platform: Option<bool> =
-            sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
-                .bind(user.tenant_id)
-                .fetch_optional(&self.pool)
-                .await?;
-        Ok(platform.unwrap_or(false))
+        let platform: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM tenants t JOIN organizations o ON o.tenant_id=t.id \
+             WHERE t.id=$1 AND o.id=$2 AND t.is_platform AND o.parent_id IS NULL)",
+        )
+        .bind(user.tenant_id)
+        .bind(user.org_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(platform)
+    }
+
+    pub(crate) async fn can_manage_platform(&self, user: &CurrentUser) -> Result<bool, AppError> {
+        self.is_platform_context(user).await
+    }
+
+    /// 当前上下文的组织数据范围。仅平台根组织返回无组织限制的 None。
+    /// UNION 在异常循环关系下也能终止，递归每一步都限制在当前租户。
+    pub(crate) async fn scoped_org_ids(
+        &self,
+        user: &CurrentUser,
+    ) -> Result<Option<Vec<Uuid>>, AppError> {
+        if self.can_manage_platform(user).await? {
+            return Ok(None);
+        }
+        let ids = sqlx::query_scalar(
+            "WITH RECURSIVE scoped_orgs AS ( \
+             SELECT id FROM organizations WHERE id=$1 AND tenant_id=$2 \
+             UNION SELECT o.id FROM organizations o JOIN scoped_orgs parent ON o.parent_id=parent.id \
+             WHERE o.tenant_id=$2 ) SELECT id FROM scoped_orgs",
+        )
+        .bind(user.org_id)
+        .bind(user.tenant_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(Some(ids))
+    }
+
+    /// 目标组织必须属于当前组织及下级组织；越界与不存在统一返回 404。
+    pub(crate) async fn ensure_org_scope(
+        &self,
+        user: &CurrentUser,
+        org_id: Uuid,
+        resource: &'static str,
+    ) -> Result<(), AppError> {
+        let scope = self.scoped_org_ids(user).await?;
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM organizations WHERE id=$1 \
+             AND ($2::uuid[] IS NULL OR id=ANY($2)))",
+        )
+        .bind(org_id)
+        .bind(scope.as_deref())
+        .fetch_one(&self.pool)
+        .await?;
+        if exists {
+            Ok(())
+        } else {
+            Err(AppError::not_found(format!("{resource}不存在")))
+        }
     }
 
     /// 跨租户写操作防线: 仅当前平台租户上下文可继续, 其余返回 403
@@ -147,21 +219,13 @@ impl AppState {
         if self.is_platform_context(user).await? {
             Ok(())
         } else {
-            Err(AppError::forbidden("仅平台租户可执行跨租户操作"))
+            Err(AppError::forbidden("仅平台租户根组织可执行平台管理操作"))
         }
     }
 
     /// The selected context bounds global administrator permissions as well as menus.
     pub async fn context_permissions(&self, user: &CurrentUser) -> Result<HashSet<String>, AppError> {
         if user.is_super_admin {
-            if self.is_platform_context(user).await? {
-                let permissions: Vec<String> = sqlx::query_scalar(
-                    "SELECT DISTINCT m.permission FROM menus m \
-                     JOIN applications app ON app.id=m.application_id AND app.status='ENABLED' \
-                     WHERE m.status='ENABLED' AND m.permission<>'' ORDER BY m.permission",
-                ).fetch_all(&self.pool).await?;
-                return Ok(permissions.into_iter().collect());
-            }
             let rows = authorization::granted_menu_rows(
                 &self.pool, user.tenant_id, user.org_id, None,
             ).await?;
