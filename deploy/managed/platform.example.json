@@ -1,0 +1,10 @@
+{
+  "targets": [{
+    "policy": {
+      "id": "static-a", "name": "受管静态节点 A", "publicOrigin": "https://platform.example.invalid",
+      "repositories": ["registry.example.invalid/team/stores-web"],
+      "templates": [{"id": "static-nginx", "applicationCode": "stores", "healthPath": "/healthz"}]
+    },
+    "agentTokenRef": "/run/secrets/static-a-agent-token"
+  }]
+}

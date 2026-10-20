@@ -9,10 +9,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::extractors::bearer_token;
-use crate::routes::app_context;
 use crate::state::AppState;
-use crate::util::jwt;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -32,11 +29,6 @@ struct MemberQuery {
 }
 
 fn validate(query: &MemberQuery, single: bool) -> Result<(i64, i64, String), AppError> {
-    if query.resource != "ticket" || !matches!(query.action.as_str(), "create" | "update") {
-        return Err(AppError::bad_request(
-            "成员辅助仅支持 ticket/create 或 ticket/update",
-        ));
-    }
     if single && (query.page.is_some() || query.size.is_some() || query.q.is_some()) {
         return Err(AppError::bad_request("单成员校验不接受分页或搜索参数"));
     }
@@ -66,55 +58,74 @@ fn uuid_of(ctx: &Value, parent: &str) -> Result<Uuid, AppError> {
         .ok_or_else(|| AppError::unauthorized("应用上下文无效"))
 }
 
+fn organization_ids(value: &Value) -> Option<Vec<Uuid>> {
+    let ids = value.as_array()?;
+    if ids.len() > 10_000 {
+        return None;
+    }
+    ids.iter().map(|id| id.as_str()?.parse().ok()).collect()
+}
+
+fn organization_allowed(
+    ctx: &Value,
+    grant: &Value,
+    org: Uuid,
+    target: Uuid,
+) -> Result<bool, AppError> {
+    use saas_platform_backend::authorization_policy::{
+        member_organization_allowed, MemberScope, OrganizationCeiling,
+    };
+    let finite = match ctx.get("organizationScopeIds") {
+        Some(value) if !value.is_null() => Some(
+            organization_ids(value)
+                .filter(|ids| ids.contains(&org))
+                .ok_or_else(|| AppError::unauthorized("应用组织数据范围无效"))?,
+        ),
+        _ => None,
+    };
+    let ceiling = match (ctx.get("organizationScopeIds"), finite.as_deref()) {
+        (None, _) => OrganizationCeiling::Current,
+        (Some(Value::Null), _) => OrganizationCeiling::Tenant,
+        (_, Some(ids)) => OrganizationCeiling::Finite(ids),
+        _ => return Err(AppError::unauthorized("应用组织数据范围无效")),
+    };
+    let ids = organization_ids(&grant["organizationIds"])
+        .ok_or_else(|| AppError::forbidden("成员用途的数据授权范围无效"))?;
+    let scope = match grant["scope"].as_str() {
+        Some("SELF") => MemberScope::SelfScope,
+        Some("ORG") => MemberScope::Org,
+        Some("ORG_SUBTREE") => MemberScope::OrgSubtree,
+        Some("TENANT") => MemberScope::Tenant,
+        _ => return Ok(false),
+    };
+    Ok(member_organization_allowed(
+        scope, &ids, ceiling, org, target,
+    ))
+}
+
+struct LookupProof {
+    identity: (Uuid, Uuid, Uuid, Uuid),
+    revision: saas_platform_backend::snapshot::Revision,
+}
 async fn authorized(
     state: &AppState,
     app_code: &str,
     headers: &HeaderMap,
     query: &MemberQuery,
-) -> Result<(Uuid, Uuid, Uuid, Uuid), AppError> {
-    let token = bearer_token(headers)?;
-    let claims = jwt::verify(&token, &state.config.jwt_secret)
-        .map_err(|_| AppError::unauthorized("应用令牌无效"))?;
-    if claims.exp <= chrono::Utc::now().timestamp() {
-        return Err(AppError::unauthorized("应用令牌已到期"));
-    }
-    let ctx = app_context::current_context(state, app_code, headers).await?;
-    let user = uuid_of(&ctx, "user")?;
-    let tenant = uuid_of(&ctx, "tenant")?;
-    let org = uuid_of(&ctx, "organization")?;
-    let app = uuid_of(&ctx, "application")?;
-    let permission = format!("ticket:{}", query.action);
-    if !ctx["permissions"].as_array().is_some_and(|items| {
-        items
-            .iter()
-            .any(|value| value.as_str() == Some(&permission))
-    }) {
-        return Err(AppError::forbidden("缺少当前应用的工单操作权限"));
-    }
-    let grant = ctx["dataGrants"]
-        .as_array()
-        .and_then(|items| {
-            items.iter().find(|item| {
-                item["resource"] == "ticket"
-                    && item["action"] == query.action
-                    && item["subjectUserId"].as_str() == Some(user.to_string().as_str())
-                    && item["tenantId"].as_str() == Some(tenant.to_string().as_str())
-            })
-        })
-        .ok_or_else(|| AppError::forbidden("缺少 ticket 操作的独立数据授权"))?;
-    let allowed = match grant["scope"].as_str() {
-        Some("SELF" | "ORG") => query.organization_id == org,
-        Some("ORG_SUBTREE") => grant["organizationIds"].as_array().is_some_and(|ids| {
-            ids.iter().any(|id| {
-                id.as_str().and_then(|id| id.parse::<Uuid>().ok()) == Some(query.organization_id)
-            })
-        }),
-        Some("TENANT") => true,
-        _ => false,
-    };
-    if !allowed {
-        return Err(AppError::not_found("组织不存在或不在授权范围内"));
-    }
+) -> Result<LookupProof, AppError> {
+    let checked = crate::app_authorization::request_context(state, app_code, headers).await?;
+    let identity = authorize_projection(state, &checked.context, query).await?;
+    Ok(LookupProof {
+        identity,
+        revision: checked.revision,
+    })
+}
+async fn validate_target(
+    state: &AppState,
+    target: Uuid,
+    tenant: Uuid,
+    app: Uuid,
+) -> Result<(), AppError> {
     let valid_org: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM organizations o \
          JOIN tenants t ON t.id=o.tenant_id AND t.status='ENABLED' AND (t.expires_at IS NULL OR t.expires_at>now()) \
@@ -122,11 +133,77 @@ async fn authorized(
          JOIN tenant_applications ta ON ta.tenant_id=t.id AND ta.application_id=a.id \
          JOIN organization_applications oa ON oa.organization_id=o.id AND oa.application_id=a.id \
          WHERE o.id=$1 AND o.tenant_id=$2 AND org_chain_active(o.id))"
-    ).bind(query.organization_id).bind(tenant).bind(app).fetch_one(&state.pool).await?;
+    ).bind(target).bind(tenant).bind(app).fetch_one(&state.pool).await?;
     if !valid_org {
         return Err(AppError::not_found("组织不存在或不能访问当前应用"));
     }
+
+    Ok(())
+}
+async fn authorize_projection(
+    state: &AppState,
+    ctx: &Value,
+    query: &MemberQuery,
+) -> Result<(Uuid, Uuid, Uuid, Uuid), AppError> {
+    let user = uuid_of(&ctx, "user")?;
+    let tenant = uuid_of(&ctx, "tenant")?;
+    let org = uuid_of(&ctx, "organization")?;
+    let app = uuid_of(&ctx, "application")?;
+    let capability = state
+        .config
+        .data_grant_policy
+        .assignment_members(app, &query.resource, &query.action)
+        .ok_or_else(|| AppError::bad_request("成员分配用途未登记或资源动作不受支持"))?;
+    let permission = format!("{}:{}", capability.resource, capability.action);
+    if !ctx["permissions"].as_array().is_some_and(|items| {
+        items
+            .iter()
+            .any(|value| value.as_str() == Some(&permission))
+    }) {
+        return Err(AppError::forbidden("缺少当前应用的成员用途操作权限"));
+    }
+    let grant = ctx["dataGrants"]
+        .as_array()
+        .and_then(|items| {
+            items.iter().find(|item| {
+                item["resource"] == capability.resource
+                    && item["action"] == capability.action
+                    && item["subjectUserId"].as_str() == Some(user.to_string().as_str())
+                    && item["tenantId"].as_str() == Some(tenant.to_string().as_str())
+            })
+        })
+        .ok_or_else(|| AppError::forbidden("缺少成员用途的独立数据授权"))?;
+    if !organization_allowed(&ctx, grant, org, query.organization_id)? {
+        return Err(AppError::not_found("组织不存在或不在授权范围内"));
+    }
+    validate_target(state, query.organization_id, tenant, app).await?;
     Ok((user, tenant, org, app))
+}
+
+async fn recheck(
+    state: &AppState,
+    app_code: &str,
+    headers: &HeaderMap,
+    query: &MemberQuery,
+    proof: &LookupProof,
+) -> Result<(), AppError> {
+    if let Some(context) =
+        crate::app_authorization::revalidate_context(state, app_code, headers, proof.revision)
+            .await?
+    {
+        if authorize_projection(state, &context, query).await? != proof.identity {
+            return Err(AppError::unauthorized("应用上下文已改变"));
+        }
+    } else {
+        validate_target(
+            state,
+            query.organization_id,
+            proof.identity.1,
+            proof.identity.3,
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 async fn list(
@@ -150,9 +227,7 @@ async fn list(
         "SELECT u.id,COALESCE(NULLIF(trim(u.real_name),''),u.username) FROM memberships m JOIN users u ON u.id=m.user_id \
          WHERE {predicate} ORDER BY u.id LIMIT $3 OFFSET $4"))
         .bind(query.organization_id).bind(&pattern).bind(size).bind((page - 1) * size).fetch_all(&state.pool).await?;
-    if authorized(&state, &app_code, &headers, &query).await? != identity {
-        return Err(AppError::unauthorized("应用上下文已改变"));
-    }
+    recheck(&state, &app_code, &headers, &query, &identity).await?;
     Ok(Json(
         json!({ "records": rows.into_iter().map(|(id, display)|
         json!({"id":id,"displayName":display,"organizationId":query.organization_id})).collect::<Vec<_>>(),
@@ -173,10 +248,45 @@ async fn one(
          WHERE m.organization_id=$1 AND m.user_id=$2 AND u.status='ENABLED'"
     ).bind(query.organization_id).bind(user_id).fetch_optional(&state.pool).await?
         .ok_or_else(|| AppError::not_found("有效直接成员不存在"))?;
-    if authorized(&state, &app_code, &headers, &query).await? != identity {
-        return Err(AppError::unauthorized("应用上下文已改变"));
-    }
+    recheck(&state, &app_code, &headers, &query, &identity).await?;
     Ok(Json(
         json!({"id":user_id,"displayName":display,"organizationId":query.organization_id}),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn assignment_scopes_intersect_a_separate_ceiling_and_self_stays_current() {
+        let org = Uuid::from_u128(1);
+        let child = Uuid::from_u128(2);
+        let peer = Uuid::from_u128(3);
+        for scope in ["SELF", "ORG_SUBTREE", "TENANT"] {
+            let grant = json!({"scope":scope,"organizationIds":if scope=="TENANT" {vec![]} else {vec![org,child,peer]}});
+            let ctx = json!({"organizationScopeIds":[org,child]});
+            assert!(organization_allowed(&ctx, &grant, org, org).unwrap());
+            assert_eq!(
+                organization_allowed(&ctx, &grant, org, child).unwrap(),
+                scope != "SELF"
+            );
+            assert!(!organization_allowed(&ctx, &grant, org, peer).unwrap());
+            assert!(!organization_allowed(&json!({}), &grant, org, child).unwrap());
+        }
+        let tenant = json!({"scope":"TENANT","organizationIds":[]});
+        assert!(
+            organization_allowed(&json!({"organizationScopeIds":null}), &tenant, org, peer)
+                .unwrap()
+        );
+        for ceiling in [json!([]), json!([child]), json!([org, "bad"]), json!("bad")] {
+            assert!(organization_allowed(
+                &json!({"organizationScopeIds":ceiling}),
+                &tenant,
+                org,
+                org
+            )
+            .is_err());
+        }
+    }
 }

@@ -223,6 +223,8 @@ pub async fn active_user(
 }
 
 /// 修改密码或管理员踢出时原子提升版本并撤销全部平台 session。
+/// Production callers compose this operation with their own checks in one transaction.
+#[cfg(test)]
 pub async fn revoke_all(
     pool: &PgPool,
     user_id: Uuid,
@@ -260,20 +262,4 @@ pub async fn revoke_all_in_tx(
     .await?
     .rows_affected();
     Ok(revoked)
-}
-
-pub async fn revoke_one(pool: &PgPool, user_id: Uuid, session_id: Uuid) -> Result<(), AppError> {
-    let changed = sqlx::query(
-        "UPDATE platform_sessions SET revoked_at = now() \
-         WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
-    )
-    .bind(session_id)
-    .bind(user_id)
-    .execute(pool)
-    .await?
-    .rows_affected();
-    if changed == 0 {
-        return Err(AppError::unauthorized("会话已失效，请重新登录"));
-    }
-    Ok(())
 }

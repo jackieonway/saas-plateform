@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "phase": 35,
+  "status": "INPUT_REQUIRED",
+  "kind": "inert-input-checklist-not-deployment-configuration",
+  "zipCrossMachineRequired": null,
+  "sharedStorageAbsent": null,
+  "validationScope": null,
+  "allowedValidationScopes": [
+    "isolated-multi-node-rehearsal",
+    "explicitly-managed-targets"
+  ],
+  "targetWhitelist": [],
+  "requiredPerTarget": [
+    "nodeId",
+    "agentHttpsOrigin",
+    "staticPublicBase",
+    "requiredForTraffic",
+    "installRoot",
+    "serviceAccount",
+    "caTrustRef",
+    "credentialRef"
+  ],
+  "trafficTopology": {
+    "publicOrigin": null,
+    "loadBalancerOrRouting": null,
+    "requiredNodeSet": null,
+    "incompleteNodeTrafficExclusion": null
+  },
+  "trust": {
+    "authenticationMode": null,
+    "caTrustRef": null,
+    "credentialRef": null,
+    "rotationAndRevocationOwner": null
+  },
+  "secrets": "Provide references or configuration locations only; never place secret values here",
+  "notes": [
+    "An explicit Phase35 execution request exists; prerequisite deployment facts have not been confirmed.",
+    "For isolated rehearsal, explicitly confirm ZIP distribution without shared storage and permit a disposable multi-node topology.",
+    "No target endpoints, CA values, credentials or routing policies have been invented."
+  ]
+}

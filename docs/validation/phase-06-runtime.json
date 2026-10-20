@@ -1,0 +1,1526 @@
+{
+  "schemaVersion": 1,
+  "phase": 6,
+  "status": "PASS",
+  "generatedAt": "2026-10-15T10:23:56.015Z",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "validationDrivers": [
+    {
+      "path": "target/phase-06/collect-final.mjs",
+      "sha256": "ac4471d94ca3f820bf9c3f7335a7271fa892f7e4b8a2674de9d1e924d35d1ceb"
+    },
+    {
+      "path": "target/phase-06/audit-resources.mjs",
+      "sha256": "425782e9bf90a9b6df3d85c51e208a116b986aa02cb50ecef4834824f4d48e04"
+    },
+    {
+      "path": "target/phase-06/run-fast-linux-r3.mjs",
+      "sha256": "b3f113e94b1bf261ae7639664ff0be9aec653374f5059195da4be0b4c8f26197"
+    },
+    {
+      "path": "target/phase-06/run-linux-postgres.mjs",
+      "sha256": "abc39e22fdeb30b7395fcf2a4b604064817cd54ac00eb560ee3d54ade562057f"
+    },
+    {
+      "path": "target/phase-06/run-browser-linux.mjs",
+      "sha256": "936b62c578cefb6ecd4acbc2e79a2e1e8151d581e49952693e3ffe4ced9a729e"
+    },
+    {
+      "path": "target/phase-06/browser-wrapper.mjs",
+      "sha256": "2f19a0e29e1f111b57e4f79a194720817ef4ddc09f68d909749414299410251c"
+    },
+    {
+      "path": "target/phase-06/browser-ua-probe.mjs",
+      "sha256": "4b85612e30737c552aaee764cc1a1dad20155d0c41becac6bc06c788da8d22d9"
+    },
+    {
+      "path": "target/phase-06/collect-browser-matrix.mjs",
+      "sha256": "eb18faa283a744f28ab853a88e80d3937aab2bc63adf64cf3a551d390d4ac3c0"
+    },
+    {
+      "path": "target/phase-06/ci/build-host.mjs",
+      "sha256": "ebd1549cddd7e221c1e78ed7e53dd21a59fb205457037b3fb0821f07b09e1adf"
+    }
+  ],
+  "finalInputs": {
+    "path": "docs/validation/phase-06-inputs.json",
+    "sha256": "0b7f912730705d726821b96573b29f025bfa81e832aae41940ce262d37ce65d4",
+    "inputsSha256": "9c967cda2b728de9f675f8537ce2c6cb3279bd4026020c77a081b550c9a0e576",
+    "fileCount": 472
+  },
+  "unchangedMigrations": [
+    {
+      "path": "backend/migrations/0001_init.sql",
+      "sha256": "723e6b957a2ba1dc65df0355aa0d22e34d50a020dc97cd6d193d53c69d47eed7"
+    },
+    {
+      "path": "backend/migrations/0002_release_artifacts.sql",
+      "sha256": "1de392dc604b5b82f3c2ba75964660803416e25308d21d4b8e3507cae0a54e21"
+    }
+  ],
+  "sdk": {
+    "registeredVersion": "1.0.0",
+    "publication": "REPOSITORY_CANDIDATE",
+    "wireVersions": {
+      "context": "1.0",
+      "props": "2.0",
+      "iframe": "2.0",
+      "notification": "1.0"
+    },
+    "generatedTargetCount": 30,
+    "dockerScopedTargetCount": 25,
+    "specializedTests": {
+      "status": "PASS",
+      "counts": {
+        "tests": 17,
+        "pass": 17,
+        "fail": 0,
+        "skip": 0,
+        "cancelled": 0,
+        "todo": 0,
+        "filtered": 0
+      }
+    },
+    "evidence": {
+      "path": "target/phase-06/generation-client-tests-final.log",
+      "sha256": "03f74a666a6a77b5b1add65a9b686f697b4509aa400678179346b4395430cd03"
+    },
+    "legacyBaseline": {
+      "path": "examples/micro-app-sdk/compat/legacy-iframe-2.0.js",
+      "sha256": "fb041923bbcff457b4d8b559f42637c5ee74ebc9c34824a901ba87d60e74b42a"
+    }
+  },
+  "fast": {
+    "status": "PASS",
+    "run": "linux-fast-r3",
+    "owner": "ci-1792059136919-0f8b43b9",
+    "tools": {
+      "node": "v24.18.0",
+      "platform": "linux",
+      "architecture": "x64",
+      "npm": "11.16.0",
+      "rust": "rustc 1.97.0 (2d8144b78 2026-07-07)"
+    },
+    "inputsSha256": "9c967cda2b728de9f675f8537ce2c6cb3279bd4026020c77a081b550c9a0e576",
+    "stepCount": 23,
+    "steps": [
+      {
+        "id": "node-version",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--version"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/01-node-version.log"
+      },
+      {
+        "id": "npm-version",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--version"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/02-npm-version.log"
+      },
+      {
+        "id": "rust-version",
+        "mandatory": true,
+        "command": [
+          "rustc",
+          "--version"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/03-rust-version.log"
+      },
+      {
+        "id": "install-root",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/04-install-root.log"
+      },
+      {
+        "id": "install-frontend",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "frontend",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/05-install-frontend.log"
+      },
+      {
+        "id": "install-mini-services-micro-vue",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "mini-services/micro-vue",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/06-install-mini-services-micro-vue.log"
+      },
+      {
+        "id": "install-mini-services-micro-jquery",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "mini-services/micro-jquery",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/07-install-mini-services-micro-jquery.log"
+      },
+      {
+        "id": "install-examples-websocket",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "examples/websocket",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/08-install-examples-websocket.log"
+      },
+      {
+        "id": "install-scripts-ci",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "scripts/ci",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/09-install-scripts-ci.log"
+      },
+      {
+        "id": "sdk-drift",
+        "mandatory": true,
+        "command": [
+          "node",
+          "scripts/sync-micro-sdk.mjs",
+          "--check"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/10-sdk-drift.log"
+      },
+      {
+        "id": "build-frontends",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "run",
+          "build:all"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/11-build-frontends.log"
+      },
+      {
+        "id": "lint",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "frontend",
+          "run",
+          "lint"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/12-lint.log"
+      },
+      {
+        "id": "typecheck",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "frontend",
+          "run",
+          "typecheck"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/13-typecheck.log"
+      },
+      {
+        "id": "contracts",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "tests/micro-context-runtime.mjs",
+          "tests/micro-sandbox-lifecycle.mjs",
+          "tests/micro-iframe-protocol.mjs",
+          "tests/micro-sdk-client.mjs",
+          "tests/micro-sdk-generation.mjs",
+          "tests/notification-context.mjs",
+          "tests/session-refresh.mjs",
+          "tests/map-location-regions.mjs",
+          "mini-services/micro-vue/smoke-test.cjs",
+          "mini-services/micro-jquery/smoke-test.cjs",
+          "business-apps/work-orders/frontend/tests/client.mjs",
+          "business-apps/work-orders/frontend/tests/app.mjs",
+          "business-apps/work-orders/backend/tests/cors.test.mjs",
+          "examples/app-backend/authorize.test.mjs",
+          "tests/package-microapp.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 169,
+          "pass": 169,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/14-contracts.log"
+      },
+      {
+        "id": "deployment-unit",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "tests/nginx-render-policy.mjs",
+          "deploy/static/tests/static-image-policy.mjs",
+          "deploy/native/tests/build.test.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 36,
+          "pass": 36,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/15-deployment-unit.log"
+      },
+      {
+        "id": "ci-policy",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "tests/ci-runner.mjs",
+          "tests/ci-workflow.mjs",
+          "scripts/ci/postgres.test.mjs",
+          "scripts/ci/linux-runner.test.mjs",
+          "scripts/ci/release.test.mjs",
+          "tests/browser/results.test.mjs",
+          "tests/browser/wait.test.mjs",
+          "tests/zip-release-e2e-policy.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 49,
+          "pass": 49,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/16-ci-policy.log"
+      },
+      {
+        "id": "dev-and-vite",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "tests/dev-runner.mjs",
+          "tests/dev-vite-integration.mjs",
+          "tests/vite-example-delivery.mjs",
+          "tests/vite-host-static.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 19,
+          "pass": 19,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/17-dev-and-vite.log"
+      },
+      {
+        "id": "rust-check",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "check",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--all-targets",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/18-rust-check.log"
+      },
+      {
+        "id": "rust-config-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "config::tests",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 117
+        },
+        "log": "logs/19-rust-config-units.log"
+      },
+      {
+        "id": "rust-archive-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "release_archives::",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 104
+        },
+        "log": "logs/20-rust-archive-units.log"
+      },
+      {
+        "id": "rust-staging-maintenance-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "release_archive_maintenance::tests",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 117
+        },
+        "log": "logs/21-rust-staging-maintenance-units.log"
+      },
+      {
+        "id": "rust-public-contract-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "public_contract_tests",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 111
+        },
+        "log": "logs/22-rust-public-contract-units.log"
+      },
+      {
+        "id": "rust-transport-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "tests/fixtures/gateway-rust/Cargo.toml",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/23-rust-transport-units.log"
+      }
+    ],
+    "evidence": [
+      {
+        "path": "target/phase-06/linux-fast-r3/linux-runner-result.json",
+        "sha256": "5187a175511fc9c9a0da120f7064d1f64973f00a20857d412cb36b20c061536c"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/summary.json",
+        "sha256": "172dd90fc486e35af605656291c9221f6819f4d54d48f2fa3b1156f3cd162b59"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/source-verification.json",
+        "sha256": "794e871eef578e6006c4274f41e3dd5f3f1d4c790089a26fb2e2a1e977da0607"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/resource-audit.json",
+        "sha256": "62b55abd10e8d30214f7a747f0211aa476d01c2c696687dff3db3bbf33a0e93b"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-install-diagnostics.json",
+        "sha256": "85ae24cfe1c2c31aa4a4e37d11a591f0f35a225f0813ff15575551ded2fef668"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/01-node-version.log",
+        "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/02-npm-version.log",
+        "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/03-rust-version.log",
+        "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/04-install-root.log",
+        "sha256": "ed3488c0dad53ade8657c9fabb0a14b8fd232ce67362e4c5489d14bc4ef97686"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/05-install-frontend.log",
+        "sha256": "aabdc44b830c4b80a88589db456b4c1ad2f3fc5ce5bddb3d7cace32bd4fc315f"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/06-install-mini-services-micro-vue.log",
+        "sha256": "f88ad429c1a81a229a4d59e212075efd69417f6bb35d504461760bbd6291522e"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/07-install-mini-services-micro-jquery.log",
+        "sha256": "23a99653960f8b39d2cdee77427e5c76ebd3c463eac108b9afc6ac3d29b448bc"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/08-install-examples-websocket.log",
+        "sha256": "4863de8fad4a6440f80f45059ad615c15615638a020336af3bb47e0ad940c4ae"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/09-install-scripts-ci.log",
+        "sha256": "da13ab9d025b19c91553bc7d4c450975d3e4e36dd7c5fef6f223f8008ba39547"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/10-sdk-drift.log",
+        "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/11-build-frontends.log",
+        "sha256": "9e06cfe958db74eec2568053eb37ab9f3461b6917fa81525307d2223800335a5"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/12-lint.log",
+        "sha256": "f161eeef01c41ec4711ad369ccb461e75fb1d220dff6a7e3b80ac9187e9bafe6"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/13-typecheck.log",
+        "sha256": "763e90b76b62e6c308e153dc0e982734104069f3384703603d3ab3778e580ab5"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/14-contracts.log",
+        "sha256": "a5fb8caed44767f82ccd493785c72a1d436f0640043746202337351d43c6c7b8"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/15-deployment-unit.log",
+        "sha256": "960d2f724acac390e2ffd5c32fc31bf555549ad178e2fb05b531cf847006d4b6"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/16-ci-policy.log",
+        "sha256": "91ce0f6589f9c16bf8e6afa206063a0d9992d9b57da181cbd2f16955aae9b3af"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/17-dev-and-vite.log",
+        "sha256": "610c92ed94a4ae2f073b67f5d671a19ec06a8b1366df1e7b0c36468cbb0b90ec"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/18-rust-check.log",
+        "sha256": "0deef56afe81372bbfbc4f650dedc06f7dd38f395e65fdb17ce9a68e806ff814"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/19-rust-config-units.log",
+        "sha256": "06ae7d7851ecfee0ac0623d7708d0ec4d9e4d57b538d1f32242c0375758c92b7"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/20-rust-archive-units.log",
+        "sha256": "1bfeab13d17ac5108a6a29529583ba7cebb850f914f3f29ce7b788001e9add4e"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/21-rust-staging-maintenance-units.log",
+        "sha256": "0fdba461122ee5acc2afd0ba805706e6db57997914282924278bc427def8b7e4"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/22-rust-public-contract-units.log",
+        "sha256": "b0e9fc8efb6554559bb348730b160ede16aa44dbf49794aca83dd575682346ce"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/fast/logs/23-rust-transport-units.log",
+        "sha256": "a59fae90ce71054ed81458b541a2c3e297a02a55918aeec1ce44bd60e5cb1c24"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_08_871Z-debug-0.log",
+        "sha256": "c4b39f36fd23422fa069f97b4df4006291355c614b21fa8aa3144b4bc2d424a5"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_15_311Z-debug-0.log",
+        "sha256": "14d7bd521bbc12aab3533a7a8b4d5a1d42760dae2b48d98719ce28a4b925b35e"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_50_383Z-debug-0.log",
+        "sha256": "1ad16b1be782d5d97e2a3d6360c39d2f7c98c98cae6a7a5631a81ae3e4ab0dbc"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_50_586Z-debug-0.log",
+        "sha256": "2aa86e328bcc21b616827fdb5fa5be24b0570e7fe5ec2d8d07b96f356309a94a"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_50_778Z-debug-0.log",
+        "sha256": "2a15b5cbcd5f0c8253a8588b78b244327fca28c0731c7f744b92f8c2d1a11328"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_51_417Z-debug-0.log",
+        "sha256": "dacba45db81c1d3dfd5a1f13dcedf7c1487093d5c3902508102a1fc06ffcfebc"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_51_993Z-debug-0.log",
+        "sha256": "15fbeeb6b5a979400706fce565b4e8c94d0604d4f2088480c4b09cbbe151f8fd"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_52_170Z-debug-0.log",
+        "sha256": "15ea3ab018855dfc2a80ef1b92fad593fbf987760ce6b4fb08a31dcd5a12e01a"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_54_943Z-debug-0.log",
+        "sha256": "aa4f8620e07b5c4cdc0d11c528f053fd83b9136a8b74bba4f59a01efb105d593"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_55_230Z-debug-0.log",
+        "sha256": "770b683c04da8400527e52c2b456616389429d34bf74aed17e081d9cc1c12b6c"
+      },
+      {
+        "path": "target/phase-06/linux-fast-r3/reports/npm-debug/2026-10-15T10_14_55_401Z-debug-0.log",
+        "sha256": "fb4e4e5d5edf9cbb717c0fde5c6a0bf3f4048d868cac7a5b228d7ca978f167b4"
+      }
+    ],
+    "wslLease": {
+      "mode": "owned WSL foreground stdin lease; no global configuration changes",
+      "ready": true,
+      "stopped": true,
+      "exitCode": 0
+    }
+  },
+  "postgres": {
+    "status": "PASS",
+    "counts": {
+      "tests": 27,
+      "pass": 27,
+      "fail": 0,
+      "skip": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "filtered": 0
+    },
+    "owner": "ci-1792057140861-e782be1e",
+    "tools": {
+      "node": "v24.18.0",
+      "platform": "linux",
+      "architecture": "x64",
+      "npm": "11.16.0",
+      "rust": "rustc 1.97.0 (2d8144b78 2026-07-07)"
+    },
+    "inputsSha256": "bce504b646f17d7454b6fcb61c0ce04d7b89a2e4d6a3ad6bc37ada58efa1ee0e",
+    "finalSnapshotDifferences": [
+      {
+        "path": "business-apps/work-orders/frontend/src/client.mjs",
+        "before": "6348d46fdb9c978ef574c0491ec5b1198dee8d078af932b6acad945dc4592722",
+        "after": "43a56ac93aedcb202c68c7e8930068e7e9ee5c0f15d70b9f1b6539af8785433f"
+      },
+      {
+        "path": "business-apps/work-orders/frontend/tests/client.mjs",
+        "before": "6dd6ea8221d461a4a7018f087263a44385b51273c670e9bfc5bec0d3daf01340",
+        "after": "f6ac1d3ac0b1a7342e556a930f363bd38090927e620fdf66ad8e8d1f80e618e8"
+      },
+      {
+        "path": "tests/micro-host-browser.mjs",
+        "before": "9a87a9dad5b31c7abe45a73717c3dcb51c1ed22837e7bfc192b1d7ed07fc3cab",
+        "after": "2918e2bb9dbf0dec069bd5b792af9f83002adea1ee2faff08e879139575eac8d"
+      },
+      {
+        "path": "tests/vite-example-delivery.mjs",
+        "before": "3bff75cffa3b6b984539c721b1262ebd7a6ac83e36656aa17b82472b95c58e7d",
+        "after": "d1a33f3e52ea4b1d83f77b994c0c81021c183bcdb942bca9ccb38c296e61c565"
+      }
+    ],
+    "allBackendInputsUnchanged": true,
+    "suites": [
+      {
+        "name": "production_security_tests",
+        "expected": 8,
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--locked",
+          "--bin",
+          "saas-platform-backend",
+          "-j",
+          "2",
+          "production_security_tests",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "log": "production_security_tests.log",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "platform_settings_tests",
+        "expected": 4,
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--locked",
+          "--bin",
+          "saas-platform-backend",
+          "-j",
+          "2",
+          "platform_settings_tests",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "log": "platform_settings_tests.log",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "authorization_isolation_tests",
+        "expected": 3,
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--locked",
+          "--bin",
+          "saas-platform-backend",
+          "-j",
+          "2",
+          "authorization_isolation_tests",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "log": "authorization_isolation_tests.log",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "entity_creation_tests",
+        "expected": 6,
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--locked",
+          "--bin",
+          "saas-platform-backend",
+          "-j",
+          "2",
+          "entity_creation_tests",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "log": "entity_creation_tests.log",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "release_tests::zip_registration",
+        "expected": 6,
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--locked",
+          "--bin",
+          "saas-platform-backend",
+          "-j",
+          "2",
+          "release_tests::zip_registration",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "log": "release_tests-zip_registration.log",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      }
+    ],
+    "evidence": [
+      {
+        "path": "target/phase-06/linux-postgres-r1/linux-runner-result.json",
+        "sha256": "a2c2d042324203a243665625fe3679c205921edfc56031486ae6484d58956d2e"
+      },
+      {
+        "path": "target/phase-06/linux-postgres-r1/reports/postgres/postgres/postgres-result.json",
+        "sha256": "885837599ecb3299954f5097294e8e29519de665adbbb3353dbdd3fd87b99438"
+      },
+      {
+        "path": "target/phase-06/linux-postgres-r1/verification-attestation.json",
+        "sha256": "efb774f2f9a40f9a06e9acfdbecdbffaae8421d2cade8aa44840934c9ce84663"
+      },
+      {
+        "path": "target/phase-06/linux-postgres-r1/resource-audit.json",
+        "sha256": "90008df39c55a9ff5e5959982d6e45e8a916f45cc986750dac2e398df507412e"
+      },
+      {
+        "path": "target/phase-06/linux-postgres-r1/wsl-lease.json",
+        "sha256": "8f934dd8030d170639ef7e132c44f2a0fb30f4618dfbd506358216465d49346c"
+      }
+    ]
+  },
+  "browsers": {
+    "status": "PASS",
+    "inputsSha256": "9c967cda2b728de9f675f8537ce2c6cb3279bd4026020c77a081b550c9a0e576",
+    "products": [
+      {
+        "product": "chromium",
+        "browserVersion": "156.0.8078.4",
+        "playwrightVersion": "1.64.1",
+        "totals": {
+          "pass": 146,
+          "fail": 0,
+          "skip": 0
+        },
+        "capabilities": [
+          {
+            "mode": "client",
+            "supported": true,
+            "missing": []
+          },
+          {
+            "mode": "iframe",
+            "supported": true,
+            "missing": []
+          },
+          {
+            "mode": "host",
+            "supported": true,
+            "missing": []
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+        "owner": "ci-1792058412130-4e2b01fb"
+      },
+      {
+        "product": "chrome",
+        "browserVersion": "155.0.8059.79",
+        "playwrightVersion": "1.64.1",
+        "totals": {
+          "pass": 146,
+          "fail": 0,
+          "skip": 0
+        },
+        "capabilities": [
+          {
+            "mode": "client",
+            "supported": true,
+            "missing": []
+          },
+          {
+            "mode": "iframe",
+            "supported": true,
+            "missing": []
+          },
+          {
+            "mode": "host",
+            "supported": true,
+            "missing": []
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+        "owner": "ci-1792058412130-2e049f60"
+      },
+      {
+        "product": "msedge",
+        "browserVersion": "155.0.4283.45",
+        "playwrightVersion": "1.64.1",
+        "totals": {
+          "pass": 146,
+          "fail": 0,
+          "skip": 0
+        },
+        "capabilities": [
+          {
+            "mode": "client",
+            "supported": true,
+            "missing": []
+          },
+          {
+            "mode": "iframe",
+            "supported": true,
+            "missing": []
+          },
+          {
+            "mode": "host",
+            "supported": true,
+            "missing": []
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
+        "owner": "ci-1792058412129-3d98ccd0"
+      }
+    ],
+    "totals": {
+      "pass": 438,
+      "fail": 0,
+      "skip": 0
+    },
+    "evidence": {
+      "path": "target/phase-06/browser-matrix-result.json",
+      "sha256": "ca66edcb42d3a162e12c5e40347c05d308cb73dedfec7391685184933c00f3a8"
+    },
+    "scope": "Actual Linux browsers against real host and examples with isolated HTTP/Socket.IO fixtures"
+  },
+  "host": {
+    "status": "PASS",
+    "verifiedInputFiles": 56,
+    "inputsStillCurrent": true,
+    "steps": [
+      {
+        "id": "node-contracts",
+        "status": "PASS",
+        "counts": {
+          "tests": 56,
+          "pass": 56,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      {
+        "id": "iframe-browser",
+        "status": "PASS",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "browser": {
+          "product": "chromium",
+          "version": "156.0.8078.4",
+          "playwright": "1.64.1"
+        }
+      },
+      {
+        "id": "typecheck",
+        "status": "PASS"
+      },
+      {
+        "id": "eslint",
+        "status": "PASS"
+      }
+    ],
+    "evidence": {
+      "path": "target/phase-06/host/final/result.json",
+      "sha256": "86a9a8b99e7298047979c7d186d5e141a4bdc017c012ba1b7e621fc2b822c584"
+    }
+  },
+  "rustWire": {
+    "status": "PASS",
+    "verifiedInputFiles": 11,
+    "inputsStillCurrent": true,
+    "tests": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    "evidence": {
+      "path": "target/phase-06/rust-contracts/result.json",
+      "sha256": "435780a98920b98c6790a40665c3d01167cf105e102562a980310212cf5aae2d"
+    }
+  },
+  "ciPolicy": {
+    "status": "PASS",
+    "pass": 85,
+    "skip": 0,
+    "evidence": {
+      "path": "target/phase-06/ci/policy-result.json",
+      "sha256": "10608593d9ee01b0925f8ed306e6f5043927a4877773cdf416a2a5cbed783b9b"
+    }
+  },
+  "workordersClient": {
+    "status": "PASS",
+    "pass": 26,
+    "skip": 0,
+    "evidence": {
+      "path": "target/phase-06/work-orders-stale-401-after.log",
+      "sha256": "55edd74caf80371cfd3a9f7a8067a12b5eec6c8c0c4728ca957306249c29e997"
+    },
+    "regressionBefore": {
+      "path": "target/phase-06/work-orders-stale-401-before.log",
+      "sha256": "12662124844d93808501f31de1c51e9a4dc79dec061ed7a300de4280d2b5a6cb"
+    }
+  },
+  "nativeFrontend": {
+    "status": "PASS",
+    "image": "sha256:a857dfbe435228003a67da9ab9c24a694aea2314c4a3467039f684b263a6ac69",
+    "platform": "linux/amd64",
+    "inputsSha256": "d9287100a59038e488e2ccd153312fc48b70ecd7426156b9130bfb72c45c910d",
+    "inputFileCount": 343,
+    "allNativeInputsStillCurrent": true,
+    "checks": [
+      {
+        "id": "clean-frontend-build",
+        "status": "PASS",
+        "imageId": "sha256:a857dfbe435228003a67da9ab9c24a694aea2314c4a3467039f684b263a6ac69",
+        "targetPlatform": "linux/amd64",
+        "nodeOnlySdkCheck": true,
+        "externalSdkImported": true
+      },
+      {
+        "id": "nonroot-readonly-runtime",
+        "status": "PASS",
+        "uid": 101,
+        "readOnlyRootfs": true,
+        "network": "none",
+        "nodeAvailable": false,
+        "staticWriteRejected": true
+      },
+      {
+        "id": "http-entry-and-sdk-assets",
+        "status": "PASS",
+        "entryHtmlSha256": "9d086630e0c672413fb085540cac73949c80aa68a8e7da053a0dd3ae72a63ffa",
+        "assetCount": 97,
+        "sdkVersion": "1.0.0",
+        "unknownVersionGuardBundled": true,
+        "missingAssetStatus": 404
+      }
+    ],
+    "cleanup": {
+      "containersRemaining": 0,
+      "networksCreated": 0,
+      "volumesCreated": 0,
+      "imageRetained": true
+    },
+    "wslLease": {
+      "mode": "owned WSL foreground stdin lease; no global configuration changes",
+      "ready": true,
+      "stopped": true,
+      "exitCode": 0
+    },
+    "evidence": [
+      {
+        "path": "target/phase-06/host-image-r1/result.json",
+        "sha256": "b53a1902b3cdd207b1b62b9d8f4fe8256053e50460ba9afaeea03a27c57ab4f5"
+      },
+      {
+        "path": "target/phase-06/host-image-r1/source-manifest.json",
+        "sha256": "02160ee5d0d4b30bae6ec55d4ea36986283bb27da52d102c6d9fd02f2240b621"
+      }
+    ]
+  },
+  "resourceAudit": {
+    "schemaVersion": 1,
+    "status": "PASS",
+    "checkedAt": "2026-10-15T10:22:09.387Z",
+    "mode": "read-only label inventory; no removals or prune",
+    "queries": [
+      {
+        "label": "saas.ci.owner",
+        "resource": "containers",
+        "command": [
+          "docker",
+          "ps",
+          "-aq",
+          "--filter",
+          "label=saas.ci.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.ci.owner",
+        "resource": "networks",
+        "command": [
+          "docker",
+          "network",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.ci.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.ci.owner",
+        "resource": "volumes",
+        "command": [
+          "docker",
+          "volume",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.ci.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.phase06.owner",
+        "resource": "containers",
+        "command": [
+          "docker",
+          "ps",
+          "-aq",
+          "--filter",
+          "label=saas.phase06.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.phase06.owner",
+        "resource": "networks",
+        "command": [
+          "docker",
+          "network",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.phase06.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.phase06.owner",
+        "resource": "volumes",
+        "command": [
+          "docker",
+          "volume",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.phase06.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      }
+    ],
+    "wslLease": {
+      "mode": "owned WSL foreground stdin lease; no global configuration changes",
+      "ready": true,
+      "stopped": true,
+      "exitCode": 0
+    },
+    "evidence": {
+      "path": "target/phase-06/final-resource-audit.json",
+      "sha256": "8b84850b772ce34bf0ce15d515307880741d8e60e568a1650b7ef4820d80c309"
+    }
+  },
+  "preservedFailures": [
+    {
+      "run": "linux-browser-chrome-r1",
+      "status": "FAIL",
+      "exitCode": 1,
+      "inputsSha256": "bce504b646f17d7454b6fcb61c0ce04d7b89a2e4d6a3ad6bc37ada58efa1ee0e",
+      "evidence": {
+        "path": "target/phase-06/linux-browser-chrome-r1/linux-runner-result.json",
+        "sha256": "f85e7415dbd86396f907829a877d794da6c5987356a6be5819e86b2eed80878f"
+      }
+    },
+    {
+      "run": "linux-browser-chromium-r1",
+      "status": "FAIL",
+      "exitCode": 1,
+      "inputsSha256": "bce504b646f17d7454b6fcb61c0ce04d7b89a2e4d6a3ad6bc37ada58efa1ee0e",
+      "evidence": {
+        "path": "target/phase-06/linux-browser-chromium-r1/linux-runner-result.json",
+        "sha256": "54a488bd0124cd5cb9f895b861d8b2aa7ee8c49d1157d46dde7b6560cdcaf1e8"
+      }
+    },
+    {
+      "run": "linux-browser-msedge-r1",
+      "status": "FAIL",
+      "exitCode": 1,
+      "inputsSha256": "bce504b646f17d7454b6fcb61c0ce04d7b89a2e4d6a3ad6bc37ada58efa1ee0e",
+      "evidence": {
+        "path": "target/phase-06/linux-browser-msedge-r1/linux-runner-result.json",
+        "sha256": "9a10ea0b6ad986ada0cff1a364c4e1c4a4a561e4d66efb636787220e81ed94ca"
+      }
+    },
+    {
+      "run": "linux-fast-r1",
+      "status": "FAIL",
+      "exitCode": 1,
+      "inputsSha256": "bce504b646f17d7454b6fcb61c0ce04d7b89a2e4d6a3ad6bc37ada58efa1ee0e",
+      "evidence": {
+        "path": "target/phase-06/linux-fast-r1/linux-runner-result.json",
+        "sha256": "07a31c3c759a497916bfbfc4de05538517f4249f514eeca7c010cee69169a327"
+      }
+    },
+    {
+      "run": "linux-fast-r2",
+      "status": "FAIL",
+      "exitCode": 1,
+      "inputsSha256": "9c967cda2b728de9f675f8537ce2c6cb3279bd4026020c77a081b550c9a0e576",
+      "evidence": {
+        "path": "target/phase-06/linux-fast-r2/linux-runner-result.json",
+        "sha256": "66f62080fdcbca16ef979ce0b261f25304c34851721e81972235c4b791fdcee7"
+      },
+      "evidenceFormatIssue": "source-verification.json has a literal backslash-n suffix from the diagnostic wrapper and is not parsed as strict JSON; original bytes retained."
+    }
+  ],
+  "windowsRustChecks": [
+    {
+      "id": "check",
+      "status": "PASS",
+      "exitCode": 0,
+      "evidence": {
+        "path": "target/phase-06/windows-rust-check.log",
+        "sha256": "fc5b8d4da6d6b76476ac7d2a13f22233663d5c50d8aed3632aec7c88a2d1ae1d"
+      }
+    },
+    {
+      "id": "doc",
+      "status": "PASS",
+      "exitCode": 0,
+      "evidence": {
+        "path": "target/phase-06/windows-rust-doc.log",
+        "sha256": "385d7c2bf0b950f050747907bd55036bf0a35f9fb61ff42bc2df8a68134fbf19"
+      }
+    },
+    {
+      "id": "strict-clippy",
+      "status": "FAIL",
+      "exitCode": 101,
+      "evidence": {
+        "path": "target/phase-06/windows-clippy.log",
+        "sha256": "79143e41505847e79e9e809d352219681078cdbb18a27fb864b83fc9203e27ba"
+      }
+    },
+    {
+      "id": "whole-repository-fmt",
+      "status": "FAIL",
+      "exitCode": 1,
+      "evidence": {
+        "path": "target/phase-06/windows-fmt.log",
+        "sha256": "1b5d2f94f02c6700b8ba604930aee6baf49eb250cf86d3ffc2e38efe10f6287f"
+      }
+    }
+  ],
+  "limitations": [
+    "SDK 1.0.0 is a repository candidate; no external publication, registry push or production deployment.",
+    "Browser UI uses real Vite/React/SDK with controlled API/Socket.IO fixtures; actual platform authorization is separately covered by PostgreSQL suites.",
+    "Actual installed Chrome/Edge versions listed above were tested; another stable version, Firefox and Safari were not tested. The 90-day window remains a candidate with no retirement date.",
+    "Whole-repository strict Clippy and fmt retain pre-existing failures; Rust doc has two pre-existing warnings. New generated Rust and wire tests pass targeted formatting.",
+    "No business Rust migration, Phase 7/8 implementation, performance/SLA claim or global Docker cleanup."
+  ]
+}

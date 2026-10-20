@@ -41,10 +41,12 @@
 
   /* ===== 模块级挂载状态 ===== */
   var currentProps = null
+  var authorizationKey = null
   var app = null
   var mountedContainer = null
   var rootVm = null
   var contextController = null
+  var contextClient = null
   var hostSignal = null
   var hostAbort = null
   var requestEpoch = 0
@@ -129,6 +131,8 @@
 
   function stopContext() {
     requestEpoch += 1
+    if (contextClient) contextClient.dispose()
+    contextClient = null
     if (contextController) contextController.abort()
     contextController = null
     if (hostSignal && hostAbort) hostSignal.removeEventListener('abort', hostAbort)
@@ -142,14 +146,14 @@
     if (!props || props.contractVersion !== '2.0' || !props.signal || !props.tenant || !props.organization || !props.user) {
       throw new Error('微应用需要 MicroProps 2.0 完整上下文和 AbortSignal')
     }
-    var old = currentProps
-    var changed = !old || ['token', 'contextVersion', 'contextEpoch', 'expiresAt', 'tokenExpiresAt', 'signal', 'appCode'].some(function (key) {
-      return old[key] !== props[key]
-    }) || old.tenant.id !== props.tenant.id || old.organization.id !== props.organization.id || old.user.id !== props.user.id
+    var nextKey = window.MicroSdk && window.MicroSdk.authorizationContextSignature(props)
+    var changed = !contextUsable() || nextKey === null || nextKey !== authorizationKey || hostSignal !== props.signal
     if (changed) {
       stopContext()
       currentProps = props
       contextController = new AbortController()
+      if (!window.MicroSdk || window.MicroSdk.sdkVersion !== '1.0.0') throw new Error('Registered micro SDK 1.0.0 required')
+      contextClient = window.MicroSdk.createContextClient(Object.assign({}, props, { signal: contextController.signal }))
       hostSignal = props.signal
       hostAbort = function () {
         requestEpoch += 1
@@ -161,7 +165,9 @@
       if (hostSignal.aborted) hostAbort()
     } else {
       currentProps = props
+      contextClient.update(Object.assign({}, props, { signal: contextController.signal }))
     }
+    authorizationKey = nextKey
     syncPropsState(props)
   }
 
@@ -169,21 +175,19 @@
     if (!contextUsable()) return Promise.resolve({ epoch: requestEpoch, ok: false, status: '—', body: { message: '应用上下文已失效，等待宿主更新' } })
     var epoch = requestEpoch
     var controller = contextController
-    var token = currentProps.token
     function isCurrent() {
       return epoch === requestEpoch && controller === contextController && contextUsable()
     }
-    return fetch(endpoint, { signal: controller.signal, headers: { Authorization: 'Bearer ' + token } })
-      .then(function (res) {
-        return res.json().catch(function () { return {} }).then(function (body) {
-          return isCurrent() ? { epoch: epoch, ok: res.ok, status: String(res.status), body: body } : null
-        })
+    return contextClient.requestJson(endpoint)
+      .then(function (body) {
+        return isCurrent() ? { epoch: epoch, ok: true, status: '200', body: body } : null
       })
       .catch(function (err) {
         if (!isCurrent() || (err && err.name === 'AbortError')) return null
-        return { epoch: epoch, ok: false, status: '—', body: { message: '网络错误: ' + (err && err.message ? err.message : String(err)) } }
+        return { epoch: epoch, ok: false, status: String(err.status || '—'), body: { message: err.message } }
       })
   }
+
   function normalizePath(p) {
     var s = String(p || '')
     if (s.length > 1) s = s.replace(/\/+$/, '')
@@ -315,7 +319,7 @@
           return normalizePath(this.p.routePath) === '/micro/vue-workshop/security' ? 'security' : 'overview'
         },
         tokenPreview: function () {
-          return this.p.token ? this.p.token.slice(0, 8) + '…' : ''
+          return this.p.token ? '应用令牌已注入' : ''
         },
       },
       mounted: function () {
@@ -593,6 +597,7 @@
   /* ===== 生命周期契约 ===== */
   window.__MICRO_APP__ = {
     name: 'micro-vue',
+    sdkVersion: window.MicroSdk && window.MicroSdk.sdkVersion,
     mount: function (container, props) {
       return new Promise(function (resolve, reject) {
         try {
@@ -618,6 +623,7 @@
           }
           rootVm = null
           applyContext(props)
+          if (container.setAttribute) container.setAttribute('data-sdk-version', contextClient.sdkVersion)
           if (propsState) {
             propsState.updates = 0
             propsState.lastUpdateAt = ''

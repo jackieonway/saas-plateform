@@ -20,8 +20,21 @@ node_modules
 # production
 /build
 /frontend/dist/
+/mini-services/micro-vue/dist/
+/mini-services/micro-jquery/dist/
+/examples/websocket/dist/
+/mini-services/oauth-playground/frontend/dist/
+/mini-services/oauth-playground/backend/target/
 /deploy/micro-apps/
+/deploy/static/history/assets/
+/deploy/static/history/manifest.json
 /target/
+**/target/
+/tools/platform-admin/target/
+/business-apps/work-orders/backend/target/
+/business-apps/stores/backend/target/
+/business-apps/stores/frontend/dist/
+/tests/browser/.browsers/
 *.pid
 /.zscripts/
 

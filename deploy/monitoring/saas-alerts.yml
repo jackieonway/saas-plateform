@@ -1,0 +1,38 @@
+groups:
+  - name: saas-candidates
+    rules:
+      - alert: SaasPrivateTargetUnavailable
+        expr: up == 0
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'Private metrics target unavailable'}
+      - alert: SaasStableDependencyDown
+        expr: saas_monitor_component_state{state="down"} == 1
+        for: 10s
+        labels: {severity: warning}
+        annotations: {summary: 'Stable dependency or backup condition DOWN'}
+      - alert: SaasCandidateApiTailLatency
+        expr: histogram_quantile(0.95, sum by (service, le) (rate(saas_stage_duration_seconds_bucket{stage="request"}[5m]))) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: 'Candidate API p95 exceeds 500ms; requires workload review'}
+      - alert: SaasNotificationQueuePressure
+        expr: saas_notification_pending_hints > 0.8 * saas_notification_total_queue_limit
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Notification hint queue pressure; verify durable inbox catch-up'}
+      - alert: SaasCandidateApiP99
+        expr: histogram_quantile(0.99, sum by (service, le) (rate(saas_stage_duration_seconds_bucket{stage="request"}[5m]))) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: 'Candidate API p99 exceeds 1s; requires workload review'}
+      - alert: SaasCandidateRequestFailures
+        expr: sum by (service) (rate(saas_stage_duration_seconds_count{stage="request",outcome=~"dependency|error"}[5m])) / sum by (service) (rate(saas_stage_duration_seconds_count{stage="request"}[5m])) > 0.001
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: 'Candidate dependency/error response ratio exceeds 0.1 percent'}
+      - alert: SaasRequestSaturation
+        expr: sum by (service) (rate(saas_stage_duration_seconds_count{stage="request",outcome="saturated"}[5m])) > 0
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Request admission saturated; fast rejections do not prove capacity'}

@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Explicit work-orders authorization intent",
+  "description": "targets may be omitted and default to an empty array. UUIDs are normalized to lowercase. Rust additionally rejects repeated menu UUIDs, membership IDs or user/organization targets, inconsistent organization/tenant or role ownership, and repeated resource/action pairs even when scopes differ. Permissions and data grants are independent: neither implies another permission or scope. JSON input with duplicate property names is rejected before schema validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "applicationCode",
+    "applicationId",
+    "menuIds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "applicationCode": {
+      "const": "work-orders"
+    },
+    "applicationId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "menuIds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "ticket:read",
+        "ticket:create",
+        "ticket:update",
+        "ticket:delete",
+        "ticket:export",
+        "notification:publish"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/uuid"
+        },
+        "ticket:read": {
+          "$ref": "#/$defs/uuid"
+        },
+        "ticket:create": {
+          "$ref": "#/$defs/uuid"
+        },
+        "ticket:update": {
+          "$ref": "#/$defs/uuid"
+        },
+        "ticket:delete": {
+          "$ref": "#/$defs/uuid"
+        },
+        "ticket:export": {
+          "$ref": "#/$defs/uuid"
+        },
+        "notification:publish": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenantId",
+          "organizationId",
+          "roleId",
+          "userId",
+          "membershipId",
+          "permissions",
+          "dataGrants"
+        ],
+        "properties": {
+          "tenantId": {
+            "$ref": "#/$defs/uuid"
+          },
+          "organizationId": {
+            "$ref": "#/$defs/uuid"
+          },
+          "roleId": {
+            "$ref": "#/$defs/uuid"
+          },
+          "userId": {
+            "$ref": "#/$defs/uuid"
+          },
+          "membershipId": {
+            "$ref": "#/$defs/uuid"
+          },
+          "permissions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "ticket:read",
+                "ticket:create",
+                "ticket:update",
+                "ticket:delete",
+                "ticket:export",
+                "notification:publish"
+              ]
+            }
+          },
+          "dataGrants": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "resource",
+                "action",
+                "scope"
+              ],
+              "properties": {
+                "resource": {
+                  "enum": [
+                    "ticket",
+                    "notification"
+                  ]
+                },
+                "action": {
+                  "enum": [
+                    "read",
+                    "create",
+                    "update",
+                    "delete",
+                    "export",
+                    "publish"
+                  ]
+                },
+                "scope": {
+                  "enum": [
+                    "SELF",
+                    "ORG",
+                    "ORG_SUBTREE",
+                    "TENANT"
+                  ]
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "resource": {
+                        "const": "ticket"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "action": {
+                        "enum": [
+                          "read",
+                          "create",
+                          "update",
+                          "delete",
+                          "export"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "action": {
+                        "const": "publish"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  }
+}

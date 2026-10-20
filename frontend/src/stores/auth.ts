@@ -1,9 +1,11 @@
 import { create } from "zustand"
 import type { AppBrief, ProfileResp } from "@/api/types"
+import { sessionCoordinator } from "@/lib/session-coordinator"
+import type { SessionFence, SessionObservation, SessionStatus } from "@/lib/session-coordinator"
+export type { SessionFence } from "@/lib/session-coordinator"
 
-const TOKEN_KEY = "platform-token"
-const REFRESH_KEY = "platform-refresh-token"
 const APP_KEY = "platform-current-app"
+let sessionLifetime = new AbortController()
 
 interface AuthState {
   token: string | null
@@ -12,32 +14,35 @@ interface AuthState {
   currentApplicationId: string | null
   contextEpoch: number
   contextSwitching: boolean
+  sessionId: string | null
+  sessionVersion: number
+  sessionStatus: SessionStatus
+  coordinationError: string | null
+  initializeSessionCoordination: () => Promise<void>
+  reconcileSession: () => Promise<void>
   beginContextSwitch: () => void
   endContextSwitch: () => void
-  setToken: (token: string) => void
-  setSession: (token: string, refreshToken?: string | null) => void
-  rotateTokens: (token: string, refreshToken: string, expectedToken: string, expectedRefresh: string, epoch: number) => boolean
+  setToken: (token: string) => Promise<boolean>
+  setSession: (token: string, refreshToken?: string | null, expected?: SessionFence) => Promise<boolean>
   setProfile: (profile: ProfileResp | null, epoch?: number) => void
   setCurrentApplication: (appId: string | null) => void
   /** 确保当前应用在可用列表内,返回有效应用 id */
   ensureApplication: (apps: AppBrief[]) => string | null
-  logout: () => void
-}
-
-function readToken(key = TOKEN_KEY): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
+  logout: (expected?: SessionFence) => Promise<boolean>
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  token: readToken(),
-  refreshToken: readToken(REFRESH_KEY),
+  token: null,
+  refreshToken: null,
   profile: null,
   contextEpoch: 0,
   contextSwitching: false,
+  sessionId: null,
+  sessionVersion: -1,
+  sessionStatus: "initializing",
+  coordinationError: null,
+  initializeSessionCoordination: () => sessionCoordinator.initialize(),
+  reconcileSession: async () => { await sessionCoordinator.reconcile() },
   currentApplicationId: (() => {
     try {
       return localStorage.getItem(APP_KEY)
@@ -48,27 +53,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setToken: (token) => get().setSession(token),
 
-  setSession: (token, refreshToken = null) => {
-    try {
-      localStorage.setItem(TOKEN_KEY, token)
-      if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken)
-      else localStorage.removeItem(REFRESH_KEY)
-      localStorage.removeItem(APP_KEY)
-    } catch { /* Storage may be unavailable; keep the current in-memory session. */ }
-    set((state) => ({ token, refreshToken, profile: null, currentApplicationId: null,
-      contextSwitching: false, contextEpoch: state.contextEpoch + 1 }))
-  },
-
-  rotateTokens: (token, refreshToken, expectedToken, expectedRefresh, epoch) => {
-    const state = get()
-    if (state.token !== expectedToken || state.refreshToken !== expectedRefresh || state.contextEpoch !== epoch) return false
-    try {
-      localStorage.setItem(TOKEN_KEY, token)
-      localStorage.setItem(REFRESH_KEY, refreshToken)
-    } catch { /* Preserve the usable in-memory session. */ }
-    set({ token, refreshToken })
-    return true
-  },
+  setSession: (token, refreshToken = null, expected = captureSessionFence()) => sessionCoordinator.replace({ token, refreshToken }, expected),
 
   beginContextSwitch: () => set((state) => ({
     contextSwitching: true, profile: null, contextEpoch: state.contextEpoch + 1,
@@ -104,18 +89,55 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return preferred.id
   },
 
-  logout: () => {
-    try {
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(REFRESH_KEY)
-      localStorage.removeItem(APP_KEY)
-    } catch {
-      /* ignore */
-    }
-    set((state) => ({ token: null, refreshToken: null, profile: null, currentApplicationId: null,
-      contextSwitching: false, contextEpoch: state.contextEpoch + 1 }))
-  },
+  logout: (expected = captureSessionFence()) => sessionCoordinator.logout(expected),
 }))
+
+function applySharedSession({ record, status, error }: SessionObservation) {
+  const state = useAuthStore.getState()
+  const usable = status === "active" || status === "refreshing"
+  const token = usable ? record?.token ?? null : null
+  const refreshToken = usable ? record?.refreshToken ?? null : null
+  const sessionId = record?.sessionId ?? null
+  const switching = status === "switching" || status === "unknown" || status === "unavailable"
+  const identityChanged = sessionId !== state.sessionId
+  const isolated = switching && !state.contextSwitching
+  const resumed = state.contextSwitching && !switching && status === "active"
+  if (state.token === token && state.refreshToken === refreshToken && state.sessionStatus === status &&
+      state.sessionVersion === (record?.version ?? -1) && state.coordinationError === error) return
+  if (identityChanged || isolated || resumed) {
+    sessionLifetime.abort()
+    sessionLifetime = new AbortController()
+    try { localStorage.removeItem(APP_KEY) } catch { /* Capability error is surfaced by the coordinator. */ }
+  }
+  useAuthStore.setState({ token, refreshToken, sessionId, sessionVersion: record?.version ?? -1,
+    sessionStatus: status, coordinationError: error, contextSwitching: switching,
+    ...((identityChanged || isolated || resumed) ? { profile: null, currentApplicationId: null, contextEpoch: state.contextEpoch + 1 } : {}),
+  })
+}
+sessionCoordinator.subscribe(applySharedSession)
+
+/** Reconcile before synchronous event callbacks (including notification delivery).
+ * Reading a record never claims an abandoned operation: recovery requires Web Locks. */
+export function reconcileSessionSync(): void { sessionCoordinator.observe() }
+export function captureSessionSignal(): AbortSignal { return sessionLifetime.signal }
+
+export function captureSessionFence(): SessionFence {
+  const state = useAuthStore.getState()
+  const fence = Object.freeze({ sessionId: state.sessionId, version: state.sessionVersion })
+  reconcileSessionSync()
+  return fence
+}
+
+/** Opt a captured platform bearer into request fencing. Credential tickets and
+ * micro-application bearers deliberately do not use this entry point. */
+export function capturePlatformSessionFence(expectedToken: string): SessionFence {
+  reconcileSessionSync()
+  const state = useAuthStore.getState()
+  if (state.token !== expectedToken || (state.sessionStatus !== "active" && state.sessionStatus !== "refreshing")) {
+    throw new DOMException("登录上下文已变化", "AbortError")
+  }
+  return Object.freeze({ sessionId: state.sessionId, version: state.sessionVersion })
+}
 
 /** 供非 React 环境(api 层)使用 */
 export const authStore = useAuthStore

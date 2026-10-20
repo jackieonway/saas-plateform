@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "status": "PASS",
+  "owner": "phase03-1792036915997-705006",
+  "startedAt": "2026-10-15T04:01:55.998Z",
+  "finishedAt": "2026-10-15T04:06:44.547Z",
+  "fixture": "RUST_TRANSPORT_ONLY_NOT_SOCKET_IO_COMPATIBILITY",
+  "dockerVersion": {
+    "Client": {
+      "Version": "29.1.3",
+      "ApiVersion": "1.52",
+      "DefaultAPIVersion": "1.52",
+      "GitCommit": "29.1.3-0ubuntu4.1",
+      "GoVersion": "go1.24.13",
+      "Os": "linux",
+      "Arch": "amd64",
+      "BuildTime": "Wed Apr 29 16:40:20 2026",
+      "Context": "default"
+    },
+    "Server": {
+      "Platform": {
+        "Name": ""
+      },
+      "Version": "29.1.3",
+      "ApiVersion": "1.52",
+      "MinAPIVersion": "1.44",
+      "Os": "linux",
+      "Arch": "amd64",
+      "Components": [
+        {
+          "Name": "Engine",
+          "Version": "29.1.3",
+          "Details": {
+            "ApiVersion": "1.52",
+            "Arch": "amd64",
+            "BuildTime": "Wed Apr 29 16:40:20 2026",
+            "Experimental": "false",
+            "GitCommit": "29.1.3-0ubuntu4.1",
+            "GoVersion": "go1.24.13",
+            "KernelVersion": "6.18.33.2-microsoft-standard-WSL2",
+            "MinAPIVersion": "1.44",
+            "Os": "linux"
+          }
+        },
+        {
+          "Name": "containerd",
+          "Version": "2.2.2",
+          "Details": {
+            "GitCommit": ""
+          }
+        },
+        {
+          "Name": "runc",
+          "Version": "1.4.0-0ubuntu1",
+          "Details": {
+            "GitCommit": ""
+          }
+        },
+        {
+          "Name": "docker-init",
+          "Version": "0.19.0",
+          "Details": {
+            "GitCommit": ""
+          }
+        }
+      ],
+      "GitCommit": "29.1.3-0ubuntu4.1",
+      "GoVersion": "go1.24.13",
+      "KernelVersion": "6.18.33.2-microsoft-standard-WSL2",
+      "BuildTime": "2026-04-29T16:40:20.000000000+00:00"
+    }
+  },
+  "composeVersion": "Docker Compose version v2.39.4",
+  "firstImageId": "sha256:084557b0b25843641454c79524b481c3a8c0b57c6b8d6d0d71404cb4cc8cd7c8",
+  "secondImageId": "sha256:f1d1d054f11009bc25ebc6789e01a923faf2a2ec77b3327e5fe8b30172abbb48",
+  "rustImageId": "sha256:d624fb3af2c7cac5fe96df09617eddf5197741871ca4621c9011eca61708c96d",
+  "gatewayImageId": "sha256:e9e8bbee83832cacb1de2529610e03d7b4674d0ecf4f78e808155ca87cd712d2",
+  "checks": [
+    {
+      "name": "nonroot read-only images, private upstreams, edge-only published ports",
+      "result": "PASS",
+      "details": {
+        "uid": 101,
+        "readOnlyRootfs": true,
+        "runtime": "nginx",
+        "publishedPorts": "edge only",
+        "internalNetwork": "phase03-1792036915997-705006-private"
+      }
+    },
+    {
+      "name": "trusted HTTPS prefixes, POST bytes, query, Authorization, CORS, overwritten proxy headers",
+      "result": "PASS",
+      "details": {
+        "prefixes": [
+          "/api",
+          "/oauth",
+          "/work-orders-api"
+        ],
+        "exactBodyAndQuery": true,
+        "unauthorizedOrigin": 403,
+        "trustedCaVerification": true
+      }
+    },
+    {
+      "name": "Rust polling GET/POST, real TLS WebSocket Upgrade and text echo",
+      "result": "PASS",
+      "details": {
+        "pollingGet": 200,
+        "pollingPost": 200,
+        "websocket": 101,
+        "textEcho": true,
+        "scope": "raw transport only"
+      }
+    },
+    {
+      "name": "static MIME/cache/CSP, strict navigation, explicit immutable version route",
+      "result": "PASS",
+      "details": {
+        "sourceSha256": "6aeb812f9175a06b7e9f91046bfb51def6cfc58c7d66f9f1fcfc7db942e67e90",
+        "buildId": "phase03-1792036915997-705006-first",
+        "oldEntryAsset": "assets/index-BS_ZdeWt.js",
+        "assetSha256": "0a975ff4254d849aa578253fb0eb7d6af61a138a1aa5f950dbe3ac60253c5e60",
+        "versionRouteScope": "explicit image upstream URI mapping; ZIP check proves iframe CSP"
+      }
+    },
+    {
+      "name": "Docker DNS recovers backend name after recreation changes its IP",
+      "result": "PASS",
+      "details": {
+        "before": "172.18.0.3",
+        "after": "172.18.0.6",
+        "instanceBefore": "fixture-a",
+        "instanceAfter": "fixture-b",
+        "strategy": "Docker DNS valid=5s variable proxy_pass"
+      }
+    },
+    {
+      "name": "ZIP volume survives static recreation, mounted read-only, staging/missing version denied",
+      "result": "PASS",
+      "details": {
+        "volume": "phase03-1792036915997-705006-zip-store",
+        "persistedAfterRecreation": true,
+        "staticMountReadOnly": true,
+        "staging": 404,
+        "missingVersion": 404
+      }
+    },
+    {
+      "name": "history export retains actual old hashed JS chunk in next image without shared volume",
+      "result": "PASS",
+      "details": {
+        "previousImageId": "sha256:084557b0b25843641454c79524b481c3a8c0b57c6b8d6d0d71404cb4cc8cd7c8",
+        "nextImageId": "sha256:f1d1d054f11009bc25ebc6789e01a923faf2a2ec77b3327e5fe8b30172abbb48",
+        "retainedUrl": "/assets/index-BS_ZdeWt.js",
+        "nextEntry": "/assets/index-CtIJinRL.js",
+        "retainedOnly": true,
+        "bytesSha256": "0a975ff4254d849aa578253fb0eb7d6af61a138a1aa5f950dbe3ac60253c5e60",
+        "newSourceSha256": "72c45bba0ec789810a40d9a81d570d2a0b8d297351f628a72f8e45d36b646306",
+        "sharedRuntimeVolume": false
+      }
+    }
+  ],
+  "cleanupErrors": [],
+  "ownedImages": [
+    "phase03-1792036915997-705006-host:first",
+    "phase03-1792036915997-705006-rust:fixture",
+    "phase03-1792036915997-705006-edge:nginx",
+    "phase03-1792036915997-705006-host:second"
+  ],
+  "rawReport": "target/phase03-1792036915997-705006/result.json",
+  "rawReportSha256": "cbd05170fcc5126357ebebf9ae8f971f61657e9919e3f722bbaa30fc7d9da2a9",
+  "limit": "Isolated Linux Docker transport/static acceptance, not production platform authorization, complete Socket.IO compatibility or external publication."
+}

@@ -1,23 +1,11 @@
+import { ApplicationEditorDialog } from "./ApplicationEditorDialog"
+import { useApplicationEditor, isMicroApp, isHostEsm } from "./use-application-editor"
 import * as React from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { zResolver } from "@/lib/form"
-import { ArrowRight, ChevronDown, ChevronRight, LayoutGrid, ListTree, Loader2, MoreHorizontal, Pencil, Plus, Rocket, Trash2 } from "lucide-react"
+import { ArrowRight, ChevronDown, ChevronRight, LayoutGrid, ListTree, MoreHorizontal, Pencil, Plus, Rocket, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,68 +13,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
-import { IconInput } from "@/components/IconInput"
 import { CardGridSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { applicationsApi } from "@/api/applications"
 import { asArray } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { hostEsmEntryForCode } from "@/micro-apps/registry"
 import { ApplicationReleasesPanel } from "./ApplicationReleasesPanel"
 import type { ApplicationRecord } from "@/api/types"
-
-const appSchema = z
-  .object({
-    code: z
-      .string()
-      .min(2, "请输入应用编码")
-      .max(32)
-      .regex(/^[a-z0-9-]+$/, "仅支持小写字母、数字与中划线"),
-    name: z.string().min(1, "请输入应用名称").max(64),
-    icon: z.string().max(64).optional(),
-    basePath: z.string().max(128).optional(),
-    description: z.string().max(255).optional(),
-    sortOrder: z.coerce.number().int().min(0).max(9999),
-    status: z.enum(["ENABLED", "DISABLED"]),
-    entryType: z.enum(["ESM", "HTML"]),
-    entryUrl: z.string().max(500).optional(),
-  })
-  .superRefine((v, ctx) => {
-    const url = (v.entryUrl ?? "").trim()
-    if (url && !/^(https?:\/\/|\/)/i.test(url)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryUrl"], message: "入口地址需以 http(s):// 或 / 开头" })
-    }
-  })
-type AppForm = z.infer<typeof appSchema>
-
-// 只有 /micro/:appCode/* 会进入微应用容器；宿主内置路由随主前端发布。
-const isMicroApp = (app: ApplicationRecord) =>
-  app.basePath?.replace(/\/+$/, "") === `/micro/${app.code}`
-
-// ESM 随宿主构建；只有 HTML 微应用使用独立版本上传。
-const isHostEsm = (app: ApplicationRecord) => isMicroApp(app) && app.entryType === "ESM"
 
 export default function ApplicationsPage() {
   const queryClient = useQueryClient()
@@ -99,89 +38,9 @@ export default function ApplicationsPage() {
     retry: 1,
   })
 
-  const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [editing, setEditing] = React.useState<ApplicationRecord | null>(null)
   const [releasesApplication, setReleasesApplication] = React.useState<ApplicationRecord | null>(null)
-  const [quickSetup, setQuickSetup] = React.useState(true)
-  const form = useForm<AppForm>({
-    resolver: zResolver(appSchema),
-    defaultValues: { code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" },
-  })
-  const entryTypeValue = form.watch("entryType")
-  const codeValue = form.watch("code")
-  const useQuickSetup = !editing && entryTypeValue === "HTML" && quickSetup
-
-  const openCreate = () => {
-    setEditing(null)
-    setQuickSetup(true)
-    form.reset({ code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" })
-    setDialogOpen(true)
-  }
-  const openEdit = (a: ApplicationRecord) => {
-    setEditing(a)
-    setQuickSetup(false)
-    form.reset({
-      code: a.code,
-      name: a.name,
-      icon: a.icon ?? "LayoutGrid",
-      basePath: a.basePath ?? "",
-      description: a.description ?? "",
-      sortOrder: a.sortOrder ?? 0,
-      status: a.status,
-      entryType: a.entryType === "ESM" ? "ESM" : "HTML",
-      entryUrl: a.entryUrl ?? "",
-    })
-    setDialogOpen(true)
-  }
-
-  const saveMutation = useMutation({
-    mutationFn: async (values: AppForm) => {
-      const esm = values.entryType === "ESM"
-      const quick = !editing && !esm && quickSetup
-      const payload = {
-        code: values.code,
-        name: values.name,
-        icon: values.icon || "LayoutGrid",
-        basePath: !editing && (quick || esm) ? `/micro/${values.code}` : values.basePath || "",
-        description: values.description || "",
-        sortOrder: values.sortOrder,
-        status: values.status,
-        entryType: editing?.entryType ?? values.entryType,
-        runtimeMode: editing?.runtimeMode ?? (esm ? "TRUSTED" as const : "IFRAME" as const),
-        entryUrl: editing ? editing.entryUrl ?? "" : esm
-          ? hostEsmEntryForCode(values.code) ?? ""
-          : `/sub-apps/${values.code}/unreleased/index.html`,
-        autoCreateMenu: quick,
-      }
-      if (editing) {
-        await applicationsApi.update(editing.id, payload)
-        return null
-      }
-      /* create 返回新建应用记录(含 id), 供 toast 引导直接跳转菜单配置 */
-      const created = await applicationsApi.create(payload)
-      return { id: created.id, quick, entryType: values.entryType, application: created }
-    },
-    onSuccess: (created) => {
-      if (created?.entryType === "HTML") {
-        toast.success("应用已创建，请上传并激活 HTML 版本")
-        setReleasesApplication(created.application)
-      } else if (created?.id) {
-        toast.success("应用创建成功", {
-          description: "ESM 模块随宿主构建；下一步配置菜单与授权",
-          action: {
-            label: "去配置菜单",
-            onClick: () => navigate(`/system/menus?applicationId=${created.id}`),
-          },
-        })
-      } else {
-        toast.success(editing ? "应用已更新" : "应用创建成功")
-      }
-      setDialogOpen(false)
-      queryClient.invalidateQueries({ queryKey: ["applications"] })
-      queryClient.invalidateQueries({ queryKey: ["profile"] })
-    },
-    onError: (e: Error) => toast.error(e.message || "保存失败"),
-  })
+  const editor = useApplicationEditor(setReleasesApplication)
+  const { openCreate, openEdit } = editor
 
   const [deleting, setDeleting] = React.useState<ApplicationRecord | null>(null)
   const deleteMutation = useMutation({
@@ -350,188 +209,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* 新建/编辑弹窗 */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editing ? "编辑应用" : "新建微应用"}</DialogTitle>
-            <DialogDescription>
-              {editing ? `正在编辑「${editing.name}」` : "应用编码创建后不可修改"}
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form id="app-form" onSubmit={form.handleSubmit((v) => {
-              if (!editing && v.entryType === "ESM" && !hostEsmEntryForCode(v.code)) {
-                form.setError("code", { message: "当前宿主构建中没有与此编码同名的 ESM 模块" })
-                return
-              }
-              saveMutation.mutate(v)
-            })} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        应用名称 <span className="text-destructive">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input placeholder="如: 数据分析" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        应用编码 <span className="text-destructive">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input placeholder="如: athena" className="font-mono" {...field} disabled={!!editing} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="icon"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>图标</FormLabel>
-                      <FormControl>
-                        <IconInput value={field.value ?? ""} onChange={field.onChange} />
-                      </FormControl>
-                      <FormDescription>从图标库中选择,展示于应用切换器与工作台</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="basePath"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>基础路径</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="如 /athena"
-                          className="font-mono"
-                          {...field}
-                          value={!editing && (useQuickSetup || entryTypeValue === "ESM") ? `/micro/${codeValue || "{code}"}` : field.value}
-                          readOnly={!editing && (useQuickSetup || entryTypeValue === "ESM")}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {editing && isHostEsm(editing) ? (
-                <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm">
-                  <p className="font-medium">第一方 ESM · 宿主直挂</p>
-                  <p className="mt-1 text-xs text-muted-foreground">模块入口随宿主构建部署，不需要单独上传版本。</p>
-                </div>
-              ) : <>
-              {editing ? (
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">接入类型：{!isMicroApp(editing) ? "宿主内置路由" : entryTypeValue === "ESM" ? "ESM · 随宿主构建" : "HTML · 上传版本包"}</div>
-              ) : <FormField control={form.control} name="entryType" render={({ field }) => (
-                <FormItem><FormLabel>接入类型</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent><SelectItem value="HTML">HTML · 上传版本包 / iframe</SelectItem><SelectItem value="ESM">ESM · 宿主构建 / 直挂</SelectItem></SelectContent>
-                  </Select>
-                  <FormDescription>ESM 仅适用于已纳入宿主构建并由平台管理员审核的第一方模块。</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )} />}
-              {entryTypeValue === "HTML" && !editing && (
-                <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-3 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium">快速接入</p>
-                    <p className="text-xs text-muted-foreground">按编码生成挂载路径和首页菜单，上传版本后才可访问</p>
-                  </div>
-                  <Switch checked={quickSetup} onCheckedChange={setQuickSetup} aria-label="快速接入微应用" />
-                </div>
-              )}
-              {!editing && entryTypeValue === "ESM" ? <p className="text-xs leading-relaxed text-muted-foreground">应用编码自动对应宿主内同名 ESM 模块。先将模块加入宿主构建；创建时无需填写入口。</p> : !editing && entryTypeValue === "HTML" ? <p className="text-xs leading-relaxed text-muted-foreground">HTML 应用使用 iframe 隔离。创建后上传 ZIP 或 tar.gz，系统生成固定版本入口；未激活前不会加载占位入口。</p> : null}
-              </>}
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>描述</FormLabel>
-                    <FormControl>
-                      <Textarea rows={2} placeholder="选填" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="sortOrder"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>排序值</FormLabel>
-                      <FormControl>
-                        <Input type="number" min={0} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>状态</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="ENABLED">启用</SelectItem>
-                          <SelectItem value="DISABLED">停用</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">{editing && !isMicroApp(editing)
-                ? "宿主内置路由随宿主前端发布；此处只编辑应用元数据。"
-                : editing && isHostEsm(editing)
-                ? "该第一方模块随宿主前端发布；租户、组织和角色授权仍由平台配置。"
-                : entryTypeValue === "ESM"
-                  ? "ESM 模块需先加入宿主构建，创建后配置菜单与授权；代码更新随宿主部署。"
-                  : "HTML 微应用创建后上传 ZIP 或 tar.gz，预检、激活并配置授权；版本文件独立于宿主镜像。"}</p>
-            </form>
-          </Form>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saveMutation.isPending}>
-              取消
-            </Button>
-            <Button type="submit" form="app-form" disabled={saveMutation.isPending}>
-              {saveMutation.isPending && <Loader2 className="size-4 animate-spin" />}
-              {editing ? "保存更改" : "创建"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ApplicationEditorDialog editor={editor} />
 
       {releasesApplication && (
         <ApplicationReleasesPanel

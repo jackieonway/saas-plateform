@@ -1,0 +1,15 @@
+{
+  "kind": "gateway",
+  "publicOrigin": "https://platform.example.invalid",
+  "backend": "backend:3001",
+  "frontend": "frontend-web:8080",
+  "workOrders": "work-orders-api:3004",
+  "stores": "stores-api:3031",
+  "allowedServices": ["backend", "frontend-web", "work-orders-api", "stores-api", "work-orders-v1", "work-orders-v2", "stores-v1", "stores-v2"],
+  "versionRoutes": [
+    {"app":"work-orders","version":"1.0.0","upstream":"work-orders-v1:8080"},
+    {"app":"work-orders","version":"2.0.0","upstream":"work-orders-v2:8080"},
+    {"app":"stores","version":"1.0.0","upstream":"stores-v1:8080"},
+    {"app":"stores","version":"2.0.0","upstream":"stores-v2:8080"}
+  ]
+}

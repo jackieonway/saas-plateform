@@ -1,0 +1,23 @@
+[package]
+name = "saas-chat-reference"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+description = "Isolated Socket.IO chat protocol reference; not a platform notification service"
+license = "MIT"
+
+[dependencies]
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
+tokio = { version = "=1.53.3", default-features = false, features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
+socketioxide = { version = "=0.18.7", default-features = false }
+serde = { version = "=1.0.229", default-features = false, features = ["derive"] }
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[profile.dev]
+debug = 1

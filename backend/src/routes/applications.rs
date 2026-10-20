@@ -43,6 +43,24 @@ const LIST_SELECT: &str = "SELECT a.id, a.code, a.name, COALESCE(a.icon,'') AS i
  a.entry_type, COALESCE(a.entry_url,'') AS entry_url, a.runtime_mode, COALESCE(a.description,'') AS description, a.sort_order, a.status, a.created_at, \
  (SELECT count(*) FROM menus m WHERE m.application_id = a.id) AS menu_count";
 
+fn audit_summary(row: &ApplicationRow) -> Value {
+    json!({"id":row.id,"name":row.name,"code":row.code,"entryType":row.entry_type,
+        "entryConfigured":!row.entry_url.is_empty(),"runtimeMode":row.runtime_mode,
+        "status":row.status,"sortOrder":row.sort_order,"menuCount":row.menu_count})
+}
+
+async fn locked_application(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: Uuid,
+) -> Result<ApplicationRow, AppError> {
+    sqlx::query_scalar::<_, Uuid>("SELECT id FROM applications WHERE id=$1 FOR UPDATE")
+        .bind(id).fetch_optional(&mut **tx).await?
+        .ok_or_else(|| AppError::not_found("应用不存在"))?;
+    // Related counts must use a statement snapshot taken after lock waits.
+    sqlx::query_as(&format!("{LIST_SELECT} FROM applications a WHERE a.id=$1"))
+        .bind(id).fetch_optional(&mut **tx).await?
+        .ok_or_else(|| AppError::not_found("应用不存在"))
+}
+
 /// GET /api/applications — 全量列表
 async fn list(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
     RequirePermission("system:application").check(&state, &user).await?;
@@ -213,7 +231,7 @@ async fn create(
     .fetch_one(&mut *tx)
     .await?;
     if body.auto_create_menu {
-        sqlx::query(
+        let inserted = sqlx::query(
             "INSERT INTO menus (application_id, type, title, path, sort_order, visible, link_target) \
              VALUES ($1, 'MENU', $2, $3, 1, true, 'MICRO')",
         )
@@ -222,16 +240,20 @@ async fn create(
         .bind(format!("/micro/{code}"))
         .execute(&mut *tx)
         .await?;
+        if inserted.rows_affected() != 1 {
+            return Err(AppError::Server(anyhow::anyhow!("application menu was not persisted")));
+        }
         row.menu_count = 1;
     }
-    tx.commit().await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("application", row.id, Value::Null, audit_summary(&row));
+    audit::write_in_tx_for_app(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "CREATE_APPLICATION", detail: &format!("创建应用: {} ({}) runtimeMode={}", row.name, row.code, row.runtime_mode), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "CREATE_APPLICATION", detail: &detail, ip: &ip, user_agent: &ua,
+    }, row.id).await?;
+    tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
 
@@ -291,17 +313,12 @@ async fn update(
         Some(u) => Some(validate_entry_url(new_entry_type.as_deref().unwrap_or("ESM"), u)?),
         None => None,
     };
+    let mut tx = state.pool.begin().await?;
+    let before = locked_application(&mut tx, id).await?;
     // HTML 完整性: 切到/保持 HTML 时, 最终 entry_url 不能为空 → 预读当前行做合并校验
     if new_entry_type.as_deref() == Some("HTML") || new_entry_type.is_none() {
-        let cur: Option<(String, String)> = sqlx::query_as(
-            "SELECT entry_type, COALESCE(entry_url,'') AS entry_url FROM applications WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&state.pool)
-        .await?;
-        let (cur_type, cur_url) = cur.ok_or_else(|| AppError::not_found("应用不存在"))?;
-        let final_type = new_entry_type.clone().unwrap_or(cur_type);
-        let final_url = new_entry_url.clone().unwrap_or(cur_url);
+        let final_type = new_entry_type.as_deref().unwrap_or(&before.entry_type);
+        let final_url = new_entry_url.as_deref().unwrap_or(&before.entry_url);
         if final_type == "HTML" && final_url.is_empty() {
             return Err(AppError::bad_request("HTML 入口应用必须配置入口地址 entryUrl"));
         }
@@ -326,16 +343,29 @@ async fn update(
     .bind(body.sort_order)
     .bind(&body.status)
     .bind(&body.runtime_mode)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("应用不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let mut after = audit_summary(&row);
+    let changed_fields: Vec<&str> = [
+        ("name",before.name != row.name),("icon",before.icon != row.icon),
+        ("basePath",before.base_path != row.base_path),("entryType",before.entry_type != row.entry_type),
+        ("entryUrl",before.entry_url != row.entry_url),("runtimeMode",before.runtime_mode != row.runtime_mode),
+        ("description",before.description != row.description),("sortOrder",before.sort_order != row.sort_order),
+        ("status",before.status != row.status),
+    ].into_iter().filter_map(|(field,changed)| changed.then_some(field)).collect();
+    if !changed_fields.is_empty() {
+        after["changedFields"] = json!(changed_fields);
+        let detail = audit::change_detail("application", id, audit_summary(&before), after);
+        audit::write_in_tx_for_app(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_APPLICATION", detail: &format!("更新应用: {} runtimeMode={}", row.name, row.runtime_mode), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "UPDATE_APPLICATION", detail: &detail, ip: &ip, user_agent: &ua,
+        }, id).await?;
+    }
+    tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
 
@@ -349,18 +379,22 @@ async fn delete(
     RequirePermission("system:application").check(&state, &user).await?;
     state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    let (name,): (String,) = sqlx::query_as("DELETE FROM applications WHERE id = $1 RETURNING name")
+    let mut tx = state.pool.begin().await?;
+    let before = locked_application(&mut tx, id).await?;
+    let (_name,): (String,) = sqlx::query_as("DELETE FROM applications WHERE id = $1 RETURNING name")
         .bind(id)
-        .fetch_optional(&state.pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| AppError::not_found("应用不存在"))?;
-    state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("application", id, audit_summary(&before), Value::Null);
+    audit::write_in_tx_for_app(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "DELETE_APPLICATION", detail: &format!("删除应用(级联菜单与授权): {}", name), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "DELETE_APPLICATION", detail: &detail, ip: &ip, user_agent: &ua,
+    }, id).await?;
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }

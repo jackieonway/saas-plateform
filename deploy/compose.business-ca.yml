@@ -1,0 +1,20 @@
+# Optional private CA chain. Omit this override for ordinary system trust.
+services:
+  work-orders-api:
+    environment:
+      PLATFORM_CA_CERT_FILE: /etc/platform-ca/public-ca.pem
+    volumes:
+      - type: bind
+        source: ${BUSINESS_PLATFORM_CA_FILE:?Set the absolute public platform CA file}
+        target: /etc/platform-ca/public-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+  stores-api:
+    environment:
+      PLATFORM_CA_CERT_FILE: /etc/platform-ca/public-ca.pem
+    volumes:
+      - type: bind
+        source: ${BUSINESS_PLATFORM_CA_FILE:?Set the absolute public platform CA file}
+        target: /etc/platform-ca/public-ca.pem
+        read_only: true
+        bind: {create_host_path: false}

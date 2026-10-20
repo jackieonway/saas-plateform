@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Known application URL release registration",
+  "description": "Register accepts at most 1 MiB JSON and rejects duplicate property names. Rust additionally requires environment to equal the CLI environment, version to contain no double dot, entry HTML under /sub-apps/<selected-known-app>/versions/<version>/, every resource under that same immutable prefix, and distinct resolved resource URLs. Raw and resolved canonical URLs are limited to 2000 characters before binding; the canonical values are sent by guarded register. The CLI --app-code selects work-orders (default) or stores; the JSON field set is unchanged. This registers existing URL resources; it does not install ZIPs, copy files or control Docker.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "environment",
+    "version",
+    "entryType",
+    "entryUrl",
+    "resources"
+  ],
+  "properties": {
+    "environment": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "not": {
+        "pattern": "\\.\\."
+      }
+    },
+    "entryType": {
+      "const": "HTML"
+    },
+    "entryUrl": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Rust validates HTTP(S), no credentials/query/fragment/whitespace/control/encoded separators or traversal. Relative paths resolve against the release entry; production requires HTTPS. Development HTTP additionally requires the explicit loopback flag and a literal loopback host."
+    },
+    "healthUrl": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rust validates HTTP(S), no credentials/query/fragment/whitespace/control/encoded separators or traversal. Relative paths resolve against the release entry; production requires HTTPS. Development HTTP additionally requires the explicit loopback flag and a literal loopback host."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resources": {
+      "type": "array",
+      "maxItems": 48,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "kind"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Rust validates HTTP(S), no credentials/query/fragment/whitespace/control/encoded separators or traversal. Relative paths resolve against the release entry; production requires HTTPS. Development HTTP additionally requires the explicit loopback flag and a literal loopback host."
+          },
+          "kind": {
+            "enum": [
+              "SCRIPT",
+              "STYLE",
+              "ASSET"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

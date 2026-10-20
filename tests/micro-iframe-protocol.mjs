@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import vm from 'node:vm'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { MessageChannel } from 'node:worker_threads'
-import { createRequire } from 'node:module'
-import { createServer } from 'node:http'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createIframeLifecycle } from '../frontend/src/components/micro/iframe.ts'
@@ -14,6 +11,14 @@ const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const sdkSource = readFileSync(path.join(workspace, 'examples/micro-app-sdk/iframe-bridge.js'), 'utf8')
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
 const turns = async () => { for (let i = 0; i < 10; i++) await new Promise((resolve) => setImmediate(resolve)) }
+function jsonResponse(value) {
+  const body = new ReadableStream({ async start(controller) {
+    const result = await value
+    try { controller.enqueue(new TextEncoder().encode(JSON.stringify(result))); controller.close() }
+    catch { /* Context cancellation is allowed to close the bounded test reader. */ }
+  } })
+  return new Response(body, { headers: { 'Content-Type': 'application/json' } })
+}
 const until = async (predicate) => {
   const end = Date.now() + 2000
   while (!predicate()) { assert.ok(Date.now() < end, 'protocol event did not arrive'); await new Promise((resolve) => setImmediate(resolve)) }
@@ -33,10 +38,13 @@ function child(options = {}) {
   const listeners = new Map(), parent = {}, messages = [], timers = new Map()
   let nextTimer = 0, now = Date.now()
   const clockDate = class extends Date { static now() { return now } }
-  const window = { parent, fetch: options.fetch || (async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) })),
+  const window = { parent, fetch: options.fetch || (async () => jsonResponse({ ok: true })),
     addEventListener: (name, listener) => { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(listener) },
     removeEventListener: (name, listener) => listeners.get(name)?.delete(listener) }
-  vm.runInNewContext(sdkSource, { window, document: { body: {} }, URL, AbortController, DOMException, Headers, TextEncoder,
+  Object.assign(window, { Headers, URL, AbortController, DOMException, TextEncoder, TextDecoder,
+    ReadableStream, Response, crypto, MessageChannel, postMessage() {} })
+  vm.runInNewContext(options.sdkSource ?? sdkSource, { window, document: { body: {} }, URL, AbortController,
+    DOMException, Headers, TextEncoder, TextDecoder, Uint8Array, crypto,
     setTimeout: (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, at: now + delay }); return id },
     clearTimeout: (id) => timers.delete(id), Date: clockDate })
   const calls = []
@@ -70,13 +78,18 @@ function harness(options = {}) {
     assert.equal(tag, 'iframe')
     const frame = { attributes: {}, style: {}, setAttribute(key, value) { this.attributes[key] = value },
       contentWindow: { postMessage(data, origin, ports) { bootstraps.push({ data: structuredClone(data), origin, ports });
-        app.dispatch({ data, source: app.parent, origin: 'https://host.test', ports }) } },
+        if (options.readyOverride) ports[0].postMessage({ kind: 'MICRO_READY', nonce: data.nonce,
+          appCode: data.appCode, contextEpoch: data.contextEpoch, contractVersion: '2.0', ...options.readyOverride })
+        else app.dispatch({ data, source: app.parent, origin: 'https://host.test', ports }) } },
       remove() { target.nodes = target.nodes.filter((node) => node !== this) } }
     frames.push(frame); return frame
   } }
   const originals = new Map()
+  class Frame {}
+  Frame.prototype.sandbox = {}
   for (const [name, value] of Object.entries({ document, window: { location: { href: 'https://host.test/dashboard', origin: 'https://host.test' } },
-    MessageChannel: TrackedChannel, MutationObserver: class { constructor(callback) { this.callback = callback; observers.push(this) } observe() {} disconnect() { this.disconnected = true } } })) {
+    HTMLIFrameElement: Frame, MessageChannel: TrackedChannel,
+    MutationObserver: class { constructor(callback) { this.callback = callback; observers.push(this) } observe() {} disconnect() { this.disconnected = true } } })) {
     originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name)); Object.defineProperty(globalThis, name, { configurable: true, writable: true, value })
   }
   const scope = new AbortController()
@@ -182,6 +195,7 @@ test('child bootstrap authenticates browser source, exact configured origin, non
   for (const invalid of [{ source: {} }, { origin: 'null' }, { origin: 'https://host.test.evil' }, { origin: 'https://evil.test', data: { hostOrigin: 'https://host.test' } },
     { data: { kind: 'MICRO_CONNECT', nonce: 'short', appCode: 'orders', contractVersion: '2.0', contextEpoch: 1 } },
     { data: { kind: 'MICRO_CONNECT', nonce: 'valid-nonce-1234567890', appCode: 'other', contractVersion: '2.0', contextEpoch: 1 } },
+    { data: { kind: 'MICRO_CONNECT', nonce: 'valid-nonce-1234567890', appCode: 'orders', contractVersion: '999.0', contextEpoch: 1 } },
     { ports: [] }, { ports: [channel.port2, channel.port2] }]) app.bootstrap(channel.port2, invalid)
   await turns(); assert.deepEqual(received, [])
   app.bootstrap(channel.port2); await until(() => received.length === 1)
@@ -198,9 +212,79 @@ test('SDK rejects wildcard and noncanonical allowlists instead of guessing host 
   app.bridge.dispose()
 })
 
+test('SDK refuses an unknown host SDK version with a fixed diagnostic and no authorization delivery', async () => {
+  const app = child(), channel = new MessageChannel(), received = []
+  channel.port1.on('message', (message) => received.push(message))
+  try {
+    app.bootstrap(channel.port2, { data: { kind: 'MICRO_CONNECT', nonce: 'valid-nonce-1234567890',
+      appCode: 'orders', contractVersion: '2.0', contextEpoch: 1, sdkVersion: '999.0.0-token-secret' } })
+    await until(() => received.length > 0)
+    assert.deepEqual(received, [{ kind: 'MICRO_ERROR', nonce: 'valid-nonce-1234567890',
+      contextEpoch: 1, code: 'UNSUPPORTED_SDK_VERSION' }])
+    assert.equal(app.bridge.current(), null)
+    assert.deepEqual(app.calls, [])
+    assert.equal(JSON.stringify(received).includes('secret'), false)
+  } finally { app.bridge.dispose(); channel.port1.close(); channel.port2.close() }
+})
+
+test('host still mounts the exact recorded legacy 2.0 bridge without an SDK version field', async () => {
+  const legacy = readFileSync(path.join(workspace, 'examples/micro-app-sdk/compat/legacy-iframe-2.0.js'), 'utf8')
+  const h = harness({ sdkSource: legacy, props: { sdkVersion: '1.0.0' } })
+  try {
+    await h.mount()
+    assert.equal(h.app.bridge.sdkVersion, undefined)
+    assert.equal(h.app.calls[0][0], 'mount')
+    assert.equal(h.app.calls[0][1].contractVersion, '2.0')
+    await h.lifecycle.update(props(2, { sdkVersion: '1.0.0' }))
+    assert.equal(h.app.calls.at(-1)[1].contextEpoch, 2)
+  } finally { await h.cleanup() }
+})
+
+test('unknown props versions and missing isolation APIs are rejected before creating an iframe', async () => {
+  for (const contractVersion of ['1.0', '3.0', '999.0']) {
+    const h = harness({ props: { contractVersion } })
+    try {
+      await assert.rejects(h.mount(), /authorization context is invalid/)
+      assert.equal(h.frames.length, 0)
+      assert.equal(h.bootstraps.length, 0)
+    } finally { await h.cleanup() }
+  }
+  for (const sdkVersion of ['999.0.0', null, undefined]) {
+    const h = harness({ props: { sdkVersion } })
+    try {
+      await assert.rejects(h.mount(), /SDK version is unsupported/)
+      assert.equal(h.frames.length, 0)
+      assert.equal(h.bootstraps.length, 0)
+    } finally { await h.cleanup() }
+  }
+  const h = harness()
+  const original = globalThis.MessageChannel
+  try {
+    globalThis.MessageChannel = undefined
+    await assert.rejects(h.mount(), (error) => error.code === 'BROWSER_CAPABILITIES_UNSUPPORTED' &&
+      error.missing.includes('MessageChannel'))
+    assert.equal(h.frames.length, 0)
+    assert.equal(h.bootstraps.length, 0)
+  } finally { globalThis.MessageChannel = original; await h.cleanup() }
+})
+
+test('host rejects declared unknown SDK and wire versions without waiting for a handshake timeout', async () => {
+  for (const [readyOverride, message] of [[{ sdkVersion: '999.0.0' }, /SDK version is unsupported/],
+    [{ contractVersion: '999.0' }, /protocol version is unsupported/],
+    [{ kind: 'MICRO_ERROR', code: 'UNSUPPORTED_SDK_VERSION' }, /SDK version is unsupported/]]) {
+    const h = harness({ readyOverride })
+    try {
+      await assert.rejects(h.mount(), message)
+      assert.equal(h.outbound.some((entry) => entry.kind === 'MICRO_MOUNT'), false)
+      assert.equal(h.target.nodes.length, 0)
+      assert.equal(h.bootstraps[0].data.sdkVersion, '1.0.0')
+    } finally { await h.cleanup() }
+  }
+})
+
 test('host uses opaque sandbox and one transferred channel; props DTO excludes secrets, signals and functions', async () => {
   const value = props(1)
-  const h = harness({ props: { deploymentVersion: 'v1', entryVersionId: 'release-v1', platformSession: 'never-send', clientSecret: 'never-send', user: { ...value.user, platformSession: 'never-send' } } })
+  const h = harness({ props: { sdkVersion: '1.0.0', deploymentVersion: 'v1', entryVersionId: 'release-v1', platformSession: 'never-send', clientSecret: 'never-send', user: { ...value.user, platformSession: 'never-send' } } })
   try {
     await h.mount()
     assert.equal(h.frames[0].attributes.sandbox, 'allow-scripts allow-forms')
@@ -214,6 +298,7 @@ test('host uses opaque sandbox and one transferred channel; props DTO excludes s
     for (const key of ['platformSession', 'clientSecret', 'signal', 'onNavigate', 'onNotify']) assert.equal(key in dto, false)
     assert.equal('platformSession' in dto.user, false)
     assert.equal(dto.token, h.initial.token)
+    assert.equal(dto.sdkVersion, '1.0.0')
     assert.equal(dto.deploymentVersion, 'v1')
     assert.equal(dto.entryVersionId, 'release-v1')
     assert.equal(dto.dataGrants[0].scope, 'SELF')
@@ -258,18 +343,76 @@ test('parent rejects forged nonce, stale epochs, cross-application navigation an
   } finally { await h.cleanup() }
 })
 
-test('same-epoch route/theme update works and old hydrated callbacks cannot publish', async () => {
+test('same-authorization route/theme updates preserve signals and callbacks until real authorization replacement', async () => {
   const h = harness()
   try {
     await h.mount(); const old = h.app.calls[0][1]
     await h.lifecycle.update({ ...h.initial, routePath: '/micro/orders/detail', theme: 'dark' })
     const updated = h.app.calls[1][1]
-    assert.ok(old.signal.aborted)
+    assert.equal(old.signal.aborted, false)
+    assert.equal(updated.signal, old.signal)
     assert.equal(updated.contextEpoch, old.contextEpoch)
     assert.equal(updated.routePath, '/micro/orders/detail')
-    old.onNotify('stale', 'error'); old.onNavigate('/micro/orders/stale')
-    updated.onNotify('fresh'); await until(() => h.notifications.length === 1)
-    assert.deepEqual(h.notifications, [['fresh', 'default']]); assert.deepEqual(h.navigations, [])
+    old.onNotify('same authorization', 'info')
+    updated.onNotify('fresh'); await until(() => h.notifications.length === 2)
+    assert.deepEqual(h.notifications, [['same authorization', 'info'], ['fresh', 'default']])
+    await h.lifecycle.update(props(2))
+    assert.equal(old.signal.aborted, true)
+    old.onNotify('stale', 'error'); old.onNavigate('/micro/orders/stale'); await turns()
+    assert.equal(h.notifications.length, 2); assert.deepEqual(h.navigations, [])
+  } finally { await h.cleanup() }
+})
+
+test('same-authorization presentation updates keep an in-flight JSON response and CSV acknowledgement usable', async () => {
+  const body = deferred(), h = harness({ props: { permissions: ['orders:export'], dataGrants: [csvGrant()] },
+    fetch: async () => jsonResponse(body.promise), parent: { saveCsv() {} } })
+  try {
+    await h.mount()
+    const before = h.app.bridge.current(), port = h.channels[0].port1, post = port.postMessage.bind(port)
+    let acknowledge
+    port.postMessage = data => { if (data.kind === 'MICRO_DOWNLOAD_RESULT') acknowledge = data; else post(data) }
+    const reading = h.app.bridge.requestJson('/orders').then(value => ({ value }), error => ({ error }))
+    const downloading = h.app.bridge.downloadCsv(csvFile).then(() => ({ ok: true }), error => ({ error }))
+    await until(() => acknowledge)
+    await h.lifecycle.update({ ...h.initial, theme: 'dark', routePath: '/micro/orders/detail' })
+    assert.equal(before.signal.aborted, false)
+    assert.equal(h.app.bridge.current().signal, before.signal)
+    body.resolve({ sameAuthorization: true }); post(acknowledge)
+    const read = await reading
+    assert.equal(read.error, undefined); assert.equal(read.value?.sameAuthorization, true)
+    assert.deepEqual(await downloading, { ok: true })
+  } finally { await h.cleanup() }
+})
+
+test('same-epoch changed grants or credentials replace the bridge lifetime and reject old in-flight responses', async () => {
+  for (const change of [{ dataGrants: [] }, { token: 'renewed-same-epoch' },
+    { expiresAt: new Date(Date.now() + 120000).toISOString() }]) {
+    const body = deferred(), h = harness({ fetch: async () => jsonResponse(body.promise) })
+    try {
+      await h.mount(); const before = h.app.bridge.current()
+      const reading = h.app.bridge.requestJson('/orders').then(value => ({ value }), error => ({ error }))
+      await h.lifecycle.update({ ...h.initial, ...change })
+      assert.equal(before.signal.aborted, true)
+      body.resolve({ oldAuthorization: true })
+      assert.equal((await reading).error?.name, 'AbortError')
+    } finally { await h.cleanup() }
+  }
+})
+
+test('an iframe lifecycle without update retains pure-theme work and keeps serial fallback for route or authorization changes', async () => {
+  const calls = [], h = harness({ lifecycle: { mount(_, value) { calls.push(['mount', value]) }, unmount() { calls.push(['unmount']) } } })
+  try {
+    await h.mount(); const initial = calls[0][1]
+    await h.lifecycle.update({ ...h.initial, theme: 'dark' })
+    assert.deepEqual(calls.map(call => call[0]), ['mount'])
+    assert.equal(initial.signal.aborted, false)
+    await h.lifecycle.update({ ...h.initial, theme: 'dark', routePath: '/micro/orders/detail' })
+    assert.deepEqual(calls.map(call => call[0]), ['mount', 'unmount', 'mount'])
+    assert.equal(initial.signal.aborted, true)
+    const routed = calls.at(-1)[1]
+    await h.lifecycle.update(props(2))
+    assert.deepEqual(calls.map(call => call[0]), ['mount', 'unmount', 'mount', 'unmount', 'mount'])
+    assert.equal(routed.signal.aborted, true)
   } finally { await h.cleanup() }
 })
 
@@ -323,15 +466,16 @@ test('renewal cancels a slow update immediately, serializes replacement and disc
 test('application token renewal cancels delayed JSON and request helper omits cookies', async () => {
   const body = deferred(), requests = []
   const h = harness({ fetch: async (url, options) => { requests.push({ url, ...options });
-    return { ok: true, status: 200, json: async () => requests.length === 1 ? body.promise : { current: true } } } })
+    return jsonResponse(requests.length === 1 ? body.promise : { current: true }) } })
   try {
     await h.mount()
     const requesting = h.app.bridge.requestJson('https://api.test/orders', { credentials: 'include' })
+    const rejected = assert.rejects(requesting, (error) => error.name === 'AbortError')
     await until(() => requests.length === 1)
     await h.lifecycle.update(props(2))
     assert.ok(requests[0].signal.aborted)
-    body.resolve({ stale: true }); await assert.rejects(requesting, (error) => error.name === 'AbortError')
-    assert.deepEqual(await h.app.bridge.requestJson('https://api.test/orders'), { current: true })
+    body.resolve({ stale: true }); await rejected
+    assert.deepEqual(structuredClone(await h.app.bridge.requestJson('https://api.test/orders')), { current: true })
     assert.equal(requests[1].headers.get('Authorization'), 'Bearer mock-application-2')
     assert.equal(requests[1].credentials, 'omit')
   } finally { body.resolve({}); await h.cleanup() }
@@ -421,78 +565,3 @@ test('entry URLs reject executable schemes, embedded credentials and token query
     finally { await h.cleanup() }
   }
 })
-
-// Optional real-browser gate: MICRO_IFRAME_BROWSER=1 node --test tests/micro-iframe-protocol.mjs
-test('real same-origin document remains isolated; renewal preserves DOM and only application token reaches CORS API',
-  { skip: process.env.MICRO_IFRAME_BROWSER !== '1', timeout: 30_000 }, async () => {
-    const require = createRequire(import.meta.url)
-    const bundled = path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node')
-    const { chromium } = require(process.env.PLAYWRIGHT_MODULE || path.join(bundled, 'node_modules/playwright'))
-    const executablePath = process.env.BROWSER_EXECUTABLE || [chromium.executablePath(),
-      path.join(process.env['ProgramFiles(x86)'] || 'C:/Program Files (x86)', 'Microsoft/Edge/Application/msedge.exe'),
-      path.join(process.env.ProgramFiles || 'C:/Program Files', 'Microsoft/Edge/Application/msedge.exe')].find(existsSync)
-    assert.ok(executablePath, 'Existing Chromium or Edge is required')
-    const ts = require(path.join(workspace, 'frontend/node_modules/typescript'))
-    const hostModule = ts.transpileModule(readFileSync(path.join(workspace, 'frontend/src/components/micro/iframe.ts'), 'utf8'),
-      { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
-    const requests = [], hold = deferred()
-    let origin
-    const server = createServer(async (request, response) => {
-      const url = new URL(request.url, origin)
-      if (url.pathname === '/iframe.js') { response.writeHead(200, { 'Content-Type': 'text/javascript' }); response.end(hostModule) }
-      else if (url.pathname === '/sdk.js') { response.writeHead(200, { 'Content-Type': 'text/javascript' }); response.end(sdkSource) }
-      else if (url.pathname === '/app') { response.writeHead(200, { 'Content-Type': 'text/html' });
-        response.end(readFileSync(path.join(workspace, 'tests/fixtures/iframe-app.html'), 'utf8').replaceAll('__HOST_ORIGIN__', origin)) }
-      else if (url.pathname === '/api/orders') {
-        response.setHeader('Access-Control-Allow-Origin', 'null')
-        response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        response.setHeader('Access-Control-Allow-Headers', 'Authorization')
-        if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return }
-        requests.push({ authorization: request.headers.authorization, cookie: request.headers.cookie, origin: request.headers.origin })
-        if (url.searchParams.has('hold')) await hold.promise
-        response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ current: !url.searchParams.has('hold') }))
-      } else { response.writeHead(200, { 'Content-Type': 'text/html' }); response.end('<!doctype html><div id="mount"></div><script type="module">import {createIframeLifecycle} from "/iframe.js"; window.factory=createIframeLifecycle</script>') }
-    })
-    await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '::1', resolve) })
-    origin = `http://[::1]:${server.address().port}`
-    let browser
-    try {
-      browser = await chromium.launch({ executablePath, headless: true, args: ['--no-proxy-server'] })
-      const page = await browser.newPage()
-      await page.goto(origin); await page.waitForFunction(() => !!window.factory)
-      await page.evaluate(async (dto) => {
-        window.__parentMarker = 'protected'; localStorage.setItem('platform-session', 'never-share')
-        window.scope = new AbortController(); window.context = new AbortController()
-        window.props = { ...dto, signal: window.context.signal, onNavigate: () => {}, onNotify: () => {} }
-        window.app = window.factory({ entryUrl: '/app', appCode: 'orders', signal: window.scope.signal })
-        await window.app.mount(document.querySelector('#mount'), window.props)
-      }, JSON.parse(JSON.stringify(props(1))))
-      const frame = page.frameLocator('iframe')
-      await frame.locator('#state').waitFor()
-      assert.equal(await page.locator('iframe').getAttribute('sandbox'), 'allow-scripts allow-forms')
-      assert.equal(await frame.locator('#state').getAttribute('data-parent-blocked'), 'true')
-      assert.equal(await frame.locator('#state').getAttribute('data-storage-blocked'), 'true')
-      assert.equal(await page.evaluate(() => window.__parentMarker), 'protected')
-      await frame.locator('#input').fill('preserved')
-      await frame.locator('#slow').click()
-      await until(() => requests.length === 1)
-      await page.evaluate(async (dto) => { window.context.abort(); window.context = new AbortController()
-        window.props = { ...dto, signal: window.context.signal, onNavigate: () => {}, onNotify: () => {} }; await window.app.update(window.props) }, JSON.parse(JSON.stringify(props(2))))
-      assert.equal(await frame.locator('#input').inputValue(), 'preserved')
-      await frame.locator('#request').click()
-      await frame.locator('#state[data-request="current"]').waitFor()
-      assert.equal(requests.at(-1).authorization, 'Bearer mock-application-2')
-      assert.equal(requests.at(-1).cookie, undefined)
-      assert.equal(requests.at(-1).origin, 'null')
-      hold.resolve(); await frame.locator('#state[data-old="aborted"]').waitFor()
-      await page.evaluate(() => window.scope.abort())
-      assert.equal(await page.locator('iframe').count(), 0)
-      await page.evaluate(async (dto) => { window.context = new AbortController(); window.scope = new AbortController()
-        window.app = window.factory({ entryUrl: '/app?noBridge=1', appCode: 'orders', signal: window.scope.signal })
-        window.pending = window.app.mount(document.querySelector('#mount'), { ...dto, signal: window.context.signal, onNavigate() {}, onNotify() {} }).catch((error) => error.name)
-      }, JSON.parse(JSON.stringify(props(3))))
-      await page.locator('iframe').waitFor(); await page.evaluate(() => window.scope.abort())
-      assert.equal(await page.evaluate(() => window.pending), 'AbortError')
-      assert.equal(await page.locator('iframe').count(), 0)
-    } finally { hold.resolve(); await browser?.close(); await new Promise((resolve) => server.close(resolve)) }
-  })

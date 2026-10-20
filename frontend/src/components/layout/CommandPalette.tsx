@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   Bell,
@@ -30,14 +30,15 @@ import {
 } from "@/components/ui/command"
 import { useAuthStore } from "@/stores/auth"
 import { useAuthorizedPaths } from "@/hooks/use-authorized-paths"
+import { useApplicationNavigation } from "@/hooks/use-application-navigation"
+import { invalidateApplicationSelection } from "@/lib/application-navigation"
+import { routeMenuAccess } from "@/lib/route-policy"
 import { notificationRequestOptions, useNotificationContext } from "@/hooks/use-notification-context"
 import { useTheme } from "@/components/theme-provider"
-import { authApi } from "@/api/auth"
+import { logoutPlatformSession } from "@/lib/api"
 import { searchEntities, EMPTY_SEARCH_RESULT, type GlobalSearchResult } from "@/api/search"
 import { notificationsApi } from "@/api/notifications"
 import type { NotificationRecord, NotificationType } from "@/api/types"
-import { asArray } from "@/lib/api"
-import { sortMenuTree } from "@/lib/tree"
 import { openExternalLink } from "@/lib/external-link"
 import { AppIcon } from "@/lib/icons"
 import { ROUTE_TITLES } from "@/lib/routes"
@@ -79,7 +80,9 @@ function pushRecentSearch(term: string) {
 function flattenMenus(nodes: MenuNode[], parentTitles: string[] = []): { node: MenuNode; trail: string[] }[] {
   const out: { node: MenuNode; trail: string[] }[] = []
   for (const n of nodes) {
-    if (n.type !== "BUTTON" && n.path) {
+    if (n.visible === false) continue
+    if (n.type === "MENU" && (n.linkUrl || (n.path &&
+        !n.path.split("/").some((part) => part.startsWith(":") || part.includes("*"))))) {
       out.push({ node: n, trail: [...parentTitles, n.title] })
     }
     if (n.children?.length) {
@@ -195,15 +198,13 @@ export function CommandPalette({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const profile = useAuthStore((s) => s.profile)
-  const setCurrentApplication = useAuthStore((s) => s.setCurrentApplication)
-  const currentApplicationId = useAuthStore((s) => s.currentApplicationId)
-  const logout = useAuthStore((s) => s.logout)
   const notificationScope = useNotificationContext()
   const { resolvedTheme, setTheme } = useTheme()
   const apps = profile?.applications ?? []
 
   /* ---------- 已授权路径集合(「常用页面」分区过滤用,菜单缓存与全局共享) ---------- */
-  const { allowedPaths, ready: pathsReady } = useAuthorizedPaths()
+  const { access, policyInput, queries: menusQueries } = useAuthorizedPaths({ enabled: open })
+  const { navigateTo } = useApplicationNavigation()
 
   /* ---------- 输入与防抖 ---------- */
   const [rawInput, setRawInput] = React.useState("")
@@ -220,18 +221,6 @@ export function CommandPalette({
   React.useEffect(() => {
     if (open) setRecentSearches(readRecentSearches())
   }, [open])
-
-  /* ---------- 菜单查询(所有应用) ---------- */
-  const menusQueries = useQueries({
-    queries: apps.map((app) => ({
-      queryKey: ["auth-menus", app.id],
-      queryFn: async () =>
-        sortMenuTree(asArray<MenuNode>(await authApi.menus(app.id), "menus")),
-      staleTime: 60_000,
-      retry: 1,
-      enabled: open,
-    })),
-  })
 
   /* ---------- 实体搜索(服务端过滤) ---------- */
   const searchQuery = useQuery({
@@ -285,35 +274,9 @@ export function CommandPalette({
     goToPath(n.link?.trim() || "/system/notifications")
   }
 
-  React.useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault()
-        onOpenChange(true)
-      }
-    }
-    window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
-  }, [onOpenChange])
-
   /* ---------- 跳转 ---------- */
-  const go = (appId: string, path: string) => {
-    if (appId !== currentApplicationId) setCurrentApplication(appId)
-    onOpenChange(false)
-    navigate(path)
-  }
-
-  /** 深链跳转:目标路径属于其它应用时同步切换应用上下文 */
   const goToPath = (path: string) => {
-    const app = apps.find(
-      (a) =>
-        a.basePath &&
-        a.basePath !== "/" &&
-        (path === a.basePath || path.startsWith(`${a.basePath}/`))
-    )
-    if (app && app.id !== currentApplicationId) setCurrentApplication(app.id)
-    onOpenChange(false)
-    navigate(path)
+    if (navigateTo(path)) onOpenChange(false)
   }
 
   /** 选中实体/菜单结果:记录搜索词后跳转 */
@@ -329,13 +292,8 @@ export function CommandPalette({
 
   /* 常用页面:静态全量表按已授权路径过滤(个人功能 /profile 已在快捷操作分区,恒排除);
      未就绪或无符合项时整组不渲染,避免空分组闪烁 */
-  const commonPages = React.useMemo(
-    () =>
-      pathsReady
-        ? Object.entries(ROUTE_TITLES).filter(([p]) => p !== "/profile" && allowedPaths.has(p))
-        : [],
-    [allowedPaths, pathsReady]
-  )
+  const commonPages = Object.entries(ROUTE_TITLES).filter(([path]) =>
+    path !== "/profile" && access(path).status === "allowed")
 
   return (
     <CommandDialog
@@ -357,7 +315,7 @@ export function CommandPalette({
         {hasQuery &&
           apps.map((app, i) => {
             const q = menusQueries[i]
-            const items = q.data ? flattenMenus(q.data) : []
+            const items = q.data ? flattenMenus(q.data).filter(({ node }) => routeMenuAccess(node, policyInput)) : []
             return (
               <CommandGroup key={app.id} heading={`${app.name} · ${app.code}`}>
                 {q.isLoading ? (
@@ -373,10 +331,10 @@ export function CommandPalette({
                       value={`${app.name} ${node.title} ${node.path ?? ""} ${node.permission ?? ""} ${node.linkUrl ?? ""}`}
                       onSelect={() =>
                         selectWithHistory(rawInput, () => {
-                          // 外链菜单: BLANK 新窗口 / SELF 内部嵌入(与侧栏同款跳转工具)
-                          if (!openExternalLink(node, (to) => go(app.id, to))) {
-                            go(app.id, node.path!)
-                          }
+                          if (!routeMenuAccess(node, policyInput)) return
+                          invalidateApplicationSelection()
+                          if (openExternalLink(node, goToPath)) onOpenChange(false)
+                          else if (node.path) goToPath(node.path)
                         })
                       }
                     >
@@ -398,6 +356,10 @@ export function CommandPalette({
         {/* ---------------- 有输入:实体分区(仅显示有结果的分区) ---------------- */}
         {hasQuery &&
           buildEntitySections(searchResult).map((section) => {
+            section.items = section.items.filter((item) => {
+              const target = new URL(item.to, window.location.origin)
+              return access(target.pathname, target.search).status === "allowed"
+            })
             if (!section.items.length) return null
             const Icon = section.icon
             return (
@@ -544,18 +506,14 @@ export function CommandPalette({
             </CommandItem>
             <CommandItem
               value="退出登录 logout"
-              onSelect={() => {
+              onSelect={async () => {
                 onOpenChange(false)
-                void (async () => {
-                  try {
-                    await authApi.logout()
-                  } catch {
-                    toast.warning("本机已退出，服务端会话撤销未确认")
-                  } finally {
-                    logout()
-                    navigate("/login", { replace: true })
-                  }
-                })()
+                try {
+                  if (!await logoutPlatformSession()) return
+                  navigate("/login", { replace: true })
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "退出结果尚未确认，请重新登录")
+                }
               }}
             >
               <LogOut className="size-4 text-muted-foreground" />

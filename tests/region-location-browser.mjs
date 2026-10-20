@@ -2,28 +2,17 @@
  * Managed-region and map integration through real Vite/React tenant/org pages.
  * The intercepted entry mounts the production pages with a fixture session;
  * catalog, persistence and map-provider HTTP responses are isolated fixtures.
- * Run with Node 24. PLAYWRIGHT_MODULE and BROWSER_EXECUTABLE may override runtimes.
+ * Run with Node 24. Browsers are installed and launched by tests/browser.
  */
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
-import { createRequire } from "node:module"
 import net from "node:net"
-import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { launchBrowser } from "./browser/runtime.mjs"
 
-const require = createRequire(import.meta.url)
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const bundledNode = path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node")
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || path.join(bundledNode, "node_modules/playwright"))
-assert(Number(process.versions.node.split(".")[0]) >= 20, "Run this script with Node 24.")
-const browserExecutable = process.env.BROWSER_EXECUTABLE || [chromium.executablePath(),
-  path.join(process.env["ProgramFiles(x86)"] || "C:/Program Files (x86)", "Microsoft/Edge/Application/msedge.exe"),
-  path.join(process.env.ProgramFiles || "C:/Program Files", "Microsoft/Edge/Application/msedge.exe"),
-].find(existsSync)
-assert(browserExecutable, "Existing Chromium or Edge is required; this test does not install browsers.")
-const bindHost = process.env.REGION_BROWSER_BIND || "::1"
+const bindHost = process.env.REGION_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done }); return { promise, resolve } }
 const freePort = () => new Promise((resolve, reject) => {
@@ -100,7 +89,7 @@ async function fixture(kind, options = {}) {
     reverseStatus: 200, resolved: resolution(["440000", "440300", "440305", "440305001", "440305001001"]), resolveStatus: 200,
     holdSearch: false, heldSearch: [], legacy: false, ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.addInitScript(() => { localStorage.setItem("platform-token", "test-region-session"); localStorage.setItem("platform-theme", "light") })
+  await context.addInitScript(() => { if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "test-region-session", refreshToken: null })); localStorage.setItem("platform-theme", "light") })
   // The fixture entry is intentionally fixed while developers may edit files.
   // A Vite HMR reload would restore its original App dependency graph.
   await context.routeWebSocket(() => true, () => {})
@@ -372,7 +361,7 @@ async function verifyStaleSearch() {
 
 try {
   await startServer()
-  browser = await chromium.launch({ headless: true, executablePath: browserExecutable, args: ["--no-proxy-server"] })
+  browser = await launchBrowser()
   const selected = process.argv[2]
   assert(!selected || ["cascade", "map", "stale", "aliases", "direct"].includes(selected), "Unknown browser scenario group.")
   for (const kind of ["tenant", "organization"]) {

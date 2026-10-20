@@ -1,0 +1,17 @@
+[Unit]
+Description=Coordinated encrypted SaaS pilot backup (review before installation)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/saas-backup-window
+TimeoutStartSec=3h
+UMask=0077
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/saas-recovery /run/saas-recovery-scratch
+TemporaryFileSystem=/run/saas-recovery-scratch:rw,nosuid,nodev,noexec,size=1G,mode=0700
+# Supply the key through the approved separate escrow mechanism at runtime.
+# This unit deliberately contains no key, credentials or automatic external sender.

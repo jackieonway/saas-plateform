@@ -1,6 +1,6 @@
 import * as React from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link, useLocation } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
 import {
   Area,
   AreaChart,
@@ -39,17 +39,14 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ErrorState, StatSkeleton, ChartSkeleton } from "@/components/states"
 import { AppIcon } from "@/lib/icons"
-import { ApiError, asArray } from "@/lib/api"
-import { sortMenuTree } from "@/lib/tree"
+import { ApiError } from "@/lib/api"
 import { monitorApi } from "@/api/monitor"
-import { authApi } from "@/api/auth"
 import { useAuthStore } from "@/stores/auth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
 import { useRecentVisits, type RecentVisit } from "@/hooks/use-recent-visits"
-import { useAuthorizedPaths } from "@/hooks/use-authorized-paths"
+import { useApplicationNavigation } from "@/hooks/use-application-navigation"
 import { formatNumber, formatRelative, greeting } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { MenuNode } from "@/api/types"
 
 /** mock 微趋势(仅展示行,标注为估算) */
 const MOCK_TREND: Record<string, number> = {
@@ -130,21 +127,23 @@ const QUICK_EXCLUDED_PATHS = new Set(["/profile", "/system/notifications", "/das
 function pickTopVisits(
   recentVisits: RecentVisit[],
   limit: number,
-  authorized: { allowedPaths: Set<string>; ready: boolean }
+  allowed: (path: string) => boolean
 ): RecentVisit[] {
-  if (!authorized.ready) return []
   return [...recentVisits]
-    .filter((v) => !QUICK_EXCLUDED_PATHS.has(v.path) && authorized.allowedPaths.has(v.path))
+    .filter((v) => !QUICK_EXCLUDED_PATHS.has(v.path) && allowed(v.path))
     .sort((a, b) => b.count - a.count || b.at - a.at)
     .slice(0, limit)
 }
 
 export default function DashboardPage() {
   const profile = useAuthStore((s) => s.profile)
-  const navigate = useNavigate()
   const recentVisits = useRecentVisits()
+  const { navigateTo, access } = useApplicationNavigation({ paths: [
+    ...recentVisits.map((visit) => visit.path), "/system/tenants", "/system/users", "/system/applications",
+    "/system/roles", "/system/oauth/clients", "/system/audit-logs",
+  ] })
   /* 已授权路径集合:高频访问展示前按权限过滤(记录照存,权限恢复后自动重现) */
-  const { allowedPaths, ready: pathsReady } = useAuthorizedPaths()
+
   const overviewQuery = useQuery({
     queryKey: ["monitor-overview"],
     queryFn: () => monitorApi.overview(),
@@ -155,18 +154,13 @@ export default function DashboardPage() {
   const permissions = new Set(permissionsQuery.data?.permissions ?? [])
   /* 权限未就绪时一律视为无权限: 避免「先全部可见、加载后消失」的按钮闪现。
      空权限集也不授予快捷操作。 */
-  const permsReady = permissionsQuery.isSuccess || permissionsQuery.isError
-  const can = (p: string) => {
-    if (!permsReady) return false
-    return permissions.has(p)
-  }
 
   const displayName = profile?.user.realName || profile?.user.username || ""
 
   /** 横幅「高频访问」Top 3(与个人工作台共用过滤+排序,仅条数不同) */
   const topVisits = React.useMemo(
-    () => pickTopVisits(recentVisits, 3, { allowedPaths, ready: pathsReady }),
-    [recentVisits, allowedPaths, pathsReady]
+    () => pickTopVisits(recentVisits, 3, (path) => access(path).status === "allowed"),
+    [recentVisits, access]
   )
 
   /* 监控总览加载中: 整页骨架占位。避免无 monitor 权限的用户在 403 返回前
@@ -194,7 +188,7 @@ export default function DashboardPage() {
     { label: "新建用户", to: "/system/users", icon: Users, perm: "system:user" },
     { label: "新建角色", to: "/system/roles", icon: Shield, perm: "system:role" },
     { label: "新建 OAuth 客户端", to: "/system/oauth/clients", icon: KeyRound, perm: "system:oauth" },
-  ].filter((a) => can(a.perm))
+  ].filter((a) => access(a.to).status === "allowed")
 
   return (
     <div className="space-y-6">
@@ -228,7 +222,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap gap-2">
               {quickActions.map((a) => (
                 <Button key={a.to} asChild size="sm" variant={a.label.includes("租户") ? "default" : "outline"}>
-                  <Link to={a.to}>
+                  <Link to={a.to} onClick={(event) => { event.preventDefault(); navigateTo(a.to) }}>
                     <a.icon className="size-4" />
                     {a.label}
                   </Link>
@@ -249,7 +243,7 @@ export default function DashboardPage() {
                     <button
                       key={v.path}
                       type="button"
-                      onClick={() => navigate(v.path)}
+                      onClick={() => navigateTo(v.path)}
                       title={v.title}
                       className="flex items-center gap-2 rounded-full border border-border/40 bg-card/50 py-1.5 pl-2.5 pr-3 text-xs outline-none transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring"
                     >
@@ -304,12 +298,12 @@ export default function DashboardPage() {
                       较昨日 {up ? "+" : ""}
                       {trend}
                     </span>
-                    <Button asChild variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground">
-                      <Link to={s.to}>
+                    {access(s.to).status === "allowed" && <Button asChild variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground">
+                      <Link to={s.to} onClick={(event) => { event.preventDefault(); navigateTo(s.to) }}>
                         明细
                         <ArrowRight className="size-3.5" />
                       </Link>
-                    </Button>
+                    </Button>}
                   </div>
                 </CardContent>
               </Card>
@@ -386,12 +380,12 @@ export default function DashboardPage() {
             <CardTitle className="text-base">最近登录</CardTitle>
             <CardDescription>平台最近的成功登录记录</CardDescription>
           </div>
-          <Button asChild variant="ghost" size="sm" className="gap-1 text-muted-foreground">
-            <Link to="/system/audit-logs">
+          {access("/system/audit-logs").status === "allowed" && <Button asChild variant="ghost" size="sm" className="gap-1 text-muted-foreground">
+            <Link to="/system/audit-logs" onClick={(event) => { event.preventDefault(); navigateTo("/system/audit-logs") }}>
               全部记录
               <ArrowRight className="size-3.5" />
             </Link>
-          </Button>
+          </Button>}
         </CardHeader>
         <CardContent className="px-0 pb-0">
           {overviewQuery.isLoading ? (
@@ -442,34 +436,29 @@ export default function DashboardPage() {
 
 function PersonalDashboard({ displayName, permissionCount }: { displayName: string; permissionCount: number }) {
   const profile = useAuthStore((s) => s.profile)
-  const navigate = useNavigate()
-  const setCurrentApplication = useAuthStore((s) => s.setCurrentApplication)
-  const currentApplicationId = useAuthStore((s) => s.currentApplicationId)
-  const queryClient = useQueryClient()
+  const { pathname } = useLocation()
   const recentVisits = useRecentVisits()
+  const { navigateTo, selectApplication, access } = useApplicationNavigation({ paths: recentVisits.map((visit) => visit.path) })
   /* 已授权路径集合(与平台视图同一 hook,菜单缓存全局共享) */
-  const { allowedPaths, ready: pathsReady } = useAuthorizedPaths()
+
 
   const apps = profile?.applications ?? []
   const memberships = profile?.memberships ?? []
   const currentOrgId = profile?.organization.id
   /* 展示层过滤:记录照存 localStorage,仅渲染已授权路径(未就绪时为空,不闪现无权项) */
   const visibleVisits = React.useMemo(
-    () => (pathsReady ? recentVisits.filter((v) => allowedPaths.has(v.path)) : []),
-    [recentVisits, allowedPaths, pathsReady]
+    () => recentVisits.filter((v) => access(v.path).status === "allowed"),
+    [recentVisits, access]
   )
   const hasVisits = visibleVisits.length > 0
 
   /** 高频访问 Top 4(共用 pickTopVisits;无符合项时保持原两项布局) */
   const topVisits = React.useMemo(
-    () => pickTopVisits(recentVisits, 4, { allowedPaths, ready: pathsReady }),
-    [recentVisits, allowedPaths, pathsReady]
+    () => pickTopVisits(recentVisits, 4, (path) => access(path).status === "allowed"),
+    [recentVisits, access]
   )
 
-  /** 通知中心入口:有 system 应用(即 /system/* 路由可达)才跳通知中心,否则回个人中心 */
-  const canOpenNotifications = apps.some(
-    (a) => a.basePath && a.basePath !== "/" && "/system/notifications".startsWith(`${a.basePath}/`)
-  )
+  const canOpenNotifications = access("/system/notifications").status === "allowed"
 
   const myStats = [
     {
@@ -495,42 +484,8 @@ function PersonalDashboard({ displayName, permissionCount }: { displayName: stri
     },
   ]
 
-  const enterApp = async (appId: string) => {
-    setCurrentApplication(appId)
-    try {
-      const menus = await queryClient.fetchQuery({
-        queryKey: ["auth-menus", appId],
-        queryFn: async () =>
-          sortMenuTree(asArray<MenuNode>(await authApi.menus(appId), "menus")),
-        staleTime: 30_000,
-      })
-      const firstPath = (function walk(nodes: MenuNode[]): string | null {
-        for (const n of nodes) {
-          if (n.type !== "BUTTON" && n.path) return n.path
-          if (n.children?.length) {
-            const found = walk(n.children)
-            if (found) return found
-          }
-        }
-        return null
-      })(menus)
-      if (firstPath) navigate(firstPath)
-    } catch {
-      /* 菜单拉取失败时仅切换侧栏,不跳转 */
-    }
-  }
-
-  /** 跳转到任意已授权路径:目标属于其它应用时同步切换应用上下文 */
-  const goTo = (path: string) => {
-    const app = apps.find(
-      (a) =>
-        a.basePath &&
-        a.basePath !== "/" &&
-        (path === a.basePath || path.startsWith(`${a.basePath}/`))
-    )
-    if (app && app.id !== currentApplicationId) setCurrentApplication(app.id)
-    navigate(path)
-  }
+  const enterApp = (appId: string) => selectApplication(appId, pathname)
+  const goTo = navigateTo
 
   /* ---------- 最近访问卡片 ---------- */
   const recentVisitsCard = (
@@ -737,7 +692,7 @@ function PersonalDashboard({ displayName, permissionCount }: { displayName: stri
           )
         })}
         <Button asChild variant="ghost" size="sm" className="w-full gap-1 text-muted-foreground">
-          <Link to="/profile">
+          <Link to="/profile" onClick={(event) => { event.preventDefault(); navigateTo("/profile") }}>
             在个人中心管理
             <ArrowRight className="size-3.5" />
           </Link>
@@ -772,7 +727,7 @@ function PersonalDashboard({ displayName, permissionCount }: { displayName: stri
             </div>
           </div>
           <Button asChild size="sm" variant="outline">
-            <Link to="/profile">
+            <Link to="/profile" onClick={(event) => { event.preventDefault(); navigateTo("/profile") }}>
               个人中心
               <ChevronRight className="size-4" />
             </Link>

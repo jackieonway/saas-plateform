@@ -110,13 +110,16 @@ async fn lock_global_user_mutation(
     Ok(tenants)
 }
 
-async fn user_tenant_ids(pool: &sqlx::PgPool, target: Uuid) -> Result<Vec<Uuid>, AppError> {
+async fn user_tenant_ids_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    target: Uuid,
+) -> Result<Vec<Uuid>, AppError> {
     Ok(sqlx::query_scalar(
         "SELECT DISTINCT o.tenant_id FROM memberships m \
          JOIN organizations o ON o.id = m.organization_id WHERE m.user_id = $1",
     )
     .bind(target)
-    .fetch_all(pool)
+    .fetch_all(&mut **tx)
     .await?)
 }
 
@@ -165,31 +168,87 @@ fn merge_tenant_ids(mut before: Vec<Uuid>, after: Vec<Uuid>) -> Vec<Uuid> {
     before
 }
 
-async fn audit_user_change(
-    state: &AppState,
+/// Read identity summaries only after the caller has locked the target user.
+/// Contact values and credentials are excluded from the durable audit payload.
+async fn user_summary_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    target: Uuid,
+) -> Result<Value, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT jsonb_build_object('username', username, 'realName', real_name, \
+         'status', status, 'gender', gender, 'emailSet', COALESCE(email,'')<>'', \
+         'phoneSet', COALESCE(phone,'')<>'', 'sessionVersion', session_version) \
+         FROM users WHERE id=$1",
+    )
+    .bind(target)
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+async fn memberships_summary_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    target: Uuid,
+    scoped_orgs: Option<&[Uuid]>,
+) -> Result<Value, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT COALESCE(jsonb_agg(jsonb_build_object( \
+         'organizationId', m.organization_id, 'organizationName', o.name, \
+         'departmentId', m.department_id, 'positionSet', m.position<>'') \
+         ORDER BY m.organization_id), '[]'::jsonb) \
+         FROM memberships m JOIN organizations o ON o.id=m.organization_id \
+         WHERE m.user_id=$1 AND ($2::uuid[] IS NULL OR m.organization_id=ANY($2))",
+    )
+    .bind(target)
+    .bind(scoped_orgs)
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+async fn roles_summary_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    target: Uuid,
+    scoped_orgs: Option<&[Uuid]>,
+) -> Result<Value, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT COALESCE(jsonb_agg(jsonb_build_object('roleId', ur.role_id, \
+         'roleName', r.name, 'organizationId', ur.organization_id) \
+         ORDER BY ur.role_id, ur.organization_id), '[]'::jsonb) \
+         FROM user_roles ur JOIN roles r ON r.id=ur.role_id \
+         WHERE ur.user_id=$1 AND ($2::uuid[] IS NULL OR \
+         (r.organization_id=ANY($2) AND ur.organization_id=ANY($2)))",
+    )
+    .bind(target)
+    .bind(scoped_orgs)
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+async fn audit_user_change_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
     headers: &HeaderMap,
     actor: &CurrentUser,
     target_tenants: &[Uuid],
     action: &'static str,
     detail: &str,
-) {
+) -> Result<(), AppError> {
     let ip = audit::client_ip(headers);
     let ua = audit::ua_of(headers);
     if target_tenants.is_empty() {
-        audit::write(&state.pool, audit::AuditInfo {
+        audit::write_in_tx(tx, audit::AuditInfo {
             user_id: Some(actor.user_id), username: &actor.username,
             tenant_id: None, organization_id: None,
             action, detail, ip: &ip, user_agent: &ua,
-        }).await;
+        }).await?;
     } else {
         for tenant_id in target_tenants {
-            audit::write(&state.pool, audit::AuditInfo {
+            audit::write_in_tx(tx, audit::AuditInfo {
                 user_id: Some(actor.user_id), username: &actor.username,
                 tenant_id: Some(*tenant_id), organization_id: None,
                 action, detail, ip: &ip, user_agent: &ua,
-            }).await;
+            }).await?;
         }
     }
+    Ok(())
 }
 
 /// GET /api/users — 分页 + keyword/organizationId/tenantId 过滤
@@ -322,7 +381,7 @@ async fn create(
     }
     pw::validate_for_config(&body.password, &state.config)?;
     let gender = parse_gender(&body.gender)?;
-    let hash = pw::hash_password(&body.password)?;
+    let hash = state.passwords.hash(&body.password).await?;
     let platform = state.scoped_org_ids(&user).await?.is_none();
     let welcome_title = if platform {
         None
@@ -362,23 +421,24 @@ async fn create(
         )
         .await?;
     }
-    tx.commit().await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(
-        &state.pool,
+    let after = user_summary_in_tx(&mut tx, row.0).await?;
+    audit::write_in_tx(
+        &mut tx,
         audit::AuditInfo {
             user_id: Some(user.user_id),
             username: &user.username,
             tenant_id: Some(user.tenant_id),
             organization_id: Some(user.org_id),
             action: "CREATE_USER",
-            detail: &format!("创建用户: {}", username),
+            detail: &audit::change_detail("user", row.0, Value::Null, after),
             ip: &ip,
             user_agent: &ua,
         },
     )
-    .await;
+    .await?;
+    tx.commit().await?;
     Ok(Json(json!({"id": row.0, "username": row.1})))
 }
 
@@ -410,7 +470,17 @@ async fn update(
     }
     let mut tx = state.pool.begin().await?;
     let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
-    let (username,): (String,) = sqlx::query_as(
+    let before = user_summary_in_tx(&mut tx, id).await?;
+    let (real_name, email, phone, gender): (Option<String>, Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT real_name, email, phone, gender FROM users WHERE id=$1",
+    ).bind(id).fetch_one(&mut *tx).await?;
+    let changed_fields: Vec<&str> = [
+        ("realName", body.real_name.as_ref().is_some_and(|value| Some(value) != real_name.as_ref())),
+        ("email", body.email.as_ref().is_some_and(|value| Some(value) != email.as_ref())),
+        ("phone", body.phone.as_ref().is_some_and(|value| Some(value) != phone.as_ref())),
+        ("gender", body.gender.as_ref().is_some_and(|value| Some(value) != gender.as_ref())),
+    ].into_iter().filter_map(|(field, changed)| changed.then_some(field)).collect();
+    let _: (String,) = sqlx::query_as(
         "UPDATE users SET real_name = COALESCE($2, real_name), email = COALESCE($3, email), \
          phone = COALESCE($4, phone), gender = COALESCE($5, gender), updated_at = now() \
          WHERE id = $1 RETURNING username",
@@ -423,9 +493,13 @@ async fn update(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("用户不存在"))?;
+    if !changed_fields.is_empty() {
+        let mut after = user_summary_in_tx(&mut tx, id).await?;
+        after["updatedFields"] = json!(changed_fields);
+        audit_user_change_in_tx(&mut tx, &headers, &user, &target_tenants, "UPDATE_USER",
+            &audit::change_detail("user", id, before, after)).await?;
+    }
     tx.commit().await?;
-    audit_user_change(&state, &headers, &user, &target_tenants, "UPDATE_USER",
-        &format!("更新用户资料: {}", username)).await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -443,15 +517,16 @@ async fn delete(
     }
     let mut tx = state.pool.begin().await?;
     let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
-    let (username,): (String,) = sqlx::query_as("DELETE FROM users WHERE id = $1 RETURNING username")
+    let before = user_summary_in_tx(&mut tx, id).await?;
+    let _: (String,) = sqlx::query_as("DELETE FROM users WHERE id = $1 RETURNING username")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| AppError::not_found("用户不存在"))?;
+    audit_user_change_in_tx(&mut tx, &headers, &user, &target_tenants, "DELETE_USER",
+        &audit::change_detail("user", id, before, Value::Null)).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
-    audit_user_change(&state, &headers, &user, &target_tenants, "DELETE_USER",
-        &format!("删除用户: {}", username)).await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -478,7 +553,8 @@ async fn update_status(
     }
     let mut tx = state.pool.begin().await?;
     let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
-    let (username,): (String,) = sqlx::query_as(
+    let before = user_summary_in_tx(&mut tx, id).await?;
+    let _: (String,) = sqlx::query_as(
         "UPDATE users SET status = $2, updated_at = now() WHERE id = $1 RETURNING username",
     )
     .bind(id)
@@ -486,9 +562,12 @@ async fn update_status(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("用户不存在"))?;
+    let after = user_summary_in_tx(&mut tx, id).await?;
+    if before != after {
+        audit_user_change_in_tx(&mut tx, &headers, &user, &target_tenants, "UPDATE_USER",
+            &audit::change_detail("user", id, before, after)).await?;
+    }
     tx.commit().await?;
-    audit_user_change(&state, &headers, &user, &target_tenants, "UPDATE_USER",
-        &format!("用户状态变更为 {}: {}", body.status, username)).await;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -507,7 +586,7 @@ struct BatchStatusBody {
 /// - 不存在的 id 计入 failed, 成功的计入 succeeded, 经响应逐类传达
 /// - 上限 100 个 id, 超出 BAD_REQUEST(防误操作)
 ///
-/// 事务性: 逐条独立 UPDATE, 不包整体事务 —— 单行 UPDATE 自身原子, 部分成功/部分失败
+/// 事务性: 每个用户的 UPDATE 与审计使用独立事务，不包整体事务。部分成功/部分失败
 /// 是可接受的(语义由响应 succeeded/failed/skipped 传达), 且避免单行异常回滚拖垮整批;
 /// 仅数据库级错误(连接等)才中断后续行并向上返回 500。
 async fn batch_status(
@@ -548,17 +627,21 @@ async fn batch_status(
             }
             Err(error) => return Err(error),
         };
+        let before = user_summary_in_tx(&mut tx, *id).await?;
         let n = sqlx::query("UPDATE users SET status = $2, updated_at = now() WHERE id = $1")
             .bind(id)
             .bind(&body.status)
             .execute(&mut *tx)
             .await?
             .rows_affected();
-        tx.commit().await?;
         if n > 0 {
+            let after = user_summary_in_tx(&mut tx, *id).await?;
+            if before != after {
+                audit_user_change_in_tx(&mut tx, &headers, &user, &target_tenants, "UPDATE_USER",
+                    &audit::change_detail("user", *id, before, after)).await?;
+            }
+            tx.commit().await?;
             succeeded.push(*id);
-            audit_user_change(&state, &headers, &user, &target_tenants, "UPDATE_USER",
-                &format!("批量用户状态变更为 {}: {}", body.status, id)).await;
         } else {
             failed.push(*id);
         }
@@ -587,14 +670,11 @@ async fn reset_password(
     let id: Uuid = id
         .parse()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    let hash = pw::hash_password(&body.new_password)?;
+    let hash = state.passwords.hash(&body.new_password).await?;
     let mut tx = state.pool.begin().await?;
     let target_tenants = lock_global_user_mutation(&state, &user, id, &mut tx).await?;
-    let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id = $1")
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await?;
-    session::revoke_all_in_tx(&mut tx, id, Some(&hash)).await?;
+    let before = user_summary_in_tx(&mut tx, id).await?;
+    let revoked = session::revoke_all_in_tx(&mut tx, id, Some(&hash)).await?;
     let contexts = system_recipient_contexts(&mut tx, id, &target_tenants).await?;
     system_in_tx(
         &mut tx,
@@ -608,20 +688,23 @@ async fn reset_password(
         "/profile",
     )
     .await?;
-    tx.commit().await?;
-    audit_user_change(
-        &state,
+    let mut after = user_summary_in_tx(&mut tx, id).await?;
+    after["passwordChanged"] = json!(true);
+    after["revokedSessions"] = json!(revoked);
+    audit_user_change_in_tx(
+        &mut tx,
         &headers,
         &user,
         &target_tenants,
         "RESET_PASSWORD",
-        &format!("重置用户密码: {}", username),
+        &audit::change_detail("user", id, before, after),
     )
-    .await;
+    .await?;
+    tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }
 
-type MembershipTuple = (Uuid, Uuid, Option<Uuid>, String, String);
+type MembershipTuple = (Uuid, Uuid, Option<Uuid>, String, String, Uuid);
 
 /// GET /api/users/{id}/memberships
 async fn get_memberships(
@@ -640,7 +723,7 @@ async fn get_memberships(
         return Err(AppError::not_found("用户不存在"));
     }
     let rows: Vec<MembershipTuple> = sqlx::query_as(
-        "SELECT m.organization_id, o.tenant_id, m.department_id, m.position, o.name \
+        "SELECT m.organization_id, o.tenant_id, m.department_id, m.position, o.name, m.id \
          FROM memberships m JOIN organizations o ON o.id = m.organization_id \
          WHERE m.user_id = $1 AND ($2::uuid[] IS NULL OR m.organization_id = ANY($2)) ORDER BY m.created_at",
     )
@@ -664,8 +747,9 @@ async fn get_memberships(
     }
     let items: Vec<Value> = rows
         .into_iter()
-        .map(|(organization_id, tenant_id, department_id, position, org_name)| {
+        .map(|(organization_id, tenant_id, department_id, position, org_name, membership_id)| {
             json!({
+                "membershipId": membership_id,
                 "organizationId": organization_id, "tenantId": tenant_id,
                 "departmentId": department_id, "position": position, "organizationName": org_name,
                 "departmentName": department_id.and_then(|d| dept_names.get(&d).cloned()),
@@ -712,7 +796,6 @@ async fn put_memberships(
     }
     let scoped_orgs = state.scoped_org_ids(&user).await?;
     let platform = scoped_orgs.is_none();
-    let before_tenants = if platform { user_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
     let mut org_ids: Vec<Uuid> = Vec::new();
     let mut dept_ids: Vec<Option<Uuid>> = Vec::new();
     let mut positions: Vec<String> = Vec::new();
@@ -766,6 +849,14 @@ async fn put_memberships(
     let mut seen = std::collections::HashSet::new();
     let mut tx = state.pool.begin().await?;
     lock_scoped_member(&mut tx, uid, scoped_orgs.as_deref()).await?;
+    let before_tenants = if platform { user_tenant_ids_in_tx(&mut tx, uid).await? } else { vec![user.tenant_id] };
+    let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id=$1")
+        .bind(uid).fetch_one(&mut *tx).await?;
+    let before = memberships_summary_in_tx(&mut tx, uid, scoped_orgs.as_deref()).await?;
+    let before_items: Vec<(Uuid, Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT organization_id, department_id, position FROM memberships WHERE user_id=$1 \
+         AND ($2::uuid[] IS NULL OR organization_id=ANY($2)) ORDER BY organization_id",
+    ).bind(uid).bind(&scoped_orgs).fetch_all(&mut *tx).await?;
     // Preserve retained membership IDs, data grants and active sessions. The
     // membership deletion trigger revokes only contexts actually removed.
     sqlx::query("DELETE FROM memberships m USING organizations o \
@@ -793,17 +884,37 @@ async fn put_memberships(
         .execute(&mut *tx)
         .await?;
     }
-    sqlx::query(
+    let revoked = sqlx::query(
         "UPDATE platform_sessions s SET revoked_at=now() WHERE s.user_id=$1 AND s.revoked_at IS NULL \
          AND NOT EXISTS(SELECT 1 FROM memberships m JOIN organizations o ON o.id=m.organization_id \
          JOIN tenants t ON t.id=o.tenant_id WHERE m.user_id=s.user_id AND m.organization_id=s.organization_id \
          AND o.tenant_id=s.tenant_id AND org_chain_active(o.id) AND t.status='ENABLED' \
          AND (t.expires_at IS NULL OR t.expires_at>now()))",
-    ).bind(uid).execute(&mut *tx).await?;
+    ).bind(uid).execute(&mut *tx).await?.rows_affected();
+    let after_tenants = if platform { user_tenant_ids_in_tx(&mut tx, uid).await? } else { vec![user.tenant_id] };
+    let after = memberships_summary_in_tx(&mut tx, uid, scoped_orgs.as_deref()).await?;
+    let after_items: Vec<(Uuid, Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT organization_id, department_id, position FROM memberships WHERE user_id=$1 \
+         AND ($2::uuid[] IS NULL OR organization_id=ANY($2)) ORDER BY organization_id",
+    ).bind(uid).bind(&scoped_orgs).fetch_all(&mut *tx).await?;
+    if before_items != after_items || revoked > 0 {
+        let before_by_org: HashMap<_, _> = before_items.iter()
+            .map(|(org, dept, position)| (*org, (*dept, position.as_str()))).collect();
+        let after_by_org: HashMap<_, _> = after_items.iter()
+            .map(|(org, dept, position)| (*org, (*dept, position.as_str()))).collect();
+        let mut changed_organizations: Vec<Uuid> = before_by_org.keys()
+            .chain(after_by_org.keys()).copied()
+            .filter(|org| before_by_org.get(org) != after_by_org.get(org)).collect();
+        changed_organizations.sort_unstable();
+        changed_organizations.dedup();
+        audit_user_change_in_tx(&mut tx, &headers, &user, &merge_tenant_ids(before_tenants, after_tenants),
+            "UPDATE_USER", &audit::change_detail("user_memberships", uid,
+                json!({"username": username, "items": before}),
+                json!({"username": username, "items": after,
+                    "changedOrganizationIds": changed_organizations, "revokedSessions": revoked}))).await?;
+    }
     tx.commit().await?;
-    let after_tenants = if platform { user_tenant_ids(&state.pool, uid).await? } else { vec![user.tenant_id] };
-    audit_user_change(&state, &headers, &user, &merge_tenant_ids(before_tenants, after_tenants),
-        "UPDATE_USER", &format!("更新用户 {} 成员关系: {} 项", uid, body.items.len())).await;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }
 
@@ -1003,11 +1114,27 @@ async fn put_roles(
     }
     let mut tx = state.pool.begin().await?;
     lock_scoped_member(&mut tx, uid, scoped_orgs.as_deref()).await?;
+    let current: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT ur.role_id, ur.organization_id FROM user_roles ur JOIN roles r ON r.id=ur.role_id \
+         WHERE ur.user_id=$1 AND ($2::uuid[] IS NULL OR \
+         (r.organization_id=ANY($2) AND ur.organization_id=ANY($2))) \
+         ORDER BY ur.role_id, ur.organization_id",
+    ).bind(uid).bind(&scoped_orgs).fetch_all(&mut *tx).await?;
+    let mut requested = parsed.clone();
+    requested.sort_unstable();
+    requested.dedup();
+    if current == requested {
+        tx.commit().await?;
+        return Ok(Json(json!({"ok": true})));
+    }
     let before_tenants = if platform {
         user_role_tenant_ids_in_tx(&mut tx, uid).await?
     } else {
         vec![user.tenant_id]
     };
+    let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id=$1")
+        .bind(uid).fetch_one(&mut *tx).await?;
+    let before = roles_summary_in_tx(&mut tx, uid, scoped_orgs.as_deref()).await?;
     sqlx::query(
         "DELETE FROM user_roles ur USING roles r \
                  WHERE ur.role_id = r.id AND ur.user_id = $1 \
@@ -1050,16 +1177,19 @@ async fn put_roles(
         "/profile",
     )
     .await?;
-    tx.commit().await?;
-    state.invalidate_perm_cache();
-    audit_user_change(
-        &state,
+    let after = roles_summary_in_tx(&mut tx, uid, scoped_orgs.as_deref()).await?;
+    audit_user_change_in_tx(
+        &mut tx,
         &headers,
         &user,
         &affected_tenants,
         "UPDATE_USER",
-        &format!("更新用户 {} 角色分配: {} 项", uid, body.items.len()),
+        &audit::change_detail("user_roles", uid,
+            json!({"username": username, "items": before}),
+            json!({"username": username, "items": after})),
     )
-    .await;
+    .await?;
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }

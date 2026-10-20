@@ -1,0 +1,99 @@
+{
+  "phase": 22,
+  "status": "COMPLETED",
+  "protocolResult": "SOCKET_IO_COMPATIBLE",
+  "phase37Triggered": false,
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "inputsSha256": "fa5f14d2d0dd6232b8e473422ddd4afee91a1035cbe81544f80237035ca2a320",
+  "phase22InputsSha256": "d1355666f4220cedc83277278ce505d1f3e417397cc7304cb4cf3538ed6782a7",
+  "relatedFilesMatched": 62,
+  "unrelatedPostRunChanges": [
+    "scripts/ci/oauth-playground-delivery.mjs"
+  ],
+  "protectedInputsSha256": "1b3bd761e56cf8f03c65cdcb5d678ac97b2f80f212af0780aca0c4dd540e89d9",
+  "tools": {
+    "node": "24.18.0",
+    "npm": "11.16.0",
+    "rust": "1.97.0",
+    "cargo": "1.97.0",
+    "docker": "29.1.3"
+  },
+  "image": {
+    "id": "sha256:42e1b7fb5fea569fba2abada59030185286c9d642643cb7fa63ed7a5715b87b7",
+    "repoDigests": [
+      "saas-ci@sha256:42e1b7fb5fea569fba2abada59030185286c9d642643cb7fa63ed7a5715b87b7"
+    ],
+    "os": "linux",
+    "architecture": "amd64"
+  },
+  "linux": {
+    "report": "target/phase22/linux-r5/result.json",
+    "commands": "target/phase22/linux-r5/executed-commands.json",
+    "tests": {
+      "notificationChildren": 35,
+      "chatChildren": 7,
+      "parentTests": 2,
+      "tapPass": 44,
+      "fail": 0,
+      "skip": 0,
+      "cancelled": 0,
+      "todo": 0
+    },
+    "rustUnits": {
+      "fixture": 2,
+      "chat": 5
+    },
+    "chatFrontendTests": 5,
+    "affectedContracts": 48,
+    "commandSteps": 16
+  },
+  "windows": {
+    "staticChecks": "target/phase22/windows-final-rust-checks.json",
+    "protocolNetwork": "NOT_COMPLETED",
+    "reason": "Rust loopback connections ETIMEDOUT; Linux real matrix completed instead"
+  },
+  "advisoryCheck": {
+    "report": "target/phase22/advisory-check.json",
+    "coverage": "target/phase22/advisory-coverage.json",
+    "registryPackages": 101,
+    "findings": []
+  },
+  "previousRuns": [
+    {
+      "run": "linux-r1",
+      "evidence": "target/phase22/linux-r1",
+      "status": "NOT_RUN"
+    },
+    {
+      "run": "linux-r2",
+      "evidence": "target/phase22/linux-r2",
+      "status": "FAIL"
+    },
+    {
+      "run": "linux-r3",
+      "evidence": "target/phase22/linux-r3",
+      "status": "FAIL"
+    },
+    {
+      "run": "linux-r4",
+      "evidence": "target/phase22/linux-r4",
+      "status": "FAIL"
+    }
+  ],
+  "cleanup": {
+    "owner": "ci-phase22-1792161192807",
+    "containerRemoved": true,
+    "networkRemoved": true,
+    "remainingContainers": "",
+    "remainingNetworks": "",
+    "hostPorts": [],
+    "mounts": [],
+    "rootWslLeaseExitCode": 0
+  },
+  "limits": [
+    "Synthetic authentication; no real platform/PG/production notification migration",
+    "No browser hook/UI-cache/Nginx/TLS/capacity validation in this phase",
+    "No automatic initial transport fallback claim",
+    "Current execution pointer preserved by user instruction"
+  ]
+}

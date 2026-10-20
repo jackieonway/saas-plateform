@@ -32,23 +32,29 @@ export default defineConfig({
     {
       name: "external-microapp-versions",
       configureServer(server) {
-        const root = realpathSync(microAppsDevDir);
         server.middlewares.use((req, res, next) => {
           const pathname = req.url?.split("?", 1)[0] || "";
-          if (!/^\/sub-apps\/[^/]+\/versions\//.test(pathname)) return next();
+          if (!pathname.startsWith("/sub-apps/")) return next();
           const missing = () => { res.statusCode = 404; res.setHeader("Cache-Control", "no-store"); res.end(); };
-          const match = /^\/sub-apps\/([a-z0-9-]+)\/versions\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(.+)$/.exec(pathname);
-          if (!match || match[2].includes("..") || !["GET", "HEAD"].includes(req.method || "")) return missing();
+          const versioned = /^\/sub-apps\/[^/]+\/versions\//.test(pathname);
+          const match = versioned
+            ? /^\/sub-apps\/([a-z0-9-]+)\/versions\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(.+)$/.exec(pathname)
+            : /^\/sub-apps\/([a-z0-9-]+)\/(.+)$/.exec(pathname);
+          if (!match || (versioned && match[2].includes("..")) || !["GET", "HEAD"].includes(req.method || "")) return missing();
           let segments: string[];
-          try { segments = match[3].split("/").map(decodeURIComponent); } catch { return missing(); }
+          try { segments = match[versioned ? 3 : 2].split("/").map(decodeURIComponent); } catch { return missing(); }
           if (segments.some((segment) => !segment || segment === "." || segment === ".." ||
             segment.includes("/") || segment.includes("\\") || segment.includes(":") || /[\x00-\x1f]/.test(segment))) return missing();
           try {
-            const file = realpathSync(path.resolve(root, match[1], "versions", match[2], ...segments));
+            // The optional release store may not exist in a fresh checkout.
+            // Resolve it only for a version request so dev can start and missing releases stay 404.
+            const root = realpathSync(versioned ? microAppsDevDir : path.resolve(__dirname, "public/sub-apps"));
+            const parts = versioned ? [match[1], "versions", match[2], ...segments] : [match[1], ...segments];
+            const file = realpathSync(path.resolve(root, ...parts));
             if (!file.startsWith(root + path.sep) || !statSync(file).isFile()) return missing();
             res.setHeader("Content-Type", versionMimeTypes[path.extname(file).toLowerCase()] || "application/octet-stream");
             res.setHeader("Access-Control-Allow-Origin", "*");
-            res.setHeader("Cache-Control", path.extname(file).toLowerCase() === ".html" ? "no-cache" : "public, max-age=31536000, immutable");
+            res.setHeader("Cache-Control", versioned && path.extname(file).toLowerCase() !== ".html" ? "public, max-age=31536000, immutable" : "no-cache");
             if (req.method === "HEAD") { res.end(); return; }
             createReadStream(file).on("error", () => {
               if (res.headersSent) res.destroy();
@@ -134,16 +140,15 @@ export default defineConfig({
         target: "http://127.0.0.1:3104",
         changeOrigin: true,
       },
-      // 微前端子应用服务(21-b): /sub/vue/* → 3005(Vue 工坊), /sub/jquery/* → 3006(legacy 工单)
-      // 子应用 HTML 里引用 /app.js 等根绝对路径 → 同源加载, 同样命中这两条代理。
-      // 各子应用使用明确前缀，与宿主 HMR 和通知连接互不重叠。
+      // Development aliases for the independent Vite compatibility examples.
+      // Their entry resources remain relative to /sub/vue/ or /sub/jquery/.
       "/sub/vue": {
-        target: "http://127.0.0.1:3005",
+        target: process.env.MICRO_VUE_DEV_PROXY_TARGET || "http://127.0.0.1:3005",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/sub\/vue/, ""),
       },
       "/sub/jquery": {
-        target: "http://127.0.0.1:3006",
+        target: process.env.MICRO_JQUERY_DEV_PROXY_TARGET || "http://127.0.0.1:3006",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/sub\/jquery/, ""),
       },

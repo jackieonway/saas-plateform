@@ -137,7 +137,9 @@ export async function loadHtmlEntry(entryUrl: string, opts?: { timeoutMs?: numbe
             fetch: trackedFetch,
             beforeExec: () => { check() },
           }
-          const result = await Promise.race([entry.execScripts(proxy, true, execOptions), abortPromise])
+          // Once trusted code starts, abort cannot prove that its returned thenable stopped.
+          // Await actual execution; the lifecycle session bounds the wait and poisons unsafe reuse.
+          const result = await entry.execScripts(proxy, true, execOptions)
           check()
           failedEntries.delete(entryUrl)
           return result

@@ -1,8 +1,7 @@
 import * as React from "react"
-import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom"
+import { Navigate, Outlet, useLocation } from "react-router-dom"
 import { AnimatePresence, motion } from "framer-motion"
 import { Loader2 } from "lucide-react"
-import { toast } from "sonner"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -10,21 +9,20 @@ import { AppIcon } from "@/lib/icons"
 import { AppRail } from "@/components/layout/AppRail"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { TopBar } from "@/components/layout/TopBar"
-import { CommandPalette } from "@/components/layout/CommandPalette"
+import { RouteRecoveryBoundary } from "@/components/RouteRecoveryBoundary"
 import { RoutePermissionGuard } from "@/components/layout/RoutePermissionGuard"
 import { ErrorState } from "@/components/states"
 import { useAuthStore } from "@/stores/auth"
 import { BrandMark } from "@/components/brand"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
-import { useQueryClient } from "@tanstack/react-query"
 import { useMenusQuery, useProfileQuery } from "@/hooks/use-auth-data"
 import { useDocumentTitle, pageTitleFor } from "@/hooks/use-document-title"
 import { pushRecentVisit } from "@/hooks/use-recent-visits"
-import { ROUTE_TITLES } from "@/lib/routes"
-import { authApi } from "@/api/auth"
-import { asArray } from "@/lib/api"
-import { sortMenuTree } from "@/lib/tree"
+import { useApplicationNavigation } from "@/hooks/use-application-navigation"
+import { invalidateApplicationSelection } from "@/lib/application-navigation"
 import type { MenuNode } from "@/api/types"
+
+const CommandPalette = React.lazy(() => import("@/components/layout/CommandPalette").then(module => ({ default: module.CommandPalette })))
 
 export default function AppLayout() {
   const { platformName } = usePlatformBranding()
@@ -36,14 +34,17 @@ export default function AppLayout() {
   const currentApplicationId = useAuthStore((s) => s.currentApplicationId)
   const setCurrentApplication = useAuthStore((s) => s.setCurrentApplication)
   const ensureApplication = useAuthStore((s) => s.ensureApplication)
-  const { pathname, search } = useLocation()
-  const navigate = useNavigate()
+  const { pathname, search, key: locationKey } = useLocation()
+  const { selectApplication, access } = useApplicationNavigation()
+  React.useLayoutEffect(() => {
+    invalidateApplicationSelection()
+    return () => { invalidateApplicationSelection() }
+  }, [locationKey])
 
   // 路由联动 document.title(/embed 标题随菜单外链标题动态变化, 由 EmbedPage 自行管理)
   useDocumentTitle(pathname === "/embed" ? null : pageTitleFor(pathname))
 
   const profileQuery = useProfileQuery()
-  const queryClient = useQueryClient()
 
   // 同步 profile 到 store
   React.useEffect(() => {
@@ -56,72 +57,25 @@ export default function AppLayout() {
   }, [profile?.applications, ensureApplication])
 
   // 深链路由 → 自动切换到该路由所属应用(若已授权),保证侧栏与页面上下文一致
-  // 仅在 pathname 变化时触发,避免与用户手动切换应用(不改路由)相互覆盖
+  // 相同路由/授权所属应用的轮询不覆盖手动选择; 授权所属应用变化后重新校正深链。
   const inferredPathRef = React.useRef<string | null>(null)
   React.useEffect(() => {
-    if (!profile?.applications?.length) return
-    const routeContext = `${contextEpoch}:${pathname}`
-    if (inferredPathRef.current === routeContext) return
-    inferredPathRef.current = routeContext
-    const match = profile.applications.find(
+    const match = profile?.applications.find(
       (a) =>
         a.basePath &&
         a.basePath !== "/" &&
         (pathname === a.basePath || pathname.startsWith(`${a.basePath}/`))
     )
+    const routeContext = `${contextEpoch}:${pathname}:${match?.id ?? ""}`
+    if (inferredPathRef.current === routeContext) return
+    inferredPathRef.current = routeContext
     if (match && match.id !== currentApplicationId) setCurrentApplication(match.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, profile?.applications, contextEpoch])
 
-  /** 切换应用:若当前页面不属于新应用,则跳转到该应用首个可导航菜单 */
   const handleSelectApp = React.useCallback(
-    (appId: string) => {
-      const selection = useAuthStore.getState()
-      if (selection.contextSwitching || !selection.token) return
-      const selectedToken = selection.token
-      const selectedEpoch = selection.contextEpoch
-      setCurrentApplication(appId)
-      const app = (profile?.applications ?? []).find((a) => a.id === appId)
-      if (!app?.basePath || app.basePath === "/") {
-        if (pathname.startsWith("/micro/")) navigate("/")
-        return
-      }
-      if (pathname === app.basePath || pathname.startsWith(`${app.basePath}/`)) return
-      void (async () => {
-        try {
-          const menus = await queryClient.fetchQuery({
-            queryKey: ["auth-menus", appId, selectedEpoch],
-            queryFn: async ({ signal }) =>
-              sortMenuTree(asArray<MenuNode>(await authApi.menus(appId, selectedToken, signal), "menus")),
-            staleTime: 20_000,
-          })
-          const current = useAuthStore.getState()
-          if (current.contextSwitching || current.contextEpoch !== selectedEpoch ||
-              current.currentApplicationId !== appId) return
-          const firstPath = (function walk(nodes: MenuNode[]): string | null {
-            for (const n of nodes) {
-              // 外链菜单无对应路由(BLANK 新窗口/SELF 走 /embed), 切换应用时跳过
-              if (n.type !== "BUTTON" && n.path && !n.linkUrl) return n.path
-              if (n.children?.length) {
-                const found = walk(n.children)
-                if (found) return found
-              }
-            }
-            return null
-          })(menus)
-          navigate(firstPath ?? app.basePath)
-        } catch {
-          const current = useAuthStore.getState()
-          if (!current.contextSwitching && current.contextEpoch === selectedEpoch &&
-              current.currentApplicationId === appId) {
-            toast.error("应用菜单获取失败，已退出旧应用")
-            navigate("/")
-          }
-        }
-      })()
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [profile?.applications, pathname, setCurrentApplication, queryClient, navigate]
+    (appId: string) => { void selectApplication(appId, pathname) },
+    [selectApplication, pathname]
   )
 
   // 路由切换回到顶部
@@ -163,9 +117,20 @@ export default function AppLayout() {
 
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false)
   const [paletteOpen, setPaletteOpen] = React.useState(false)
+  React.useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault()
+        setPaletteOpen(true)
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [])
 
   const app = profile?.applications.find((a) => a.id === currentApplicationId) ?? null
   const menusQuery = useMenusQuery(currentApplicationId)
+  const canRecordCurrentPath = access(pathname).status === "allowed"
 
   /* ---------- 最近访问记录(localStorage,个人工作台展示) ---------- */
   const recordedPathRef = React.useRef<string | null>(null)
@@ -177,7 +142,7 @@ export default function AppLayout() {
     }
     if (recordedPathRef.current === pathname) return
     // 菜单仍在加载时先等一下,尽量带上菜单图标再记录
-    if (menusQuery.isLoading) return
+    if (menusQuery.isLoading || !canRecordCurrentPath) return
 
     const findIcon = (nodes: MenuNode[]): string | null => {
       for (const n of nodes) {
@@ -197,21 +162,13 @@ export default function AppLayout() {
       findIcon(menusQuery.data ?? []) ??
       FALLBACK_ICONS[pathname] ??
       null
-    // 只记录真实存在的页面: 已知路由表命中或当前应用菜单命中
-    // (避免 404 兜底页与 / 根重定向混入「最近访问」)
-    const known = ROUTE_TITLES[pathname] !== undefined || icon !== null
-    if (!known) {
-      recordedPathRef.current = pathname
-      return
-    }
     recordedPathRef.current = pathname
     pushRecentVisit({
       path: pathname,
       title: pageTitleFor(pathname),
       icon: icon ?? "Page",
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, menusQuery.isLoading, menusQuery.data])
+  }, [pathname, menusQuery.isLoading, menusQuery.data, canRecordCurrentPath])
 
   /* ---------- 守卫 ---------- */
   if (!token) {
@@ -245,9 +202,8 @@ export default function AppLayout() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                useAuthStore.getState().logout()
-                window.location.assign("/login")
+              onClick={async () => {
+                if (await useAuthStore.getState().logout()) window.location.assign("/login")
               }}
             >
               返回登录
@@ -352,6 +308,7 @@ export default function AppLayout() {
             className="flex-1 overflow-y-auto scroll-area p-4 md:p-6"
             aria-live="polite"
           >
+            <RouteRecoveryBoundary key={pageTransitionKey}>
             <RoutePermissionGuard>
               <AnimatePresence mode="wait">
                 <motion.div
@@ -366,10 +323,16 @@ export default function AppLayout() {
                 </motion.div>
               </AnimatePresence>
             </RoutePermissionGuard>
+            </RouteRecoveryBoundary>
           </main>
         </div>
 
-        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+        {paletteOpen && <div className="fixed bottom-4 right-4 z-50 max-w-lg">
+          <RouteRecoveryBoundary loading={<span role="status" className="rounded-md border bg-card px-3 py-2 text-sm">命令面板加载中…</span>}>
+            <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+          </RouteRecoveryBoundary>
+          <button type="button" className="sr-only focus:not-sr-only" onClick={() => setPaletteOpen(false)}>关闭命令面板</button>
+        </div>}
       </div>
     </TooltipProvider>
   )

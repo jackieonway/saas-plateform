@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import App from "./App";
 import { authStore as sessionStore } from "@/stores/auth";
+import { SessionStatusGate } from "@/components/session-status";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -26,15 +27,23 @@ sessionStore.subscribe((state, previous) => {
   queryClient.clear();
 });
 
+// Register cross-page reconciliation before any private component can mount.
+// The gate also keeps unsupported storage environments out of preference code.
+void sessionStore.getState().initializeSessionCoordination().catch(() => {
+  // The coordinator publishes its unavailable/unknown state to the gate.
+});
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <BrowserRouter>
-          <App />
-          <Toaster position="top-center" richColors closeButton />
-        </BrowserRouter>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <SessionStatusGate>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <BrowserRouter>
+            <App />
+            <Toaster position="top-center" richColors closeButton />
+          </BrowserRouter>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </SessionStatusGate>
   </React.StrictMode>
 );

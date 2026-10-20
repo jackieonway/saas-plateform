@@ -7,6 +7,7 @@ use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -115,6 +116,54 @@ async fn load_role_org(pool: &sqlx::PgPool, role: Uuid) -> Result<(Uuid, Uuid, S
     row.ok_or_else(|| AppError::not_found("角色不存在"))
 }
 
+#[derive(sqlx::FromRow)]
+struct RoleSnapshot {
+    id: Uuid,
+    name: String,
+    code: String,
+    status: String,
+    built_in: bool,
+    description: String,
+}
+
+impl RoleSnapshot {
+    fn summary(&self) -> Value {
+        json!({"id": self.id, "name": self.name, "code": self.code,
+               "status": self.status, "builtIn": self.built_in})
+    }
+
+    fn managed(&self) -> bool {
+        self.built_in && matches!(self.code.as_str(), "tenant_admin" | "org_admin")
+    }
+}
+
+async fn lock_role(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+) -> Result<RoleSnapshot, AppError> {
+    // Serialize replacements on the same role without conflicting with the
+    // KEY SHARE locks acquired by user_roles foreign-key inserts.
+    sqlx::query_as(
+        "SELECT id, name, COALESCE(code,'') AS code, status, built_in, \
+         COALESCE(description,'') AS description \
+         FROM roles WHERE id=$1 FOR NO KEY UPDATE",
+    ).bind(id).fetch_optional(&mut **tx).await?
+        .ok_or_else(|| AppError::not_found("角色不存在"))
+}
+
+fn role_summary(row: &RoleListRow) -> Value {
+    json!({"id": row.id, "name": row.name, "code": row.code,
+           "status": row.status, "builtIn": row.built_in})
+}
+
+fn ids_digest(ids: impl IntoIterator<Item = Uuid>) -> String {
+    let mut digest = Sha256::new();
+    for id in ids {
+        digest.update(id.as_bytes());
+    }
+    hex::encode(digest.finalize())
+}
+
 /// 非平台上下文的目标角色隔离校验 (角色自带 tenant_id 列)
 async fn ensure_role_in_scope(
     state: &AppState,
@@ -148,6 +197,7 @@ async fn create(
     .await?
     .ok_or_else(|| AppError::not_found("组织不存在"))?;
     state.ensure_org_scope(&user, org_id, "组织").await?;
+    let mut tx = state.pool.begin().await?;
     let row: RoleListRow = sqlx::query_as(
         "INSERT INTO roles (tenant_id, organization_id, name, code, description) VALUES ($1, $2, $3, $4, $5) \
          RETURNING id, name, COALESCE(code,'') AS code, COALESCE(description,'') AS description, \
@@ -159,15 +209,17 @@ async fn create(
     .bind(&name)
     .bind(&body.code)
     .bind(&body.description)
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("role", row.id, Value::Null, role_summary(&row));
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "CREATE_ROLE", detail: &format!("创建角色: {}", name), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "CREATE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
 
@@ -195,15 +247,15 @@ async fn update(
     // 隔离校验需在写库前: 先读角色归属再更新
     let loaded = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, loaded).await?;
-    let managed: bool = sqlx::query_scalar(
-        "SELECT built_in AND code IN ('tenant_admin', 'org_admin') FROM roles WHERE id = $1",
-    ).bind(id).fetch_one(&state.pool).await?;
-    if managed { return Err(AppError::conflict("默认管理员角色由系统维护，不允许修改")); }
     if let Some(name) = &body.name {
         if name.trim().is_empty() {
             return Err(AppError::bad_request("角色名称不能为空"));
         }
     }
+    let scoped_orgs = state.scoped_org_ids(&user).await?;
+    let mut tx = state.pool.begin().await?;
+    let before = lock_role(&mut tx, id).await?;
+    if before.managed() { return Err(AppError::conflict("默认管理员角色由系统维护，不允许修改")); }
     let row: RoleListRow = sqlx::query_as(&format!(
         "UPDATE roles SET name = COALESCE($2, name), code = COALESCE($3, code), \
          description = COALESCE($4, description), updated_at = now() WHERE id = $1 \
@@ -219,17 +271,28 @@ async fn update(
     .bind(&body.name)
     .bind(&body.code)
     .bind(&body.description)
-    .bind(state.scoped_org_ids(&user).await?)
-    .fetch_optional(&state.pool)
+    .bind(scoped_orgs)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("角色不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(row.tenant_id), organization_id: Some(row.organization_id),
-        action: "UPDATE_ROLE", detail: &format!("更新角色: {}", row.name), ip: &ip, user_agent: &ua,
-    }).await;
+    let changed_fields: Vec<&str> = [
+        ("name", before.name != row.name),
+        ("code", before.code != row.code),
+        ("description", before.description != row.description),
+    ].into_iter().filter_map(|(field, changed)| changed.then_some(field)).collect();
+    if !changed_fields.is_empty() {
+        let mut after = role_summary(&row);
+        after["changedFields"] = json!(changed_fields);
+        let detail = audit::change_detail("role", id, before.summary(), after);
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(row.tenant_id), organization_id: Some(row.organization_id),
+            action: "UPDATE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
 
@@ -242,29 +305,37 @@ async fn delete(
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:role").check(&state, &user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    let (org_id, tenant_id, name, built_in): (Uuid, Uuid, String, bool) = sqlx::query_as(
-        "SELECT organization_id, tenant_id, name, built_in FROM roles WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("角色不存在"))?;
-    ensure_role_in_scope(&state, &user, (org_id, tenant_id, name.clone())).await?;
-    if built_in {
+    let (org_id, tenant_id, name) = load_role_org(&state.pool, id).await?;
+    ensure_role_in_scope(&state, &user, (org_id, tenant_id, name)).await?;
+    let mut tx = state.pool.begin().await?;
+    let before = lock_role(&mut tx, id).await?;
+    if before.built_in {
         return Err(AppError::conflict("内置角色不允许删除"));
     }
+    // Upgrade the parent lock before the deletion snapshot and its cascades.
+    sqlx::query("SELECT id FROM roles WHERE id=$1 FOR UPDATE")
+        .bind(id).execute(&mut *tx).await?;
+    let (menu_count, user_count): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM role_menus WHERE role_id=$1), \
+         (SELECT count(*) FROM user_roles WHERE role_id=$1)",
+    ).bind(id).fetch_one(&mut *tx).await?;
+    let mut summary = before.summary();
+    summary["menuCount"] = json!(menu_count);
+    summary["userCount"] = json!(user_count);
     sqlx::query("DELETE FROM roles WHERE id = $1")
         .bind(id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
-    state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("role", id, summary, Value::Null);
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "DELETE_ROLE", detail: &format!("删除角色: {}", name), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "DELETE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }
 
@@ -305,10 +376,6 @@ async fn put_menus(
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, role_name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, role_name.clone())).await?;
-    let managed: bool = sqlx::query_scalar(
-        "SELECT built_in AND code IN ('tenant_admin', 'org_admin') FROM roles WHERE id = $1",
-    ).bind(id).fetch_one(&state.pool).await?;
-    if managed { return Err(AppError::conflict("默认管理员角色的菜单随授权自动同步")); }
     let menu_ids: Vec<Uuid> = body
         .menu_ids
         .iter()
@@ -322,6 +389,12 @@ async fn put_menus(
             unique.push(m);
         }
     }
+    let mut tx = state.pool.begin().await?;
+    let role = lock_role(&mut tx, id).await?;
+    if role.managed() { return Err(AppError::conflict("默认管理员角色的菜单随授权自动同步")); }
+    let before_ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT menu_id FROM role_menus WHERE role_id=$1 ORDER BY menu_id",
+    ).bind(id).fetch_all(&mut *tx).await?;
     if !unique.is_empty() {
         let n: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM menus m WHERE m.id = ANY($1) \
@@ -331,13 +404,12 @@ async fn put_menus(
         .bind(&unique)
         .bind(org_id)
         .bind(tenant_id)
-        .fetch_one(&state.pool)
+        .fetch_one(&mut *tx)
         .await?;
         if n != unique.len() as i64 {
             return Err(AppError::bad_request("存在超出组织授权范围的菜单"));
         }
     }
-    let mut tx = state.pool.begin().await?;
     sqlx::query("DELETE FROM role_menus WHERE role_id = $1")
         .bind(id)
         .execute(&mut *tx)
@@ -349,15 +421,25 @@ async fn put_menus(
             .execute(&mut *tx)
             .await?;
     }
-    tx.commit().await?;
-    state.invalidate_perm_cache();
+    let after_ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT menu_id FROM role_menus WHERE role_id=$1 ORDER BY menu_id",
+    ).bind(id).fetch_all(&mut *tx).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "ROLE_MENUS", detail: &format!("更新角色菜单: {} 共 {} 项", role_name, unique.len()), ip: &ip, user_agent: &ua,
-    }).await;
+    if before_ids != after_ids {
+        let detail = audit::change_detail("role_menus", id,
+            json!({"id": id, "name": role.name, "menuCount": before_ids.len(),
+                   "menuIdsSha256": ids_digest(before_ids.iter().copied())}),
+            json!({"id": id, "name": role.name, "menuCount": after_ids.len(),
+                   "menuIdsSha256": ids_digest(after_ids.iter().copied())}));
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(tenant_id), organization_id: Some(org_id),
+            action: "ROLE_MENUS", detail: &detail, ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }
 
@@ -442,6 +524,13 @@ async fn put_users(
             return Err(AppError::not_found("用户不存在"));
         }
     }
+    let role = lock_role(&mut tx, id).await?;
+    let before_bindings: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT ur.user_id, ur.organization_id FROM user_roles ur WHERE ur.role_id=$1 \
+         AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
+         SELECT 1 FROM memberships m WHERE m.user_id = ur.user_id AND m.organization_id = ANY($2)))) \
+         ORDER BY ur.user_id, ur.organization_id",
+    ).bind(id).bind(&scoped_orgs).fetch_all(&mut *tx).await?;
     sqlx::query("DELETE FROM user_roles ur WHERE ur.role_id = $1 \
         AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
         SELECT 1 FROM memberships m WHERE m.user_id = ur.user_id AND m.organization_id = ANY($2))))")
@@ -459,14 +548,27 @@ async fn put_users(
         .execute(&mut *tx)
         .await?;
     }
-    tx.commit().await?;
-    state.invalidate_perm_cache();
+    let after_bindings: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT ur.user_id, ur.organization_id FROM user_roles ur WHERE ur.role_id=$1 \
+         AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
+         SELECT 1 FROM memberships m WHERE m.user_id = ur.user_id AND m.organization_id = ANY($2)))) \
+         ORDER BY ur.user_id, ur.organization_id",
+    ).bind(id).bind(&scoped_orgs).fetch_all(&mut *tx).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "UPDATE_ROLE", detail: &format!("更新角色用户: {} 共 {} 人", role_name, unique.len()), ip: &ip, user_agent: &ua,
-    }).await;
+    if before_bindings != after_bindings {
+        let detail = audit::change_detail("role_users", id,
+            json!({"id": id, "name": role.name, "userCount": before_bindings.len(),
+                   "userBindingsSha256": ids_digest(before_bindings.iter().flat_map(|(uid, org)| [*uid, *org]))}),
+            json!({"id": id, "name": role.name, "userCount": after_bindings.len(),
+                   "userBindingsSha256": ids_digest(after_bindings.iter().flat_map(|(uid, org)| [*uid, *org]))}));
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(tenant_id), organization_id: Some(org_id),
+            action: "UPDATE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }

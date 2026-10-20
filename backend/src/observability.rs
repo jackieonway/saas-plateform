@@ -2,6 +2,7 @@
 //! never enter logs or metric labels. Browser events are authenticated hints,
 //! not an authoritative record of application availability.
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -20,6 +21,11 @@ use crate::extractors::{bearer_token, ApiJson};
 use crate::routes::app_context;
 use crate::state::AppState;
 use crate::util::{hash, jwt};
+use operational_telemetry::{Registry as StageRegistry,Service,Stage,Outcome};
+
+pub(crate) fn stages()->&'static StageRegistry{static STAGES:OnceLock<StageRegistry>=OnceLock::new();STAGES.get_or_init(||StageRegistry::new(Service::Platform))}
+pub(crate) fn outcome<T>(result:&Result<T,AppError>)->Outcome{match result{Ok(_)=>Outcome::Ok,Err(AppError::Unavailable)=>Outcome::Dependency,Err(AppError::RateLimited(_))=>Outcome::Saturated,Err(AppError::Server(_))=>Outcome::Error,Err(_)=>Outcome::Denied}}
+pub(crate) async fn acquire(pool:&sqlx::PgPool)->Result<sqlx::pool::PoolConnection<sqlx::Postgres>,sqlx::Error>{let timer=stages().timer(Stage::PoolAcquire);let result=pool.acquire().await;timer.finish(if result.is_ok(){Outcome::Ok}else{Outcome::Dependency});result}
 
 #[derive(Clone)]
 pub struct RequestContext {
@@ -42,10 +48,19 @@ struct Registry {
     requests: BTreeMap<(String, String, u16), Observation>,
     token_failures: BTreeMap<&'static str, u64>,
     runtime_events: BTreeMap<(String, String, String), u64>,
-    event_rates: BTreeMap<(Uuid, Uuid, String), (Instant, u32)>,
+    event_rates: BTreeMap<(Uuid, Uuid, String, bool), (Instant, u32)>,
 }
 static METRICS: OnceLock<Mutex<Registry>> = OnceLock::new();
+static AUDIT_WRITE_FAILURES: AtomicU64 = AtomicU64::new(0);
 fn registry() -> &'static Mutex<Registry> { METRICS.get_or_init(|| Mutex::new(Registry::default())) }
+
+/// Process-lifetime audit failures; no request, identity, or SQL labels are stored.
+pub fn record_audit_failure() {
+    let _ = AUDIT_WRITE_FAILURES.fetch_update(Ordering::Relaxed, Ordering::Relaxed,
+        |value| Some(value.saturating_add(1)));
+}
+
+pub fn audit_write_failures() -> u64 { AUDIT_WRITE_FAILURES.load(Ordering::Relaxed) }
 
 pub fn record_auth_failure(reason: &'static str) {
     let label = match reason {
@@ -74,6 +89,7 @@ fn identity(headers: &HeaderMap, state: &AppState) -> RequestContext {
 }
 
 pub async fn observe(State(state): State<AppState>, mut request: Request, next: Next) -> Response {
+    let timer=stages().timer(Stage::Request);
     let context = identity(request.headers(), &state);
     request.headers_mut().insert("x-request-id", context.id.to_string().parse().expect("UUID header"));
     let route = request.extensions().get::<MatchedPath>().map(|value| value.as_str()).unwrap_or("unmatched").to_string();
@@ -86,6 +102,7 @@ pub async fn observe(State(state): State<AppState>, mut request: Request, next: 
     let mut response = CONTEXT.scope(context.clone(), next.run(request)).await;
     let seconds = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();
+    timer.finish(Outcome::http(status));
     response.headers_mut().insert("x-request-id", context.id.to_string().parse().expect("UUID header"));
     if let Ok(mut metrics) = registry().lock() {
         let entry = metrics.requests.entry((route.clone(), method.clone(), status)).or_default();
@@ -121,6 +138,14 @@ async fn metrics(State(state): State<AppState>, headers: HeaderMap) -> Result<Re
         sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&state.pool)).await.is_ok_and(|value| value.is_ok());
     let mut output = format!("# TYPE platform_service_up gauge\nplatform_service_up 1\n# TYPE platform_database_up gauge\nplatform_database_up {}\n# TYPE platform_uptime_seconds gauge\nplatform_uptime_seconds {}\n",
         u8::from(database_up), (chrono::Utc::now() - state.started_at).num_seconds().max(0));
+    output.push_str(&stages().render());
+    let committed=tokio::time::timeout(Duration::from_millis(500),sqlx::query_scalar::<_,i64>("SELECT count(*) FROM notifications").fetch_one(&state.pool)).await.ok().and_then(Result::ok);
+    output.push_str(&format!("# TYPE platform_notification_observation_up gauge\nplatform_notification_observation_up {}\n",u8::from(committed.is_some())));
+    if let Some(rows)=committed{output.push_str(&format!("# TYPE platform_notification_committed_rows gauge\nplatform_notification_committed_rows {rows}\n"));}
+    let locks=tokio::time::timeout(Duration::from_millis(500),sqlx::query_scalar::<_,i64>("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'").fetch_one(&state.pool)).await.ok().and_then(Result::ok);
+    let (running,queued)=state.passwords.operational_counts();
+    output.push_str(&format!("# TYPE platform_db_pool_size gauge\nplatform_db_pool_size {}\n# TYPE platform_db_pool_idle gauge\nplatform_db_pool_idle {}\n# TYPE platform_db_lock_waiters gauge\nplatform_db_lock_waiters {}\n# TYPE platform_db_lock_observation_up gauge\nplatform_db_lock_observation_up {}\n# TYPE platform_password_running gauge\nplatform_password_running {}\n# TYPE platform_password_queued gauge\nplatform_password_queued {}\n",state.pool.size(),state.pool.num_idle(),locks.unwrap_or(0),u8::from(locks.is_some()),running,queued));
+    output.push_str(&format!("# TYPE platform_audit_write_failures_total counter\nplatform_audit_write_failures_total {}\n", audit_write_failures()));
     output.push_str("# TYPE platform_http_requests_total counter\n# TYPE platform_http_request_duration_seconds histogram\n# TYPE platform_http_authentication_failures_total counter\n# TYPE platform_http_permission_denials_total counter\n");
     let data = registry().lock().map_err(|_| AppError::Server(anyhow::anyhow!("metrics unavailable")))?;
     for ((route, method, status), value) in &data.requests {
@@ -144,12 +169,12 @@ async fn metrics(State(state): State<AppState>, headers: HeaderMap) -> Result<Re
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RuntimeEvent { kind: String, stage: String }
+struct RuntimeEvent { kind: String, stage: String, #[serde(default)] duration_ms: Option<u32> }
 
 async fn runtime_event(State(state): State<AppState>, Path(app): Path<String>, headers: HeaderMap,
     ApiJson(body): ApiJson<RuntimeEvent>) -> Result<Response, AppError> {
-    if !matches!(body.kind.as_str(), "LOAD_FAILED" | "LIFECYCLE_FAILED") ||
-        !matches!(body.stage.as_str(), "mount" | "update" | "unmount") || !valid_app(&app) {
+    let timing=body.kind=="TIMING";
+    if !(if timing {matches!(body.stage.as_str(),"entry"|"ready"|"mount") && body.duration_ms.is_some_and(|v|v<=60000)}else{matches!(body.kind.as_str(), "LOAD_FAILED" | "LIFECYCLE_FAILED") && matches!(body.stage.as_str(), "mount" | "update" | "unmount") && body.duration_ms.is_none()}) || !valid_app(&app) {
         return Err(AppError::bad_request("微应用运行事件类型无效"));
     }
     let context = app_context::current_context(&state, &app, &headers).await?;
@@ -159,12 +184,19 @@ async fn runtime_event(State(state): State<AppState>, Path(app): Path<String>, h
         .ok_or_else(|| AppError::unauthorized("应用上下文无效"))?;
     let mut metrics = registry().lock().map_err(|_| AppError::Server(anyhow::anyhow!("metrics unavailable")))?;
     metrics.event_rates.retain(|_, (start, _)| start.elapsed() < Duration::from_secs(60));
-    if metrics.event_rates.len() >= 4096 && !metrics.event_rates.contains_key(&(user, tenant, app.clone())) {
+    // Successful timing samples have a separate per-subject quota so normal
+    // navigation cannot consume the existing lifecycle-failure event allowance.
+    if metrics.event_rates.len() >= 4096 && !metrics.event_rates.contains_key(&(user, tenant, app.clone(), timing)) {
         return Err(AppError::RateLimited(60));
     }
-    let entry = metrics.event_rates.entry((user, tenant, app.clone())).or_insert_with(|| (Instant::now(), 0));
+    let entry = metrics.event_rates.entry((user, tenant, app.clone(), timing)).or_insert_with(|| (Instant::now(), 0));
     if entry.1 >= 30 { return Err(AppError::RateLimited(60)); }
     entry.1 += 1;
+    if timing {
+        let stage=match body.stage.as_str(){"entry"=>Stage::Entry,"ready"=>Stage::Ready,_=>Stage::Mount};
+        stages().record(stage,Outcome::Ok,Duration::from_millis(u64::from(body.duration_ms.unwrap_or(0))));
+        return Ok(StatusCode::NO_CONTENT.into_response());
+    }
     let event_key = (app.clone(), body.kind.clone(), body.stage.clone());
     if metrics.runtime_events.len() >= 4096 && !metrics.runtime_events.contains_key(&event_key) {
         return Err(AppError::RateLimited(60));

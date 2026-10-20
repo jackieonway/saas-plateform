@@ -9,6 +9,12 @@ use std::sync::Arc;
 pub struct Config {
     pub app_env: String,
     pub database_url: String,
+    pub db_max_connections: u32,
+    pub db_acquire_timeout_ms: u64,
+    pub db_statement_timeout_ms: u64,
+    pub db_lock_timeout_ms: u64,
+    pub app_authorization_timeout_ms: u64,
+    pub app_authorization_max_concurrent: usize,
     pub auto_create_database: bool,
     pub bind_addr: String,
     pub jwt_secret: String,
@@ -25,6 +31,17 @@ pub struct Config {
     pub micro_allowed_origins: Vec<String>,
     pub cors_allowed_origins: Vec<String>,
     pub trusted_proxy_ips: Vec<IpAddr>,
+    pub(crate) data_grant_policy: crate::data_grants::policy::Policy,
+    pub password_concurrency: usize,
+    pub password_queue_capacity: usize,
+    pub password_queue_timeout_ms: u64,
+    pub password_execution_timeout_ms: u64,
+    pub login_max_entries: usize,
+    pub login_window_seconds: u64,
+    pub login_source_requests: u32,
+    pub login_user_failures: u32,
+    pub login_identifier_max_bytes: usize,
+    pub login_verify_budget_ms: u64,
     pub micro_ca_cert_file: Option<String>,
     pub micro_ca_certificates: Vec<reqwest::Certificate>,
     pub oauth_introspection_client_requests_per_minute: usize,
@@ -131,8 +148,7 @@ pub fn load_environment() -> anyhow::Result<()> {
             Path::new(&path).is_absolute(),
             "APP_ENV_FILE must be an absolute path"
         );
-        dotenvy::from_path(&path)
-            .map_err(|_| anyhow::anyhow!("APP_ENV_FILE cannot be loaded"))?;
+        dotenvy::from_path(&path).map_err(|_| anyhow::anyhow!("APP_ENV_FILE cannot be loaded"))?;
         return Ok(());
     }
     if production_mode(
@@ -258,6 +274,25 @@ impl Config {
                 "postgres://platform@127.0.0.1:5432/saas_platform",
             ),
             auto_create_database: boolean(env, "AUTO_CREATE_DATABASE", false)?,
+            db_max_connections: number(env, "DB_MAX_CONNECTIONS", 10, 1, 128)? as u32,
+            db_acquire_timeout_ms: number(env, "DB_ACQUIRE_TIMEOUT_MS", 5000, 100, 30000)? as u64,
+            db_statement_timeout_ms: number(env, "DB_STATEMENT_TIMEOUT_MS", 5000, 100, 60000)?
+                as u64,
+            db_lock_timeout_ms: number(env, "DB_LOCK_TIMEOUT_MS", 5000, 100, 30000)? as u64,
+            app_authorization_timeout_ms: number(
+                env,
+                "APP_AUTHORIZATION_TIMEOUT_MS",
+                5000,
+                100,
+                30000,
+            )? as u64,
+            app_authorization_max_concurrent: number(
+                env,
+                "APP_AUTHORIZATION_MAX_CONCURRENT",
+                32,
+                1,
+                128,
+            )? as usize,
             bind_addr: value(env, "BIND_ADDR", "0.0.0.0:3001"),
             jwt_secret: value(env, "JWT_SECRET", "saas-platform-dev-secret-change-me"),
             metrics_token: value(env, "METRICS_TOKEN", ""),
@@ -278,6 +313,28 @@ impl Config {
             micro_allowed_origins,
             cors_allowed_origins,
             trusted_proxy_ips,
+            data_grant_policy: match env.get("DATA_GRANT_POLICY") {
+                Some(raw) => crate::data_grants::policy::Policy::from_json(raw)?,
+                None => crate::data_grants::policy::Policy::default(),
+            },
+            password_concurrency: number(env, "PASSWORD_CONCURRENCY", 2, 1, 32)? as usize,
+            password_queue_capacity: number(env, "PASSWORD_QUEUE_CAPACITY", 8, 0, 1024)? as usize,
+            password_queue_timeout_ms: number(env, "PASSWORD_QUEUE_TIMEOUT_MS", 250, 1, 30000)?
+                as u64,
+            password_execution_timeout_ms: number(
+                env,
+                "PASSWORD_EXECUTION_TIMEOUT_MS",
+                10000,
+                1,
+                120000,
+            )? as u64,
+            login_max_entries: number(env, "LOGIN_MAX_ENTRIES", 4096, 3, 1000000)? as usize,
+            login_window_seconds: number(env, "LOGIN_WINDOW_SECONDS", 600, 1, 86400)? as u64,
+            login_source_requests: number(env, "LOGIN_SOURCE_REQUESTS", 60, 1, 100000)? as u32,
+            login_user_failures: number(env, "LOGIN_USER_FAILURES", 5, 1, 1000)? as u32,
+            login_identifier_max_bytes: number(env, "LOGIN_IDENTIFIER_MAX_BYTES", 320, 1, 1024)?
+                as usize,
+            login_verify_budget_ms: number(env, "LOGIN_VERIFY_BUDGET_MS", 10000, 1, 120000)? as u64,
             micro_ca_cert_file,
             micro_ca_certificates,
             oauth_introspection_client_requests_per_minute: number(
@@ -464,5 +521,125 @@ mod tests {
             "correct-new-admin-password".into(),
         );
         assert!(Config::from_values(&env).is_ok());
+    }
+
+    #[test]
+    fn authorization_and_database_budgets_are_bounded() {
+        for (key, minimum, maximum) in [
+            ("DB_MAX_CONNECTIONS", 1, 128),
+            ("DB_ACQUIRE_TIMEOUT_MS", 100, 30000),
+            ("DB_STATEMENT_TIMEOUT_MS", 100, 60000),
+            ("DB_LOCK_TIMEOUT_MS", 100, 30000),
+            ("APP_AUTHORIZATION_TIMEOUT_MS", 100, 30000),
+            ("APP_AUTHORIZATION_MAX_CONCURRENT", 1, 128),
+        ] {
+            for value in [minimum, maximum] {
+                assert!(
+                    Config::from_values(&HashMap::from([(key.into(), value.to_string())])).is_ok(),
+                    "{key} valid boundary"
+                );
+            }
+            for value in [minimum - 1, maximum + 1] {
+                assert!(
+                    Config::from_values(&HashMap::from([(key.into(), value.to_string())])).is_err(),
+                    "{key} invalid boundary"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn login_and_password_budgets_are_bounded_and_allow_zero_waiters() {
+        let defaults = Config::from_values(&HashMap::new()).unwrap();
+        assert_eq!(
+            (
+                defaults.password_concurrency,
+                defaults.password_queue_capacity
+            ),
+            (2, 8)
+        );
+        assert_eq!(
+            (defaults.login_max_entries, defaults.login_window_seconds),
+            (4096, 600)
+        );
+        for (key, invalid) in [
+            ("PASSWORD_CONCURRENCY", "0"),
+            ("PASSWORD_CONCURRENCY", "33"),
+            ("PASSWORD_QUEUE_CAPACITY", "-1"),
+            ("PASSWORD_QUEUE_CAPACITY", "1025"),
+            ("PASSWORD_QUEUE_TIMEOUT_MS", "0"),
+            ("PASSWORD_EXECUTION_TIMEOUT_MS", "120001"),
+            ("LOGIN_MAX_ENTRIES", "1"),
+            ("LOGIN_MAX_ENTRIES", "2"),
+            ("LOGIN_WINDOW_SECONDS", "86401"),
+            ("LOGIN_SOURCE_REQUESTS", "0"),
+            ("LOGIN_USER_FAILURES", "0"),
+            ("LOGIN_IDENTIFIER_MAX_BYTES", "1025"),
+            ("LOGIN_VERIFY_BUDGET_MS", "0"),
+        ] {
+            let env = HashMap::from([(key.to_owned(), invalid.to_owned())]);
+            assert!(
+                Config::from_values(&env).is_err(),
+                "{key} accepted an invalid budget"
+            );
+        }
+        let no_queue = Config::from_values(&HashMap::from([(
+            "PASSWORD_QUEUE_CAPACITY".into(),
+            "0".into(),
+        )]))
+        .unwrap();
+        assert_eq!(no_queue.password_queue_capacity, 0);
+    }
+
+    #[test]
+    fn data_grant_policy_defaults_to_empty_and_explicit_json_is_strict() {
+        let defaults = Config::from_values(&HashMap::new()).unwrap();
+        assert!(defaults.data_grant_policy.applications.is_empty());
+        assert!(defaults.data_grant_policy.management_scopes.is_empty());
+        for raw in [
+            "",
+            " ",
+            "{}",
+            "null",
+            "{\"applications\":[]}",
+            "{\"applications\":[],\"managementScopes\":[],\"private-policy-secret\":true}",
+        ] {
+            let values = HashMap::from([("DATA_GRANT_POLICY".into(), raw.into())]);
+            let error = Config::from_values(&values)
+                .err()
+                .expect("invalid policy accepted")
+                .to_string();
+            assert!(error.contains("DATA_GRANT_POLICY"));
+            assert!(!error.contains("private-policy-secret"));
+        }
+        let values = HashMap::from([(
+            "DATA_GRANT_POLICY".into(),
+            "{\"applications\":[],\"managementScopes\":[]}".into(),
+        )]);
+        assert_eq!(
+            Config::from_values(&values).unwrap().data_grant_policy,
+            defaults.data_grant_policy
+        );
+    }
+
+    #[test]
+    fn data_grant_policy_loads_typed_explicit_capabilities_and_boundaries_once() {
+        let policy = serde_json::json!({
+            "applications":[{"applicationId":"00000000-0000-0000-0000-000000000001",
+                "capabilities":[{"resource":"ticket","action":"read","scopes":["ORG"]}]}],
+            "managementScopes":[{"tenantId":"00000000-0000-0000-0000-000000000002",
+                "organizationId":"00000000-0000-0000-0000-000000000003",
+                "includeDescendants":true,"read":false,"write":true}]
+        });
+        let mut values = HashMap::from([("DATA_GRANT_POLICY".into(), policy.to_string())]);
+        let config = Config::from_values(&values).unwrap();
+        values.insert("DATA_GRANT_POLICY".into(), "broken after startup".into());
+        let capability = &config.data_grant_policy.applications[0].capabilities[0];
+        assert_eq!(capability.resource, "ticket");
+        assert_eq!(capability.action, "read");
+        assert_eq!(capability.scopes[0].as_str(), "ORG");
+        assert!(!config.data_grant_policy.management_scopes[0].read);
+        assert!(config.data_grant_policy.management_scopes[0].write);
+        assert!(config.data_grant_policy.management_scopes[0].include_descendants);
     }
 }

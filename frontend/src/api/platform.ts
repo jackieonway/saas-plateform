@@ -1,4 +1,5 @@
 import { api } from "@/lib/api"
+import { capturePlatformSessionFence } from "@/stores/auth"
 
 export interface PlatformBranding {
   platformName: string
@@ -21,7 +22,7 @@ export const platformApi = {
   branding: (signal?: AbortSignal) =>
     api.get<PlatformBranding>("/api/platform/branding", { skipAuth: true, suppress401: true, signal }),
   settings: (token: string, signal?: AbortSignal) =>
-    api.get<PlatformSettings>("/api/platform/settings", { bearer: token, signal }),
+    api.get<PlatformSettings>("/api/platform/settings", { bearer: token, signal, sessionFence: capturePlatformSessionFence(token) }),
   updateSettings: (body: PlatformSettingsPayload, token: string) =>
-    api.put<PlatformSettings>("/api/platform/settings", body, { bearer: token }),
+    api.put<PlatformSettings>("/api/platform/settings", body, { bearer: token, sessionFence: capturePlatformSessionFence(token) }),
 }

@@ -1,0 +1,5 @@
+FROM nginx:1.28.0-alpine
+USER 101:101
+EXPOSE 8080
+ENTRYPOINT ["nginx"]
+CMD ["-c", "/etc/nginx/nginx.conf"]

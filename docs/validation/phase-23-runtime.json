@@ -1,0 +1,747 @@
+{
+  "schemaVersion": 1,
+  "phase": 23,
+  "status": "PASS",
+  "finalizedAt": "2026-10-17T01:38:10.612Z",
+  "selectedProtocol": "SOCKET_IO_COMPATIBLE",
+  "conditionalPhase37Triggered": false,
+  "source": {
+    "revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "files": 682,
+    "inputsSha256": "1bc2fbbae7e62c5691e781b33612b707ee085f7aaf3ef7d5c7af63bf70961eee",
+    "groups": {
+      "service": {
+        "sha256": "39b41439bc5c4db910036d7de685a3887c65c2c4a79195990ac464eef8ea901d",
+        "count": 12
+      },
+      "proxy": {
+        "sha256": "7db75672b5948c352523c3d27663e350dbbb7239bcd7275f5b477afa2d7bbbd1",
+        "count": 9
+      },
+      "browser": {
+        "sha256": "7d2cba4065e4956800869f91b635a6afe66f8fcd076a310bd071d40a552b4e3c",
+        "count": 186
+      },
+      "platform": {
+        "sha256": "b0fa65c1977f7b3219462c8bed4e4b1901b6f62227e94b588638340102d4601f",
+        "count": 67
+      },
+      "drivers": {
+        "sha256": "b5cc60a5015cb287a12c1c26a78108626f14125944c907121ee358ec8b514a96",
+        "count": 13
+      }
+    }
+  },
+  "linux": {
+    "owner": "ci-phase23-1792197371216",
+    "container": "ci-phase23-1792197371216-runner",
+    "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "sourceFiles": 682,
+    "inputsSha256": "1bc2fbbae7e62c5691e781b33612b707ee085f7aaf3ef7d5c7af63bf70961eee",
+    "scopedInputs": {
+      "service": {
+        "sha256": "39b41439bc5c4db910036d7de685a3887c65c2c4a79195990ac464eef8ea901d",
+        "count": 12
+      },
+      "proxy": {
+        "sha256": "7db75672b5948c352523c3d27663e350dbbb7239bcd7275f5b477afa2d7bbbd1",
+        "count": 9
+      },
+      "browser": {
+        "sha256": "7d2cba4065e4956800869f91b635a6afe66f8fcd076a310bd071d40a552b4e3c",
+        "count": 186
+      },
+      "platform": {
+        "sha256": "b0fa65c1977f7b3219462c8bed4e4b1901b6f62227e94b588638340102d4601f",
+        "count": 67
+      },
+      "drivers": {
+        "sha256": "b5cc60a5015cb287a12c1c26a78108626f14125944c907121ee358ec8b514a96",
+        "count": 13
+      }
+    },
+    "status": "PASS",
+    "browser": "chromium",
+    "cache": "Only Cargo target retained from the owned r2 runner. Workspace source removed, clean snapshot copied, every source file touched before cargo --locked to force rebuilding local crates.",
+    "cleanupRequired": false,
+    "hostPorts": [],
+    "mounts": [],
+    "exitCode": 0,
+    "cleanupStatus": "PASS",
+    "cleanupReport": "cleanup.json",
+    "currentSourceMatch": true,
+    "allScopedInputsMatch": true,
+    "currentSourceComparison": "current-input-comparison.json"
+  },
+  "integration": {
+    "schemaVersion": 1,
+    "kind": "notification-real-platform-postgres",
+    "ownership": {
+      "owner": "ci-phase23-1792197371216",
+      "hostname": "ci-phase23-1792197371216-postgres",
+      "database": "postgres",
+      "credentials": "synthetic ephemeral; redacted"
+    },
+    "browser": "chromium",
+    "startedAt": "2026-10-17T01:30:15.788Z",
+    "status": "PASS",
+    "steps": [
+      {
+        "name": "npm-notification",
+        "command": [
+          "npm",
+          "ci",
+          "--prefix",
+          "mini-services/notification-ws",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "name": "build-platform",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--target-dir",
+          "/workspace/target/ci-rust-notification",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "name": "build-notification",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--manifest-path",
+          "mini-services/notification-ws/Cargo.toml",
+          "--target-dir",
+          "/workspace/target/ci-rust-notification",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "name": "build-proxy",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--manifest-path",
+          "tests/fixtures/notification-platform-proxy/Cargo.toml",
+          "--target-dir",
+          "/workspace/target/ci-rust-notification",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "name": "real-platform-scheduler",
+        "command": [
+          "/usr/local/bin/node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "mini-services/notification-ws/tests/rust-platform-e2e.mjs",
+          "mini-services/notification-ws/tests/rust-scheduler.mjs",
+          "mini-services/notification-ws/tests/rust-boundaries.mjs",
+          "mini-services/notification-ws/tests/rust-auth-races.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 34,
+          "pass": 34,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "name": "npm-frontend",
+        "command": [
+          "npm",
+          "ci",
+          "--prefix",
+          "frontend",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "name": "npm-tests-browser",
+        "command": [
+          "npm",
+          "ci",
+          "--prefix",
+          "tests/browser",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "name": "two-page-browser-chromium",
+        "command": [
+          "/usr/local/bin/node",
+          "--test",
+          "--test-reporter=tap",
+          "mini-services/notification-ws/tests/rust-browser.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      }
+    ],
+    "finishedAt": "2026-10-17T01:35:27.297Z"
+  },
+  "browser": {
+    "checks": [
+      "two-pages-share-real-platform-session-and-authenticated-http-recovery",
+      "persisted-publication-reaches-both-real-host-pages",
+      "shared-switch-intent-synchronously-retires-both-old-scopes-and-real-transports",
+      "real-context-switch-rebinds-both-pages-and-rejects-late-old-http-data",
+      "post-switch-real-publications-are-isolated-to-current-organization",
+      "real-transport-reconnect-recovers-persisted-offline-inbox-without-history-toasts"
+    ],
+    "pages": 2,
+    "documentsPreserved": true,
+    "lateHttp": {
+      "upstreamStatus": 200,
+      "productionPromise": "AbortError"
+    },
+    "browser": {
+      "product": "chromium",
+      "version": "156.0.8078.4",
+      "playwright": "1.64.1"
+    },
+    "sources": [
+      {
+        "path": "frontend/src/lib/session-coordinator.ts",
+        "sha256": "d588cf17cfa357bba12ed76815fc3f58817b0936a1fb84928a70c53d568772aa"
+      },
+      {
+        "path": "frontend/src/lib/api.ts",
+        "sha256": "8232eeeb9532843f5cfaa53e3566869d014bf9f29ace2ee17116d4d4da36d347"
+      },
+      {
+        "path": "frontend/src/stores/auth.ts",
+        "sha256": "7d89debbaaa696d899744877aeb1297dedb55c5526c08835378cd31b1dd20e2e"
+      },
+      {
+        "path": "frontend/src/hooks/use-notification-context.ts",
+        "sha256": "cb86c7cafcca24fd1b29093a18ebd74965b852978fcf490de43ac08ef057bf50"
+      },
+      {
+        "path": "frontend/src/hooks/use-notification-socket.tsx",
+        "sha256": "e0fa06c415878da790b2c9d035eb2e24f1a6a13a967d88696612e6e78cdb10b3"
+      },
+      {
+        "path": "frontend/src/main.tsx",
+        "sha256": "f65bdb5f883508b601d5ed0e0f50b51be941a048e97a8c0eecec82a93037e8b3"
+      },
+      {
+        "path": "frontend/vite.config.ts",
+        "sha256": "a60bbe4fcadf5c3bf74672c61fb1393304722c7009bb64083d0f9dfada63ea1f"
+      },
+      {
+        "path": "tests/phase23-notification-browser.mjs",
+        "sha256": "900e6f1e716c0dbac393efa1e9aa70e1c3e93ac49a18f2e284c6f6522afebdf9"
+      }
+    ],
+    "observations": [
+      {
+        "page": 1,
+        "authenticatedA": 1,
+        "authenticatedB": 2,
+        "closedTransports": 3,
+        "currentOrganization": "7c7aec27-873c-450e-8633-d7c790010469",
+        "http": [
+          {
+            "path": "/api/notifications",
+            "succeeded": 6,
+            "aborted": 3
+          },
+          {
+            "path": "/api/notifications/unread-count",
+            "succeeded": 5,
+            "aborted": 2
+          },
+          {
+            "path": "/api/notifications/prefs",
+            "succeeded": 5,
+            "aborted": 2
+          }
+        ]
+      },
+      {
+        "page": 2,
+        "authenticatedA": 1,
+        "authenticatedB": 2,
+        "closedTransports": 3,
+        "currentOrganization": "7c7aec27-873c-450e-8633-d7c790010469",
+        "http": [
+          {
+            "path": "/api/notifications",
+            "succeeded": 5,
+            "aborted": 2
+          },
+          {
+            "path": "/api/notifications/unread-count",
+            "succeeded": 5,
+            "aborted": 2
+          },
+          {
+            "path": "/api/notifications/prefs",
+            "succeeded": 5,
+            "aborted": 2
+          }
+        ]
+      }
+    ]
+  },
+  "measurements": [
+    {
+      "realMigrationsApplied": 3,
+      "realRegionRows": 665923,
+      "realBackendStartupObservedMs": 37223,
+      "testStartupBudgetMs": 90000
+    },
+    {
+      "initialValidationRequests": 1,
+      "duplicateValidationRequests": 0,
+      "rejectedBeforeAuthWaitMs": 30,
+      "freshAuthenticatedEngineConnections": 4,
+      "excessRejected": true
+    },
+    {
+      "configuredAuthWaitMs": 1000,
+      "configuredHttpDeadlineMs": 5000,
+      "configuredProxyDelayMs": 12000,
+      "observedRejectionMs": 988,
+      "initialValidationRequests": 1
+    },
+    {
+      "realMigrationsApplied": 3,
+      "realRegionRows": 665923,
+      "realBackendStartupObservedMs": 36993,
+      "testStartupBudgetMs": 90000
+    },
+    {
+      "rawEngineClosed": true,
+      "transportErrorObserved": false,
+      "unauthorizedEvents": 1
+    },
+    {
+      "path": "next-delivery",
+      "configuredRecheckMs": 60000,
+      "observedRejectionMs": 35,
+      "actualDeliveryValidationCount": 1
+    },
+    {
+      "configuredDatabaseLifetimeMs": 3000,
+      "configuredPlatformDeadlineMs": 5000,
+      "configuredProxyDelayMs": 12000,
+      "expiryObservedLateMs": 12
+    },
+    {
+      "originalLifetimeMs": 7948,
+      "shortenedLifetimeMs": 2000,
+      "subsequentlyExtendedDatabaseLifetimeMs": 3600000,
+      "expiryObservedLateMs": 19
+    },
+    {
+      "phase": "raw-polling-retired-new-tcp",
+      "method": "GET",
+      "declaredFlushMs": 100,
+      "observedFlushWaitMs": 150,
+      "actualStatus": null,
+      "transportError": "ECONNRESET"
+    },
+    {
+      "phase": "raw-polling-retired-new-tcp",
+      "method": "POST",
+      "actualStatus": null,
+      "transportError": "ECONNRESET"
+    },
+    {
+      "rawPollingNewTcpRejected": true,
+      "announcedPingIntervalMs": 25000,
+      "announcedPingTimeoutMs": 20000,
+      "testedRecoveryBudgetMs": 50000,
+      "recoveryObservedMs": 19981,
+      "rejectedNewOpensAfterRetirement": 746
+    },
+    {
+      "shutdownTrigger": "owned-stdin-EOF",
+      "idleTcpPeers": 1,
+      "incompleteHttpHeads": 1,
+      "shutdownObservedMs": 111,
+      "testedUpperBoundMs": 7000
+    },
+    {
+      "realMigrationsApplied": 3,
+      "realRegionRows": 665923,
+      "realBackendStartupObservedMs": 37565,
+      "testStartupBudgetMs": 90000
+    },
+    {
+      "observation": "after-mutation",
+      "invalidationObservedMs": 253,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000,
+      "testedUpperBoundMs": 7000
+    },
+    {
+      "observation": "before-real-logout-without-hint",
+      "invalidationObservedMs": 911,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000,
+      "testedUpperBoundMs": 7000
+    },
+    {
+      "observation": "after-mutation",
+      "invalidationObservedMs": 25,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000,
+      "testedUpperBoundMs": 7000
+    },
+    {
+      "observation": "after-mutation",
+      "invalidationObservedMs": 1943,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000,
+      "testedUpperBoundMs": 7000
+    },
+    {
+      "transport": "websocket",
+      "configuredDatabaseLifetimeMs": 2000,
+      "acknowledgedLifetimeMs": 1948,
+      "expiryObservedLateMs": 25,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000
+    },
+    {
+      "observation": "after-mutation",
+      "invalidationObservedMs": 1941,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000,
+      "testedUpperBoundMs": 7000
+    },
+    {
+      "transport": "polling",
+      "configuredDatabaseLifetimeMs": 2000,
+      "acknowledgedLifetimeMs": 1947,
+      "expiryObservedLateMs": 21,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000
+    },
+    {
+      "observation": "after-mutation",
+      "invalidationObservedMs": 25,
+      "configuredRecheckMs": 1000,
+      "configuredPlatformDeadlineMs": 2000,
+      "testedUpperBoundMs": 7000
+    },
+    {
+      "realMigrationsApplied": 3,
+      "realRegionRows": 665923,
+      "realBackendStartupObservedMs": 37161,
+      "testStartupBudgetMs": 90000
+    },
+    {
+      "active": 2,
+      "queued": 4,
+      "partitions": 3,
+      "validationHighWater": 2,
+      "dropped": 24,
+      "durableOverloadRows": 24
+    },
+    {
+      "configuredHttpDeadlineMs": 5000,
+      "observedWorkerReleaseMs": 4987
+    }
+  ],
+  "currentInputs": {
+    "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "frozenInputsSha256": "1bc2fbbae7e62c5691e781b33612b707ee085f7aaf3ef7d5c7af63bf70961eee",
+    "currentInputsSha256": "1bc2fbbae7e62c5691e781b33612b707ee085f7aaf3ef7d5c7af63bf70961eee",
+    "fullSourceMatch": true,
+    "fullSourceChangedPaths": [],
+    "groups": {
+      "service": {
+        "match": true,
+        "frozenSha256": "39b41439bc5c4db910036d7de685a3887c65c2c4a79195990ac464eef8ea901d",
+        "currentSha256": "39b41439bc5c4db910036d7de685a3887c65c2c4a79195990ac464eef8ea901d",
+        "frozenCount": 12,
+        "currentCount": 12,
+        "changedPaths": []
+      },
+      "proxy": {
+        "match": true,
+        "frozenSha256": "7db75672b5948c352523c3d27663e350dbbb7239bcd7275f5b477afa2d7bbbd1",
+        "currentSha256": "7db75672b5948c352523c3d27663e350dbbb7239bcd7275f5b477afa2d7bbbd1",
+        "frozenCount": 9,
+        "currentCount": 9,
+        "changedPaths": []
+      },
+      "browser": {
+        "match": true,
+        "frozenSha256": "7d2cba4065e4956800869f91b635a6afe66f8fcd076a310bd071d40a552b4e3c",
+        "currentSha256": "7d2cba4065e4956800869f91b635a6afe66f8fcd076a310bd071d40a552b4e3c",
+        "frozenCount": 186,
+        "currentCount": 186,
+        "changedPaths": []
+      },
+      "platform": {
+        "match": true,
+        "frozenSha256": "b0fa65c1977f7b3219462c8bed4e4b1901b6f62227e94b588638340102d4601f",
+        "currentSha256": "b0fa65c1977f7b3219462c8bed4e4b1901b6f62227e94b588638340102d4601f",
+        "frozenCount": 67,
+        "currentCount": 67,
+        "changedPaths": []
+      },
+      "drivers": {
+        "match": true,
+        "frozenSha256": "b5cc60a5015cb287a12c1c26a78108626f14125944c907121ee358ec8b514a96",
+        "currentSha256": "b5cc60a5015cb287a12c1c26a78108626f14125944c907121ee358ec8b514a96",
+        "frozenCount": 13,
+        "currentCount": 13,
+        "changedPaths": []
+      }
+    },
+    "supportingInputs": [
+      {
+        "path": "tests/browser/runtime.mjs",
+        "match": true,
+        "frozenSha256": "59408a184a7ad183274c7127c0c365706a48bf33fc62f993b718b381f4b30688",
+        "currentSha256": "59408a184a7ad183274c7127c0c365706a48bf33fc62f993b718b381f4b30688"
+      },
+      {
+        "path": "scripts/ci/report.mjs",
+        "match": true,
+        "frozenSha256": "731a357225456c5048818b44d933362291e84816cb79ccefedebb14a420d7936",
+        "currentSha256": "731a357225456c5048818b44d933362291e84816cb79ccefedebb14a420d7936"
+      },
+      {
+        "path": "scripts/ci/manifest.mjs",
+        "match": true,
+        "frozenSha256": "b93cc4d91f196dec61a7db33aa31c7512ce88da7461e207b0637d12f16eb2f8c",
+        "currentSha256": "b93cc4d91f196dec61a7db33aa31c7512ce88da7461e207b0637d12f16eb2f8c"
+      },
+      {
+        "path": "scripts/ci/data-grant-ui-results.mjs",
+        "match": true,
+        "frozenSha256": "e3ec4e0bc28361b6bc1218d1a409c9838dd635f90ee58612612464d9971a0481",
+        "currentSha256": "e3ec4e0bc28361b6bc1218d1a409c9838dd635f90ee58612612464d9971a0481"
+      },
+      {
+        "path": "scripts/ci/work-orders-live-results.mjs",
+        "match": true,
+        "frozenSha256": "3c21205e47ff5ff665e7e925d7532434b27d228ef3af59d6d7c8e9fab2f7cf67",
+        "currentSha256": "3c21205e47ff5ff665e7e925d7532434b27d228ef3af59d6d7c8e9fab2f7cf67"
+      },
+      {
+        "path": "scripts/ci/postgres.mjs",
+        "match": true,
+        "frozenSha256": "3cf8ba6c9aa45260572b6d43bb153c675c8673f1177a32fcd0ee213e2d1c80e2",
+        "currentSha256": "3cf8ba6c9aa45260572b6d43bb153c675c8673f1177a32fcd0ee213e2d1c80e2"
+      },
+      {
+        "path": "scripts/ci/provenance.mjs",
+        "match": true,
+        "frozenSha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8",
+        "currentSha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      },
+      {
+        "path": "scripts/ci/linux-runner.mjs",
+        "match": true,
+        "frozenSha256": "d3f480ddf4b1bd8cdc6cf886cf95b9613878d831b69f81af936a8af6749246d3",
+        "currentSha256": "d3f480ddf4b1bd8cdc6cf886cf95b9613878d831b69f81af936a8af6749246d3"
+      },
+      {
+        "path": "tests/zip-release-e2e.mjs",
+        "match": true,
+        "frozenSha256": "8bf25801ed7c9044e71eb9d50c9319df1bf97600fbf82d8696cef3e641346f98",
+        "currentSha256": "8bf25801ed7c9044e71eb9d50c9319df1bf97600fbf82d8696cef3e641346f98"
+      }
+    ],
+    "allScopedInputsMatch": true
+  },
+  "cleanup": {
+    "owner": "ci-phase23-1792197371216",
+    "status": "PASS",
+    "containers": [
+      {
+        "name": "/ci-phase23-1792197371216-runner",
+        "imageId": "sha256:7ad323a47d6d5202da34beb0f315d24dd10102d9bebd0726260c189768d0094c",
+        "hostPorts": [],
+        "mounts": [],
+        "runningBeforeCleanup": true
+      },
+      {
+        "name": "/ci-phase23-1792197371216-postgres",
+        "imageId": "sha256:8745eeb23be1055bd80c88e509a5247110cce0f2496c7492d165f3d0fc1975cd",
+        "hostPorts": [],
+        "mounts": [],
+        "runningBeforeCleanup": true
+      }
+    ],
+    "networks": [
+      {
+        "name": "ci-phase23-1792197371216-network",
+        "id": "42c2940701fa9298bf2b79c37e6b412ef9ef7254fb094fedd743d171b4a36352",
+        "endpoints": [
+          "ci-phase23-1792197371216-postgres",
+          "ci-phase23-1792197371216-runner"
+        ]
+      }
+    ],
+    "errors": [],
+    "postgresFixtureCounts": "owned_databases=0\nowned_reader_roles=0",
+    "remainingContainers": "",
+    "remainingNetworks": "",
+    "wslLease": {
+      "owner": "ci-phase23-1792197371216",
+      "mode": "owned WSL foreground stdin lease; no global configuration changes",
+      "ready": true,
+      "stopped": true,
+      "exitCode": 0
+    }
+  },
+  "wslLease": {
+    "owner": "ci-phase23-1792197371216",
+    "mode": "owned WSL foreground stdin lease; no global configuration changes",
+    "ready": true,
+    "stopped": true,
+    "exitCode": 0
+  },
+  "rust": {
+    "gates": [
+      "fmt",
+      "check",
+      "clippy",
+      "test",
+      "doc"
+    ],
+    "tests": 29,
+    "failed": 0,
+    "ignored": 0,
+    "log": "target/phase23-rust-final-r3.log",
+    "logSha256": "0a0c18d83b1b42261e721575f250893b96b43f8099175276b461c9414bf55433"
+  },
+  "policies": {
+    "distinctTests": 87,
+    "failed": 0,
+    "skipped": 0,
+    "log": "target/phase23-policy-combined-final.log",
+    "finalCiSubset": {
+      "tests": 29,
+      "failed": 0,
+      "skipped": 0,
+      "log": "target/phase23-ci-policy-final-r2.log"
+    }
+  },
+  "role": {
+    "evidence": "phase-23-role.txt",
+    "evidenceSha256": "e47cc0ac2c6ca2961b61ebb61011360ec9c869b7fcb4c15b2ca42cb5ca3dc6e0",
+    "sourceSha256": "cab8682ebfa8ddb129750406c96ba70cbc19c937a4e2d8b2c42133708a6f166d"
+  },
+  "imageEvidence": "phase-23-image.json",
+  "limitations": [
+    "Local isolated Linux acceptance; no registry push or target production deployment.",
+    "HTTP inbox recovery is not an automatic initial WebSocket-to-polling fallback.",
+    "Only Chromium was executed for the Phase 23 real host test; other required products remain configured in managed CI.",
+    "OSV lockfile finding in inactive SQLx MySQL RSA branch is retained; see dependency evidence."
+  ]
+}

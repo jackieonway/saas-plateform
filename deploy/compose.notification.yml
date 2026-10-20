@@ -1,0 +1,48 @@
+# Rust notification service, independently enabled with --profile notification.
+# Merge with docker-compose.yml; use a reviewed immutable digest. The operator
+# must explicitly route notification-ws:3003 in the rendered gateway JSON.
+# Public HTTPS must already work before notification readiness can converge;
+# the gateway must never depend_on this service's readiness.
+services:
+  notification-ws:
+    profiles: [notification]
+    image: ${NOTIFICATION_IMAGE:?Set the approved Rust notification repository@sha256 digest}
+    user: "10003:10003"
+    environment:
+      NOTIFICATION_ENV: production
+      DATABASE_URL: ${NOTIFICATION_DATABASE_URL:?Set the restricted notification read and LISTEN database URL}
+      PLATFORM_API_BASE_URL: ${PUBLIC_APP_URL:?Set the exact public HTTPS platform origin}
+      METRICS_TOKEN: ${NOTIFICATION_METRICS_TOKEN:?Set an independent notification metrics token}
+      NOTIFICATION_HOST: 0.0.0.0
+      NOTIFICATION_PORT: 3003
+      NOTIFICATION_SOCKET_PATH: /socket.io/
+      NOTIFICATION_ALLOWED_ORIGINS: ${NOTIFICATION_ALLOWED_ORIGINS:-${PUBLIC_APP_URL}}
+      NOTIFICATION_AUTH_TIMEOUT_MS: ${NOTIFICATION_AUTH_TIMEOUT_MS:-2000}
+      NOTIFICATION_AUTH_RECHECK_MS: ${NOTIFICATION_AUTH_RECHECK_MS:-30000}
+      NOTIFICATION_AUTH_WAIT_MS: ${NOTIFICATION_AUTH_WAIT_MS:-10000}
+      NOTIFICATION_HEALTH_PROBE_MS: ${NOTIFICATION_HEALTH_PROBE_MS:-5000}
+      NOTIFICATION_DATABASE_RETRY_MS: ${NOTIFICATION_DATABASE_RETRY_MS:-1000}
+      NOTIFICATION_MAX_CONNECTIONS: ${NOTIFICATION_MAX_CONNECTIONS:-256}
+      NOTIFICATION_MAX_PARTITIONS: ${NOTIFICATION_MAX_PARTITIONS:-128}
+      NOTIFICATION_PER_PARTITION_QUEUE: ${NOTIFICATION_PER_PARTITION_QUEUE:-32}
+      NOTIFICATION_TOTAL_QUEUE: ${NOTIFICATION_TOTAL_QUEUE:-1000}
+      NOTIFICATION_MAX_INFLIGHT: ${NOTIFICATION_MAX_INFLIGHT:-8}
+      NOTIFICATION_VALIDATION_CONCURRENCY: ${NOTIFICATION_VALIDATION_CONCURRENCY:-16}
+      RUST_LOG: info
+    depends_on:
+      backend: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    expose: ["3003"]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "3", "http://127.0.0.1:3003/health/ready"]
+      interval: 30s
+      timeout: 4s
+      start_period: 20s
+      retries: 3
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    networks: [edge, database]

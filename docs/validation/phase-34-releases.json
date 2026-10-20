@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "phase": 34,
+  "status": "PASS",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "inputsSha256": "9a23e8808cad703afbd06864da92f6cbf417db908060dc63d2cef577b2950623",
+  "sourceBundles": [
+    {
+      "application": "work-orders",
+      "archive": "target/phase-34/formal-standalone-r4/public/reports/work-orders-source.tar.gz",
+      "bytes": 230165,
+      "sha256": "44fb76e0d8244779c0141d64855c7b2463d40403914eb4bc2f0d04acc325ad44",
+      "sourceFiles": 64,
+      "manifest": {
+        "path": "target/phase-34/formal-standalone-r4/public/reports/work-orders-release-manifest.json",
+        "sha256": "74c6661cc3d170d5d542eb2fda4edd9e800ea43c8a42104ea6fdc8128ef1fa3d",
+        "bytes": 11957
+      },
+      "closedManifestVerified": true,
+      "cleanNpmAndCargoBuild": "PASS",
+      "path": "target/phase-34/formal-standalone-r4/public/reports/work-orders-source.tar.gz"
+    },
+    {
+      "application": "stores",
+      "archive": "target/phase-34/formal-standalone-r4/public/reports/stores-source.tar.gz",
+      "bytes": 193770,
+      "sha256": "3cf438ed3c1c96624d0078b7adfe1582da46c0a1db87f7203862348e2ffdbd13",
+      "sourceFiles": 74,
+      "manifest": {
+        "path": "target/phase-34/formal-standalone-r4/public/reports/stores-release-manifest.json",
+        "sha256": "f979ec373b7de0af13edc29842c7e1d78957fb4000547a76e21231e1dbf46826",
+        "bytes": 13604
+      },
+      "closedManifestVerified": true,
+      "cleanNpmAndCargoBuild": "PASS",
+      "path": "target/phase-34/formal-standalone-r4/public/reports/stores-source.tar.gz"
+    }
+  ],
+  "businessImages": [
+    {
+      "key": "work-orders-v1",
+      "imageId": "sha256:d8679ec54053536c22e1f256315e80d2f2f081c31eb7c0444878ddf9749abfa6",
+      "candidateImageId": "sha256:d8679ec54053536c22e1f256315e80d2f2f081c31eb7c0444878ddf9749abfa6",
+      "reference": "localhost:44630/phase28-1792422697031-2b747d0b/work-orders-web@sha256:d8679ec54053536c22e1f256315e80d2f2f081c31eb7c0444878ddf9749abfa6",
+      "digest": "sha256:d8679ec54053536c22e1f256315e80d2f2f081c31eb7c0444878ddf9749abfa6",
+      "ociConfigDigest": "sha256:04480bb7a5c7dc02bd49e86ae13e835635eeec18356b85f82a9eec63061a8a85",
+      "daemonImageIdKind": "OCI_MANIFEST_DIGEST",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "9a23e8808cad703afbd06864da92f6cbf417db908060dc63d2cef577b2950623",
+      "buildId": "32956c4532bb-9a23e8808cad703a",
+      "archive": {
+        "path": "target/phase-34/formal-business-delivery-r9/candidate/images/work-orders-v1.tar",
+        "sha256": "73985f545533f85b0eb13caa9107d3f03efde49becaca345fac3771dd457fd2c",
+        "bytes": 21075456
+      }
+    },
+    {
+      "key": "work-orders-v2",
+      "imageId": "sha256:207ab9844c93a031059f19ecd6615e9e093beba87bf7110e1b1cf79ef08c714f",
+      "candidateImageId": "sha256:207ab9844c93a031059f19ecd6615e9e093beba87bf7110e1b1cf79ef08c714f",
+      "reference": "localhost:44630/phase28-1792422697031-2b747d0b/work-orders-web@sha256:207ab9844c93a031059f19ecd6615e9e093beba87bf7110e1b1cf79ef08c714f",
+      "digest": "sha256:207ab9844c93a031059f19ecd6615e9e093beba87bf7110e1b1cf79ef08c714f",
+      "ociConfigDigest": "sha256:3a787b99b30ce0eb49cb1b4cb552eeea950de1461f0df3eddf5bef736e0b7c1a",
+      "daemonImageIdKind": "OCI_MANIFEST_DIGEST",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "9a23e8808cad703afbd06864da92f6cbf417db908060dc63d2cef577b2950623",
+      "buildId": "32956c4532bb-9a23e8808cad703a",
+      "archive": {
+        "path": "target/phase-34/formal-business-delivery-r9/candidate/images/work-orders-v2.tar",
+        "sha256": "1bddbf1abea1563973b6f314d083c805a04a0407e7fa8a3b5abf7f893b07a185",
+        "bytes": 21075456
+      }
+    },
+    {
+      "key": "stores-v1",
+      "imageId": "sha256:21b6e6c346a5b8bd858a5119eca0a8ccd675bc112fa132e2c8557eff2e2c8d7e",
+      "candidateImageId": "sha256:21b6e6c346a5b8bd858a5119eca0a8ccd675bc112fa132e2c8557eff2e2c8d7e",
+      "reference": "localhost:44630/phase28-1792422697031-2b747d0b/stores-web@sha256:21b6e6c346a5b8bd858a5119eca0a8ccd675bc112fa132e2c8557eff2e2c8d7e",
+      "digest": "sha256:21b6e6c346a5b8bd858a5119eca0a8ccd675bc112fa132e2c8557eff2e2c8d7e",
+      "ociConfigDigest": "sha256:ece5c5356ae121ffc4bbad4b45797229f8367f24a7270f8174896af3b8e47b84",
+      "daemonImageIdKind": "OCI_MANIFEST_DIGEST",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "9a23e8808cad703afbd06864da92f6cbf417db908060dc63d2cef577b2950623",
+      "buildId": "32956c4532bb-9a23e8808cad703a",
+      "archive": {
+        "path": "target/phase-34/formal-business-delivery-r9/candidate/images/stores-v1.tar",
+        "sha256": "75537f385279312f317ea4939249894a7eb7281f78a89e2176e42755c20e2344",
+        "bytes": 21124096
+      }
+    },
+    {
+      "key": "stores-v2",
+      "imageId": "sha256:34eb79c1a45b69506833662fc99982f85680db76d09824cc808fa32803c0de81",
+      "candidateImageId": "sha256:34eb79c1a45b69506833662fc99982f85680db76d09824cc808fa32803c0de81",
+      "reference": "localhost:44630/phase28-1792422697031-2b747d0b/stores-web@sha256:34eb79c1a45b69506833662fc99982f85680db76d09824cc808fa32803c0de81",
+      "digest": "sha256:34eb79c1a45b69506833662fc99982f85680db76d09824cc808fa32803c0de81",
+      "ociConfigDigest": "sha256:6e8ff9376a352fc59c1c0f0efa5597257c63ccad3bf163c58cdc0d900a6dc9df",
+      "daemonImageIdKind": "OCI_MANIFEST_DIGEST",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "9a23e8808cad703afbd06864da92f6cbf417db908060dc63d2cef577b2950623",
+      "buildId": "32956c4532bb-9a23e8808cad703a",
+      "archive": {
+        "path": "target/phase-34/formal-business-delivery-r9/candidate/images/stores-v2.tar",
+        "sha256": "4317c0cd9b005caba3bfc4a985484e357831df6e7e7c32bc880cdcd23fcc22f6",
+        "bytes": 21124096
+      }
+    },
+    {
+      "key": "work-orders-api",
+      "imageId": "sha256:75ac57fd6ff962eb914d1867792c060732d031e1b5df9b40505f53145ffbfbc8",
+      "candidateImageId": "sha256:75ac57fd6ff962eb914d1867792c060732d031e1b5df9b40505f53145ffbfbc8",
+      "reference": "localhost:44630/phase28-1792422697031-2b747d0b/work-orders-api@sha256:75ac57fd6ff962eb914d1867792c060732d031e1b5df9b40505f53145ffbfbc8",
+      "digest": "sha256:75ac57fd6ff962eb914d1867792c060732d031e1b5df9b40505f53145ffbfbc8",
+      "ociConfigDigest": "sha256:e5b2fa728572baf34829824a49389f0260c905263ac423e940f1c1b160d74422",
+      "daemonImageIdKind": "OCI_MANIFEST_DIGEST",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "9a23e8808cad703afbd06864da92f6cbf417db908060dc63d2cef577b2950623",
+      "buildId": "32956c4532bb-9a23e8808cad703a",
+      "archive": {
+        "path": "target/phase-34/formal-business-delivery-r9/candidate/images/work-orders-api.tar",
+        "sha256": "487b58ed9765f6b54321edf186332083f413f2f1f8528e3cd6f06691288ed22e",
+        "bytes": 50083840
+      }
+    },
+    {
+      "key": "stores-api",
+      "imageId": "sha256:a15c5e92508b915c93140a1e97ca20b94582735c3d724c794e6a7a477b677b37",
+      "candidateImageId": "sha256:a15c5e92508b915c93140a1e97ca20b94582735c3d724c794e6a7a477b677b37",
+      "reference": "localhost:44630/phase28-1792422697031-2b747d0b/stores-api@sha256:a15c5e92508b915c93140a1e97ca20b94582735c3d724c794e6a7a477b677b37",
+      "digest": "sha256:a15c5e92508b915c93140a1e97ca20b94582735c3d724c794e6a7a477b677b37",
+      "ociConfigDigest": "sha256:09df1935796e1cb7d2e39d99b50897ad23a7b803da93c2e3c6a662c030cf695b",
+      "daemonImageIdKind": "OCI_MANIFEST_DIGEST",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "9a23e8808cad703afbd06864da92f6cbf417db908060dc63d2cef577b2950623",
+      "buildId": "32956c4532bb-9a23e8808cad703a",
+      "archive": {
+        "path": "target/phase-34/formal-business-delivery-r9/candidate/images/stores-api.tar",
+        "sha256": "1762f0c2ff5e366d5464438ef7c424db4e8d08dc98c189f842e399eb5dcd3dda",
+        "bytes": 50075136
+      }
+    }
+  ],
+  "defaultImages": [
+    {
+      "name": "frontend",
+      "tag": "phase04-1792422712232-8dac567e-frontend:candidate",
+      "imageId": "sha256:da62a0bb319645a931d0f7650c26293abd1a35d139f906396f88a59d6460d2f3",
+      "identityKind": "local-docker-image-id",
+      "commit": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "buildId": "32956c4532bb-d5c28471b7289d83",
+      "inputsSha256": "d5c28471b7289d8390d6eb33fe4c928e67171f8cc587fde47e109361cf3beebf",
+      "archive": {
+        "path": "target/phase-34/formal-delivery-r4/release/images/frontend.tar",
+        "sha256": "8435dc51e769259bdc60deb931d579a7f420187965453a186093cdc79dd9062d",
+        "bytes": 22121472
+      },
+      "archiveSha256": "8435dc51e769259bdc60deb931d579a7f420187965453a186093cdc79dd9062d",
+      "archiveBytes": 22121472,
+      "ociManifestDigest": "sha256:da62a0bb319645a931d0f7650c26293abd1a35d139f906396f88a59d6460d2f3",
+      "ociConfigDigest": "sha256:b6fd17d24eb5b120b34f1b7d93f2c5a38d249336fac7e9d211d23ff006a382b1",
+      "targetPlatform": "linux/amd64",
+      "verifiedLayerCount": 12,
+      "labels": {
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+        "org.opencontainers.image.created": "2026-01-26T01:42:19.722Z",
+        "org.opencontainers.image.description": "Unprivileged NGINX Dockerfiles",
+        "org.opencontainers.image.licenses": "Apache-2.0",
+        "org.opencontainers.image.revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+        "org.opencontainers.image.source": "https://github.com/nginx/docker-nginx-unprivileged",
+        "org.opencontainers.image.title": "docker-nginx-unprivileged",
+        "org.opencontainers.image.url": "https://github.com/nginx/docker-nginx-unprivileged",
+        "org.opencontainers.image.version": "32956c4532bb-d5c28471b7289d83",
+        "saas.ci.inputs-sha256": "d5c28471b7289d8390d6eb33fe4c928e67171f8cc587fde47e109361cf3beebf",
+        "saas.ci.owner": "phase04-1792422712232-8dac567e"
+      },
+      "repoDigests": [
+        "phase04-1792422712232-8dac567e-frontend@sha256:da62a0bb319645a931d0f7650c26293abd1a35d139f906396f88a59d6460d2f3"
+      ],
+      "registryAvailability": "NOT_VERIFIED_NO_PUSH",
+      "distributionDigestMeaning": "ociManifestDigest identifies the verified saved OCI manifest; it does not prove registry publication"
+    },
+    {
+      "name": "edge",
+      "tag": "phase04-1792422712232-8dac567e-edge:candidate",
+      "imageId": "sha256:faf78e093b60eaf6a3c482a3f3c72d613457d552ee3aaad67d6a2aafeb00fd60",
+      "identityKind": "local-docker-image-id",
+      "commit": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "buildId": "32956c4532bb-d5c28471b7289d83",
+      "inputsSha256": "d5c28471b7289d8390d6eb33fe4c928e67171f8cc587fde47e109361cf3beebf",
+      "archive": {
+        "path": "target/phase-34/formal-delivery-r4/release/images/edge.tar",
+        "sha256": "5ba09ca1105eac8553e6617319c377b8643ec65c7de7ac796bf5b501352096b3",
+        "bytes": 21019648
+      },
+      "archiveSha256": "5ba09ca1105eac8553e6617319c377b8643ec65c7de7ac796bf5b501352096b3",
+      "archiveBytes": 21019648,
+      "ociManifestDigest": "sha256:faf78e093b60eaf6a3c482a3f3c72d613457d552ee3aaad67d6a2aafeb00fd60",
+      "ociConfigDigest": "sha256:ace3dac3f4873c4afd5d6f93e76b6a75917d7f0f9ca60e81eb6d932ec9b487cb",
+      "targetPlatform": "linux/amd64",
+      "verifiedLayerCount": 8,
+      "labels": {
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+        "org.opencontainers.image.revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+        "org.opencontainers.image.version": "32956c4532bb-d5c28471b7289d83",
+        "saas.ci.inputs-sha256": "d5c28471b7289d8390d6eb33fe4c928e67171f8cc587fde47e109361cf3beebf",
+        "saas.ci.owner": "phase04-1792422712232-8dac567e"
+      },
+      "repoDigests": [
+        "phase04-1792422712232-8dac567e-edge@sha256:faf78e093b60eaf6a3c482a3f3c72d613457d552ee3aaad67d6a2aafeb00fd60"
+      ],
+      "registryAvailability": "NOT_VERIFIED_NO_PUSH",
+      "distributionDigestMeaning": "ociManifestDigest identifies the verified saved OCI manifest; it does not prove registry publication"
+    },
+    {
+      "name": "platform",
+      "tag": "phase04-1792422712232-8dac567e-platform:candidate",
+      "imageId": "sha256:fc4d0d53e6033908978d19622fc1906d97e10959d8fabcf5af9b597083c6056e",
+      "identityKind": "local-docker-image-id",
+      "commit": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "buildId": "32956c4532bb-d5c28471b7289d83",
+      "inputsSha256": "d5c28471b7289d8390d6eb33fe4c928e67171f8cc587fde47e109361cf3beebf",
+      "archive": {
+        "path": "target/phase-34/formal-delivery-r4/release/images/platform.tar",
+        "sha256": "e7a01aacfef210e1e1784cee77c812229376f1643d30d1656ab4edd1580dbbef",
+        "bytes": 57822208
+      },
+      "archiveSha256": "e7a01aacfef210e1e1784cee77c812229376f1643d30d1656ab4edd1580dbbef",
+      "archiveBytes": 57822208,
+      "ociManifestDigest": "sha256:fc4d0d53e6033908978d19622fc1906d97e10959d8fabcf5af9b597083c6056e",
+      "ociConfigDigest": "sha256:43acf64c98f87293dab204e58489656a13567ba4b8498e78755abccc5e9943c8",
+      "targetPlatform": "linux/amd64",
+      "verifiedLayerCount": 4,
+      "labels": {
+        "org.opencontainers.image.revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+        "org.opencontainers.image.version": "32956c4532bb-d5c28471b7289d83",
+        "saas.ci.inputs-sha256": "d5c28471b7289d8390d6eb33fe4c928e67171f8cc587fde47e109361cf3beebf",
+        "saas.ci.owner": "phase04-1792422712232-8dac567e"
+      },
+      "repoDigests": [
+        "phase04-1792422712232-8dac567e-platform@sha256:fc4d0d53e6033908978d19622fc1906d97e10959d8fabcf5af9b597083c6056e"
+      ],
+      "runtimeVerification": {
+        "binarySha256": "1a020984c2cd6e71fdd144cba925f4b1bb9cf5c6cd6978c3e129d259f64ec0f7",
+        "elfMachine": 62,
+        "uid": 10001,
+        "targetPlatform": "linux/amd64",
+        "sharedLibrariesResolved": true,
+        "noServiceStarted": true,
+        "network": "none",
+        "readOnlyRootfs": true
+      },
+      "registryAvailability": "NOT_VERIFIED_NO_PUSH",
+      "distributionDigestMeaning": "ociManifestDigest identifies the verified saved OCI manifest; it does not prove registry publication"
+    }
+  ],
+  "notification": {
+    "report": {
+      "path": "target/phase-34/formal-delivery-r4/notification-image/result.json",
+      "sha256": "4abb5956531ab81eb84344784d7872293e2729c0c0a3aa09943052f3ae83012c",
+      "bytes": 9985
+    },
+    "inputsSha256": "a155f1279a28b6e6d0b7d4569f726b0ad97b0d7e3849e6c7b6c1b89096a9bf72",
+    "candidate": {
+      "role": "candidate",
+      "tag": "phase23-image-1792423116823-13bdb01c:candidate",
+      "imageId": "sha256:6b9361877f15be2b64354326c36236bdabff1128ce98d166a146a2a1086d9639",
+      "labels": {
+        "org.opencontainers.image.revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+        "org.opencontainers.image.title": "Rust notification service",
+        "saas.ci.inputs-sha256": "a155f1279a28b6e6d0b7d4569f726b0ad97b0d7e3849e6c7b6c1b89096a9bf72",
+        "saas.phase23.image.owner": "phase23-image-1792423116823-13bdb01c"
+      },
+      "identityMeaning": "local image ID; no registry publication"
+    },
+    "archive": "NOT_EXPORTED",
+    "availability": "LOCAL_CANDIDATE_VERIFIED_THEN_CLEANED"
+  },
+  "identityMeaning": "Final full-source identity binds CI execution. Default release and notification use their own closed scoped-input hashes; these are preserved, never replaced with the full-source hash. Registry digests prove isolated distribution only. Saved archives remain usable after owned image cleanup.",
+  "externalPublication": false,
+  "productionDeployment": false
+}

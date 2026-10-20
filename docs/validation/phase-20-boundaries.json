@@ -1,0 +1,2586 @@
+{
+  "schemaVersion": 1,
+  "phase": 20,
+  "kind": "immutable-source-and-phase-boundary-audit",
+  "status": "BOUNDARIES_PASS",
+  "capturedAt": "2026-10-17T05:31:17.456Z",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "candidate": {
+    "path": "target/phase-20/inputs-candidate-r2.json",
+    "fileSha256": "f5b5f5704429fff9ea9aaa1d1c0090f6a7c7a00d4590e4ddeaed892b60be0226",
+    "inputsSha256": "4f9a2cb80ece51c86e07a86bdafb98ca765fc2498a30ae5f64e7ce08cec3f449",
+    "inputCount": 711,
+    "sourceRoot": "D:\\WorkSpace\\rust\\saas\\rust-saas\\target\\phase-20\\source-candidate-r2"
+  },
+  "checks": [
+    {
+      "id": "candidate-self-selector-and-file-fingerprints",
+      "result": "PASS"
+    },
+    {
+      "id": "candidate-physical-file-set-exactly-matches-public-inputs",
+      "result": "PASS"
+    },
+    {
+      "id": "required-inputs-and-literal-import-closure",
+      "result": "PASS"
+    },
+    {
+      "id": "all-owned-inputs-match-the-stopped-host-source",
+      "result": "PASS"
+    },
+    {
+      "id": "old-sql-and-cargo-dependencies-remain-fixed",
+      "result": "PASS"
+    },
+    {
+      "id": "additive-0003-and-migration-target-registered-once",
+      "result": "PASS"
+    },
+    {
+      "id": "reminder-contract-live-and-ci-policy-selections-are-explicit",
+      "result": "PASS"
+    },
+    {
+      "id": "capture-driver-archives-remain-unchanged",
+      "result": "PASS"
+    }
+  ],
+  "ownedExecutableInputs": [
+    {
+      "path": ".github/README.md",
+      "candidate": {
+        "path": ".github/README.md",
+        "bytes": 7611,
+        "sha256": "18977b866d6db601a90e3c49a6a12ed86534f7af049770b985acca44dc864d6b"
+      },
+      "host": {
+        "path": ".github/README.md",
+        "bytes": 7611,
+        "sha256": "18977b866d6db601a90e3c49a6a12ed86534f7af049770b985acca44dc864d6b"
+      }
+    },
+    {
+      "path": ".github/workflows/production-build.yml",
+      "candidate": {
+        "path": ".github/workflows/production-build.yml",
+        "bytes": 12843,
+        "sha256": "d6498d4031233ef1a295ee8abeddec2aa9b788a339f4ab2be63b24e72e4c165f"
+      },
+      "host": {
+        "path": ".github/workflows/production-build.yml",
+        "bytes": 12843,
+        "sha256": "d6498d4031233ef1a295ee8abeddec2aa9b788a339f4ab2be63b24e72e4c165f"
+      }
+    },
+    {
+      "path": "backend/src/main.rs",
+      "candidate": {
+        "path": "backend/src/main.rs",
+        "bytes": 11257,
+        "sha256": "0b3660946f2e8fd4dfc3e975827125214024cb5c6e8f284edd9de6bb7f13154b"
+      },
+      "host": {
+        "path": "backend/src/main.rs",
+        "bytes": 11257,
+        "sha256": "0b3660946f2e8fd4dfc3e975827125214024cb5c6e8f284edd9de6bb7f13154b"
+      }
+    },
+    {
+      "path": "backend/src/phase20_work_orders_tests.rs",
+      "candidate": {
+        "path": "backend/src/phase20_work_orders_tests.rs",
+        "bytes": 58999,
+        "sha256": "13f53155d465c715d704cfca31ca89ddfc1e61df949284eed8808f41ab6baba1"
+      },
+      "host": {
+        "path": "backend/src/phase20_work_orders_tests.rs",
+        "bytes": 58999,
+        "sha256": "13f53155d465c715d704cfca31ca89ddfc1e61df949284eed8808f41ab6baba1"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/.dockerignore",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/.dockerignore",
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/.dockerignore",
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/auth.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/auth.mjs",
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/auth.mjs",
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/Cargo.lock",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/Cargo.lock",
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/Cargo.lock",
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/Cargo.toml",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/Cargo.toml",
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/Cargo.toml",
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/config.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/config.mjs",
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/config.mjs",
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/db.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/db.mjs",
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/db.mjs",
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/Dockerfile",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/Dockerfile",
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/Dockerfile",
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/errors.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/errors.mjs",
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/errors.mjs",
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/index.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/index.mjs",
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/index.mjs",
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+        "bytes": 1232,
+        "sha256": "124247dc89b8090c06e5c9309ceddb12944135acd560926cb1fd4b18ed0cf0ad"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+        "bytes": 1232,
+        "sha256": "124247dc89b8090c06e5c9309ceddb12944135acd560926cb1fd4b18ed0cf0ad"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/observability.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/observability.mjs",
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/observability.mjs",
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/package-lock.json",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/package-lock.json",
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/package-lock.json",
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/package.json",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/package.json",
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/package.json",
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/README.md",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/README.md",
+        "bytes": 18247,
+        "sha256": "417ddb1be6777d46ce66add0b3b957e8f04e8bf3f7714741b9794f6ed6487a84"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/README.md",
+        "bytes": 18247,
+        "sha256": "417ddb1be6777d46ce66add0b3b957e8f04e8bf3f7714741b9794f6ed6487a84"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/server.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/server.mjs",
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/server.mjs",
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/authorization.rs",
+        "bytes": 7961,
+        "sha256": "5cc7b0456d4286744aeb499c6b93c9f6914ec91ebadff351861501f9f9948b10"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/authorization.rs",
+        "bytes": 7961,
+        "sha256": "5cc7b0456d4286744aeb499c6b93c9f6914ec91ebadff351861501f9f9948b10"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization/client.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/authorization/client.rs",
+        "bytes": 9938,
+        "sha256": "134ab4b09148f9cabfe9024b1ef2e174fe5342ff21326e57bbfc59cff6e964f1"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/authorization/client.rs",
+        "bytes": 9938,
+        "sha256": "134ab4b09148f9cabfe9024b1ef2e174fe5342ff21326e57bbfc59cff6e964f1"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization/policy.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/authorization/policy.rs",
+        "bytes": 12381,
+        "sha256": "4dba370a48f14323a794039a40358f17049e5e92b1bbd3eafa2543ffb0dc03c8"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/authorization/policy.rs",
+        "bytes": 12381,
+        "sha256": "4dba370a48f14323a794039a40358f17049e5e92b1bbd3eafa2543ffb0dc03c8"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization/reminder_tests.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/authorization/reminder_tests.rs",
+        "bytes": 4937,
+        "sha256": "cf3705572b199c05cb6bf57061fbaff6698e91eb431090eadb167dcb1c83cd6d"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/authorization/reminder_tests.rs",
+        "bytes": 4937,
+        "sha256": "cf3705572b199c05cb6bf57061fbaff6698e91eb431090eadb167dcb1c83cd6d"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization/tests.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/authorization/tests.rs",
+        "bytes": 18082,
+        "sha256": "3cdd38e090524b6516e61915b6aacda65b60b90e08edcda1100395ec4750642c"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/authorization/tests.rs",
+        "bytes": 18082,
+        "sha256": "3cdd38e090524b6516e61915b6aacda65b60b90e08edcda1100395ec4750642c"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/config.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/config.rs",
+        "bytes": 18056,
+        "sha256": "ab706d655268372e1f59d12100b97f008fac7fd363340149aa3308b2b344e232"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/config.rs",
+        "bytes": 18056,
+        "sha256": "ab706d655268372e1f59d12100b97f008fac7fd363340149aa3308b2b344e232"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/directory.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/directory.rs",
+        "bytes": 6527,
+        "sha256": "a89ec15ee898c7d6907fa0dd86c97cff46dd37b5a1c77f662b22d6cce69c5a52"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/directory.rs",
+        "bytes": 6527,
+        "sha256": "a89ec15ee898c7d6907fa0dd86c97cff46dd37b5a1c77f662b22d6cce69c5a52"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/directory/query.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/directory/query.rs",
+        "bytes": 5747,
+        "sha256": "f9ddd5fb704f304249aaa0a47204638c1d1a29402120529785e49b942646e343"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/directory/query.rs",
+        "bytes": 5747,
+        "sha256": "f9ddd5fb704f304249aaa0a47204638c1d1a29402120529785e49b942646e343"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/directory/tests.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/directory/tests.rs",
+        "bytes": 4348,
+        "sha256": "e5943b4a4499ef613ced765d5ca05b7312936bc94fb09197912e09f0ac0c6bea"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/directory/tests.rs",
+        "bytes": 4348,
+        "sha256": "e5943b4a4499ef613ced765d5ca05b7312936bc94fb09197912e09f0ac0c6bea"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/error.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/error.rs",
+        "bytes": 7118,
+        "sha256": "37777b7081cffff32d7279fef45a01095fcd6c7b31facd8fbc19dd3eb7d03da9"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/error.rs",
+        "bytes": 7118,
+        "sha256": "37777b7081cffff32d7279fef45a01095fcd6c7b31facd8fbc19dd3eb7d03da9"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/http.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/http.rs",
+        "bytes": 29658,
+        "sha256": "24829b5a173c9849abfba217c5e9152d806225493cc08f5266d4d8139cf06701"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/http.rs",
+        "bytes": 29658,
+        "sha256": "24829b5a173c9849abfba217c5e9152d806225493cc08f5266d4d8139cf06701"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/lib.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/lib.rs",
+        "bytes": 7187,
+        "sha256": "b828d6406386c61a6f539a4fa2b4d328920f0b137e17127b9e0cd42bc0993536"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/lib.rs",
+        "bytes": 7187,
+        "sha256": "b828d6406386c61a6f539a4fa2b4d328920f0b137e17127b9e0cd42bc0993536"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/main.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/main.rs",
+        "bytes": 716,
+        "sha256": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/main.rs",
+        "bytes": 716,
+        "sha256": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/migrations.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/migrations.rs",
+        "bytes": 19697,
+        "sha256": "9f298af0c0099e927ba954e348243dce56187031c3cb093d8accc077905f6c72"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/migrations.rs",
+        "bytes": 19697,
+        "sha256": "9f298af0c0099e927ba954e348243dce56187031c3cb093d8accc077905f6c72"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/migrations/catalog.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/migrations/catalog.rs",
+        "bytes": 11947,
+        "sha256": "775297319d408f0a70d66deafe58c00d70624375e8393e922e5c5faf5b30b291"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/migrations/catalog.rs",
+        "bytes": 11947,
+        "sha256": "775297319d408f0a70d66deafe58c00d70624375e8393e922e5c5faf5b30b291"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reads.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/reads.rs",
+        "bytes": 8365,
+        "sha256": "09a71fb403d9aa3306f6220b4fa38d3be77191fb15a6e051b346f5118eaaaad6"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/reads.rs",
+        "bytes": 8365,
+        "sha256": "09a71fb403d9aa3306f6220b4fa38d3be77191fb15a6e051b346f5118eaaaad6"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reads/csv.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/reads/csv.rs",
+        "bytes": 6370,
+        "sha256": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/reads/csv.rs",
+        "bytes": 6370,
+        "sha256": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reads/query.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/reads/query.rs",
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/reads/query.rs",
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reminders.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/reminders.rs",
+        "bytes": 2025,
+        "sha256": "5d718624744e4d1e9dd498ead52c03c32dbacc2e2dbea46a83eb9d9e4ad345d1"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/reminders.rs",
+        "bytes": 2025,
+        "sha256": "5d718624744e4d1e9dd498ead52c03c32dbacc2e2dbea46a83eb9d9e4ad345d1"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reminders/dto.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/reminders/dto.rs",
+        "bytes": 9214,
+        "sha256": "52f3f49ab461877684c7a92c744c5de73df9f1d23ef1691fedbfc4f5b4ad6cb8"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/reminders/dto.rs",
+        "bytes": 9214,
+        "sha256": "52f3f49ab461877684c7a92c744c5de73df9f1d23ef1691fedbfc4f5b4ad6cb8"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reminders/store.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/reminders/store.rs",
+        "bytes": 4778,
+        "sha256": "38d17f5494e10bc070d06ace10f1cdc04002e26b89a294213c90eb4df0312004"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/reminders/store.rs",
+        "bytes": 4778,
+        "sha256": "38d17f5494e10bc070d06ace10f1cdc04002e26b89a294213c90eb4df0312004"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/writes.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/writes.rs",
+        "bytes": 18698,
+        "sha256": "bf346f76011fc44d0e273b19569dbf380320e1a43f94f5e333174b7e5774af15"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/writes.rs",
+        "bytes": 18698,
+        "sha256": "bf346f76011fc44d0e273b19569dbf380320e1a43f94f5e333174b7e5774af15"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/writes/dto.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/src/writes/dto.rs",
+        "bytes": 14362,
+        "sha256": "a61c9c58c587934a28e3f7b2e332aa563b91ea1302b24922063411d8eeeabbd5"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/src/writes/dto.rs",
+        "bytes": 14362,
+        "sha256": "a61c9c58c587934a28e3f7b2e332aa563b91ea1302b24922063411d8eeeabbd5"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/api.test.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/api.test.mjs",
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/api.test.mjs",
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/config.test.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/config.test.mjs",
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/config.test.mjs",
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/cors.test.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/cors.test.mjs",
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/cors.test.mjs",
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/helpers.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/helpers.mjs",
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/helpers.mjs",
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/member_contracts.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/member_contracts.rs",
+        "bytes": 58366,
+        "sha256": "0f28be0c03fbf797bcb19d73e492419d017851ef70f6bef268dc988bf2f89508"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/member_contracts.rs",
+        "bytes": 58366,
+        "sha256": "0f28be0c03fbf797bcb19d73e492419d017851ef70f6bef268dc988bf2f89508"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/migrations.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/migrations.rs",
+        "bytes": 47488,
+        "sha256": "faf6b1f1a4f21dbc4fbd08152bba141a04472238b72c84110be7d2c61d58dcfe"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/migrations.rs",
+        "bytes": 47488,
+        "sha256": "faf6b1f1a4f21dbc4fbd08152bba141a04472238b72c84110be7d2c61d58dcfe"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/observability.test.mjs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/observability.test.mjs",
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/observability.test.mjs",
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/read_contracts.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/read_contracts.rs",
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/read_contracts.rs",
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/reminder_contracts.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/reminder_contracts.rs",
+        "bytes": 54343,
+        "sha256": "303a86ac9573dfb14fc75cbfcbf9c218534b3a2dc5607524d2f777d146a3efc6"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/reminder_contracts.rs",
+        "bytes": 54343,
+        "sha256": "303a86ac9573dfb14fc75cbfcbf9c218534b3a2dc5607524d2f777d146a3efc6"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/write_contracts.rs",
+      "candidate": {
+        "path": "business-apps/work-orders/backend/tests/write_contracts.rs",
+        "bytes": 48375,
+        "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+      },
+      "host": {
+        "path": "business-apps/work-orders/backend/tests/write_contracts.rs",
+        "bytes": 48375,
+        "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+      }
+    },
+    {
+      "path": "scripts/ci/manifest.mjs",
+      "candidate": {
+        "path": "scripts/ci/manifest.mjs",
+        "bytes": 5535,
+        "sha256": "4c314f06249a5eacafb36da517a40b12de20fa0bfa0496bcbf566286c7934bd5"
+      },
+      "host": {
+        "path": "scripts/ci/manifest.mjs",
+        "bytes": 5535,
+        "sha256": "4c314f06249a5eacafb36da517a40b12de20fa0bfa0496bcbf566286c7934bd5"
+      }
+    },
+    {
+      "path": "scripts/ci/README.md",
+      "candidate": {
+        "path": "scripts/ci/README.md",
+        "bytes": 33902,
+        "sha256": "e344eb728f6a700f8ccdcd469755cc54b29a8a3ce8c761348c3302525f11a59e"
+      },
+      "host": {
+        "path": "scripts/ci/README.md",
+        "bytes": 33902,
+        "sha256": "e344eb728f6a700f8ccdcd469755cc54b29a8a3ce8c761348c3302525f11a59e"
+      }
+    },
+    {
+      "path": "scripts/ci/report.mjs",
+      "candidate": {
+        "path": "scripts/ci/report.mjs",
+        "bytes": 15184,
+        "sha256": "e590c93f9bd4cb2c05ad0100b0334c64c127c14a8675bd8e43dcf6163bda4f2d"
+      },
+      "host": {
+        "path": "scripts/ci/report.mjs",
+        "bytes": 15184,
+        "sha256": "e590c93f9bd4cb2c05ad0100b0334c64c127c14a8675bd8e43dcf6163bda4f2d"
+      }
+    },
+    {
+      "path": "scripts/ci/run.mjs",
+      "candidate": {
+        "path": "scripts/ci/run.mjs",
+        "bytes": 21260,
+        "sha256": "45f0c1b833cdc4935a0aad8be2681d6fb2f49f7e85587ff030bf22968bbf4cde"
+      },
+      "host": {
+        "path": "scripts/ci/run.mjs",
+        "bytes": 21260,
+        "sha256": "45f0c1b833cdc4935a0aad8be2681d6fb2f49f7e85587ff030bf22968bbf4cde"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-member.test.mjs",
+      "candidate": {
+        "path": "scripts/ci/work-orders-member.test.mjs",
+        "bytes": 15817,
+        "sha256": "fe4fe856b8c81cc9b6402ce78a1a2ffd3b979bb9a11421a46f9685e0902e27dd"
+      },
+      "host": {
+        "path": "scripts/ci/work-orders-member.test.mjs",
+        "bytes": 15817,
+        "sha256": "fe4fe856b8c81cc9b6402ce78a1a2ffd3b979bb9a11421a46f9685e0902e27dd"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-reminder-live-postgres.mjs",
+      "candidate": {
+        "path": "scripts/ci/work-orders-reminder-live-postgres.mjs",
+        "bytes": 1861,
+        "sha256": "8c26db1aff74ca1bacb3e1513d7e420fa50257ddc49236e1cbe4e1cb91e7643e"
+      },
+      "host": {
+        "path": "scripts/ci/work-orders-reminder-live-postgres.mjs",
+        "bytes": 1861,
+        "sha256": "8c26db1aff74ca1bacb3e1513d7e420fa50257ddc49236e1cbe4e1cb91e7643e"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-reminder-live-results.mjs",
+      "candidate": {
+        "path": "scripts/ci/work-orders-reminder-live-results.mjs",
+        "bytes": 5284,
+        "sha256": "3428ac19f286ba41f550db3f74d053b220c069bf918e1aa99faa96042346e276"
+      },
+      "host": {
+        "path": "scripts/ci/work-orders-reminder-live-results.mjs",
+        "bytes": 5284,
+        "sha256": "3428ac19f286ba41f550db3f74d053b220c069bf918e1aa99faa96042346e276"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-reminder-postgres.mjs",
+      "candidate": {
+        "path": "scripts/ci/work-orders-reminder-postgres.mjs",
+        "bytes": 1714,
+        "sha256": "580d220611e237ef4a9fea8b4c72c54768ca97bd74e15e9db34e4f59f314bac0"
+      },
+      "host": {
+        "path": "scripts/ci/work-orders-reminder-postgres.mjs",
+        "bytes": 1714,
+        "sha256": "580d220611e237ef4a9fea8b4c72c54768ca97bd74e15e9db34e4f59f314bac0"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-reminder.test.mjs",
+      "candidate": {
+        "path": "scripts/ci/work-orders-reminder.test.mjs",
+        "bytes": 12380,
+        "sha256": "c24e1acd2be57f6452251bd4c92bebc46b6f50d3fe78c2f599c3a1d3396fd9f4"
+      },
+      "host": {
+        "path": "scripts/ci/work-orders-reminder.test.mjs",
+        "bytes": 12380,
+        "sha256": "c24e1acd2be57f6452251bd4c92bebc46b6f50d3fe78c2f599c3a1d3396fd9f4"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders.test.mjs",
+      "candidate": {
+        "path": "scripts/ci/work-orders.test.mjs",
+        "bytes": 11838,
+        "sha256": "c3bafcee33c3088e9b10b4fdbd4259c6c5f64ec9a03b05c47fe8395d3729c140"
+      },
+      "host": {
+        "path": "scripts/ci/work-orders.test.mjs",
+        "bytes": 11838,
+        "sha256": "c3bafcee33c3088e9b10b4fdbd4259c6c5f64ec9a03b05c47fe8395d3729c140"
+      }
+    },
+    {
+      "path": "scripts/ci/workflow-policy.mjs",
+      "candidate": {
+        "path": "scripts/ci/workflow-policy.mjs",
+        "bytes": 12083,
+        "sha256": "64a61dfe5ec4c3b9ef6c300f8202545a054bb80a3a115aaec00f8f96aaea18d9"
+      },
+      "host": {
+        "path": "scripts/ci/workflow-policy.mjs",
+        "bytes": 12083,
+        "sha256": "64a61dfe5ec4c3b9ef6c300f8202545a054bb80a3a115aaec00f8f96aaea18d9"
+      }
+    }
+  ],
+  "ciFixtureInputs": [
+    "scripts/ci/work-orders.test.mjs",
+    "scripts/ci/work-orders-member.test.mjs"
+  ],
+  "requiredInputs": [
+    "scripts/ci/provenance.mjs",
+    "scripts/ci/linux-runner.mjs",
+    "scripts/ci/manifest.mjs",
+    "scripts/ci/report.mjs",
+    "scripts/ci/run.mjs",
+    "scripts/ci/workflow-policy.mjs",
+    ".github/workflows/production-build.yml",
+    "scripts/ci/README.md",
+    ".github/README.md",
+    "scripts/ci/work-orders.test.mjs",
+    "scripts/ci/work-orders-member.test.mjs",
+    "business-apps/work-orders/backend/Cargo.toml",
+    "business-apps/work-orders/backend/Cargo.lock",
+    "business-apps/work-orders/backend/src/reminders.rs",
+    "business-apps/work-orders/backend/src/reminders/dto.rs",
+    "business-apps/work-orders/backend/src/reminders/store.rs",
+    "business-apps/work-orders/backend/tests/migrations.rs",
+    "business-apps/work-orders/backend/tests/read_contracts.rs",
+    "business-apps/work-orders/backend/tests/write_contracts.rs",
+    "business-apps/work-orders/backend/tests/member_contracts.rs",
+    "business-apps/work-orders/backend/tests/reminder_contracts.rs",
+    "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+    "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+    "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+    "backend/src/phase17_work_orders_tests.rs",
+    "backend/src/phase18_work_orders_tests.rs",
+    "backend/src/phase19_work_orders_tests.rs",
+    "backend/src/phase20_work_orders_tests.rs",
+    "tests/platform-admin-tls.mjs",
+    "tools/platform-admin/Cargo.toml",
+    "tools/platform-admin/Cargo.lock",
+    "scripts/ci/work-orders-postgres.mjs",
+    "scripts/ci/work-orders-read-postgres.mjs",
+    "scripts/ci/work-orders-write-postgres.mjs",
+    "scripts/ci/work-orders-member-postgres.mjs",
+    "scripts/ci/work-orders-reminder-postgres.mjs",
+    "scripts/ci/work-orders-live-postgres.mjs",
+    "scripts/ci/work-orders-write-live-postgres.mjs",
+    "scripts/ci/work-orders-member-live-postgres.mjs",
+    "scripts/ci/work-orders-reminder-live-postgres.mjs",
+    "scripts/ci/work-orders-reminder-live-results.mjs",
+    "scripts/ci/work-orders-reminder.test.mjs"
+  ],
+  "closure": {
+    "status": "PASS",
+    "selector": {
+      "path": "scripts/ci/provenance.mjs",
+      "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+    },
+    "parserTool": {
+      "package": "typescript",
+      "version": "5.9.3",
+      "entrySha256": "3ae902c92cc44dace175c0e69e13a4b0899f6983c6121d76b9ab8dd5795e7675",
+      "source": "Existing frontend lock-bound parser used only by the local capture tool; no runtime dependency was added."
+    },
+    "explicitRequired": [
+      "scripts/ci/provenance.mjs",
+      "scripts/ci/linux-runner.mjs",
+      "scripts/ci/manifest.mjs",
+      "scripts/ci/report.mjs",
+      "scripts/ci/run.mjs",
+      "scripts/ci/workflow-policy.mjs",
+      ".github/workflows/production-build.yml",
+      "scripts/ci/README.md",
+      ".github/README.md",
+      "scripts/ci/work-orders.test.mjs",
+      "scripts/ci/work-orders-member.test.mjs",
+      "business-apps/work-orders/backend/Cargo.toml",
+      "business-apps/work-orders/backend/Cargo.lock",
+      "business-apps/work-orders/backend/src/reminders.rs",
+      "business-apps/work-orders/backend/src/reminders/dto.rs",
+      "business-apps/work-orders/backend/src/reminders/store.rs",
+      "business-apps/work-orders/backend/tests/migrations.rs",
+      "business-apps/work-orders/backend/tests/read_contracts.rs",
+      "business-apps/work-orders/backend/tests/write_contracts.rs",
+      "business-apps/work-orders/backend/tests/member_contracts.rs",
+      "business-apps/work-orders/backend/tests/reminder_contracts.rs",
+      "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+      "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+      "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+      "backend/src/phase17_work_orders_tests.rs",
+      "backend/src/phase18_work_orders_tests.rs",
+      "backend/src/phase19_work_orders_tests.rs",
+      "backend/src/phase20_work_orders_tests.rs",
+      "tests/platform-admin-tls.mjs",
+      "tools/platform-admin/Cargo.toml",
+      "tools/platform-admin/Cargo.lock",
+      "scripts/ci/work-orders-postgres.mjs",
+      "scripts/ci/work-orders-read-postgres.mjs",
+      "scripts/ci/work-orders-write-postgres.mjs",
+      "scripts/ci/work-orders-member-postgres.mjs",
+      "scripts/ci/work-orders-reminder-postgres.mjs",
+      "scripts/ci/work-orders-live-postgres.mjs",
+      "scripts/ci/work-orders-write-live-postgres.mjs",
+      "scripts/ci/work-orders-member-live-postgres.mjs",
+      "scripts/ci/work-orders-reminder-live-postgres.mjs",
+      "scripts/ci/work-orders-reminder-live-results.mjs",
+      "scripts/ci/work-orders-reminder.test.mjs"
+    ],
+    "registeredTestFiles": [
+      "tests/platform-admin-contract.mjs",
+      "tests/data-grants.mjs",
+      "tests/data-grants-transport.mjs",
+      "tests/auth-queries.mjs",
+      "tests/route-policy.mjs",
+      "tests/route-policy-guard.mjs",
+      "tests/application-navigation.mjs",
+      "tests/micro-context-runtime.mjs",
+      "tests/micro-context-updates.mjs",
+      "tests/micro-sandbox-lifecycle.mjs",
+      "tests/micro-runtime-faults.mjs",
+      "tests/micro-iframe-protocol.mjs",
+      "tests/micro-sdk-client.mjs",
+      "tests/micro-sdk-generation.mjs",
+      "tests/notification-context.mjs",
+      "tests/session-refresh.mjs",
+      "tests/session-coordinator.mjs",
+      "tests/session-integration.mjs",
+      "tests/map-location-regions.mjs",
+      "mini-services/micro-vue/smoke-test.cjs",
+      "mini-services/micro-jquery/smoke-test.cjs",
+      "business-apps/work-orders/frontend/tests/client.mjs",
+      "business-apps/work-orders/frontend/tests/app.mjs",
+      "business-apps/work-orders/backend/tests/cors.test.mjs",
+      "examples/app-backend/authorize.test.mjs",
+      "tests/package-microapp.mjs",
+      "tests/ci-runner.mjs",
+      "tests/ci-workflow.mjs",
+      "tests/notification-ci-policy.mjs",
+      "tests/notification-e2e-launch-policy.mjs",
+      "scripts/ci/postgres.test.mjs",
+      "scripts/ci/platform-admin.test.mjs",
+      "scripts/ci/work-orders.test.mjs",
+      "scripts/ci/work-orders-write.test.mjs",
+      "scripts/ci/work-orders-member.test.mjs",
+      "scripts/ci/work-orders-reminder.test.mjs",
+      "scripts/ci/linux-runner.test.mjs",
+      "scripts/ci/release.test.mjs",
+      "tests/browser/results.test.mjs",
+      "tests/browser/wait.test.mjs",
+      "tests/zip-release-e2e-policy.mjs",
+      "tests/nginx-render-policy.mjs",
+      "deploy/static/tests/static-image-policy.mjs",
+      "deploy/native/tests/build.test.mjs"
+    ],
+    "resolvedEdges": [
+      {
+        "from": "backend/src/oauth_issuance_tests.rs",
+        "to": "backend/migrations/0001_init.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/oauth_issuance_tests.rs",
+        "to": "backend/migrations/0002_release_artifacts.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/oauth_issuance_tests.rs",
+        "to": "backend/migrations/0003_oauth_issuance.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/public_contract_tests.rs",
+        "to": "examples/micro-app-sdk/contracts/fixtures/public-wire.json",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/public_contract_tests.rs",
+        "to": "backend/src/public_contract.rs",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/public_contract_tests.rs",
+        "to": "examples/micro-app-sdk/generated/protocol.rs",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/public_contract_tests.rs",
+        "to": "examples/micro-app-sdk/release.json",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/public_contract_tests.rs",
+        "to": "examples/micro-app-sdk/generated/schema.json",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/region_seed.rs",
+        "to": "backend/assets/regions-2023.copy.gz",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "backend/src/region_selection.rs",
+        "to": "backend/assets/regions-2023.copy.gz",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "business-apps/work-orders/backend/auth.mjs",
+        "to": "business-apps/work-orders/backend/errors.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/config.mjs",
+        "to": "business-apps/work-orders/backend/observability.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/index.mjs",
+        "to": "business-apps/work-orders/backend/config.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/index.mjs",
+        "to": "business-apps/work-orders/backend/db.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/index.mjs",
+        "to": "business-apps/work-orders/backend/server.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/server.mjs",
+        "to": "business-apps/work-orders/backend/errors.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/server.mjs",
+        "to": "business-apps/work-orders/backend/auth.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/server.mjs",
+        "to": "business-apps/work-orders/backend/observability.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/src/migrations.rs",
+        "to": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "business-apps/work-orders/backend/src/migrations.rs",
+        "to": "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "business-apps/work-orders/backend/src/migrations.rs",
+        "to": "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/api.test.mjs",
+        "to": "business-apps/work-orders/backend/tests/helpers.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/api.test.mjs",
+        "to": "business-apps/work-orders/backend/db.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/config.test.mjs",
+        "to": "business-apps/work-orders/backend/config.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/cors.test.mjs",
+        "to": "business-apps/work-orders/backend/server.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/helpers.mjs",
+        "to": "business-apps/work-orders/backend/db.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/helpers.mjs",
+        "to": "business-apps/work-orders/backend/server.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/migrations.rs",
+        "to": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/migrations.rs",
+        "to": "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/migrations.rs",
+        "to": "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+        "kind": "rust-embedded-source"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/observability.test.mjs",
+        "to": "business-apps/work-orders/backend/server.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/backend/tests/observability.test.mjs",
+        "to": "business-apps/work-orders/backend/config.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/frontend/scripts/build.mjs",
+        "to": "business-apps/work-orders/frontend/vendor/micro-sdk.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/frontend/src/app.mjs",
+        "to": "business-apps/work-orders/frontend/src/client.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/frontend/src/app.mjs",
+        "to": "business-apps/work-orders/frontend/src/domain.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/frontend/src/client.mjs",
+        "to": "business-apps/work-orders/frontend/src/domain.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/frontend/src/client.mjs",
+        "to": "business-apps/work-orders/frontend/vendor/micro-sdk.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/frontend/tests/client.mjs",
+        "to": "business-apps/work-orders/frontend/src/client.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/frontend/tests/client.mjs",
+        "to": "business-apps/work-orders/frontend/src/domain.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "business-apps/work-orders/tests/platform-e2e.mjs",
+        "to": "tests/production-native-support.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "deploy/gateway/render.mjs",
+        "to": "deploy/gateway/policy.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "deploy/native/render.mjs",
+        "to": "deploy/gateway/policy.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "deploy/native/tests/build.test.mjs",
+        "to": "deploy/native/build.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "deploy/static/prepare-history.mjs",
+        "to": "deploy/static/finalize-build.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "deploy/static/tests/static-image-policy.mjs",
+        "to": "deploy/static/finalize-build.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "deploy/static/tests/static-image-policy.mjs",
+        "to": "deploy/static/prepare-history.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/app-backend/authorize.test.mjs",
+        "to": "examples/app-backend/authorize.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/context-client.mjs",
+        "to": "examples/micro-app-sdk/releases/1.0.0/index.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/index.d.mts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/index.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/index.mjs",
+        "to": "examples/micro-app-sdk/releases/1.0.0/index.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/notification-publisher.mjs",
+        "to": "examples/micro-app-sdk/releases/1.0.0/index.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/http.d.mts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/types.d.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.mts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/types.d.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.mts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.mts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/http.d.mts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.mts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/capabilities.d.mts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.ts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/types.d.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.ts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.ts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/http.d.mts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/releases/1.0.0/index.d.ts",
+        "to": "examples/micro-app-sdk/releases/1.0.0/capabilities.d.mts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/classic-entry.mjs",
+        "to": "examples/micro-app-sdk/src/index.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/classic-entry.mjs",
+        "to": "examples/micro-app-sdk/src/iframe-bridge.js",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/context-client.mjs",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/context-client.mjs",
+        "to": "examples/micro-app-sdk/src/http.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/context-client.mjs",
+        "to": "examples/micro-app-sdk/src/capabilities.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/context-client.mjs",
+        "to": "examples/micro-app-sdk/src/context-updates.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/http.d.mts",
+        "to": "examples/micro-app-sdk/generated/types.d.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/http.mjs",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/iframe-bridge.js",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/iframe-bridge.js",
+        "to": "examples/micro-app-sdk/src/capabilities.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/iframe-bridge.js",
+        "to": "examples/micro-app-sdk/src/http.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/iframe-bridge.js",
+        "to": "examples/micro-app-sdk/src/context-updates.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.d.mts",
+        "to": "examples/micro-app-sdk/generated/types.d.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.d.mts",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.d.mts",
+        "to": "examples/micro-app-sdk/src/http.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.d.mts",
+        "to": "examples/micro-app-sdk/src/capabilities.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.mjs",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.mjs",
+        "to": "examples/micro-app-sdk/src/http.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.mjs",
+        "to": "examples/micro-app-sdk/src/context-client.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.mjs",
+        "to": "examples/micro-app-sdk/src/notification-publisher.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.mjs",
+        "to": "examples/micro-app-sdk/src/capabilities.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.mjs",
+        "to": "examples/micro-app-sdk/src/iframe-bridge.js",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/index.mjs",
+        "to": "examples/micro-app-sdk/src/context-updates.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/notification-publisher.mjs",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/micro-app-sdk/src/notification-publisher.mjs",
+        "to": "examples/micro-app-sdk/src/http.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/websocket/src/main.tsx",
+        "to": "examples/websocket/src/styles.css",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/websocket/tests/browser-smoke.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/websocket/tests/config.test.mjs",
+        "to": "examples/websocket/src/chat-config.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/websocket/tests/config.test.mjs",
+        "to": "examples/websocket/src/chat-client.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "examples/websocket/vite.config.ts",
+        "to": "examples/websocket/src/chat-config.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/components/micro/iframe.ts",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/components/micro/iframe.ts",
+        "to": "examples/micro-app-sdk/src/capabilities.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/components/micro/MicroAppContainer.tsx",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/components/micro/MicroAppContainer.tsx",
+        "to": "examples/micro-app-sdk/src/capabilities.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/components/micro/runtime.ts",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/components/micro/runtime.ts",
+        "to": "examples/micro-app-sdk/src/context-updates.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/lib/notification-protocol.ts",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "frontend/src/main.tsx",
+        "to": "frontend/src/index.css",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/helpers/rust-platform.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-service.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-auth-races.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-platform.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-auth-races.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-service.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-auth-races.mjs",
+        "to": "frontend/src/lib/notification-protocol.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-boundaries.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-platform.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-boundaries.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-service.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-browser.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-platform.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-browser.mjs",
+        "to": "tests/phase23-notification-browser.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-platform-e2e.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-platform.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-scheduler.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-platform.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/notification-ws/tests/rust-scheduler.mjs",
+        "to": "mini-services/notification-ws/tests/helpers/rust-service.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/oauth-playground/frontend/src/app.js",
+        "to": "mini-services/oauth-playground/frontend/src/style.css",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/oauth-playground/frontend/src/app.js",
+        "to": "mini-services/oauth-playground/frontend/src/api.js",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/oauth-playground/frontend/src/app.js",
+        "to": "mini-services/oauth-playground/frontend/src/device-poller.js",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/oauth-playground/frontend/tests/api.test.mjs",
+        "to": "mini-services/oauth-playground/frontend/src/api.js",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/oauth-playground/frontend/tests/device-poller.test.mjs",
+        "to": "mini-services/oauth-playground/frontend/src/device-poller.js",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "mini-services/oauth-playground/tests/delivery.mjs",
+        "to": "mini-services/oauth-playground/deploy/render-edge.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/data-grant-ui.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/data-grant-ui.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/data-grant-ui.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/data-grant-ui.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/data-grant-ui.mjs",
+        "to": "scripts/ci/data-grant-ui-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/linux-runner.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/linux-runner.test.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/notification-image.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/notification-image.mjs",
+        "to": "tests/zip-release-e2e.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/notification.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/notification.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground-delivery.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground-delivery.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground-delivery.mjs",
+        "to": "tests/zip-release-e2e.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground-delivery.mjs",
+        "to": "mini-services/oauth-playground/deploy/render-edge.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/oauth-playground.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/platform-admin.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/platform-admin.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/platform-admin.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/platform-admin.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/platform-admin.test.mjs",
+        "to": "scripts/ci/platform-admin.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/postgres.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/postgres.test.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/release.mjs",
+        "to": "deploy/native/build.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/release.test.mjs",
+        "to": "scripts/ci/release.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/report.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/report.mjs",
+        "to": "scripts/ci/data-grant-ui-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/report.mjs",
+        "to": "scripts/ci/work-orders-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/report.mjs",
+        "to": "scripts/ci/work-orders-write-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/report.mjs",
+        "to": "scripts/ci/work-orders-reminder-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/report.mjs",
+        "to": "scripts/ci/work-orders-member-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/run.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/run.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/run.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/run.mjs",
+        "to": "tests/browser/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/run.mjs",
+        "to": "tests/zip-release-e2e.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-live-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-live-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-live-postgres.mjs",
+        "to": "scripts/ci/work-orders-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member-live-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member-live-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member-live-postgres.mjs",
+        "to": "scripts/ci/work-orders-member-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member-postgres.mjs",
+        "to": "scripts/ci/work-orders-member-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/work-orders-member-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/work-orders-member-live-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/work-orders-member-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/work-orders-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/work-orders-write-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-member.test.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-read-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-read-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder-live-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder-live-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder-live-postgres.mjs",
+        "to": "scripts/ci/work-orders-reminder-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder-postgres.mjs",
+        "to": "scripts/ci/work-orders-reminder-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder.test.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder.test.mjs",
+        "to": "scripts/ci/work-orders-reminder-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder.test.mjs",
+        "to": "scripts/ci/work-orders-reminder-live-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder.test.mjs",
+        "to": "scripts/ci/work-orders-reminder-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder.test.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder.test.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-reminder.test.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write-live-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write-live-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write-live-postgres.mjs",
+        "to": "scripts/ci/work-orders-write-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write-postgres.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write-postgres.mjs",
+        "to": "scripts/ci/postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write.test.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write.test.mjs",
+        "to": "scripts/ci/work-orders-write-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write.test.mjs",
+        "to": "scripts/ci/work-orders-write-live-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write.test.mjs",
+        "to": "scripts/ci/work-orders-write-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write.test.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write.test.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders-write.test.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders.test.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders.test.mjs",
+        "to": "scripts/ci/work-orders-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders.test.mjs",
+        "to": "scripts/ci/work-orders-read-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders.test.mjs",
+        "to": "scripts/ci/work-orders-live-postgres.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders.test.mjs",
+        "to": "scripts/ci/work-orders-live-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders.test.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "scripts/ci/work-orders.test.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/browser/results.test.mjs",
+        "to": "tests/browser/results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/browser/run.mjs",
+        "to": "tests/browser/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/browser/run.mjs",
+        "to": "tests/browser/results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/browser/run.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/browser/wait.test.mjs",
+        "to": "tests/browser/wait.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-runner.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-runner.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-runner.mjs",
+        "to": "scripts/ci/run.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-runner.mjs",
+        "to": "scripts/ci/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-runner.mjs",
+        "to": "tests/browser/manifest.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-runner.mjs",
+        "to": "scripts/ci/data-grant-ui-results.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-runner.mjs",
+        "to": "scripts/ci/data-grant-ui.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/ci-workflow.mjs",
+        "to": "scripts/ci/workflow-policy.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/data-grants-transport.mjs",
+        "to": "tests/helpers/session-fixture.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/department-context-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/department-context-browser.mjs",
+        "to": "tests/browser/wait.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/dev-runner.mjs",
+        "to": "scripts/dev.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/dev-vite-integration.mjs",
+        "to": "scripts/dev.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/entity-types-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/fixtures/dev-supervisor.mjs",
+        "to": "scripts/dev.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/map-location-regions.mjs",
+        "to": "frontend/src/lib/location.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-context-runtime.mjs",
+        "to": "frontend/src/components/micro/runtime.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-context-runtime.mjs",
+        "to": "examples/micro-app-sdk/context-client.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-context-runtime.mjs",
+        "to": "examples/micro-app-sdk/src/capabilities.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-context-updates.mjs",
+        "to": "frontend/src/components/micro/runtime.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-context-updates.mjs",
+        "to": "frontend/src/components/micro/entry.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-host-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-host-browser.mjs",
+        "to": "tests/phase8-work-orders-browser.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-iframe-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-iframe-protocol.mjs",
+        "to": "frontend/src/components/micro/iframe.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-release-gateways.mjs",
+        "to": "deploy/gateway/render.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-release-gateways.mjs",
+        "to": "deploy/static/prepare-history.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-runtime-faults.mjs",
+        "to": "frontend/src/components/micro/runtime.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-sdk-client.mjs",
+        "to": "examples/micro-app-sdk/releases/1.0.0/index.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-sdk-generation.mjs",
+        "to": "scripts/sync-micro-sdk.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/micro-sdk-generation.mjs",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/nginx-render-policy.mjs",
+        "to": "deploy/gateway/render.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/notification-ci-policy.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/notification-context.mjs",
+        "to": "frontend/src/lib/notification-context.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/notification-context.mjs",
+        "to": "frontend/src/lib/notification-protocol.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/notification-frontend-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase10-session-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase15-data-grants-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase15-data-grants-browser.mjs",
+        "to": "tests/phase15-data-grants-races.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase15-data-grants-browser.mjs",
+        "to": "tests/phase15-work-orders-fixture.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase15-work-orders-fixture.mjs",
+        "to": "business-apps/work-orders/backend/config.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase15-work-orders-fixture.mjs",
+        "to": "business-apps/work-orders/backend/db.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase15-work-orders-fixture.mjs",
+        "to": "business-apps/work-orders/backend/server.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase22-socketio.mjs",
+        "to": "frontend/src/lib/notification-protocol.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase22-socketio.mjs",
+        "to": "examples/websocket/src/chat-client.ts",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase22-socketio.mjs",
+        "to": "tests/helpers/phase22-fixtures.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase23-notification-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase23-notification-browser.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase24-oauth-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase24-oauth-browser.mjs",
+        "to": "scripts/ci/oauth-playground.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/phase9-navigation-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/platform-admin-contract.mjs",
+        "to": "business-apps/work-orders/frontend/src/domain.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/platform-settings-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/production-native-config.mjs",
+        "to": "deploy/native/render.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/production-native-e2e.mjs",
+        "to": "tests/production-native-support.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/production-native-e2e.mjs",
+        "to": "business-apps/work-orders/tests/platform-e2e.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/production-native-support.mjs",
+        "to": "deploy/native/render.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/region-location-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/route-permissions-browser.mjs",
+        "to": "tests/browser/runtime.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/session-coordinator.mjs",
+        "to": "tests/helpers/session-fixture.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/session-refresh.mjs",
+        "to": "tests/helpers/session-fixture.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/vite-example-delivery.mjs",
+        "to": "examples/micro-app-sdk/generated/protocol.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/zip-release-e2e-policy.mjs",
+        "to": "tests/zip-release-e2e.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/zip-release-e2e.mjs",
+        "to": "deploy/native/build.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/zip-release-e2e.mjs",
+        "to": "deploy/gateway/render.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/zip-release-e2e.mjs",
+        "to": "scripts/ci/provenance.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/zip-release-e2e.mjs",
+        "to": "scripts/ci/report.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tests/zip-release-e2e.mjs",
+        "to": "scripts/ci/linux-runner.mjs",
+        "kind": "exact-local-import"
+      },
+      {
+        "from": "tools/platform-admin/src/bootstrap.rs",
+        "to": "tools/platform-admin/manifests/bootstrap.manifest.json",
+        "kind": "rust-embedded-source"
+      }
+    ],
+    "installedPackageEdges": [
+      {
+        "from": "tests/micro-runtime-faults.mjs",
+        "to": "frontend/node_modules/typescript/lib/typescript.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/micro-runtime-faults.mjs",
+        "to": "frontend/node_modules/import-html-entry/lib/index.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/micro-sandbox-lifecycle.mjs",
+        "to": "frontend/node_modules/typescript/lib/typescript.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/vite-example-delivery.mjs",
+        "to": "frontend/node_modules/vite/dist/node/index.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/vite-host-static.mjs",
+        "to": "frontend/node_modules/vite/dist/node/index.js",
+        "kind": "locked-installed-package"
+      }
+    ],
+    "limits": [
+      "Static exact local imports, literal Rust embedded sources and explicitly registered fixtures are checked here. Dynamic paths, installed packages and bundler resolution are additionally verified by locked installation, the real build and tests."
+    ]
+  },
+  "immutableHistoricalInputs": [
+    "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+    "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+    "business-apps/work-orders/backend/Cargo.toml",
+    "business-apps/work-orders/backend/Cargo.lock",
+    "backend/Cargo.toml",
+    "backend/Cargo.lock"
+  ],
+  "evolution": {
+    "baseline": "docs/validation/phase-19-inputs.json",
+    "baselineInputsSha256": "52ebb7a5904b82fa94f5f16b69e9cad924b8afcea4ae60df75fa1423a101741e",
+    "addedMigration": "business-apps/work-orders/backend/migrations/0003_reminder_intents.sql",
+    "dependenciesChanged": false,
+    "fixtures": [
+      {
+        "path": "business-apps/work-orders/backend/tests/migrations.rs",
+        "before": {
+          "path": "business-apps/work-orders/backend/tests/migrations.rs",
+          "bytes": 32291,
+          "sha256": "e0d0d5e50cfc141f1c14c0f9a988d43667fdd98c889fe3cac3e55956f8d9cea3"
+        },
+        "after": {
+          "path": "business-apps/work-orders/backend/tests/migrations.rs",
+          "bytes": 47488,
+          "sha256": "faf6b1f1a4f21dbc4fbd08152bba141a04472238b72c84110be7d2c61d58dcfe"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member.test.mjs",
+        "before": {
+          "path": "scripts/ci/work-orders-member.test.mjs",
+          "bytes": 15817,
+          "sha256": "c461b3f1e39cbae1ef419e19ab445f7aa5d994e94d1833a740735e5b02a225f5"
+        },
+        "after": {
+          "path": "scripts/ci/work-orders-member.test.mjs",
+          "bytes": 15817,
+          "sha256": "fe4fe856b8c81cc9b6402ce78a1a2ffd3b979bb9a11421a46f9685e0902e27dd"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders.test.mjs",
+        "before": {
+          "path": "scripts/ci/work-orders.test.mjs",
+          "bytes": 11838,
+          "sha256": "0646b8f5d2e2d3eaf8a264ea862ddbc85829a47e8b3f5304456ede2fc7dbcccd"
+        },
+        "after": {
+          "path": "scripts/ci/work-orders.test.mjs",
+          "bytes": 11838,
+          "sha256": "c3bafcee33c3088e9b10b4fdbd4259c6c5f64ec9a03b05c47fe8395d3729c140"
+        }
+      }
+    ]
+  },
+  "hostDrift": [],
+  "hostWholeTreeEquivalent": true,
+  "artifacts": [
+    {
+      "path": "target/phase-20/inputs-candidate-r2.json",
+      "bytes": 177277,
+      "sha256": "f5b5f5704429fff9ea9aaa1d1c0090f6a7c7a00d4590e4ddeaed892b60be0226"
+    },
+    {
+      "path": "docs/validation/phase-19-inputs.json",
+      "bytes": 171991,
+      "sha256": "f8aa24a8c36ca0179996c245b353c19bca298baac63f648adf3b4701fbcc8fe5"
+    },
+    {
+      "path": "target/phase-20/capture-drivers-candidate-r2/freeze-source.mjs",
+      "bytes": 3525,
+      "sha256": "0d136b4a7aa4e1e1e7192dbf117a864d3421ba9dc0d3203397646fdb53d49642"
+    },
+    {
+      "path": "target/phase-20/capture-drivers-candidate-r2/source-closure.mjs",
+      "bytes": 7390,
+      "sha256": "b328fd2afe3ffd3bc45ac8bc2ebe91e71d1e53ee52680fd7a33f20871d5e827b"
+    },
+    {
+      "path": "target/phase-20/collect-boundaries.mjs",
+      "bytes": 7477,
+      "sha256": "fbff9cfdc61c48eed4aba537e0eafe088dbe91b761d0306228c9d9dff5652130"
+    },
+    {
+      "path": "target/phase-20/source-closure.mjs",
+      "bytes": 7390,
+      "sha256": "b328fd2afe3ffd3bc45ac8bc2ebe91e71d1e53ee52680fd7a33f20871d5e827b"
+    }
+  ],
+  "limitations": [
+    "This audit binds source and declared selections; it is not execution evidence. Actual test counts, persistent notifications and cleanup must come from the adopted runtime audit."
+  ]
+}

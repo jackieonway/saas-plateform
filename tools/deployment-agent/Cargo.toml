@@ -1,0 +1,15 @@
+[package]
+name = "saas-deployment-agent"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Constrained static-image deployment worker with outbound authenticated HTTPS"
+
+[dependencies]
+deployment-contract = { path = "../../crates/deployment-contract" }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.dev]
+debug = 1

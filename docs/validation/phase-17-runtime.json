@@ -1,0 +1,868 @@
+{
+  "schemaVersion": 1,
+  "phase": 17,
+  "status": "PHASE17_GATES_PASS",
+  "kind": "phase17-evidence-and-runtime-index",
+  "publishedAt": "2026-10-17T01:05:09.049Z",
+  "clientDate": "2026-10-17",
+  "clientTimezone": "Asia/Shanghai",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "inputsSha256": "59b0f8d12db41b566e42f59d0aeba38f2afe72c547a18ca3501dabb53a654028",
+  "inputCount": 674,
+  "managedAudit": {
+    "path": "target/phase-17/managed-audit.json",
+    "checks": 14,
+    "status": "PHASE17_GATES_PASS"
+  },
+  "suites": [
+    {
+      "id": "postgres",
+      "passed": 74,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "id": "work-orders-postgres",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "id": "work-orders-read-postgres",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "id": "work-orders-live-postgres",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "namedChecks": 13
+    }
+  ],
+  "fast": {
+    "status": "FAIL",
+    "steps": 50,
+    "passedSteps": 48,
+    "failedSteps": 2,
+    "passed": 700,
+    "failed": 1,
+    "skipped": 0,
+    "failedStepIds": [
+      "contracts",
+      "platform-admin-fmt"
+    ],
+    "originalSummary": "target/phase-17/linux-fast-r1/reports/fast/summary.json",
+    "classification": [
+      {
+        "id": "contracts",
+        "log": "logs/15-contracts.log",
+        "logSha256": "2b90281463dd4a5fd9ad588e1fd0d4dbeb004ba5bca04dbdd0203e160ee2864b"
+      },
+      {
+        "id": "platform-admin-fmt",
+        "log": "logs/46-platform-admin-fmt.log",
+        "logSha256": "60e1e95bb99aa094307a7b4d4260223fba340371d3806594ee20ff904350162b"
+      }
+    ]
+  },
+  "focusedFast": {
+    "status": "PHASE17_SCOPED_FAST_PASS",
+    "selectedSteps": 9,
+    "passed": 137,
+    "failed": 0,
+    "skipped": 0,
+    "report": "target/phase-17/focused-fast-result.json",
+    "sha256": "09bc599ce80990c8ac1a43b8f38cd1468f0356a967981e1baf798047e3de9211",
+    "derivationOnly": true,
+    "testsReexecuted": false,
+    "groups": [
+      {
+        "file": "examples/app-backend/authorize.test.mjs",
+        "passed": 7
+      },
+      {
+        "file": "business-apps/work-orders/backend/tests/cors.test.mjs",
+        "passed": 1
+      },
+      {
+        "file": "business-apps/work-orders/frontend/tests/client.mjs",
+        "passed": 19
+      },
+      {
+        "file": "business-apps/work-orders/frontend/tests/app.mjs",
+        "passed": 13
+      }
+    ]
+  },
+  "library": {
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0
+  },
+  "doctest": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "runtime": {
+    "passed": 11,
+    "binarySha256": "7155530bb405c655813c9edb6cfef132509cc8a007631298a03120f854974f15",
+    "readOnlyRootfs": false,
+    "authorizationScope": "The isolated loopback HTTPS platform is intentionally unreachable. This probe proves 401/503 fail-closed behavior; successful real-platform reads are verified in the independent joint suite."
+  },
+  "originalOuterFailure": {
+    "report": "target/phase-17/linux-postgres-wip-r2/linux-runner-result.json",
+    "status": "FAIL",
+    "reason": "Phase 17 executable or CI input changed: scripts/ci/manifest.mjs",
+    "childPostgresStatus": "PASS",
+    "runtimeSupplementedBy": "target/phase-17/linux-runtime-r1/supplement-result.json"
+  },
+  "separateCurrentHostPolicy": {
+    "report": "target/phase-17/current-policy-reconciled.json",
+    "passed": 6,
+    "candidate": "current host bytes in that report; separate from immutable 674-file candidate",
+    "originalCollectorFailurePreserved": true
+  },
+  "separateCurrentHostExternalRecheck": {
+    "report": "target/phase-17/current-external-recheck.json",
+    "status": "PASS",
+    "candidate": "current host bytes described by that report; no frozen source replacement or full fast rerun"
+  },
+  "currentOwnedInputsRechecked": 23,
+  "artifactsSha256": "f8281df0f2002ad4cba88c86ed018a7adc4ca2fccc43c62d52adaad889dd7992",
+  "artifacts": [
+    {
+      "path": "docs/validation/phase-17-boundaries.json",
+      "bytes": 155775,
+      "sha256": "f42e26705523c3e6a3df2647c8786a5f507152f493fd814e287db31e8191bfe3"
+    },
+    {
+      "path": "docs/validation/phase-17-inputs.json",
+      "bytes": 117939,
+      "sha256": "5f7df747cc779fc511552550e8c2316c75e340c79f2b79e98097cb10bcf07801"
+    },
+    {
+      "path": "docs/validation/phase-17-ledger-update.md",
+      "bytes": 8983,
+      "sha256": "91b6a89c85f41d6ffc2856e993a7b7413c503330b80d87a1cbece031d477e205"
+    },
+    {
+      "path": "docs/validation/phase-17-query-plans.json",
+      "bytes": 33585,
+      "sha256": "da6060b355e7dad8a38d32fddfa31f6ef7496ec5cc86b2342c93cf13ccfd5bea"
+    },
+    {
+      "path": "docs/validation/phase-17.md",
+      "bytes": 22136,
+      "sha256": "dab3d8d4298babc6d48e632f41470100e7dc76463aa7a3076922d594c70ae4e2"
+    },
+    {
+      "path": "target/phase-17/audit-managed.mjs",
+      "bytes": 12248,
+      "sha256": "01f03010a76f838a4f5375b99cd559d64cbcfca7713f21ab9872c8a16260fffa"
+    },
+    {
+      "path": "target/phase-17/check-current-policy.mjs",
+      "bytes": 2281,
+      "sha256": "eeefa37dcc75f8250ab8cf998a66ae4671130bb7c8a87ae2271950d1d003740e"
+    },
+    {
+      "path": "target/phase-17/collect-boundaries.mjs",
+      "bytes": 22480,
+      "sha256": "d618065a2f535f0d9ab4094180fa8e21f06d88b61626af88f415f2d8e448be1f"
+    },
+    {
+      "path": "target/phase-17/collect-dependencies.mjs",
+      "bytes": 2566,
+      "sha256": "38e2b4214cda58937b8fcc3d817d4293ab04c1c1635b0cc5f134f327d23d1a80"
+    },
+    {
+      "path": "target/phase-17/complete-ledger.mjs",
+      "bytes": 10276,
+      "sha256": "b8725dd27d495de69a41c464b8d64c03ee5da2e4669c89a24bfeab7204f11b10"
+    },
+    {
+      "path": "target/phase-17/current-external-recheck.json",
+      "bytes": 11541,
+      "sha256": "c53058db4c3746d1c6fd06364c29edd14e24a4e60f79bf2b75e876a0694b1932"
+    },
+    {
+      "path": "target/phase-17/current-platform-admin-contract.log",
+      "bytes": 1333,
+      "sha256": "c6dc3b9c44f19ae8b066b04618e09ac40baa115da9dde4b28c23a0ae89e2f646"
+    },
+    {
+      "path": "target/phase-17/current-platform-admin-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/current-policy-reconciled.json",
+      "bytes": 4657,
+      "sha256": "7a83dacfcfde26fae86f21dded4ce1b647a10b77a263deed84867e0695df02a9"
+    },
+    {
+      "path": "target/phase-17/current-policy.json",
+      "bytes": 4069,
+      "sha256": "561538aa2fbc5241a9e2dfe08e50fdd52e9b3c82d7696ed64e7329c0b0204e5f"
+    },
+    {
+      "path": "target/phase-17/current-policy.log",
+      "bytes": 844,
+      "sha256": "20eb92b1c4a85a8d03618fe1a462888da767528325b6a602be19a3aa1d129988"
+    },
+    {
+      "path": "target/phase-17/dependency-inventory.json",
+      "bytes": 55589,
+      "sha256": "8f2585e790021c9782e109105a16a936c6df04d964ff24d274cc18e562a22635"
+    },
+    {
+      "path": "target/phase-17/dependency-metadata-preflight.json",
+      "bytes": 4909,
+      "sha256": "c75b9ea1dca7306988fa34dd102438e41d899ca2d22c2c57b8cd9fd2591431f8"
+    },
+    {
+      "path": "target/phase-17/dependency-metadata.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/focused-fast-result.json",
+      "bytes": 19227,
+      "sha256": "09bc599ce80990c8ac1a43b8f38cd1468f0356a967981e1baf798047e3de9211"
+    },
+    {
+      "path": "target/phase-17/inputs-wip-r1.json",
+      "bytes": 116945,
+      "sha256": "e3ab10e8acbbe1fedeedb39e558c2e589c903354dadc5b47e5523c699b0df63d"
+    },
+    {
+      "path": "target/phase-17/legacy-inputs.json",
+      "bytes": 3239,
+      "sha256": "74e86606465f73861a2e0ad1deafaf169ccc22f279b7543a452b1a364be06e1d"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/container.log",
+      "bytes": 3133,
+      "sha256": "244e6bc72ef2705540010046ddd1351ea3e7cd2518ba106f32b30fa18cc94bb8"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/external-drivers/inputs-wip-r1.json",
+      "bytes": 116945,
+      "sha256": "e3ab10e8acbbe1fedeedb39e558c2e589c903354dadc5b47e5523c699b0df63d"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/external-drivers/raw-runtime.mjs",
+      "bytes": 12583,
+      "sha256": "ca23e98560c63adac8944822e276227cb72eb6a3900d8b78857fc80060b8e400"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/external-drivers/run-linux.mjs",
+      "bytes": 13354,
+      "sha256": "76222f43e7be21dc4b839a67a17c252b5aa5e201581392c4fcd90023ef25d607"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/linux-runner-result.json",
+      "bytes": 4221,
+      "sha256": "9d1f3ccc1ca626424939b90cf8f1f5d087b119a50e21abdab71ae785233d6baa"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/01-node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/02-npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/03-rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/04-install-root.log",
+      "bytes": 25,
+      "sha256": "3453e1d2a2ddbbfb914f8896675529d4f26cece14490a8ebd4012ade58c86221"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/05-install-frontend.log",
+      "bytes": 27,
+      "sha256": "0eb243a917ff40a9f59a876fec059a54beed9e2c1d48081b3e2906e546db672b"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/06-install-mini-services-micro-vue.log",
+      "bytes": 26,
+      "sha256": "777dd3a3648166f1e9b49215b06000631836f5969246c30c40d087ab3e102019"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/07-install-mini-services-micro-jquery.log",
+      "bytes": 25,
+      "sha256": "c564ed6fb14a0a63233502bfa240f54cfcb3a8ea9936ce00a7110fe55ff45a81"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/08-install-examples-websocket.log",
+      "bytes": 25,
+      "sha256": "4863de8fad4a6440f80f45059ad615c15615638a020336af3bb47e0ad940c4ae"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/09-install-mini-services-oauth-playground-frontend.log",
+      "bytes": 25,
+      "sha256": "b70bbb7125dae0ff93af25e897764945669e9df0d1da8d2954b166c60f35fba8"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/10-install-scripts-ci.log",
+      "bytes": 23,
+      "sha256": "da13ab9d025b19c91553bc7d4c450975d3e4e36dd7c5fef6f223f8008ba39547"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/11-sdk-drift.log",
+      "bytes": 87,
+      "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/12-build-frontends.log",
+      "bytes": 19762,
+      "sha256": "a335a430d9219372073e752ace4dc779a9429db3a80e553c3894b764f603e1bb"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/13-lint.log",
+      "bytes": 11362,
+      "sha256": "d1d19e6294f8c0645a51161e049f1303c05c85e18129370c87a01b0c0cc08077"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/14-typecheck.log",
+      "bytes": 69,
+      "sha256": "763e90b76b62e6c308e153dc0e982734104069f3384703603d3ab3778e580ab5"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/15-contracts.log",
+      "bytes": 86535,
+      "sha256": "2b90281463dd4a5fd9ad588e1fd0d4dbeb004ba5bca04dbdd0203e160ee2864b"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/16-deployment-unit.log",
+      "bytes": 8986,
+      "sha256": "9cfad4ab6634a2bda54ec9d646e103a874264230c64b9c2e5a83f3796e3a861f"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/17-oauth-playground-frontend.log",
+      "bytes": 2089,
+      "sha256": "3fcceddb592980cd431b3cdb6ebef20863af1a3d2f757f97bf820d07bb7a0df2"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/18-oauth-playground-delivery.log",
+      "bytes": 1398,
+      "sha256": "56aa4a1bf8c21a1e65dd69b4311abdc97fe555053620021b5960cc0ad876a24d"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/19-ci-policy.log",
+      "bytes": 15075,
+      "sha256": "d9cadc4b14d8b210250c3f53edf9d8f85c6eb8dce36160d211e97db7dd47efb0"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/20-dev-and-vite.log",
+      "bytes": 4828,
+      "sha256": "7f48f87cb1caf1fcd24a8fda83e5ac584c2847073090145eff291b9356a97e8b"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/21-rust-check.log",
+      "bytes": 16567,
+      "sha256": "e2c57fe1ed0a139cf164a538f00fc03a1216e7f3ff1a073c0e8a55c7635c6c27"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/22-rust-config-units.log",
+      "bytes": 7609,
+      "sha256": "fc5dc2e7db06dcf1efc72fd070ec17534424280ed0767f6926e4821a71d33ff1"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/23-rust-data-grant-units.log",
+      "bytes": 1140,
+      "sha256": "549b8850a1a6ef01d27758043c9bc34bfe5a33979b52e2dec9b85e62ca79dca8"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/24-rust-archive-units.log",
+      "bytes": 2085,
+      "sha256": "54b21948599d78fe74f271737635b4115dd0ccf79e0f840d94a571475fe5c738"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/25-rust-staging-maintenance-units.log",
+      "bytes": 591,
+      "sha256": "256fe3b3bd420cceda99d9a24c22ae100981f292526d9c3382517b7e4d3b33cd"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/26-rust-public-contract-units.log",
+      "bytes": 1267,
+      "sha256": "182c85340eeb7a080a0566bfe88d87664bbd353854bfedff64043756776254fe"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/27-rust-oauth-issuance-units.log",
+      "bytes": 382,
+      "sha256": "a53c7884d545ecb9acc3d8bfcae5704c7f949056c71e40d5da2dde2581a41da0"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/28-rust-login-limit-units.log",
+      "bytes": 1094,
+      "sha256": "5871300970d58dca363065f44139d11a19b173257b64388e737de212498392f6"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/29-rust-password-units.log",
+      "bytes": 594,
+      "sha256": "6fe2c2f1821e9664a6e62cbdea408fe438222cc05fae1d3075220f6313935176"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/30-rust-client-ip-units.log",
+      "bytes": 796,
+      "sha256": "24f5822979eb5ec0feebc41c29d92930b87570a45fb65db0a8b6323d54374a8e"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/31-rust-transport-units.log",
+      "bytes": 3990,
+      "sha256": "c57fc15e88bb3a55561e48a0ee5b321977e46f719f3b045f8d7e2aa0dd0d1570"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/32-rust-socketio-units.log",
+      "bytes": 3667,
+      "sha256": "ad6ad4dfee0e36dab21008ef6b612c03d9d6b9be7ed22910248019ce3ff6b14a"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/33-rust-chat-units.log",
+      "bytes": 3277,
+      "sha256": "13497977f182b7f4c5910ff7430cc75c4f789c3f7ae6a0ad95fdad4ebc4fbf24"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/34-rust-socketio-compatibility.log",
+      "bytes": 10599,
+      "sha256": "99202789a24ea66fcd589748458827bbc9ad14517764c41e628dcfd3cedfd7f9"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/35-notification-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/36-notification-check.log",
+      "bytes": 6331,
+      "sha256": "3d0dacda1297e7054cbc81242ea20a53cadab078e9b092ad71d259a251e8ea1c"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/37-notification-clippy.log",
+      "bytes": 156,
+      "sha256": "556f023a67af14e92aa9ef87ec323faa63046cc262e9301f5471cebae685f2d3"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/38-notification-units.log",
+      "bytes": 7437,
+      "sha256": "176d8f3a973c2737d962dae888715737fe232172e6b30dd882db055265c53a1f"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/39-notification-doc.log",
+      "bytes": 244,
+      "sha256": "7748cc6b816c31601b3c22a1f1bc3199e2c38903780c5c149f5203a3087e8da4"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/40-work-orders-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/41-work-orders-check.log",
+      "bytes": 5479,
+      "sha256": "e32e4e0ced5ad24918f124c3c3c94d647af89c83a82dcb3d494d106ee46f13c6"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/42-work-orders-clippy.log",
+      "bytes": 155,
+      "sha256": "8cae9d45dda0c55fa6d2a4cb6e73e78bc5f65be36ee8c86d63b344cba55e4767"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/43-work-orders-units.log",
+      "bytes": 8023,
+      "sha256": "6c66f6898fbcdd807bbae6a9ea37b436a5e9d6456d9255440eee36da706029bb"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/44-work-orders-doc.log",
+      "bytes": 251,
+      "sha256": "1713e6d6f62835d3d24bacb711eec306c9754f10853d8408aa6903d20140dcaa"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/45-rust-oauth-playground-units.log",
+      "bytes": 6043,
+      "sha256": "bd90921cb8467f460b6f5ef4b71097f333a5716a20f45c0eba1e1fede0afbb64"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/46-platform-admin-fmt.log",
+      "bytes": 928,
+      "sha256": "60e1e95bb99aa094307a7b4d4260223fba340371d3806594ee20ff904350162b"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/47-platform-admin-check.log",
+      "bytes": 3120,
+      "sha256": "8903871f56da5c7973de3c9cf78754ab0a7cb77fbaf8be2bf15bd97bd62e66e6"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/48-platform-admin-clippy.log",
+      "bytes": 146,
+      "sha256": "6c77a5aaf1813f7a786ecb6d03861aa8bce85ed7d682a348a55afccdfa1f2dc6"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/49-platform-admin-tests.log",
+      "bytes": 4848,
+      "sha256": "22d5ec0eac05e80d4dacd527aeca59cb03d3ad90cb0537cceccef9e17956753b"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/logs/50-platform-admin-doc.log",
+      "bytes": 233,
+      "sha256": "100d87ec9de0e7ca570cae1a5ecf22aeff6ba2de66d0e8d76cfd1787b076a41c"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/source-manifest.json",
+      "bytes": 116803,
+      "sha256": "7ab362c3fa65e8efb21711b3dbbad7fea0f231f2886662c33854aec92387ef70"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/fast/summary.json",
+      "bytes": 31583,
+      "sha256": "8bfc5e21ee380d761dad1cb4ee666fb7ffed6e199fec03469e47f8579ab3e6b4"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/reports/source-verification.json",
+      "bytes": 255,
+      "sha256": "9dad74c1d24132effb1f261cfad2cd8a6102b06d1a653fb02b0e9e49824a725d"
+    },
+    {
+      "path": "target/phase-17/linux-fast-r1/snapshot-manifest.json",
+      "bytes": 102337,
+      "sha256": "2e57ba2a72cb5322902ca1d27e2c529f2c7c7447f253957eb5e982a1f9d0a4ae"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/container.log",
+      "bytes": 670,
+      "sha256": "1493ce20083b0d5a490116d02b146eb87a98c1795d7612e664cb307d6ace0670"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/external-drivers/inputs-wip-r1.json",
+      "bytes": 116945,
+      "sha256": "e3ab10e8acbbe1fedeedb39e558c2e589c903354dadc5b47e5523c699b0df63d"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/external-drivers/raw-runtime.mjs",
+      "bytes": 12583,
+      "sha256": "ca23e98560c63adac8944822e276227cb72eb6a3900d8b78857fc80060b8e400"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/external-drivers/run-linux.mjs",
+      "bytes": 13726,
+      "sha256": "a4aa2fb996c8cd61e9a22de341669e95217e61642b057537117bc521b5eabc83"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/linux-runner-result.json",
+      "bytes": 3065,
+      "sha256": "1a73beda053c33961c97186698ad1584d2f5f4bf0915f284cb5a77a50eed0db5"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/artifacts/build-result.json",
+      "bytes": 216,
+      "sha256": "15af707eb3e24f76874149cb01dd693c65cc4bb8fd1210b0920fe14f22d4eaf7"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/artifacts/build.log",
+      "bytes": 72,
+      "sha256": "5604fc8f0c276397a55db4bd7008236712075c0ad37d3b3a0f1fe362b1b85a36"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/artifacts/doctest-result.json",
+      "bytes": 291,
+      "sha256": "3c54b96d8cc0c6358a048881e36f370cfe2a673c123af06745a47b2f04d892a9"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/artifacts/doctest.log",
+      "bytes": 267,
+      "sha256": "755e522b31796d898527611203ae00bb2c9ddcca2820dd9866b25ca4f6a41700"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/artifacts/library-tests-result.json",
+      "bytes": 363,
+      "sha256": "8a37ae2375978921ccf73180eaf1241532337a905d17539268c21fa360fac683"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/artifacts/library-tests.log",
+      "bytes": 3404,
+      "sha256": "8432ec51963e2524980d56c3d341d6b5e82e96be18391506768a4d64290114a5"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/artifacts/work-orders-api",
+      "bytes": 65460864,
+      "sha256": "7155530bb405c655813c9edb6cfef132509cc8a007631298a03120f854974f15"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/01-node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/02-npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/03-rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/04-install-business-apps-work-orders-backend.log",
+      "bytes": 25,
+      "sha256": "ff3cb47c0f22a2a47b09642933529c3e0b2ca26b1146ca8292a786c2799bb28f"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/05-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/06-work-orders-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/07-work-orders-read-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/08-work-orders-live-build.log",
+      "bytes": 72,
+      "sha256": "2461b00c8697c4189b2de92ca6fb05b5d72273c78a0a47b1ce4e83ccca077b70"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/logs/09-work-orders-live-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/authorization_isolation_tests.log",
+      "bytes": 899,
+      "sha256": "4c7bc679707a3f5ef7362a083191bb161a12bd4b39df79fc296f1851cc3a9859"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/data_grant_discovery_tests.log",
+      "bytes": 1298,
+      "sha256": "c070c00ebbda465f4630002a121f8f4bfc08c3fafcad5e93717eb11067e35de2"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/data_grant_tests.log",
+      "bytes": 2449,
+      "sha256": "ab67b5a11c65b269625618f2a4af64ee692cfe955499084c7d85180fedc38dc3"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/entity_creation_tests.log",
+      "bytes": 1448,
+      "sha256": "31011f80169efe29ba091dbafd5ed87e29f9150039e138354f34603cbb6dbe24"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/login_protection_tests.log",
+      "bytes": 1256,
+      "sha256": "8a8f1e1010214471a5470d2553463df4b7034dfbf2ed4e4aad923c2fd9543964"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/management_audit_tests.log",
+      "bytes": 8198,
+      "sha256": "467abb1902aa3b18936ed48dce6103bc1545c9ac499c2b3463292c79403ca788"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/notification_tests.log",
+      "bytes": 2086,
+      "sha256": "8628cb6645ae2a27517ce77254f160c0447946546fae531aa300c0b9eea7b1d3"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/oauth_issuance_tests.log",
+      "bytes": 2110,
+      "sha256": "20b78d1deb27281b0ba4351fe5d378dd5be392b778678c0f9e1290f9f0e3c674"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/platform_session_refresh_tests.log",
+      "bytes": 1044,
+      "sha256": "04b2ce55107486a8e3765f0c7150f6400eca084167eed4bd6156af9a18d7410c"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/platform_settings_tests.log",
+      "bytes": 1059,
+      "sha256": "58538be2d22f6ee8c579993025a3c1e22cddbdfbb3c37612c6940a2a6dd96c3b"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/postgres-result.json",
+      "bytes": 7460,
+      "sha256": "ff6b4cc66c78e42d8ea6f0e084ffdb1ea16f3b08bf74169c676b823f04b420c8"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/production_security_tests.log",
+      "bytes": 17891,
+      "sha256": "2ca752a4760f4ee55332d6aa8cadbc6f3ce88e570778e6e83e793439beb3a183"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/postgres/release_tests-zip_registration.log",
+      "bytes": 2302,
+      "sha256": "f2bb8d72be0a195cd1db237433b686c1f4b766330279fc4969f2a6b981129ce0"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/source-manifest.json",
+      "bytes": 116803,
+      "sha256": "7ab362c3fa65e8efb21711b3dbbad7fea0f231f2886662c33854aec92387ef70"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/summary.json",
+      "bytes": 6677,
+      "sha256": "95b20b743a4a7ea15f5cf0efc658a233170721eb6ce5afc48561384c423ae8d8"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-live-postgres/phase17_work_orders_tests-real_platform_authorization_and_business_scope.log",
+      "bytes": 2224,
+      "sha256": "308cf45610049cd5f6de0e56209710edb670b3b98d689aca57a18d2c47c3c0c1"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-live-postgres/postgres-result.json",
+      "bytes": 2947,
+      "sha256": "311ff42207675699990035d58e59d037c46ae8aa956581ab032b879739de6d0a"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-postgres/postgres-result.json",
+      "bytes": 1020,
+      "sha256": "305ede093befd3845646540743a901e0541823bb3407f16e5ce04ea348373b39"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-postgres/work-orders-migrations.log",
+      "bytes": 6511,
+      "sha256": "dad3bcae51ca031db3b5030e5356c9ec6193749719dbf4306cffee60142c639f"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-read-postgres/postgres-result.json",
+      "bytes": 1037,
+      "sha256": "d19a5c582dd7739220b6114f0490bf5eed0cbc49865e6e878c3a45dfcbe28fad"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-read-postgres/work-orders-read-contracts.log",
+      "bytes": 16235,
+      "sha256": "8c63ab6c8c1242b9e9cab680fae1e7f68ee98162b0283b9786b1c5a77b977c8e"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/source-verification.json",
+      "bytes": 255,
+      "sha256": "a89ffe66162fe7088889ea05e3fb5a5f1ca3541c18bfe400ec92436942ca41c8"
+    },
+    {
+      "path": "target/phase-17/linux-postgres-wip-r2/snapshot-manifest.json",
+      "bytes": 102337,
+      "sha256": "2e57ba2a72cb5322902ca1d27e2c529f2c7c7447f253957eb5e982a1f9d0a4ae"
+    },
+    {
+      "path": "target/phase-17/linux-runtime-r1/external-drivers/inputs-wip-r1.json",
+      "bytes": 116945,
+      "sha256": "e3ab10e8acbbe1fedeedb39e558c2e589c903354dadc5b47e5523c699b0df63d"
+    },
+    {
+      "path": "target/phase-17/linux-runtime-r1/external-drivers/raw-runtime.mjs",
+      "bytes": 12583,
+      "sha256": "ca23e98560c63adac8944822e276227cb72eb6a3900d8b78857fc80060b8e400"
+    },
+    {
+      "path": "target/phase-17/linux-runtime-r1/external-drivers/supplement-runtime.mjs",
+      "bytes": 7380,
+      "sha256": "e4733fc5812c17f97c8e84a3466c10865ee7b9d3fcce4f0ad805ce8beddccc02"
+    },
+    {
+      "path": "target/phase-17/linux-runtime-r1/raw-runtime-result.json",
+      "bytes": 3973,
+      "sha256": "559fa2623e73690c14973e24d1f7cff0c91063fd79175f7963dc10df37bb7488"
+    },
+    {
+      "path": "target/phase-17/linux-runtime-r1/raw-startup-failure.log",
+      "bytes": 164,
+      "sha256": "b78b67843a678d2916843841f944b5eb4f2c207cb34c8c24b5c19545ba0da8d3"
+    },
+    {
+      "path": "target/phase-17/linux-runtime-r1/supplement-result.json",
+      "bytes": 7624,
+      "sha256": "bcf81c149a919b866229b83686b6f8f8433e728122d9cebed512147489d7ba2f"
+    },
+    {
+      "path": "target/phase-17/linux-runtime-r1/work-orders-api",
+      "bytes": 65460864,
+      "sha256": "7155530bb405c655813c9edb6cfef132509cc8a007631298a03120f854974f15"
+    },
+    {
+      "path": "target/phase-17/managed-audit.json",
+      "bytes": 6218,
+      "sha256": "5ff783335f51639136ba122fd99fc06dec162dd6428d5d5ac2801e7523c71880"
+    },
+    {
+      "path": "target/phase-17/observed-start-inputs.json",
+      "bytes": 105910,
+      "sha256": "ea79559dbdce3fe4150da6931693a0f5a9c33721d255a1346dcf91fb41952584"
+    },
+    {
+      "path": "target/phase-17/platform-clippy-current.jsonl",
+      "bytes": 477982,
+      "sha256": "2ed4422747a6b644c1c3d66d90f456f08170fd203db506e559421bb796750b41"
+    },
+    {
+      "path": "target/phase-17/platform-clippy-current.stderr.log",
+      "bytes": 363,
+      "sha256": "a290336cfa78eaa6f1f4ea0540857ca233799fd0c56ee3721b3e8fc23ec88e6a"
+    },
+    {
+      "path": "target/phase-17/preflight-failure-r1.json",
+      "bytes": 407,
+      "sha256": "6d949cecde463a70edcf7251f6a43a41b1247890a4264588f7126f6bdd6f29cc"
+    },
+    {
+      "path": "target/phase-17/preflight-failure-r2.json",
+      "bytes": 327,
+      "sha256": "331374b8725cbb6ce5c4530cac96c178c87e668b33ef8850330d51ba4537c410"
+    },
+    {
+      "path": "target/phase-17/publish-inputs.mjs",
+      "bytes": 2132,
+      "sha256": "37f839ec9fbd3fa9b3d26702e620e8fdf7a47b76be4a40a0e1f601e129c53534"
+    },
+    {
+      "path": "target/phase-17/publish-runtime-index.mjs",
+      "bytes": 5295,
+      "sha256": "22cc9557325cb299bd0c38eb71e9370388576a59c057c14edbf1154c8f37308a"
+    },
+    {
+      "path": "target/phase-17/query-plan-table.md",
+      "bytes": 2330,
+      "sha256": "74342f02e6f24a88501f1e6ae8b6e0d18895880e62d6736c5dc837c1c111f9c9"
+    },
+    {
+      "path": "target/phase-17/recheck-external-failures.mjs",
+      "bytes": 3519,
+      "sha256": "0e8a3fc0344eb1794bd12dccd85457de1cfa81641b0606cd9636335ebcc897d8"
+    },
+    {
+      "path": "target/phase-17/reconcile-current-policy.mjs",
+      "bytes": 1647,
+      "sha256": "f8d0c89ec5f86d5362e631ee7e508d6f6e04788e1f5b60a4a5688ab4d1a51db9"
+    },
+    {
+      "path": "target/phase-17/windows-tcp-readiness.json",
+      "bytes": 1155,
+      "sha256": "3bd7111bd9d7c3520d65b3cd35cd1daae55bca7dc68817c742fffceb6606a274"
+    }
+  ],
+  "limitations": [
+    "Full fast remains FAIL: 50 steps/48 passed/2 failed; 700 test passes/1 failure/0 skips. Phase17 scoped gates passed with the exact selection stated in focused-fast-result.json.",
+    "Current host shared CI and parallel notification/CLI code differ from the executed immutable candidate; formal boundaries record those changes.",
+    "Original PostgreSQL wrapper FAIL is preserved. Child PostgreSQL suites passed unchanged; the same ELF was verified separately.",
+    "The Node-free probe uses a deliberately unavailable loopback HTTPS platform and proves fail-closed behavior. Successful platform authorization is the separate actual-platform joint suite.",
+    "No registry push or production deployment was executed.",
+    "The index binds the listed evidence, including successful and failed attempts. Presence in this index does not turn a failed or unavailable report into a PASS.",
+    "Current owned executable inputs were rechecked. Shared host CI and parallel work remain subject to the separately recorded observed drift; this does not certify the entire current host tree.",
+    "The candidate and raw ELF remain local retained artifacts. Source hashes and evidence links do not represent an external release or production deployment.",
+    "Dependency identity and declared license metadata are recorded, not a full vulnerability or legal audit."
+  ]
+}

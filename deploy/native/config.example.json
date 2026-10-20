@@ -1,0 +1,17 @@
+{
+  "publicOrigin": "https://localhost:8443",
+  "listener": "127.0.0.1:8443",
+  "instanceRoot": "/srv/platform",
+  "hostRoot": "/srv/platform/current/frontend",
+  "microRoot": "/srv/platform/micro-apps",
+  "certificate": "/srv/platform/tls/fullchain.pem",
+  "certificateKey": "/srv/platform/tls/privkey.pem",
+  "mimeTypes": "/etc/nginx/mime.types",
+  "backend": "127.0.0.1:3001",
+  "notification": null,
+  "workOrders": null,
+  "applicationOrigins": [],
+  "imageOrigins": [],
+  "trustedHtmlEval": false,
+  "allowedUpstreamIps": []
+}

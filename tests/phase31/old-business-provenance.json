@@ -1,0 +1,40 @@
+{
+  "baselineInputsSha256": "178ffd6ed48417df5769fc9126c5afad4013e9d2aa2f5f631d20a3c1b7c98b43",
+  "files": [
+    {
+      "file": "stores/src/client.ts",
+      "source": "business-apps/stores/frontend/src/client.ts",
+      "sha256": "c5868e8ecfe9f855cfd2438f1f3d512cb58f1303d5196ac6e179f1b670a913c4"
+    },
+    {
+      "file": "stores/src/domain.ts",
+      "source": "business-apps/stores/frontend/src/domain.ts",
+      "sha256": "d732d6be49dcc5968d81562a666eb33292897b53771399335c39db5f0e70a2f7"
+    },
+    {
+      "file": "stores/src/sdk.ts",
+      "source": "business-apps/stores/frontend/src/sdk.ts",
+      "sha256": "d32eaad4b8b0e71736ec0c1cec49c6d512183ca5f50efb8c8ca510e9d26010f6"
+    },
+    {
+      "file": "stores/vendor/micro-sdk/index.mjs",
+      "source": "business-apps/stores/frontend/vendor/micro-sdk/index.mjs",
+      "sha256": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837"
+    },
+    {
+      "file": "work-orders/src/client.mjs",
+      "source": "business-apps/work-orders/frontend/src/client.mjs",
+      "sha256": "b2682ee2e8c6f8bd89e481f634c1dd8ecda8299772c1d3598d727fdbfd87c04f"
+    },
+    {
+      "file": "work-orders/src/domain.mjs",
+      "source": "business-apps/work-orders/frontend/src/domain.mjs",
+      "sha256": "d4af24fbb17aa7f00b21fa2461ce25adbd0804a69ba7f533880af6452ca2148d"
+    },
+    {
+      "file": "work-orders/vendor/micro-sdk.mjs",
+      "source": "business-apps/work-orders/frontend/vendor/micro-sdk.mjs",
+      "sha256": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837"
+    }
+  ]
+}

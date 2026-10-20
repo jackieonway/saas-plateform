@@ -1,0 +1,15 @@
+{
+  "bind": "0.0.0.0:9098",
+  "interval_ms": 5000,
+  "timeout_ms": 1000,
+  "failures": 2,
+  "recoveries": 2,
+  "metrics_token": "REPLACE_WITH_PRIVATE_METRICS_CREDENTIAL",
+  "event_token": "REPLACE_WITH_PRIVATE_EVENT_CREDENTIAL",
+  "targets": [
+    { "component": "platform", "url": "http://backend:3001/api/health" },
+    { "component": "work_orders", "url": "http://work-orders-api:3004/work-orders-api/health/ready" },
+    { "component": "stores", "url": "http://stores-api:3031/stores-api/health/ready" },
+    { "component": "notification", "url": "http://notification-ws:3003/health/ready" }
+  ]
+}

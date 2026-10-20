@@ -1,0 +1,43 @@
+{
+  "tool": "official google/go-containerregistry crane v0.22.1 Windows x86_64",
+  "toolReleaseArchiveSha256": "0e073ea8192c3b8442ec8aaf44d53c1050a09084669fae3a6ceb0f2026cf8b21",
+  "transport": "normal verified HTTPS from Windows; docker archive for local WSL docker load",
+  "warning": "Docker archive reconstruction has a different manifest digest from the registry OCI manifest; archive digest is recorded separately.",
+  "images": [
+    {
+      "reference": "index.docker.io/library/node:24.18.0-alpine",
+      "platform": "linux/amd64",
+      "registryManifestDigest": "sha256:4ba75f835bb8802193e4c114572113d4b26f95f6f094f4b5229d2a77773e0afc",
+      "archive": "target/phase-03/images/node.tar",
+      "archiveSha256": "34197155b05a91047bfaccfd7177f88be42d9bec35014098c6a2b4e3fde8a197"
+    },
+    {
+      "reference": "index.docker.io/nginxinc/nginx-unprivileged:1.28.0-alpine",
+      "platform": "linux/amd64",
+      "registryManifestDigest": "sha256:a6bd0e0995ab4723fb65068665f8016decb67dc6a6a32eddc415c7d1229cada6",
+      "archive": "target/phase-03/images/nginx-unprivileged.tar",
+      "archiveSha256": "d0e6d807c8c49edb148de716a5f2813f95ea87c1396783dfbd48b1edf5716d1c"
+    },
+    {
+      "reference": "index.docker.io/library/nginx:1.28.0-alpine",
+      "platform": "linux/amd64",
+      "registryManifestDigest": "sha256:09ab424a8c788f8d0fe3a64429f6d19dfa526885c8609b748d0943a75dcb9f8c",
+      "archive": "target/phase-03/images/nginx.tar",
+      "archiveSha256": "25dce20311736b2de4591e951621e8c9b436eb2e2e43c532daf72e81fdbf6af2"
+    },
+    {
+      "reference": "index.docker.io/library/debian:bookworm-slim",
+      "platform": "linux/amd64",
+      "registryManifestDigest": "sha256:a4672c0cb26fbdde88e38fa2dfb6c681942306680e41e4378b28770b6e79ee91",
+      "archive": "target/phase-03/images/debian.tar",
+      "archiveSha256": "8fcd6eb3a321307c8872a03d38a054e4f131603fc78bb636324ff1c26afaaee5"
+    },
+    {
+      "reference": "index.docker.io/library/rust:1.97.0-bookworm",
+      "platform": "linux/amd64",
+      "registryManifestDigest": "sha256:b5a086f64ffecaa4e283063184770107915756739598173e1f5712d6b34b84d0",
+      "archive": "target/phase-03/images/rust.tar",
+      "archiveSha256": "d38be5bd27d0a40c9c6ff66181f589a610217d1e1fa8e8588d8bd13fcbf1990f"
+    }
+  ]
+}

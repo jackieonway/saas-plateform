@@ -84,6 +84,73 @@ struct TenantRow {
     authorized_app_count: i64,
 }
 
+/// Only fields protected by this row lock participate in ordinary edit/no-op
+/// decisions; independent role/member edits must not become this request's event.
+async fn tenant_configuration_snapshot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+) -> Result<Value, AppError> {
+    let (name, code, tenant_type, status, is_platform, expires_at):
+        (String, String, String, String, bool, Option<DateTime<Utc>>) = sqlx::query_as(
+        "SELECT name,code,tenant_type,status,is_platform,expires_at FROM tenants WHERE id=$1 FOR NO KEY UPDATE",
+    ).bind(id).fetch_optional(&mut **tx).await?
+        .ok_or_else(|| AppError::not_found("租户不存在"))?;
+    // Hash explicit editable fields so contact/body-only updates remain visible
+    // without persisting their contents or treating updated_at as a change.
+    let configuration: String = sqlx::query_scalar(
+        "SELECT jsonb_build_array(name,code,tenant_type,status,expires_at,contact_name,contact_phone,contact_email, \
+         description,province,city,district,township,village,address,longitude,latitude)::text FROM tenants WHERE id=$1",
+    ).bind(id).fetch_one(&mut **tx).await?;
+    Ok(json!({
+        "id": id, "name": name, "code": code, "tenantType": tenant_type,
+        "status": status, "isPlatform": is_platform, "expiresAt": expires_at,
+        "configurationHash": crate::util::hash::sha256_hex(&configuration),
+    }))
+}
+
+async fn tenant_audit_snapshot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+) -> Result<Value, AppError> {
+    let mut snapshot = tenant_configuration_snapshot(tx, id).await?;
+    let (organizations, members, roles, role_assignments, applications, menus):
+        (i64, i64, i64, i64, i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM organizations WHERE tenant_id=$1), \
+         (SELECT count(*) FROM memberships m JOIN organizations o ON o.id=m.organization_id WHERE o.tenant_id=$1), \
+         (SELECT count(*) FROM roles WHERE tenant_id=$1), \
+         (SELECT count(*) FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE r.tenant_id=$1), \
+         (SELECT count(*) FROM tenant_applications WHERE tenant_id=$1), \
+         (SELECT count(*) FROM tenant_menus WHERE tenant_id=$1)",
+    ).bind(id).fetch_one(&mut **tx).await?;
+    let authorization: String = sqlx::query_scalar(
+        "SELECT jsonb_build_array( \
+         (SELECT COALESCE(jsonb_agg(application_id ORDER BY application_id),'[]'::jsonb) FROM tenant_applications WHERE tenant_id=$1), \
+         (SELECT COALESCE(jsonb_agg(menu_id ORDER BY menu_id),'[]'::jsonb) FROM tenant_menus WHERE tenant_id=$1), \
+         (SELECT COALESCE(jsonb_agg(jsonb_build_array(oa.organization_id,oa.application_id) ORDER BY oa.organization_id,oa.application_id),'[]'::jsonb) \
+          FROM organization_applications oa JOIN organizations o ON o.id=oa.organization_id WHERE o.tenant_id=$1), \
+         (SELECT COALESCE(jsonb_agg(jsonb_build_array(om.organization_id,om.menu_id) ORDER BY om.organization_id,om.menu_id),'[]'::jsonb) \
+          FROM organization_menus om JOIN organizations o ON o.id=om.organization_id WHERE o.tenant_id=$1), \
+         (SELECT COALESCE(jsonb_agg(jsonb_build_array(rm.role_id,rm.menu_id) ORDER BY rm.role_id,rm.menu_id),'[]'::jsonb) \
+          FROM role_menus rm JOIN roles r ON r.id=rm.role_id WHERE r.tenant_id=$1))::text",
+    ).bind(id).fetch_one(&mut **tx).await?;
+    snapshot["organizationCount"] = json!(organizations);
+    snapshot["memberCount"] = json!(members);
+    snapshot["roleCount"] = json!(roles);
+    snapshot["roleAssignmentCount"] = json!(role_assignments);
+    snapshot["applicationCount"] = json!(applications);
+    snapshot["menuCount"] = json!(menus);
+    snapshot["authorizationHash"] = json!(crate::util::hash::sha256_hex(&authorization));
+    Ok(snapshot)
+}
+
+fn tenant_authorization_summary(snapshot: Value) -> Value {
+    json!({
+        "id": snapshot["id"], "name": snapshot["name"],
+        "applicationCount": snapshot["applicationCount"], "menuCount": snapshot["menuCount"],
+        "authorizationHash": snapshot["authorizationHash"],
+    })
+}
+
 /// GET /api/tenants — 分页; 非平台租户仅能看到自己的租户 (只读视角)
 /// 所有上下文均需 system:tenant；写操作另需平台上下文。
 async fn list(
@@ -231,20 +298,27 @@ async fn create(
         .fetch_one(&mut *tx).await?;
     onboarding::initialize_tenant(&mut tx, row.id, root_id).await?;
     let administrator = onboarding::provision_contact_administrator(
-        &mut tx, &state.config, row.id, root_id, &contact, "tenant_admin", None,
+        &mut tx, (&state.config, &state.passwords), row.id, root_id, &contact, "tenant_admin", None,
     ).await?;
-    tx.commit().await?;
     row.organization_count = 1;
     row.user_count = i64::from(administrator.is_some());
     row.authorized_app_count = 1;
-    state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let mut after = tenant_audit_snapshot(&mut tx, row.id).await?;
+    after["rootOrganizationId"] = json!(root_id);
+    if let Some(administrator) = &administrator {
+        after["administratorUserId"] = json!(administrator.user_id);
+        after["administratorCreated"] = json!(administrator.created);
+    }
+    let detail = audit::change_detail("tenant", row.id, Value::Null, after);
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(row.id), organization_id: Some(user.org_id),
-        action: "CREATE_TENANT", detail: &format!("创建租户: {} ({})", row.name, row.code), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "CREATE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     let mut response = serde_json::to_value(&row).map_err(anyhow::Error::from)?;
     if let Some(administrator) = administrator {
         response["administrator"] = serde_json::to_value(administrator).map_err(anyhow::Error::from)?;
@@ -418,9 +492,11 @@ async fn update(
         validate_tenant_type(tenant_type)?;
     }
     let contact = body.contact.normalized()?;
+    let mut tx = state.pool.begin().await?;
+    let before = tenant_configuration_snapshot(&mut tx, id).await?;
     let (longitude, latitude, current_name, current_code, is_platform): (Option<f64>, Option<f64>, String, String, bool) = sqlx::query_as(
         "SELECT longitude, latitude, name, code, is_platform FROM tenants WHERE id = $1",
-    ).bind(id).fetch_optional(&state.pool).await?
+    ).bind(id).fetch_optional(&mut *tx).await?
         .ok_or_else(|| AppError::not_found("租户不存在"))?;
     validate_tenant_identity(
         body.name.as_deref().unwrap_or(&current_name).trim(),
@@ -469,16 +545,22 @@ async fn update(
     .bind(&contact.contact_name)
     .bind(&contact.contact_phone)
     .bind(&contact.contact_email)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("租户不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(id), organization_id: Some(user.org_id),
-        action: "UPDATE_TENANT", detail: &format!("更新租户: {}", row.name), ip: &ip, user_agent: &ua,
-    }).await;
+    let after = tenant_configuration_snapshot(&mut tx, id).await?;
+    if before != after {
+        let detail = audit::change_detail("tenant", id, before, after);
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(id), organization_id: Some(user.org_id),
+            action: "UPDATE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
 
@@ -492,27 +574,37 @@ async fn delete(
     RequirePermission("system:tenant").check(&state, &user).await?;
     state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let mut tx = state.pool.begin().await?;
+    // Deletion needs the stronger lock; ordinary edits leave FK checks free.
+    sqlx::query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE")
+        .bind(id).execute(&mut *tx).await?;
+    let before = tenant_audit_snapshot(&mut tx, id).await?;
     let is_platform: bool = sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
         .bind(id)
-        .fetch_optional(&state.pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| AppError::not_found("租户不存在"))?;
     if is_platform {
         return Err(AppError::bad_request("平台租户不允许删除"));
     }
-    let (name,): (String,) = sqlx::query_as("DELETE FROM tenants WHERE id = $1 RETURNING name")
-        .bind(id)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(|| AppError::not_found("租户不存在"))?;
-    state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("tenant", id, before, Value::Null);
+    // Insert while the target still exists so tenant_name survives its deletion.
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(id), organization_id: Some(user.org_id),
-        action: "DELETE_TENANT", detail: &format!("删除租户(级联): {}", name), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "DELETE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    // A tenant cascade deletes organization trees and their roles. Defer only
+    // these existing composite checks until the paired CASCADE FKs have settled.
+    sqlx::query("SET CONSTRAINTS fk_organizations_parent_same_tenant, fk_roles_organization_same_tenant DEFERRED")
+        .execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM tenants WHERE id=$1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("SET CONSTRAINTS fk_organizations_parent_same_tenant, fk_roles_organization_same_tenant IMMEDIATE")
+        .execute(&mut *tx).await?;
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }
 
@@ -535,29 +627,36 @@ async fn update_status(
         return Err(AppError::bad_request("状态仅支持 ENABLED / DISABLED"));
     }
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let mut tx = state.pool.begin().await?;
+    let before = tenant_configuration_snapshot(&mut tx, id).await?;
     let is_platform: bool = sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
         .bind(id)
-        .fetch_optional(&state.pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| AppError::not_found("租户不存在"))?;
     if is_platform {
         return Err(AppError::bad_request("平台租户不允许停用"));
     }
-    let (name,): (String,) = sqlx::query_as(
-        "UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1 RETURNING name",
+    sqlx::query(
+        "UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1",
     )
     .bind(id)
     .bind(&body.status)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("租户不存在"))?;
+    .execute(&mut *tx)
+    .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(id), organization_id: Some(user.org_id),
-        action: "UPDATE_TENANT", detail: &format!("租户状态变更为 {}: {}", body.status, name), ip: &ip, user_agent: &ua,
-    }).await;
+    let after = tenant_configuration_snapshot(&mut tx, id).await?;
+    if before != after {
+        let detail = audit::change_detail("tenant", id, before, after);
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(id), organization_id: Some(user.org_id),
+            action: "UPDATE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }
 
@@ -741,6 +840,7 @@ async fn put_authorizations(
     }
 
     let mut tx = state.pool.begin().await?;
+    let before = tenant_authorization_summary(tenant_audit_snapshot(&mut tx, tenant_id).await?);
     for (app, authorized) in app_ids.iter().zip(app_authed.iter()) {
         if *authorized {
             sqlx::query("INSERT INTO tenant_applications (tenant_id, application_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
@@ -849,18 +949,21 @@ async fn put_authorizations(
     .execute(&mut *tx)
     .await?;
     onboarding::sync_tenant_admin(&mut tx, tenant_id).await?;
-    tx.commit().await?;
-    state.invalidate_perm_cache();
-
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(user.org_id),
-        action: "TENANT_AUTH",
-        detail: &format!("租户授权变更: 应用 {} 项, 菜单 {} 项 (含级联清理)", body.applications.len(), body.menus.len()),
-        ip: &ip, user_agent: &ua,
-    }).await;
+    let after = tenant_authorization_summary(tenant_audit_snapshot(&mut tx, tenant_id).await?);
+    if before != after {
+        let detail = audit::change_detail("tenant", tenant_id, before, after);
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(tenant_id), organization_id: Some(user.org_id),
+            action: "TENANT_AUTH",
+            detail: &detail,
+            ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }
 
@@ -874,8 +977,9 @@ async fn initialize_administrator(
     state.require_platform(&user).await?;
     let existing_org_scope = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
-    let (name, contact_name, contact_phone, contact_email): (String, String, String, String) = sqlx::query_as(
-        "SELECT name,contact_name,contact_phone,contact_email FROM tenants WHERE id=$1 FOR UPDATE",
+    let before = tenant_audit_snapshot(&mut tx, id).await?;
+    let (contact_name, contact_phone, contact_email): (String, String, String) = sqlx::query_as(
+        "SELECT contact_name,contact_phone,contact_email FROM tenants WHERE id=$1 FOR NO KEY UPDATE",
     ).bind(id).fetch_optional(&mut *tx).await?.ok_or_else(|| AppError::not_found("租户不存在"))?;
     let roots: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM organizations WHERE tenant_id=$1 AND parent_id IS NULL ORDER BY id")
         .bind(id).fetch_all(&mut *tx).await?;
@@ -885,17 +989,23 @@ async fn initialize_administrator(
     let role_code = "tenant_admin";
     let contact = Contact { contact_name, contact_phone, contact_email }.normalized();
     let administrator = onboarding::initialize_existing_administrator(
-        &mut tx, &state.config, tenant_id, org_id, &contact, role_code, existing_org_scope.as_deref(),
+        &mut tx, (&state.config, &state.passwords), tenant_id, org_id, &contact, role_code, existing_org_scope.as_deref(),
     ).await?;
+    if !administrator.already_initialized {
+        let ip = audit::client_ip(&headers);
+        let ua = audit::ua_of(&headers);
+        let mut after = tenant_audit_snapshot(&mut tx, id).await?;
+        after["administratorUserId"] = json!(administrator.user_id);
+        after["administratorCreated"] = json!(administrator.created);
+        let detail = audit::change_detail("tenant", id, before, after);
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(tenant_id), organization_id: Some(org_id),
+            action: "INITIALIZE_ADMINISTRATOR", detail: &detail,
+            ip: &ip, user_agent: &ua,
+        }).await?;
+    }
     tx.commit().await?;
     state.invalidate_perm_cache();
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "INITIALIZE_ADMINISTRATOR", detail: &format!("初始化首位管理员: {name}；账号 {}", administrator.user_id),
-        ip: &ip, user_agent: &ua,
-    }).await;
     Ok(Json(json!({"administrator": administrator})))
 }

@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "phase": 27,
+  "status": "PASS",
+  "checkedAt": "2026-10-18T04:12:35.101Z",
+  "source": {
+    "candidateFile": "target/phase-27/inputs-candidate-r2.json",
+    "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "inputsSha256": "02304b07f8c9b25a34b124898c7ce06ef283f092eb95910dde73fa828b559b9d",
+    "fileCount": 809
+  },
+  "approvalFile": "target/phase-27/approved-source-paths-r2.json",
+  "changedFromStart": [
+    ".github/README.md",
+    ".github/workflows/production-build.yml",
+    ".gitignore",
+    "business-apps/stores/deploy/bootstrap.manifest.json",
+    "business-apps/stores/deploy/bootstrap.schema.json",
+    "business-apps/stores/deploy/grants.manifest.example.json",
+    "business-apps/stores/deploy/grants.schema.json",
+    "business-apps/stores/frontend/.npmrc",
+    "business-apps/stores/frontend/README.md",
+    "business-apps/stores/frontend/index.html",
+    "business-apps/stores/frontend/package-lock.json",
+    "business-apps/stores/frontend/package.json",
+    "business-apps/stores/frontend/scripts/build.mjs",
+    "business-apps/stores/frontend/scripts/test.mjs",
+    "business-apps/stores/frontend/src/app.tsx",
+    "business-apps/stores/frontend/src/client.ts",
+    "business-apps/stores/frontend/src/controller.ts",
+    "business-apps/stores/frontend/src/domain.ts",
+    "business-apps/stores/frontend/src/lazy-lifecycle.ts",
+    "business-apps/stores/frontend/src/main.ts",
+    "business-apps/stores/frontend/src/sdk.ts",
+    "business-apps/stores/frontend/src/styles.css",
+    "business-apps/stores/frontend/tests/build.mjs",
+    "business-apps/stores/frontend/tests/client.test.mjs",
+    "business-apps/stores/frontend/tests/controller.test.ts",
+    "business-apps/stores/frontend/tests/domain.fixture.mjs",
+    "business-apps/stores/frontend/tests/domain.test.mjs",
+    "business-apps/stores/frontend/tests/lazy-lifecycle.test.ts",
+    "business-apps/stores/frontend/tests/static-delivery.mjs",
+    "business-apps/stores/frontend/tsconfig.json",
+    "business-apps/stores/frontend/vendor/micro-sdk/artifact-manifest.json",
+    "business-apps/stores/frontend/vendor/micro-sdk/capabilities.d.mts",
+    "business-apps/stores/frontend/vendor/micro-sdk/http.d.mts",
+    "business-apps/stores/frontend/vendor/micro-sdk/iframe-bridge.js",
+    "business-apps/stores/frontend/vendor/micro-sdk/index.d.mts",
+    "business-apps/stores/frontend/vendor/micro-sdk/index.d.ts",
+    "business-apps/stores/frontend/vendor/micro-sdk/index.mjs",
+    "business-apps/stores/frontend/vendor/micro-sdk/package.json",
+    "business-apps/stores/frontend/vendor/micro-sdk/protocol.d.mts",
+    "business-apps/stores/frontend/vendor/micro-sdk/protocol.mjs",
+    "business-apps/stores/frontend/vendor/micro-sdk/protocol.rs",
+    "business-apps/stores/frontend/vendor/micro-sdk/schema.json",
+    "business-apps/stores/frontend/vendor/micro-sdk/sdk.js",
+    "business-apps/stores/frontend/vendor/micro-sdk/types.d.ts",
+    "business-apps/stores/frontend/vite.config.mjs",
+    "deploy/gateway/README.md",
+    "deploy/gateway/policy.mjs",
+    "deploy/gateway/render.mjs",
+    "deploy/native/README.md",
+    "deploy/native/build.mjs",
+    "deploy/native/render.mjs",
+    "deploy/native/tests/build.test.mjs",
+    "examples/micro-app-sdk/README.md",
+    "package.json",
+    "scripts/ci/README.md",
+    "scripts/ci/manifest.mjs",
+    "scripts/ci/provenance.mjs",
+    "scripts/ci/report.mjs",
+    "scripts/ci/run.mjs",
+    "scripts/ci/stores-browser-results.mjs",
+    "scripts/ci/stores-browser-results.test.mjs",
+    "scripts/ci/stores-browser.mjs",
+    "scripts/ci/stores.test.mjs",
+    "scripts/ci/workflow-policy.mjs",
+    "scripts/dev.mjs",
+    "scripts/sync-micro-sdk.mjs",
+    "tests/ci-workflow.mjs",
+    "tests/helpers/phase27-stores-services.mjs",
+    "tests/micro-sdk-generation.mjs",
+    "tests/phase21-ci-policy.mjs",
+    "tests/phase27-ci-policy.mjs",
+    "tests/phase27-stores-browser.mjs",
+    "tests/platform-admin-contract.mjs",
+    "tests/vite-example-delivery.mjs",
+    "tools/platform-admin/README.md",
+    "tools/platform-admin/manifests/stores-bootstrap.manifest.json",
+    "tools/platform-admin/manifests/stores-grants.manifest.example.json",
+    "tools/platform-admin/schemas/release.schema.json",
+    "tools/platform-admin/schemas/stores-bootstrap.schema.json",
+    "tools/platform-admin/schemas/stores-grants.schema.json",
+    "tools/platform-admin/src/bootstrap.rs",
+    "tools/platform-admin/src/contract.rs",
+    "tools/platform-admin/src/grants.rs",
+    "tools/platform-admin/src/grants/tests.rs",
+    "tools/platform-admin/src/lib.rs",
+    "tools/platform-admin/src/options.rs",
+    "tools/platform-admin/src/release.rs",
+    "tools/platform-admin/tests/safety.rs"
+  ],
+  "checks": [
+    {
+      "id": "same-source-host-and-frozen-physical-selector",
+      "result": "PASS"
+    },
+    {
+      "id": "explicit-reviewed-phase27-change-list",
+      "result": "PASS"
+    },
+    {
+      "id": "114-historical-formal-files-preserved",
+      "result": "PASS"
+    },
+    {
+      "id": "in-progress-ledger-preserved",
+      "result": "PASS"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "target/phase-27/start.json",
+      "bytes": 20300,
+      "sha256": "6b2975f9baae52381edaecb2005acbd0eb19e158d8eed1b6600f21d005003c26"
+    },
+    {
+      "path": "target/phase-27/observed-start-inputs.json",
+      "bytes": 131832,
+      "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+    },
+    {
+      "path": "target/phase-27/ledger-before.md",
+      "bytes": 213888,
+      "sha256": "bfcf31242dd74b6bac6ea6fb8428a133fd51f8888b610a47ef0d57d18c07041d"
+    },
+    {
+      "path": "target/phase-27/capture-source.mjs",
+      "bytes": 6479,
+      "sha256": "c8cd840c1e9c2b39e447d4ecccc3541648bb239539a03e67397b65b2c1e472fe"
+    },
+    {
+      "path": "target/phase-27/approve-recovery-r2.mjs",
+      "bytes": 3349,
+      "sha256": "240fc5b60b3a62ba582b0e9edc80b741ed20d2e3ccc6b27795506b28eb319ce6"
+    },
+    {
+      "path": "target/phase-27/approved-source-paths-r2.json",
+      "bytes": 6101,
+      "sha256": "a8c4ec3aeea12da4362b615d047b7e23fedaa1af901d68eacc57a56e8a67ae63"
+    },
+    {
+      "path": "target/phase-27/inputs-candidate-r2.json",
+      "bytes": 141938,
+      "sha256": "83c39a3f164e6ec062fbfa1b7384ee47b7c1c9e3653205ac4cb8836719f28f7d"
+    }
+  ],
+  "artifactsSha256": "703ac408de9c69c73d069a61d71276962c909844e8715cb9bff52f9a0e5f7ca7"
+}

@@ -1,23 +1,13 @@
 /** Real AppLayout regression: denied routes never mount or fetch business data. */
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
-import { createRequire } from "node:module"
 import net from "node:net"
-import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { launchBrowser } from "./browser/runtime.mjs"
 
-const require = createRequire(import.meta.url)
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const nodeRuntime = path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node")
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || path.join(nodeRuntime, "node_modules/playwright"))
-const browserExecutable = process.env.BROWSER_EXECUTABLE || [chromium.executablePath(),
-  path.join(process.env["ProgramFiles(x86)"] || "C:/Program Files (x86)", "Microsoft/Edge/Application/msedge.exe"),
-  path.join(process.env.ProgramFiles || "C:/Program Files", "Microsoft/Edge/Application/msedge.exe"),
-].find(existsSync)
-assert(browserExecutable, "An existing Chromium or Edge installation is required.")
-const bindHost = process.env.ROUTE_PERMISSIONS_BROWSER_BIND || "::1"
+const bindHost = process.env.ROUTE_PERMISSIONS_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const freePort = () => new Promise((resolve, reject) => {
   const server = net.createServer().on("error", reject)
@@ -94,7 +84,7 @@ async function fixture(pathname, options = {}) {
   state.releaseMenus = () => releaseMenus?.()
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript((authenticated) => {
-    if (authenticated) localStorage.setItem("platform-token", "guard-session")
+    if (authenticated) if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "guard-session", refreshToken: null }))
     localStorage.setItem("platform-theme", "light")
   }, options.authenticated !== false)
   await context.routeWebSocket(() => true, () => {})
@@ -140,7 +130,8 @@ async function fixture(pathname, options = {}) {
       state.contextRequests++
       return fulfill(route, { contractVersion: "1.0", contextVersion: `guard-${state.contextRequests}`,
         expiresAt: new Date(Date.now() + (options.microContextTtlMs ?? 60_000)).toISOString(), appCode: microApp.code,
-        application: { id: microApp.id, name: microApp.name, runtimeMode: "TRUSTED" },
+        application: { id: microApp.id, name: microApp.name, runtimeMode: "TRUSTED",
+          entryType: microApp.entryType, entryUrl: microApp.entryUrl, deploymentVersion: null, entryVersionId: null },
         user: { id: state.profile.user.id, username: state.profile.user.username, displayName: state.profile.user.realName },
         tenant: state.profile.tenant, organization: state.profile.organization, roles: [], permissions: ["guardmicro:read"],
         dataGrants: [], menus: state.microContextMenus })
@@ -195,8 +186,8 @@ function noBusinessRequests(state) {
 
 try {
   await startServer()
-  browser = await chromium.launch({ executablePath: browserExecutable, headless: true })
-  const deniedPaths = ["/dashboard", "/system/tenants", "/system/settings", "/system/applications", "/system/menus",
+  browser = await launchBrowser()
+  const deniedPaths = ["/system/tenants", "/system/settings", "/system/applications", "/system/menus",
     "/system/organizations", "/system/departments", "/system/authorizations", "/system/users", "/system/roles",
     "/system/regions", "/system/oauth/clients", "/system/oauth/tokens", "/system/audit-logs", "/system/monitor",
     "/athena/overview", "/athena/reports/sales", "/athena/reports/operations", "/athena/sources",
@@ -207,6 +198,14 @@ try {
       noBusinessRequests(state)
     })
   }
+  await check("authenticated dashboard personal workbench needs no application MENU", "/dashboard", {}, async ({ page, state }) => {
+    await page.getByText("我的应用", { exact: true }).waitFor()
+    assert.equal(await page.getByText("无访问权限", { exact: true }).count(), 0)
+    // The monitor API independently denies its data; only the personal fallback mounts.
+    assert(state.requests.some((request) => request.pathname === "/api/monitor/overview"))
+    assert.equal(state.requests.filter((request) => businessPath(request.pathname)).every((request) =>
+      request.pathname === "/api/monitor/overview"), true)
+  })
   await check("unauthenticated deep link redirects before business mount", "/system/tenants", { authenticated: false }, async ({ page, state }) => {
     await page.waitForURL(/\/login\?return=/)
     await page.getByLabel("登录账号").waitFor()
@@ -412,7 +411,8 @@ try {
   await check("micro live context rejects cached menu grant before entry loading", "/micro/guardmicro/public", {
     microApp: true, menus: [microMenu("/public")], microContextMenus: [],
   }, async ({ page, state }) => {
-    await page.getByText("无访问权限", { exact: true }).waitFor()
+    await page.waitForURL("**/dashboard")
+    await page.getByText("我的应用", { exact: true }).waitFor()
     assert(state.contextRequests > 0, "The live application context must independently validate menu access")
     assert.equal(state.entries, 0)
   })
@@ -423,7 +423,8 @@ try {
     const before = state.entries
     state.microContextMenus = []
     await page.getByTestId("guard-micro-mounted").waitFor({ state: "hidden" })
-    await page.getByText("无访问权限", { exact: true }).waitFor()
+    await page.waitForURL("**/dashboard")
+    await page.getByText("我的应用", { exact: true }).waitFor()
     assert.equal(state.entries, before)
     assert(state.contextRequests > 1)
   })
@@ -440,7 +441,7 @@ try {
     assert.equal(await page.getByTestId("guard-micro-mounted").count(), 0)
     assert.equal(state.entries, before)
   })
-  await check("header collapses menu and topbar restores it with app rail intact", "/profile", { menus: sidebarMenus }, async ({ page, state }) => {
+  await check("header collapses menu and topbar restores it with app rail intact", "/profile", { menus: sidebarMenus, permissions: ["system:organization"] }, async ({ page, state }) => {
     const sidebar = page.getByRole("complementary", { name: "菜单导航", exact: true })
     await sidebar.getByRole("button", { name: "组织机构", exact: true }).waitFor()
     const before = await page.locator("#app-scroll").boundingBox()
@@ -455,7 +456,7 @@ try {
     assert.equal(await page.evaluate(() => localStorage.getItem("platform-sidebar")), "open")
     noBusinessRequests(state)
   })
-  await check("whole-menu collapse persists across reload", "/profile", { menus: sidebarMenus }, async ({ page, state }) => {
+  await check("whole-menu collapse persists across reload", "/profile", { menus: sidebarMenus, permissions: ["system:organization"] }, async ({ page, state }) => {
     await page.getByRole("button", { name: "收起菜单", exact: true }).waitFor()
     await page.getByRole("button", { name: "收起菜单", exact: true }).click()
     await page.getByRole("button", { name: "展开菜单", exact: true }).waitFor()
@@ -466,7 +467,7 @@ try {
     await page.getByRole("complementary", { name: "菜单导航", exact: true }).waitFor()
     noBusinessRequests(state)
   })
-  await check("nested directory folds persist through whole collapse, reload and search", "/profile", { menus: sidebarMenus }, async ({ page, state }) => {
+  await check("nested directory folds persist through whole collapse, reload and search", "/profile", { menus: sidebarMenus, permissions: ["system:organization"] }, async ({ page, state }) => {
     const sidebar = page.getByRole("complementary", { name: "菜单导航", exact: true })
     const root = sidebar.getByRole("button", { name: "组织机构", exact: true })
     const child = sidebar.getByRole("button", { name: "组织维护", exact: true })
@@ -494,7 +495,7 @@ try {
     await child.waitFor({ state: "hidden" })
     noBusinessRequests(state)
   })
-  await check("directory preference is isolated by user tenant organization app scope", "/profile", { menus: sidebarMenus }, async ({ page, state }) => {
+  await check("directory preference is isolated by user tenant organization app scope", "/profile", { menus: sidebarMenus, permissions: ["system:organization"] }, async ({ page, state }) => {
     const root = page.getByRole("complementary", { name: "菜单导航", exact: true }).getByRole("button", { name: "组织机构", exact: true })
     await root.waitFor()
     await root.click()
@@ -509,7 +510,7 @@ try {
     assert.equal(await root.getAttribute("aria-expanded"), "false", "Original context restores its own fold preferences")
     noBusinessRequests(state)
   })
-  await check("mobile drawer works independently of desktop collapse", "/profile", { menus: sidebarMenus,
+  await check("mobile drawer works independently of desktop collapse", "/profile", { menus: sidebarMenus, permissions: ["system:organization"],
     viewport: { width: 390, height: 844 } }, async ({ page, state }) => {
     await page.getByRole("button", { name: "打开导航", exact: true }).waitFor()
     await page.evaluate(() => localStorage.setItem("platform-sidebar", "collapsed"))

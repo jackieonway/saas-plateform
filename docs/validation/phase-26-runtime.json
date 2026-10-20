@@ -1,0 +1,2401 @@
+{
+  "schemaVersion": 1,
+  "phase": 26,
+  "status": "PHASE26_GATES_PASS",
+  "publishedAt": "2026-10-18T01:14:04.004Z",
+  "source": {
+    "candidateFile": "target/phase-26/inputs-candidate-r4.json",
+    "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "inputsSha256": "2a00d4ecf05558d1b6019f73707160c216e1e4f5fd18f24ea95ee8752dfee5eb",
+    "fileCount": 757,
+    "closureEdges": 59
+  },
+  "requiredRuns": [
+    {
+      "id": "fast",
+      "status": "PASS",
+      "path": "target/phase-26/validation-runner/final-fast-r4/run.json",
+      "managedSummaryPath": "target/phase-26/validation-runner/final-fast-r4/reports/summary.json",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "2a00d4ecf05558d1b6019f73707160c216e1e4f5fd18f24ea95ee8752dfee5eb",
+      "summaryPath": "target/phase-26/validation-runner/final-fast-r4/reports/fast/summary.json",
+      "stepCount": 61,
+      "counts": {
+        "tests": 894,
+        "pass": 894,
+        "fail": 0,
+        "skip": 0,
+        "cancelled": 0,
+        "todo": 0,
+        "filtered": 1931
+      },
+      "proofs": [
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/container.log",
+          "bytes": 308,
+          "sha256": "1c5175b67a7042ed7b4fa09d56a68ec6b39d37272b687439a44aceb54bb72bbe"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/in-container.mjs",
+          "bytes": 5568,
+          "sha256": "c5ffb341a89349c59dddfc6023598a14b9acc34707beed723f4acfa52f78af10"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/launcher.mjs",
+          "bytes": 16456,
+          "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/01-node-version.log",
+          "bytes": 9,
+          "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/02-npm-version.log",
+          "bytes": 8,
+          "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/03-rust-version.log",
+          "bytes": 36,
+          "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/04-install-root.log",
+          "bytes": 25,
+          "sha256": "a5167a3c98725273d348f8699f7c314021f7c56ee1c9add9d197db61c60d4ca9"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/05-install-frontend.log",
+          "bytes": 27,
+          "sha256": "1a9c2de8e45be81122886d6383b90bdf5c23cb3ecb726b13dd602ab904692fd6"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/06-install-mini-services-micro-vue.log",
+          "bytes": 25,
+          "sha256": "f88ad429c1a81a229a4d59e212075efd69417f6bb35d504461760bbd6291522e"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/07-install-mini-services-micro-jquery.log",
+          "bytes": 25,
+          "sha256": "23a99653960f8b39d2cdee77427e5c76ebd3c463eac108b9afc6ac3d29b448bc"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/08-install-examples-websocket.log",
+          "bytes": 25,
+          "sha256": "4863de8fad4a6440f80f45059ad615c15615638a020336af3bb47e0ad940c4ae"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/09-install-mini-services-oauth-playground-frontend.log",
+          "bytes": 25,
+          "sha256": "b70bbb7125dae0ff93af25e897764945669e9df0d1da8d2954b166c60f35fba8"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/10-install-business-apps-work-orders-frontend.log",
+          "bytes": 25,
+          "sha256": "b0395a4bee2e5ab18a9dd621db70d65e7d218fa1140ae08cad4e60aacc43140b"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/11-install-scripts-ci.log",
+          "bytes": 23,
+          "sha256": "da13ab9d025b19c91553bc7d4c450975d3e4e36dd7c5fef6f223f8008ba39547"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/12-sdk-drift.log",
+          "bytes": 87,
+          "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/13-build-frontends.log",
+          "bytes": 20734,
+          "sha256": "f2a3642670caf566db036cba7e0f22dba6eb6c51ebc16cb4e4a0393b8e948df3"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/14-lint.log",
+          "bytes": 11362,
+          "sha256": "d1d19e6294f8c0645a51161e049f1303c05c85e18129370c87a01b0c0cc08077"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/15-typecheck.log",
+          "bytes": 69,
+          "sha256": "763e90b76b62e6c308e153dc0e982734104069f3384703603d3ab3778e580ab5"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/16-contracts.log",
+          "bytes": 91981,
+          "sha256": "98c1ad596e278b5b86f688d2aaa32244dcc45658305d89b7b6b2abcc5bef8120"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/17-work-orders-vite-contracts.log",
+          "bytes": 2705,
+          "sha256": "2c956259e16f40a52cf4db0254937b1d05c1df2a1603b7252cbf45a0609dd5e1"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/18-deployment-unit.log",
+          "bytes": 8985,
+          "sha256": "4bcf4a5ca9d2cf9eafcc0d73f4e839a0d04f8703dcd6cd0b64a4e1c9d0c94228"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/19-oauth-playground-frontend.log",
+          "bytes": 2089,
+          "sha256": "cc8d406481a674badbc74daeb2096444a80cc3977db68713ec12f8d237fbbf11"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/20-oauth-playground-delivery.log",
+          "bytes": 1396,
+          "sha256": "aab2139850a04d5c00fab4768b8f3ef11ae1cb339e167f785d97b30b860d959b"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/21-ci-policy.log",
+          "bytes": 32275,
+          "sha256": "0f5f7dfab19c73ab78ae5ab44beceec2bae87756218601b9ad6f88aaaaceabb0"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/22-dev-and-vite.log",
+          "bytes": 4829,
+          "sha256": "8bb7a6df4b9eabdbeda8c865645159b1e07e57b1612837be0bf3d5a512d46be3"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/23-rust-check.log",
+          "bytes": 8096,
+          "sha256": "4fc9952fda54a885cc0c6ebbbed387921a20ed9847d8f922d74310b0f8b57508"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/24-rust-config-units.log",
+          "bytes": 7609,
+          "sha256": "370e19d7c0141180985475650a51a6e4cbcf7938a3a557b92117bd16079ef375"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/25-rust-data-grant-units.log",
+          "bytes": 1472,
+          "sha256": "24ce660b42359fcb3fa984f913a6194a99468a627a1abf3de1abd75ccddb1fab"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/26-rust-app-member-units.log",
+          "bytes": 399,
+          "sha256": "6e0958c74a3e313a70d934eb7a4d9ed641b82e6e73c1cf2eae74d895a9997346"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/27-rust-archive-units.log",
+          "bytes": 2085,
+          "sha256": "041982f2105e6a3002265b15454c570caff1451d77fcb3bf278c5e7fa9cf58ad"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/28-rust-staging-maintenance-units.log",
+          "bytes": 591,
+          "sha256": "547b0f42df99e746c21373445e7ede06f67907c10b0e066f58957ae1ccaa5202"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/29-rust-public-contract-units.log",
+          "bytes": 1267,
+          "sha256": "e5fcdb78e614146faa4f1bc891ff7fa31c6d3038ba1e62d33ee090ac943d5d0e"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/30-rust-oauth-issuance-units.log",
+          "bytes": 382,
+          "sha256": "da6b1f2321b1a9b80cc2b6ffcd3643a5790c52d0939bddabc6aff642c94e522c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/31-rust-login-limit-units.log",
+          "bytes": 1094,
+          "sha256": "dcfb68616176198e7defbcc3f84d7a661ae044c09127ee8a41312b1e878f96d9"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/32-rust-password-units.log",
+          "bytes": 594,
+          "sha256": "e3d9e43ed1c40b5774e6c485d1f012e4461c2ec354bdd905286ff98d5a07f1ee"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/33-rust-client-ip-units.log",
+          "bytes": 796,
+          "sha256": "dcea26be8b04a52912d47a29ef2540c3dbd78adeccb7f5abd639ce4cf16cd127"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/34-rust-transport-units.log",
+          "bytes": 3733,
+          "sha256": "1c6bdc49fa4ce8bf6999ae895766306588e556ff5f5de3611422f24bf218ea19"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/35-rust-socketio-units.log",
+          "bytes": 3667,
+          "sha256": "9d883a1dd0503943d028d6018e5a221141ead089dd49f5665a143d1de954e8ca"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/36-rust-chat-units.log",
+          "bytes": 3277,
+          "sha256": "29324e8fe7790be4333dbdf0888ab16a2ff021e771df0915fe98a1c772ee106e"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/37-rust-socketio-compatibility.log",
+          "bytes": 10595,
+          "sha256": "c8aa5ab93cc919fbd3fc87e3ecea36da5ad9c2409272f5529bffb436152cb29a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/38-notification-fmt.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/39-notification-check.log",
+          "bytes": 5972,
+          "sha256": "f073661d392200a1d3b0f22ce686b0579dee4fee0d46f777cb98d7378563eab7"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/40-notification-clippy.log",
+          "bytes": 156,
+          "sha256": "79229d75fb6ce32f6f72728c24f086b74d0dc64799819f005690d8fa369539b9"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/41-notification-units.log",
+          "bytes": 8380,
+          "sha256": "cada20884db334591e1cb043a8497d9a6b556ffbcd9dcc5e45242fd5e3c583b6"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/42-notification-doc.log",
+          "bytes": 244,
+          "sha256": "feaf584b716a8a37379f1181a6d311a829010df11a2b672d6df0db91f88ee75f"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/43-work-orders-fmt.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/44-work-orders-check.log",
+          "bytes": 5389,
+          "sha256": "df37e758d47f7578f5bf9b57355f2c1a07ceb40c1b76409b9e9065c5ce18413c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/45-work-orders-clippy.log",
+          "bytes": 155,
+          "sha256": "9a2f32fd3fd3a473887d7b2e2e99bba81b75a61fee444e23a915ce34d9f736ce"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/46-work-orders-units.log",
+          "bytes": 10200,
+          "sha256": "f165d7aa78d14659d4a63bba36f7e716334a5610ee2e97b6c822336eb11f4733"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/47-work-orders-doc.log",
+          "bytes": 251,
+          "sha256": "f5004260f93c44e8038a4253d3e6df7d4ca5eb699e33560ae717c050c9952b5f"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/48-stores-fmt.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/49-stores-check.log",
+          "bytes": 2872,
+          "sha256": "9e2e8cfb8dae65c9d577c62feefb9222d8cf3760ce2ec3c312dab174d1f52a90"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/50-stores-clippy.log",
+          "bytes": 145,
+          "sha256": "c3139a4215b9b1c40906b588714002c592c47d4b100f0eb21b8f0d30797f0fe8"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/51-stores-units.log",
+          "bytes": 5341,
+          "sha256": "56ca4389111b2dfdd0920a45e2f912ef26d3be1f13b6676af3e8e2901e09b958"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/52-stores-doc.log",
+          "bytes": 210,
+          "sha256": "fb6a283dfdb117527dbede1e61a9f7a031ca0d75977450f8e4cdc779ace8104f"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/53-stores-build.log",
+          "bytes": 72,
+          "sha256": "2461b00c8697c4189b2de92ca6fb05b5d72273c78a0a47b1ce4e83ccca077b70"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/54-rust-oauth-playground-units.log",
+          "bytes": 6043,
+          "sha256": "29b26ba72e43abedb0b5d8da4cfd2896bd277f38ae20f48dc242188eef3f23d2"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/55-platform-admin-fmt.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/56-platform-admin-check.log",
+          "bytes": 3120,
+          "sha256": "bd8322f79fbd0d2006ef24c024c1eb81069f2ae8430101e7e0be32ee5f4c57d9"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/57-platform-admin-clippy.log",
+          "bytes": 146,
+          "sha256": "ca102dc9a5719bc2be9fdfe9978ab122a9ab7c61ba6125719f468bad30b97667"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/58-platform-admin-tests.log",
+          "bytes": 5062,
+          "sha256": "aa9fee86c62c60ad9e7155a572e05c00fe5dcaf8b70c6f3a0a1a5c9643f3d3ea"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/59-platform-admin-doc.log",
+          "bytes": 233,
+          "sha256": "165f9d663f2d96a9816fded9ae0bf4159fddf8a017cc5ea989f74f1cfcd2833a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/60-platform-admin-build.log",
+          "bytes": 3120,
+          "sha256": "c5b6f016c3a316a7404ff000c236d2ce26e8a6fb438f21f45c1bc5b4f12df917"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/61-platform-admin-tls.log",
+          "bytes": 2332,
+          "sha256": "6e7b1dec804690d3ab18283576463a0d68cfe602772fbd88517518741a83e817"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/platform-admin-tls/result.json",
+          "bytes": 2135,
+          "sha256": "ce1db0bb5ade5776c4390cfc4f98ddc5b467c6dece36c5791ea0b2adbdd79b7f"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/summary.json",
+          "bytes": 39464,
+          "sha256": "00cc869ef813db1ac3084591dfe7b771ae0b03ccd7f0c12da63c68b85420cdd3"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/cargo-version.log",
+          "bytes": 36,
+          "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/fast.log",
+          "bytes": 3801,
+          "sha256": "b190ff035e8e9447363e60d0acd86e205fbfc78f04a9203ab108a5e1fd60ad62"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/node-version.log",
+          "bytes": 9,
+          "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/npm-version.log",
+          "bytes": 8,
+          "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/rust-version.log",
+          "bytes": 36,
+          "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/reports/summary.json",
+          "bytes": 2033,
+          "sha256": "d6e6e88efee68ead2415ddd04b28165bfec22e3a69638eb29fa413b367ef0751"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/run.json",
+          "bytes": 126214,
+          "sha256": "1aa245805b5ba589fb423119903fb46bea8c22af14697bd72ab73737651da4cf"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/snapshot-manifest.json",
+          "bytes": 115586,
+          "sha256": "bb7d8253ef155442d180aec73b5b367fccfbb5f1827ab89a58ce97bf925963ff"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-fast-r4/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-managed.mjs",
+          "bytes": 16456,
+          "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+        }
+      ]
+    },
+    {
+      "id": "stores-postgres",
+      "status": "PASS",
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/run.json",
+      "managedSummaryPath": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/summary.json",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "2a00d4ecf05558d1b6019f73707160c216e1e4f5fd18f24ea95ee8752dfee5eb",
+      "summaryPath": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/summary.json",
+      "stepCount": 5,
+      "reportPath": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/stores-postgres/postgres-result.json",
+      "counts": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skip": 0,
+        "cancelled": 0,
+        "todo": 0,
+        "filtered": 0
+      },
+      "namedChecks": 8,
+      "proofs": [
+        {
+          "path": "target/phase-26/validation-runner/final-managed.mjs",
+          "bytes": 16456,
+          "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/container.log",
+          "bytes": 330,
+          "sha256": "2805bf2c0e93f38a685b90551762ffb7aca4088bb7fe27e64dfbe217684ce901"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/in-container.mjs",
+          "bytes": 5579,
+          "sha256": "538da2bc1392451882bdab773b1e1bc6547cae8448b64e06a13488dafda9f2ba"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/launcher.mjs",
+          "bytes": 16456,
+          "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/cargo-version.log",
+          "bytes": 36,
+          "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/node-version.log",
+          "bytes": 9,
+          "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/npm-version.log",
+          "bytes": 8,
+          "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/rust-version.log",
+          "bytes": 36,
+          "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/stores-postgres.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/stores-postgres/postgres-result.json",
+          "bytes": 2089,
+          "sha256": "fabf01582cc042ff146a0e0a3ae40baaa0cec6cb5b5352ceafa7cdf5d1398bff"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/stores-postgres/stores-postgres-contracts.log",
+          "bytes": 1067,
+          "sha256": "5650794f3f18556e4d29b9756ce43ed7083a95430ed5645ab10cebb03c82f2b8"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/summary.json",
+          "bytes": 2185,
+          "sha256": "a93c7ccda34da472c27838e8db6d665a71d3bc3808e37a383d3e4d1c25c54cd9"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/run.json",
+          "bytes": 126818,
+          "sha256": "0f458b78e839c308e668e0403c7a76709a72fc6a8f43beed733b467db441a1dc"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/snapshot-manifest.json",
+          "bytes": 115586,
+          "sha256": "bb7d8253ef155442d180aec73b5b367fccfbb5f1827ab89a58ce97bf925963ff"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r4/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+        }
+      ]
+    },
+    {
+      "id": "stores-live-postgres",
+      "status": "PASS",
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/run.json",
+      "managedSummaryPath": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/summary.json",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "2a00d4ecf05558d1b6019f73707160c216e1e4f5fd18f24ea95ee8752dfee5eb",
+      "summaryPath": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/summary.json",
+      "stepCount": 7,
+      "reportPath": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/stores-live-postgres/postgres-result.json",
+      "counts": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skip": 0,
+        "cancelled": 0,
+        "todo": 0,
+        "filtered": 0
+      },
+      "namedChecks": 16,
+      "originalBinaries": [
+        {
+          "role": "stores",
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/artifacts/stores-api",
+          "bytes": 67912520,
+          "sha256": "e4335fc52fddd7772568a794c36682cfd3ff78515bad076bc0b37349da24868f",
+          "elfMachine": 62,
+          "sourceRole": "independent-business-service"
+        },
+        {
+          "role": "work-orders",
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/artifacts/work-orders-api",
+          "bytes": 67902896,
+          "sha256": "94d132037a7c4f7815f0fa9ff6ec4d1508cba337014cb12723f26b33e953fd3e",
+          "elfMachine": 62,
+          "sourceRole": "independent-business-service"
+        }
+      ],
+      "proofs": [
+        {
+          "path": "target/phase-26/validation-runner/final-managed.mjs",
+          "bytes": 16456,
+          "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/container.log",
+          "bytes": 500,
+          "sha256": "51031c9f2028f2f0ba70d9e46b2783a30eda21383bce718289f5a43f153b73a9"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/in-container.mjs",
+          "bytes": 5584,
+          "sha256": "f7bea8a1da256dd6d5e9fd0cd1342a10c68e62744ed0c414e9c0f0fa242a57af"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/launcher.mjs",
+          "bytes": 16456,
+          "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/artifacts/stores-api",
+          "bytes": 67912520,
+          "sha256": "e4335fc52fddd7772568a794c36682cfd3ff78515bad076bc0b37349da24868f"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/artifacts/work-orders-api",
+          "bytes": 67902896,
+          "sha256": "94d132037a7c4f7815f0fa9ff6ec4d1508cba337014cb12723f26b33e953fd3e"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/cargo-version.log",
+          "bytes": 36,
+          "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/node-version.log",
+          "bytes": 9,
+          "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/npm-version.log",
+          "bytes": 8,
+          "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/rust-version.log",
+          "bytes": 36,
+          "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/stores-live-build.log",
+          "bytes": 72,
+          "sha256": "dc7ed95048c06bea49dc7dc39acd01a27efda444b5ddc747f0d95eb33fad9409"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/stores-live-postgres.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/work-orders-live-build.log",
+          "bytes": 155,
+          "sha256": "386812bd83e6c71f35951a8d16e0176189717f5f83cab239aae80d9923882369"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/stores-live-postgres/phase26_stores_tests-real_platform_stores_and_cross_app_isolation.log",
+          "bytes": 3409,
+          "sha256": "06812a0a8d8cdf7e84f8b2d17f1f3c29016f69ec0c427182141ebd2e8e8c1c38"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/stores-live-postgres/postgres-result.json",
+          "bytes": 3910,
+          "sha256": "56770a65bcf34a7dca527e100cb4ffee481b0d753400b5eb62e22d5f63fe9bca"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/summary.json",
+          "bytes": 3681,
+          "sha256": "6b9257cc47c08d18a0ebbe3e8c7d281eebd76428cbda67b7110d390e52756b0e"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/run.json",
+          "bytes": 128340,
+          "sha256": "763ced032d88654e11f9ad6730c7fb6c6e2a8a8a313b2b286b83170b1a753780"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/snapshot-manifest.json",
+          "bytes": 115586,
+          "sha256": "bb7d8253ef155442d180aec73b5b367fccfbb5f1827ab89a58ce97bf925963ff"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "id": "same-frozen-source-and-own-selector",
+      "result": "PASS"
+    },
+    {
+      "id": "physical-files-and-import-closure",
+      "result": "PASS"
+    },
+    {
+      "id": "fresh-owned-boundaries",
+      "result": "PASS"
+    },
+    {
+      "id": "three-actual-final-managed-gates",
+      "result": "PASS"
+    },
+    {
+      "id": "raw-fast-counts-and-typed-sql-live-logs",
+      "result": "PASS"
+    },
+    {
+      "id": "original-drivers-argv-and-business-elfs",
+      "result": "PASS"
+    },
+    {
+      "id": "owned-resource-and-cache-cleanup",
+      "result": "PASS"
+    },
+    {
+      "id": "109-historical-evidence-preserved",
+      "result": "PASS"
+    },
+    {
+      "id": "original-development-failures-retained",
+      "result": "PASS"
+    }
+  ],
+  "cacheCleanup": {
+    "path": "target/phase-26/validation-runner/cache-cleanup-final-r4.json",
+    "bytes": 452,
+    "sha256": "fdc44caa1ae198084c9c7697feaa5b60cb6bd0a5068ccd49cd4ff868934211b3"
+  },
+  "developmentObservations": [
+    {
+      "id": "unadopted-capture-r1-r2",
+      "status": "OBSERVED",
+      "note": "Original candidate manifests r1/r2 share the r3 source digest. Control-script allowlists were incomplete at their capture/boundary attempts, so neither candidate was adopted. This records the manifests and the parent-reported reason; no absent terminal log is reconstructed.",
+      "files": [
+        {
+          "path": "target/phase-26/inputs-candidate-r1.json",
+          "bytes": 141728,
+          "sha256": "e0dcab77c4487861981be714f754e6ca3f7c151d7386fc358f7ef80d0aec76c4"
+        },
+        {
+          "path": "target/phase-26/inputs-candidate-r2.json",
+          "bytes": 141728,
+          "sha256": "b8eef01f0c8873975c8caf8464037e5b7c276072f4d950178d0aac9d9d7365a4"
+        }
+      ]
+    },
+    {
+      "id": "unadopted-r3-sql-run",
+      "status": "OBSERVED",
+      "note": "The original r3 SQL execution passed. The candidate was subsequently retired after a real report-audit rows_affected defect was found and repaired, and live regression coverage was extended. Its PASS is preserved but is not a final Phase26 gate and contributes no requiredRuns counts.",
+      "files": [
+        {
+          "path": "target/phase-26/inputs-candidate-r3.json",
+          "bytes": 141728,
+          "sha256": "3bdc5096e93e2ad71d8382fa543ce9ea607907ce63d9e46b02ac4bd42ca6c7fb"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/run.json",
+          "bytes": 126818,
+          "sha256": "5d4439380792b0d494202db37587682cc21b0bd869fb485528583c92596cbe5a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/launcher.mjs",
+          "bytes": 16456,
+          "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/in-container.mjs",
+          "bytes": 5579,
+          "sha256": "20b0c076cbe8a579a6b9b405d4ca3b1774c1ea093b22c08fbccec4850702a205"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/container.log",
+          "bytes": 330,
+          "sha256": "2805bf2c0e93f38a685b90551762ffb7aca4088bb7fe27e64dfbe217684ce901"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/snapshot-manifest.json",
+          "bytes": 115586,
+          "sha256": "67aaee3430f68545197c148fdcd39fa40d1634e804e049f7cb28261fb9def145"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "d53d28303e9923fa9bde89ed6429f3661942c3cac3ca4fd4528037d1bd8d4143"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/summary.json",
+          "bytes": 2185,
+          "sha256": "e364dedac94e711e6cf3c0b2ef347370d66af8457d5a55e75086b1e45dae1d4a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/node-version.log",
+          "bytes": 9,
+          "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/rust-version.log",
+          "bytes": 36,
+          "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/cargo-version.log",
+          "bytes": 36,
+          "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/npm-version.log",
+          "bytes": 8,
+          "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/stores-postgres.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/stores-postgres/postgres-result.json",
+          "bytes": 2089,
+          "sha256": "f4d1d433972c7a40d6a496be9a4583a67ea4f3819ecbc86d483eb90c335536f1"
+        },
+        {
+          "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/stores-postgres/stores-postgres-contracts.log",
+          "bytes": 1067,
+          "sha256": "729b255677cc4f08204de77ec6ee7712075f67a7305d34521bbd747b17ef76db"
+        }
+      ],
+      "originalStatus": "PASS",
+      "statusFile": "target/phase-26/validation-runner/final-stores-postgres-r3/run.json"
+    },
+    {
+      "id": "native-lib-r1",
+      "status": "FAIL",
+      "note": "Original Windows lib suite: exit 101; nine loopback HTTP fixtures failed. Original assertions and log retained.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r1/cargo-test-lib.log",
+          "bytes": 15537,
+          "sha256": "5deea120366d1f217b8c94d640f3d54c9b2131eebaba818769518ef24ad94b61"
+        },
+        {
+          "path": "target/phase-26/auth-local-r1/exit-code.txt",
+          "bytes": 5,
+          "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+        }
+      ],
+      "exitCodeFile": "target/phase-26/auth-local-r1/exit-code.txt"
+    },
+    {
+      "id": "native-loopback-diagnostics",
+      "status": "OBSERVED",
+      "note": "Original secret-free TCP/reqwest loopback diagnostics. Executables/debug symbols are excluded from the public evidence archive.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r1/network-probe.rs",
+          "bytes": 1953,
+          "sha256": "d28e7387c69e6062c16066423caaa3de7e8d6e3ee2b093a6df1d5c7f1deec631"
+        },
+        {
+          "path": "target/phase-26/auth-local-r1/network-probe.log",
+          "bytes": 370,
+          "sha256": "bc0e26a1eb2788683c78345f1db0a9b7187c4ebce2dbe25b0ffe4ed1d8605558"
+        },
+        {
+          "path": "target/phase-26/auth-local-r1/network-probe-r2.log",
+          "bytes": 225,
+          "sha256": "53b1163e9f176ab4ed3bae8c31e9ee7a971b4fa6b289e73b94a429fce86eac2a"
+        }
+      ]
+    },
+    {
+      "id": "native-lib-r2",
+      "status": "FAIL",
+      "note": "Original Windows lib suite: exit 101; 45 passed and nine loopback HTTP fixtures failed. This is retained independently of the later Linux development success.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r2/cargo-test-lib.log",
+          "bytes": 10148,
+          "sha256": "542f9944014357dd9efa0dbab2705938d67c6310dc1fc9f4e44fff0848b06187"
+        },
+        {
+          "path": "target/phase-26/auth-local-r2/exit-code.txt",
+          "bytes": 5,
+          "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+        }
+      ],
+      "exitCodeFile": "target/phase-26/auth-local-r2/exit-code.txt"
+    },
+    {
+      "id": "native-pg-compile-r2",
+      "status": "FAIL",
+      "note": "Original compile-only attempt failed; it never established PostgreSQL behavioral acceptance.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r2/cargo-postgres-no-run.log",
+          "bytes": 1659,
+          "sha256": "70b0e2265c1a97b2d530258cf92423328da544b8b194d4983a7c28c31b499a3c"
+        },
+        {
+          "path": "target/phase-26/auth-local-r2/postgres-no-run-exit-code.txt",
+          "bytes": 5,
+          "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+        }
+      ],
+      "exitCodeFile": "target/phase-26/auth-local-r2/postgres-no-run-exit-code.txt"
+    },
+    {
+      "id": "native-pg-compile-r3",
+      "status": "FAIL",
+      "note": "Original SQLx Send/Acquire compile diagnostics, retained after the subsequent source repair.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r3/cargo-postgres-no-run.log",
+          "bytes": 2846,
+          "sha256": "f807dd9b542d30acf5ea4654b682411fa2b1cc64c50a2d6627420aef21127798"
+        },
+        {
+          "path": "target/phase-26/auth-local-r3/postgres-no-run-exit-code.txt",
+          "bytes": 5,
+          "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+        }
+      ],
+      "exitCodeFile": "target/phase-26/auth-local-r3/postgres-no-run-exit-code.txt"
+    },
+    {
+      "id": "native-clippy-r3",
+      "status": "FAIL",
+      "note": "Original static-check diagnostics, including module placement and compile errors; later repair does not relabel this observation.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r3/cargo-clippy.log",
+          "bytes": 6620,
+          "sha256": "ff9fc92ce29407d6853012f0f90df360f6641ca90acc6691e3541edf9388bb6b"
+        },
+        {
+          "path": "target/phase-26/auth-local-r3/clippy-exit-code.txt",
+          "bytes": 5,
+          "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+        }
+      ],
+      "exitCodeFile": "target/phase-26/auth-local-r3/clippy-exit-code.txt"
+    },
+    {
+      "id": "native-pg-compile-r4",
+      "status": "PASS",
+      "note": "Original compile-only success, not a database test execution.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r4/cargo-postgres-no-run.log",
+          "bytes": 294,
+          "sha256": "204ff26c92b4f9f3696c652e50398240cbd16f963089cebe50e8858f66bea093"
+        },
+        {
+          "path": "target/phase-26/auth-local-r4/postgres-no-run-exit-code.txt",
+          "bytes": 3,
+          "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+        },
+        {
+          "path": "target/phase-26/auth-local-r4/source-summary.json",
+          "bytes": 1830,
+          "sha256": "f294f2caf2bfa92619384c6a177812978869afb7225a61fca267ba1d4270135c"
+        }
+      ],
+      "exitCodeFile": "target/phase-26/auth-local-r4/postgres-no-run-exit-code.txt"
+    },
+    {
+      "id": "native-clippy-r4",
+      "status": "PASS",
+      "note": "Original development clippy success; final checks still run against the adopted candidate.",
+      "files": [
+        {
+          "path": "target/phase-26/auth-local-r4/cargo-clippy.log",
+          "bytes": 169,
+          "sha256": "6f44fd0bbd5f20b910fe49ad13d5ead7b869916c2de6047efa88268af694aa04"
+        },
+        {
+          "path": "target/phase-26/auth-local-r4/clippy-exit-code.txt",
+          "bytes": 3,
+          "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+        }
+      ],
+      "exitCodeFile": "target/phase-26/auth-local-r4/clippy-exit-code.txt"
+    },
+    {
+      "id": "native-ci-r1",
+      "status": "PASS",
+      "note": "Original native CI policy test result. Its counts remain development observations.",
+      "files": [
+        {
+          "path": "target/phase-26/ci-local-r1/result.json",
+          "bytes": 5746,
+          "sha256": "219fd1467487bbb3b88085823bfb717a351c7418c2f61ea88eeb35fd05cf3d67"
+        },
+        {
+          "path": "target/phase-26/ci-local-r1/ci-unit-tests.tap",
+          "bytes": 32035,
+          "sha256": "73b9dbd471ad68457bc1e8f95d707364b6292b7deb7747ad4ee647dc8376a6eb"
+        },
+        {
+          "path": "target/phase-26/ci-local-r1/source-before.json",
+          "bytes": 131832,
+          "sha256": "d766a737a66d7910227bf5647ac746a37cbd5b115901f459610a36ce0594c465"
+        },
+        {
+          "path": "target/phase-26/ci-local-r1/source-after.json",
+          "bytes": 131832,
+          "sha256": "d766a737a66d7910227bf5647ac746a37cbd5b115901f459610a36ce0594c465"
+        }
+      ],
+      "statusFile": "target/phase-26/ci-local-r1/result.json"
+    },
+    {
+      "id": "native-ci-r2",
+      "status": "PASS",
+      "note": "Original repeated native CI policy test result; no inheritance into final gate counts.",
+      "files": [
+        {
+          "path": "target/phase-26/ci-local-r2/result.json",
+          "bytes": 6276,
+          "sha256": "700dc2d3cb22855069bee7e487041fba0bb69cdba8b66ebdeff715d489e82e45"
+        },
+        {
+          "path": "target/phase-26/ci-local-r2/ci-unit-tests.tap",
+          "bytes": 32026,
+          "sha256": "43a77756d205efbc7acaf85b8ea9941523c12da4b2936e92ff8154c1867c915f"
+        },
+        {
+          "path": "target/phase-26/ci-local-r2/source-before.json",
+          "bytes": 131832,
+          "sha256": "fa6a6e63ae0a1bd014345ddccc76487351d09f428ee7cb57461dc58ef0a5cf4c"
+        },
+        {
+          "path": "target/phase-26/ci-local-r2/source-after.json",
+          "bytes": 131832,
+          "sha256": "fa6a6e63ae0a1bd014345ddccc76487351d09f428ee7cb57461dc58ef0a5cf4c"
+        }
+      ],
+      "statusFile": "target/phase-26/ci-local-r2/result.json"
+    },
+    {
+      "id": "linux-development-check-r1",
+      "status": "PASS",
+      "note": "Original developing-source platform compilation, not a fresh final run.",
+      "files": [
+        {
+          "path": "target/phase-26/validation-runner/check-r1/run.json",
+          "bytes": 121843,
+          "sha256": "be15009b361d5d0b0960bd4e25ad4e3a975803886c4266d89e46960d230ae71b"
+        },
+        {
+          "path": "target/phase-26/validation-runner/check-r1/source-manifest.json",
+          "bytes": 130315,
+          "sha256": "a9656b771f457a7b091e6877e20b290713ffc90cac5159e1a69523b4d9bb5370"
+        },
+        {
+          "path": "target/phase-26/validation-runner/check-r1/in-container.mjs",
+          "bytes": 1551,
+          "sha256": "5dc3fa28bde23718527f3c4fd2c2da433f982b3a56a77ace140696116eb6614a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/check-r1/container.log",
+          "bytes": 56,
+          "sha256": "47d9a6c6588779e4333758b10d3c2b1feaee071278c53fbad3200417ea0f0dd7"
+        },
+        {
+          "path": "target/phase-26/validation-runner/check-r1/reports/summary.json",
+          "bytes": 385,
+          "sha256": "e399b2f695fa2f574134efa5597b5e4246c0a74368e7de72892bc3e0a81fce91"
+        },
+        {
+          "path": "target/phase-26/validation-runner/check-r1/reports/platform-check.log",
+          "bytes": 17166,
+          "sha256": "d559a4bbca6079d30ff2f9e443d6ea1e1650d233e30a6b7fcb3c16f9ac9631e3"
+        }
+      ],
+      "statusFile": "target/phase-26/validation-runner/check-r1/run.json"
+    },
+    {
+      "id": "linux-development-units-r1",
+      "status": "PASS",
+      "note": "Original Linux development unit suite, including HTTP tests that failed in the native Windows loopback environment.",
+      "files": [
+        {
+          "path": "target/phase-26/validation-runner/units-r1/run.json",
+          "bytes": 122975,
+          "sha256": "473cb4af69e553db8ccea0e4d036eb1ac747023c4b8a126b528d65c73d1147a7"
+        },
+        {
+          "path": "target/phase-26/validation-runner/units-r1/source-manifest.json",
+          "bytes": 131525,
+          "sha256": "9eb1a403291f98e9e61899f1166219cdec1270bbf046b3bae6ba5eda25e7de4d"
+        },
+        {
+          "path": "target/phase-26/validation-runner/units-r1/in-container.mjs",
+          "bytes": 1567,
+          "sha256": "e53ae413afad049c2cdb19d068c1189c85f0028878589a13ae52b2aa2950d39a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/units-r1/container.log",
+          "bytes": 52,
+          "sha256": "239a29dcb3626fe4337330773db1713a8107065d6f539ac157d8d0a12f768426"
+        },
+        {
+          "path": "target/phase-26/validation-runner/units-r1/reports/summary.json",
+          "bytes": 400,
+          "sha256": "91c1ae6a45a3f88e598655b656f4f2d7df192479c07d1388d2601ce69810aaf1"
+        },
+        {
+          "path": "target/phase-26/validation-runner/units-r1/reports/stores-units.log",
+          "bytes": 11097,
+          "sha256": "1ce48d71f01cf024c9a21352e80404a0160343d381dce2feed86d4550ef1bda7"
+        }
+      ],
+      "statusFile": "target/phase-26/validation-runner/units-r1/run.json"
+    },
+    {
+      "id": "linux-development-live-r1",
+      "status": "FAIL",
+      "note": "Original live failure: collection endpoint expected status was overstrict. The failed log and cleanup evidence remain unchanged.",
+      "files": [
+        {
+          "path": "target/phase-26/validation-runner/live-r1/run.json",
+          "bytes": 124859,
+          "sha256": "43cb468400bed4d2c73a7eb0c60f925abe30e59d29f877ff7ac1d267facefb1a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r1/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "39e0f051123948cd3143c46b88fa3321652aba0db15e45ae55629567485d86ab"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r1/in-container.mjs",
+          "bytes": 2475,
+          "sha256": "84472498247cc0ad132fd8295ebab0654599718c0e41fdd90798454419596521"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r1/container.log",
+          "bytes": 5809,
+          "sha256": "96b9c9b3c87f0a97c786b1372065dda03502ce815e736c553c727a2a5e65754c"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r1/reports/summary.json",
+          "bytes": 1542,
+          "sha256": "37c9d2bd60e5d0992bed3bb654782272237111bf519585dde0f44e5319953f2f"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r1/reports/stores-build.log",
+          "bytes": 145,
+          "sha256": "c31c8afba7a2647bd53047e1b61f71a38949f3b90835b4172375bc7931ac84a2"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r1/reports/work-orders-build.log",
+          "bytes": 2213,
+          "sha256": "8264b45476095d2f3985b65c9a2e2b8b48e89b1375ec7261a3bcf729d3b260d5"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r1/reports/stores-live.log",
+          "bytes": 5643,
+          "sha256": "940968597347618076e250e6ae65e52bde3db7f0d607044f08cf593dc094a9a7"
+        }
+      ],
+      "statusFile": "target/phase-26/validation-runner/live-r1/run.json"
+    },
+    {
+      "id": "linux-development-live-r2",
+      "status": "PASS",
+      "note": "Original development live pass. The later stricter cross-database SQLSTATE assertion still requires the final fresh live gate.",
+      "files": [
+        {
+          "path": "target/phase-26/validation-runner/live-r2/run.json",
+          "bytes": 124854,
+          "sha256": "1f97d1050ccf6e316f369fa7b1ce836cc0cec9ed042e76d156d14e49e3473752"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r2/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "491c51d41e1508f49152c77698dc08e09b15b30ed735f3a572c68bb1295c1877"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r2/in-container.mjs",
+          "bytes": 2475,
+          "sha256": "84472498247cc0ad132fd8295ebab0654599718c0e41fdd90798454419596521"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r2/container.log",
+          "bytes": 166,
+          "sha256": "79bac80d4c2d48d4594b688ce30439d65034426076710bbfedd32ed96da34b09"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r2/reports/summary.json",
+          "bytes": 1537,
+          "sha256": "ddf34f61fcafead58896aa30eb1cd02b8a83c50c98f3182b5feb3fb53de9e5a4"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r2/reports/stores-build.log",
+          "bytes": 145,
+          "sha256": "34321bbd20f97debdc10d4c796dd9019e21e6b0e3ac6534ed43105fc56596418"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r2/reports/work-orders-build.log",
+          "bytes": 72,
+          "sha256": "8950be1e8f4499f41b8e38ef15f09a0e2671be53a43aa5dec4d794320908881d"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-r2/reports/stores-live.log",
+          "bytes": 3048,
+          "sha256": "090a93a6b267b0d61f205393bb2ca0ce30a56db62d084139417ad796805db3fd"
+        }
+      ],
+      "statusFile": "target/phase-26/validation-runner/live-r2/run.json"
+    },
+    {
+      "id": "linux-development-sql-r1",
+      "status": "PASS",
+      "note": "Original development SQL fixture success, independently preserved.",
+      "files": [
+        {
+          "path": "target/phase-26/validation-runner/sql-r1/run.json",
+          "bytes": 124039,
+          "sha256": "e55543f351f5e6a3d72dedbe9be6a4ad4ed68e2487d27daed3817c0243f9bc36"
+        },
+        {
+          "path": "target/phase-26/validation-runner/sql-r1/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "d53d28303e9923fa9bde89ed6429f3661942c3cac3ca4fd4528037d1bd8d4143"
+        },
+        {
+          "path": "target/phase-26/validation-runner/sql-r1/in-container.mjs",
+          "bytes": 2127,
+          "sha256": "362e7046de05800cb242b06332e254447a02ebf7cd6331e01b86902a33321f47"
+        },
+        {
+          "path": "target/phase-26/validation-runner/sql-r1/container.log",
+          "bytes": 48,
+          "sha256": "4c92ed38e36f0aa8f970e23fe660a0fbed401207348d96ad0d3cc485c0d1c3d1"
+        },
+        {
+          "path": "target/phase-26/validation-runner/sql-r1/reports/summary.json",
+          "bytes": 723,
+          "sha256": "126ca47c7a74df3d93b139301088e4c040a6819bc04898599a16110250607656"
+        },
+        {
+          "path": "target/phase-26/validation-runner/sql-r1/reports/stores-sql.log",
+          "bytes": 1066,
+          "sha256": "60e5baa15b0dcd91423f6466f065ed0d2def64a6894e237ef0bd2b6d26fbb7a2"
+        }
+      ],
+      "statusFile": "target/phase-26/validation-runner/sql-r1/run.json"
+    },
+    {
+      "id": "reports-early-integration-observation",
+      "status": "OBSERVED",
+      "note": "Explicitly an observed summary of early missing-manifest/module failures, not a reconstructed terminal log or executed behavioral test.",
+      "files": [
+        {
+          "path": "target/phase-26/reports-red-observed-summary.txt",
+          "bytes": 1756,
+          "sha256": "9b0ae71385f999bef805e269092468ed2f98060e79a13bdae0bc19cf068d2b6e"
+        }
+      ]
+    },
+    {
+      "id": "linux-development-live-audit-r1",
+      "status": "PASS",
+      "note": "Actual development HTTP regression after the zero-row report audit repair: POST/PATCH audit suppression rolled back all business changes; after removing the owned trigger both normal requests succeeded with exactly one request-bound audit. The strict cross-database 42501 assertion also passed. This development result is preserved separately from the fresh adopted r4 gates.",
+      "files": [
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/run.json",
+          "bytes": 124854,
+          "sha256": "730296740fb3feac5cda2c62cd3acdfc3a8330fe303e656f83b730575596470a"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/source-manifest.json",
+          "bytes": 131832,
+          "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/in-container.mjs",
+          "bytes": 2475,
+          "sha256": "84472498247cc0ad132fd8295ebab0654599718c0e41fdd90798454419596521"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/container.log",
+          "bytes": 166,
+          "sha256": "79bac80d4c2d48d4594b688ce30439d65034426076710bbfedd32ed96da34b09"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/reports/summary.json",
+          "bytes": 1537,
+          "sha256": "ddf31b341f923ec7d6a73c64c414aa78db4fe822749e436343ffa0b89a74b670"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/reports/stores-build.log",
+          "bytes": 145,
+          "sha256": "8d5033eee57a5332f3808a74ee7a0993405021f947f7ad5c00528c1de33e1abf"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/reports/work-orders-build.log",
+          "bytes": 72,
+          "sha256": "beed191cf5cd39a57477a6d66e9acb53f3b4efe7566a30e0ada805357a0fe6ff"
+        },
+        {
+          "path": "target/phase-26/validation-runner/live-audit-r1/reports/stores-live.log",
+          "bytes": 3315,
+          "sha256": "bc4ea3a38e7dbb93ec1a12f5fd902718cd6077ce46b33aa82afe4d3d56e10b44"
+        }
+      ],
+      "statusFile": "target/phase-26/validation-runner/live-audit-r1/run.json"
+    }
+  ],
+  "managedAudit": {
+    "path": "target/phase-26/managed-audit-r4.json",
+    "bytes": 118221,
+    "sha256": "b4ff20903e89bc2a27e0bbf609675119c325d43576c4c37c8817bb99d73df957"
+  },
+  "reportPublication": {
+    "path": "target/phase-26/report-publication.json",
+    "bytes": 2296,
+    "sha256": "71ce69c87ce1dfce842403da20bc170d7251c8742140f98797488667139f7ad4"
+  },
+  "finalizationTools": [
+    {
+      "path": "target/phase-26/complete-ledger.mjs",
+      "bytes": 33747,
+      "sha256": "0981d419e705a811db540ec88b35f426327a231f40fb2a64c36cf4a23d89aef0"
+    },
+    {
+      "path": "target/phase-26/verify-completion.mjs",
+      "bytes": 5208,
+      "sha256": "9f27bbb1981e95da36f2bba795c239b7b50ef8761d150b5614b991e907d2ce8f"
+    },
+    {
+      "path": "target/phase-26/publish-formal.mjs",
+      "bytes": 8669,
+      "sha256": "e1621eb3e1587de6a3e6974121f6f18bb2e85d113e80ef047ca2d5c07de60c11"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/validation/phase-26-boundaries.json",
+      "bytes": 24064,
+      "sha256": "0cba89cd698ef375ed262ca01771f7705b172fdb7cf86bf759b71ee84a392c3a"
+    },
+    {
+      "path": "docs/validation/phase-26-inputs.json",
+      "bytes": 141971,
+      "sha256": "404e3c4629ffb63f7e3a9585981a15eb87b9e55348d6011388149149d0d9a44f"
+    },
+    {
+      "path": "docs/validation/phase-26-ledger-update.md",
+      "bytes": 12184,
+      "sha256": "04d1a70e4b91371bcd29deb60764adbe503ddb72af687c4283c590306da052a6"
+    },
+    {
+      "path": "docs/validation/phase-26.md",
+      "bytes": 22751,
+      "sha256": "ca61ad97065e640a5a03ed12b1d6c9d1f013474b7b4982fd58c20d613d74b763"
+    },
+    {
+      "path": "target/phase-26/auth-local-r1/cargo-test-lib.log",
+      "bytes": 15537,
+      "sha256": "5deea120366d1f217b8c94d640f3d54c9b2131eebaba818769518ef24ad94b61"
+    },
+    {
+      "path": "target/phase-26/auth-local-r1/exit-code.txt",
+      "bytes": 5,
+      "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+    },
+    {
+      "path": "target/phase-26/auth-local-r1/network-probe-r2.log",
+      "bytes": 225,
+      "sha256": "53b1163e9f176ab4ed3bae8c31e9ee7a971b4fa6b289e73b94a429fce86eac2a"
+    },
+    {
+      "path": "target/phase-26/auth-local-r1/network-probe.log",
+      "bytes": 370,
+      "sha256": "bc0e26a1eb2788683c78345f1db0a9b7187c4ebce2dbe25b0ffe4ed1d8605558"
+    },
+    {
+      "path": "target/phase-26/auth-local-r1/network-probe.rs",
+      "bytes": 1953,
+      "sha256": "d28e7387c69e6062c16066423caaa3de7e8d6e3ee2b093a6df1d5c7f1deec631"
+    },
+    {
+      "path": "target/phase-26/auth-local-r2/cargo-postgres-no-run.log",
+      "bytes": 1659,
+      "sha256": "70b0e2265c1a97b2d530258cf92423328da544b8b194d4983a7c28c31b499a3c"
+    },
+    {
+      "path": "target/phase-26/auth-local-r2/cargo-test-lib.log",
+      "bytes": 10148,
+      "sha256": "542f9944014357dd9efa0dbab2705938d67c6310dc1fc9f4e44fff0848b06187"
+    },
+    {
+      "path": "target/phase-26/auth-local-r2/exit-code.txt",
+      "bytes": 5,
+      "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+    },
+    {
+      "path": "target/phase-26/auth-local-r2/postgres-no-run-exit-code.txt",
+      "bytes": 5,
+      "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+    },
+    {
+      "path": "target/phase-26/auth-local-r3/cargo-clippy.log",
+      "bytes": 6620,
+      "sha256": "ff9fc92ce29407d6853012f0f90df360f6641ca90acc6691e3541edf9388bb6b"
+    },
+    {
+      "path": "target/phase-26/auth-local-r3/cargo-postgres-no-run.log",
+      "bytes": 2846,
+      "sha256": "f807dd9b542d30acf5ea4654b682411fa2b1cc64c50a2d6627420aef21127798"
+    },
+    {
+      "path": "target/phase-26/auth-local-r3/clippy-exit-code.txt",
+      "bytes": 5,
+      "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+    },
+    {
+      "path": "target/phase-26/auth-local-r3/postgres-no-run-exit-code.txt",
+      "bytes": 5,
+      "sha256": "bdc830287616dae1818ced3e7c186e1387155900ad30d5983ec02da1519c4a95"
+    },
+    {
+      "path": "target/phase-26/auth-local-r4/cargo-clippy.log",
+      "bytes": 169,
+      "sha256": "6f44fd0bbd5f20b910fe49ad13d5ead7b869916c2de6047efa88268af694aa04"
+    },
+    {
+      "path": "target/phase-26/auth-local-r4/cargo-postgres-no-run.log",
+      "bytes": 294,
+      "sha256": "204ff26c92b4f9f3696c652e50398240cbd16f963089cebe50e8858f66bea093"
+    },
+    {
+      "path": "target/phase-26/auth-local-r4/clippy-exit-code.txt",
+      "bytes": 3,
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "target/phase-26/auth-local-r4/postgres-no-run-exit-code.txt",
+      "bytes": 3,
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    {
+      "path": "target/phase-26/auth-local-r4/source-summary.json",
+      "bytes": 1830,
+      "sha256": "f294f2caf2bfa92619384c6a177812978869afb7225a61fca267ba1d4270135c"
+    },
+    {
+      "path": "target/phase-26/boundaries-final-r4.json",
+      "bytes": 24064,
+      "sha256": "0cba89cd698ef375ed262ca01771f7705b172fdb7cf86bf759b71ee84a392c3a"
+    },
+    {
+      "path": "target/phase-26/capture-source.mjs",
+      "bytes": 6024,
+      "sha256": "fe6f3992ac0b8c33b92ec689e6d70e35e8c527b5344aea5a2ad9ef87d939b155"
+    },
+    {
+      "path": "target/phase-26/check-boundaries.mjs",
+      "bytes": 2978,
+      "sha256": "637be49947d77ba8e58e7d645c3fda758a50b085078cabb0c9afc1bacf9c0228"
+    },
+    {
+      "path": "target/phase-26/ci-local-r1/ci-unit-tests.tap",
+      "bytes": 32035,
+      "sha256": "73b9dbd471ad68457bc1e8f95d707364b6292b7deb7747ad4ee647dc8376a6eb"
+    },
+    {
+      "path": "target/phase-26/ci-local-r1/result.json",
+      "bytes": 5746,
+      "sha256": "219fd1467487bbb3b88085823bfb717a351c7418c2f61ea88eeb35fd05cf3d67"
+    },
+    {
+      "path": "target/phase-26/ci-local-r1/source-after.json",
+      "bytes": 131832,
+      "sha256": "d766a737a66d7910227bf5647ac746a37cbd5b115901f459610a36ce0594c465"
+    },
+    {
+      "path": "target/phase-26/ci-local-r1/source-before.json",
+      "bytes": 131832,
+      "sha256": "d766a737a66d7910227bf5647ac746a37cbd5b115901f459610a36ce0594c465"
+    },
+    {
+      "path": "target/phase-26/ci-local-r2/ci-unit-tests.tap",
+      "bytes": 32026,
+      "sha256": "43a77756d205efbc7acaf85b8ea9941523c12da4b2936e92ff8154c1867c915f"
+    },
+    {
+      "path": "target/phase-26/ci-local-r2/result.json",
+      "bytes": 6276,
+      "sha256": "700dc2d3cb22855069bee7e487041fba0bb69cdba8b66ebdeff715d489e82e45"
+    },
+    {
+      "path": "target/phase-26/ci-local-r2/source-after.json",
+      "bytes": 131832,
+      "sha256": "fa6a6e63ae0a1bd014345ddccc76487351d09f428ee7cb57461dc58ef0a5cf4c"
+    },
+    {
+      "path": "target/phase-26/ci-local-r2/source-before.json",
+      "bytes": 131832,
+      "sha256": "fa6a6e63ae0a1bd014345ddccc76487351d09f428ee7cb57461dc58ef0a5cf4c"
+    },
+    {
+      "path": "target/phase-26/collect-evidence.mjs",
+      "bytes": 26292,
+      "sha256": "929646ffb339cd761f662c0709666598dc71c9d37faad0943fac522c5feb1c35"
+    },
+    {
+      "path": "target/phase-26/complete-ledger.mjs",
+      "bytes": 33747,
+      "sha256": "0981d419e705a811db540ec88b35f426327a231f40fb2a64c36cf4a23d89aef0"
+    },
+    {
+      "path": "target/phase-26/development-index.json",
+      "bytes": 12568,
+      "sha256": "90d110b1cea84222211095690608e9da20eb17f65b486446c192730e0d542e8c"
+    },
+    {
+      "path": "target/phase-26/inputs-candidate-r1.json",
+      "bytes": 141728,
+      "sha256": "e0dcab77c4487861981be714f754e6ca3f7c151d7386fc358f7ef80d0aec76c4"
+    },
+    {
+      "path": "target/phase-26/inputs-candidate-r2.json",
+      "bytes": 141728,
+      "sha256": "b8eef01f0c8873975c8caf8464037e5b7c276072f4d950178d0aac9d9d7365a4"
+    },
+    {
+      "path": "target/phase-26/inputs-candidate-r3.json",
+      "bytes": 141728,
+      "sha256": "3bdc5096e93e2ad71d8382fa543ce9ea607907ce63d9e46b02ac4bd42ca6c7fb"
+    },
+    {
+      "path": "target/phase-26/inputs-candidate-r4.json",
+      "bytes": 141728,
+      "sha256": "bd0bec6e0d7c655fe0098f03f53b6a900fc0a79aa6427e7f5534f89b970a1608"
+    },
+    {
+      "path": "target/phase-26/ledger-before.md",
+      "bytes": 210586,
+      "sha256": "2006afd65aab6d603749941af55ac5c3535b571cb3eec7ac29cf0d0c78e55ffa"
+    },
+    {
+      "path": "target/phase-26/ledger-update-draft.md",
+      "bytes": 12184,
+      "sha256": "04d1a70e4b91371bcd29deb60764adbe503ddb72af687c4283c590306da052a6"
+    },
+    {
+      "path": "target/phase-26/managed-audit-r4.json",
+      "bytes": 118221,
+      "sha256": "b4ff20903e89bc2a27e0bbf609675119c325d43576c4c37c8817bb99d73df957"
+    },
+    {
+      "path": "target/phase-26/observed-start-inputs.json",
+      "bytes": 126308,
+      "sha256": "6835e8756168618aa22c92d21a5bf31fdf2af4c05db8cd1c6321feb583d7b482"
+    },
+    {
+      "path": "target/phase-26/publish-formal.mjs",
+      "bytes": 8669,
+      "sha256": "e1621eb3e1587de6a3e6974121f6f18bb2e85d113e80ef047ca2d5c07de60c11"
+    },
+    {
+      "path": "target/phase-26/report-draft.md",
+      "bytes": 22751,
+      "sha256": "ca61ad97065e640a5a03ed12b1d6c9d1f013474b7b4982fd58c20d613d74b763"
+    },
+    {
+      "path": "target/phase-26/report-publication.json",
+      "bytes": 2296,
+      "sha256": "71ce69c87ce1dfce842403da20bc170d7251c8742140f98797488667139f7ad4"
+    },
+    {
+      "path": "target/phase-26/reports-red-observed-summary.txt",
+      "bytes": 1756,
+      "sha256": "9b0ae71385f999bef805e269092468ed2f98060e79a13bdae0bc19cf068d2b6e"
+    },
+    {
+      "path": "target/phase-26/start.json",
+      "bytes": 19269,
+      "sha256": "2f2c03f8bd2916b512651ba5816e4367f62f776677eede344abcce6f7dc773f3"
+    },
+    {
+      "path": "target/phase-26/validation-runner/cache-cleanup-final-r4.json",
+      "bytes": 452,
+      "sha256": "fdc44caa1ae198084c9c7697feaa5b60cb6bd0a5068ccd49cd4ff868934211b3"
+    },
+    {
+      "path": "target/phase-26/validation-runner/cache-cleanup.mjs",
+      "bytes": 2763,
+      "sha256": "65d5d4a6b8fced084b553476a595dfb31f71dcd736ea7568d850b3668bbf885c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/check-r1/container.log",
+      "bytes": 56,
+      "sha256": "47d9a6c6588779e4333758b10d3c2b1feaee071278c53fbad3200417ea0f0dd7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/check-r1/in-container.mjs",
+      "bytes": 1551,
+      "sha256": "5dc3fa28bde23718527f3c4fd2c2da433f982b3a56a77ace140696116eb6614a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/check-r1/reports/platform-check.log",
+      "bytes": 17166,
+      "sha256": "d559a4bbca6079d30ff2f9e443d6ea1e1650d233e30a6b7fcb3c16f9ac9631e3"
+    },
+    {
+      "path": "target/phase-26/validation-runner/check-r1/reports/summary.json",
+      "bytes": 385,
+      "sha256": "e399b2f695fa2f574134efa5597b5e4246c0a74368e7de72892bc3e0a81fce91"
+    },
+    {
+      "path": "target/phase-26/validation-runner/check-r1/run.json",
+      "bytes": 121843,
+      "sha256": "be15009b361d5d0b0960bd4e25ad4e3a975803886c4266d89e46960d230ae71b"
+    },
+    {
+      "path": "target/phase-26/validation-runner/check-r1/source-manifest.json",
+      "bytes": 130315,
+      "sha256": "a9656b771f457a7b091e6877e20b290713ffc90cac5159e1a69523b4d9bb5370"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/container.log",
+      "bytes": 308,
+      "sha256": "1c5175b67a7042ed7b4fa09d56a68ec6b39d37272b687439a44aceb54bb72bbe"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/in-container.mjs",
+      "bytes": 5568,
+      "sha256": "c5ffb341a89349c59dddfc6023598a14b9acc34707beed723f4acfa52f78af10"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/launcher.mjs",
+      "bytes": 16456,
+      "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/01-node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/02-npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/03-rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/04-install-root.log",
+      "bytes": 25,
+      "sha256": "a5167a3c98725273d348f8699f7c314021f7c56ee1c9add9d197db61c60d4ca9"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/05-install-frontend.log",
+      "bytes": 27,
+      "sha256": "1a9c2de8e45be81122886d6383b90bdf5c23cb3ecb726b13dd602ab904692fd6"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/06-install-mini-services-micro-vue.log",
+      "bytes": 25,
+      "sha256": "f88ad429c1a81a229a4d59e212075efd69417f6bb35d504461760bbd6291522e"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/07-install-mini-services-micro-jquery.log",
+      "bytes": 25,
+      "sha256": "23a99653960f8b39d2cdee77427e5c76ebd3c463eac108b9afc6ac3d29b448bc"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/08-install-examples-websocket.log",
+      "bytes": 25,
+      "sha256": "4863de8fad4a6440f80f45059ad615c15615638a020336af3bb47e0ad940c4ae"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/09-install-mini-services-oauth-playground-frontend.log",
+      "bytes": 25,
+      "sha256": "b70bbb7125dae0ff93af25e897764945669e9df0d1da8d2954b166c60f35fba8"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/10-install-business-apps-work-orders-frontend.log",
+      "bytes": 25,
+      "sha256": "b0395a4bee2e5ab18a9dd621db70d65e7d218fa1140ae08cad4e60aacc43140b"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/11-install-scripts-ci.log",
+      "bytes": 23,
+      "sha256": "da13ab9d025b19c91553bc7d4c450975d3e4e36dd7c5fef6f223f8008ba39547"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/12-sdk-drift.log",
+      "bytes": 87,
+      "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/13-build-frontends.log",
+      "bytes": 20734,
+      "sha256": "f2a3642670caf566db036cba7e0f22dba6eb6c51ebc16cb4e4a0393b8e948df3"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/14-lint.log",
+      "bytes": 11362,
+      "sha256": "d1d19e6294f8c0645a51161e049f1303c05c85e18129370c87a01b0c0cc08077"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/15-typecheck.log",
+      "bytes": 69,
+      "sha256": "763e90b76b62e6c308e153dc0e982734104069f3384703603d3ab3778e580ab5"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/16-contracts.log",
+      "bytes": 91981,
+      "sha256": "98c1ad596e278b5b86f688d2aaa32244dcc45658305d89b7b6b2abcc5bef8120"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/17-work-orders-vite-contracts.log",
+      "bytes": 2705,
+      "sha256": "2c956259e16f40a52cf4db0254937b1d05c1df2a1603b7252cbf45a0609dd5e1"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/18-deployment-unit.log",
+      "bytes": 8985,
+      "sha256": "4bcf4a5ca9d2cf9eafcc0d73f4e839a0d04f8703dcd6cd0b64a4e1c9d0c94228"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/19-oauth-playground-frontend.log",
+      "bytes": 2089,
+      "sha256": "cc8d406481a674badbc74daeb2096444a80cc3977db68713ec12f8d237fbbf11"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/20-oauth-playground-delivery.log",
+      "bytes": 1396,
+      "sha256": "aab2139850a04d5c00fab4768b8f3ef11ae1cb339e167f785d97b30b860d959b"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/21-ci-policy.log",
+      "bytes": 32275,
+      "sha256": "0f5f7dfab19c73ab78ae5ab44beceec2bae87756218601b9ad6f88aaaaceabb0"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/22-dev-and-vite.log",
+      "bytes": 4829,
+      "sha256": "8bb7a6df4b9eabdbeda8c865645159b1e07e57b1612837be0bf3d5a512d46be3"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/23-rust-check.log",
+      "bytes": 8096,
+      "sha256": "4fc9952fda54a885cc0c6ebbbed387921a20ed9847d8f922d74310b0f8b57508"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/24-rust-config-units.log",
+      "bytes": 7609,
+      "sha256": "370e19d7c0141180985475650a51a6e4cbcf7938a3a557b92117bd16079ef375"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/25-rust-data-grant-units.log",
+      "bytes": 1472,
+      "sha256": "24ce660b42359fcb3fa984f913a6194a99468a627a1abf3de1abd75ccddb1fab"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/26-rust-app-member-units.log",
+      "bytes": 399,
+      "sha256": "6e0958c74a3e313a70d934eb7a4d9ed641b82e6e73c1cf2eae74d895a9997346"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/27-rust-archive-units.log",
+      "bytes": 2085,
+      "sha256": "041982f2105e6a3002265b15454c570caff1451d77fcb3bf278c5e7fa9cf58ad"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/28-rust-staging-maintenance-units.log",
+      "bytes": 591,
+      "sha256": "547b0f42df99e746c21373445e7ede06f67907c10b0e066f58957ae1ccaa5202"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/29-rust-public-contract-units.log",
+      "bytes": 1267,
+      "sha256": "e5fcdb78e614146faa4f1bc891ff7fa31c6d3038ba1e62d33ee090ac943d5d0e"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/30-rust-oauth-issuance-units.log",
+      "bytes": 382,
+      "sha256": "da6b1f2321b1a9b80cc2b6ffcd3643a5790c52d0939bddabc6aff642c94e522c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/31-rust-login-limit-units.log",
+      "bytes": 1094,
+      "sha256": "dcfb68616176198e7defbcc3f84d7a661ae044c09127ee8a41312b1e878f96d9"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/32-rust-password-units.log",
+      "bytes": 594,
+      "sha256": "e3d9e43ed1c40b5774e6c485d1f012e4461c2ec354bdd905286ff98d5a07f1ee"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/33-rust-client-ip-units.log",
+      "bytes": 796,
+      "sha256": "dcea26be8b04a52912d47a29ef2540c3dbd78adeccb7f5abd639ce4cf16cd127"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/34-rust-transport-units.log",
+      "bytes": 3733,
+      "sha256": "1c6bdc49fa4ce8bf6999ae895766306588e556ff5f5de3611422f24bf218ea19"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/35-rust-socketio-units.log",
+      "bytes": 3667,
+      "sha256": "9d883a1dd0503943d028d6018e5a221141ead089dd49f5665a143d1de954e8ca"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/36-rust-chat-units.log",
+      "bytes": 3277,
+      "sha256": "29324e8fe7790be4333dbdf0888ab16a2ff021e771df0915fe98a1c772ee106e"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/37-rust-socketio-compatibility.log",
+      "bytes": 10595,
+      "sha256": "c8aa5ab93cc919fbd3fc87e3ecea36da5ad9c2409272f5529bffb436152cb29a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/38-notification-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/39-notification-check.log",
+      "bytes": 5972,
+      "sha256": "f073661d392200a1d3b0f22ce686b0579dee4fee0d46f777cb98d7378563eab7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/40-notification-clippy.log",
+      "bytes": 156,
+      "sha256": "79229d75fb6ce32f6f72728c24f086b74d0dc64799819f005690d8fa369539b9"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/41-notification-units.log",
+      "bytes": 8380,
+      "sha256": "cada20884db334591e1cb043a8497d9a6b556ffbcd9dcc5e45242fd5e3c583b6"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/42-notification-doc.log",
+      "bytes": 244,
+      "sha256": "feaf584b716a8a37379f1181a6d311a829010df11a2b672d6df0db91f88ee75f"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/43-work-orders-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/44-work-orders-check.log",
+      "bytes": 5389,
+      "sha256": "df37e758d47f7578f5bf9b57355f2c1a07ceb40c1b76409b9e9065c5ce18413c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/45-work-orders-clippy.log",
+      "bytes": 155,
+      "sha256": "9a2f32fd3fd3a473887d7b2e2e99bba81b75a61fee444e23a915ce34d9f736ce"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/46-work-orders-units.log",
+      "bytes": 10200,
+      "sha256": "f165d7aa78d14659d4a63bba36f7e716334a5610ee2e97b6c822336eb11f4733"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/47-work-orders-doc.log",
+      "bytes": 251,
+      "sha256": "f5004260f93c44e8038a4253d3e6df7d4ca5eb699e33560ae717c050c9952b5f"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/48-stores-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/49-stores-check.log",
+      "bytes": 2872,
+      "sha256": "9e2e8cfb8dae65c9d577c62feefb9222d8cf3760ce2ec3c312dab174d1f52a90"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/50-stores-clippy.log",
+      "bytes": 145,
+      "sha256": "c3139a4215b9b1c40906b588714002c592c47d4b100f0eb21b8f0d30797f0fe8"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/51-stores-units.log",
+      "bytes": 5341,
+      "sha256": "56ca4389111b2dfdd0920a45e2f912ef26d3be1f13b6676af3e8e2901e09b958"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/52-stores-doc.log",
+      "bytes": 210,
+      "sha256": "fb6a283dfdb117527dbede1e61a9f7a031ca0d75977450f8e4cdc779ace8104f"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/53-stores-build.log",
+      "bytes": 72,
+      "sha256": "2461b00c8697c4189b2de92ca6fb05b5d72273c78a0a47b1ce4e83ccca077b70"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/54-rust-oauth-playground-units.log",
+      "bytes": 6043,
+      "sha256": "29b26ba72e43abedb0b5d8da4cfd2896bd277f38ae20f48dc242188eef3f23d2"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/55-platform-admin-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/56-platform-admin-check.log",
+      "bytes": 3120,
+      "sha256": "bd8322f79fbd0d2006ef24c024c1eb81069f2ae8430101e7e0be32ee5f4c57d9"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/57-platform-admin-clippy.log",
+      "bytes": 146,
+      "sha256": "ca102dc9a5719bc2be9fdfe9978ab122a9ab7c61ba6125719f468bad30b97667"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/58-platform-admin-tests.log",
+      "bytes": 5062,
+      "sha256": "aa9fee86c62c60ad9e7155a572e05c00fe5dcaf8b70c6f3a0a1a5c9643f3d3ea"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/59-platform-admin-doc.log",
+      "bytes": 233,
+      "sha256": "165f9d663f2d96a9816fded9ae0bf4159fddf8a017cc5ea989f74f1cfcd2833a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/60-platform-admin-build.log",
+      "bytes": 3120,
+      "sha256": "c5b6f016c3a316a7404ff000c236d2ce26e8a6fb438f21f45c1bc5b4f12df917"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/logs/61-platform-admin-tls.log",
+      "bytes": 2332,
+      "sha256": "6e7b1dec804690d3ab18283576463a0d68cfe602772fbd88517518741a83e817"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/platform-admin-tls/result.json",
+      "bytes": 2135,
+      "sha256": "ce1db0bb5ade5776c4390cfc4f98ddc5b467c6dece36c5791ea0b2adbdd79b7f"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/fast/summary.json",
+      "bytes": 39464,
+      "sha256": "00cc869ef813db1ac3084591dfe7b771ae0b03ccd7f0c12da63c68b85420cdd3"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/cargo-version.log",
+      "bytes": 36,
+      "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/fast.log",
+      "bytes": 3801,
+      "sha256": "b190ff035e8e9447363e60d0acd86e205fbfc78f04a9203ab108a5e1fd60ad62"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/logs/rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/reports/summary.json",
+      "bytes": 2033,
+      "sha256": "d6e6e88efee68ead2415ddd04b28165bfec22e3a69638eb29fa413b367ef0751"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/run.json",
+      "bytes": 126214,
+      "sha256": "1aa245805b5ba589fb423119903fb46bea8c22af14697bd72ab73737651da4cf"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/snapshot-manifest.json",
+      "bytes": 115586,
+      "sha256": "bb7d8253ef155442d180aec73b5b367fccfbb5f1827ab89a58ce97bf925963ff"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-fast-r4/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-managed.mjs",
+      "bytes": 16456,
+      "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/container.log",
+      "bytes": 500,
+      "sha256": "51031c9f2028f2f0ba70d9e46b2783a30eda21383bce718289f5a43f153b73a9"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/in-container.mjs",
+      "bytes": 5584,
+      "sha256": "f7bea8a1da256dd6d5e9fd0cd1342a10c68e62744ed0c414e9c0f0fa242a57af"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/launcher.mjs",
+      "bytes": 16456,
+      "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/artifacts/stores-api",
+      "bytes": 67912520,
+      "sha256": "e4335fc52fddd7772568a794c36682cfd3ff78515bad076bc0b37349da24868f"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/artifacts/work-orders-api",
+      "bytes": 67902896,
+      "sha256": "94d132037a7c4f7815f0fa9ff6ec4d1508cba337014cb12723f26b33e953fd3e"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/cargo-version.log",
+      "bytes": 36,
+      "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/stores-live-build.log",
+      "bytes": 72,
+      "sha256": "dc7ed95048c06bea49dc7dc39acd01a27efda444b5ddc747f0d95eb33fad9409"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/stores-live-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/logs/work-orders-live-build.log",
+      "bytes": 155,
+      "sha256": "386812bd83e6c71f35951a8d16e0176189717f5f83cab239aae80d9923882369"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/stores-live-postgres/phase26_stores_tests-real_platform_stores_and_cross_app_isolation.log",
+      "bytes": 3409,
+      "sha256": "06812a0a8d8cdf7e84f8b2d17f1f3c29016f69ec0c427182141ebd2e8e8c1c38"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/stores-live-postgres/postgres-result.json",
+      "bytes": 3910,
+      "sha256": "56770a65bcf34a7dca527e100cb4ffee481b0d753400b5eb62e22d5f63fe9bca"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/reports/summary.json",
+      "bytes": 3681,
+      "sha256": "6b9257cc47c08d18a0ebbe3e8c7d281eebd76428cbda67b7110d390e52756b0e"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/run.json",
+      "bytes": 128340,
+      "sha256": "763ced032d88654e11f9ad6730c7fb6c6e2a8a8a313b2b286b83170b1a753780"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/snapshot-manifest.json",
+      "bytes": 115586,
+      "sha256": "bb7d8253ef155442d180aec73b5b367fccfbb5f1827ab89a58ce97bf925963ff"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-live-postgres-r4/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/container.log",
+      "bytes": 330,
+      "sha256": "2805bf2c0e93f38a685b90551762ffb7aca4088bb7fe27e64dfbe217684ce901"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/in-container.mjs",
+      "bytes": 5579,
+      "sha256": "20b0c076cbe8a579a6b9b405d4ca3b1774c1ea093b22c08fbccec4850702a205"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/launcher.mjs",
+      "bytes": 16456,
+      "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/cargo-version.log",
+      "bytes": 36,
+      "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/logs/stores-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/stores-postgres/postgres-result.json",
+      "bytes": 2089,
+      "sha256": "f4d1d433972c7a40d6a496be9a4583a67ea4f3819ecbc86d483eb90c335536f1"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/stores-postgres/stores-postgres-contracts.log",
+      "bytes": 1067,
+      "sha256": "729b255677cc4f08204de77ec6ee7712075f67a7305d34521bbd747b17ef76db"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/reports/summary.json",
+      "bytes": 2185,
+      "sha256": "e364dedac94e711e6cf3c0b2ef347370d66af8457d5a55e75086b1e45dae1d4a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/run.json",
+      "bytes": 126818,
+      "sha256": "5d4439380792b0d494202db37587682cc21b0bd869fb485528583c92596cbe5a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/snapshot-manifest.json",
+      "bytes": 115586,
+      "sha256": "67aaee3430f68545197c148fdcd39fa40d1634e804e049f7cb28261fb9def145"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r3/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "d53d28303e9923fa9bde89ed6429f3661942c3cac3ca4fd4528037d1bd8d4143"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/container.log",
+      "bytes": 330,
+      "sha256": "2805bf2c0e93f38a685b90551762ffb7aca4088bb7fe27e64dfbe217684ce901"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/in-container.mjs",
+      "bytes": 5579,
+      "sha256": "538da2bc1392451882bdab773b1e1bc6547cae8448b64e06a13488dafda9f2ba"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/launcher.mjs",
+      "bytes": 16456,
+      "sha256": "a9f129a5e3dbd29d4b369fb42efaeb1d82d523cabcd619525f4a7a911b17458c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/cargo-version.log",
+      "bytes": 36,
+      "sha256": "f4f564f8936fa8eb53bca8bbe50666489252bbcbeaae0cb0dd54682444697e52"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/logs/stores-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/stores-postgres/postgres-result.json",
+      "bytes": 2089,
+      "sha256": "fabf01582cc042ff146a0e0a3ae40baaa0cec6cb5b5352ceafa7cdf5d1398bff"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/stores-postgres/stores-postgres-contracts.log",
+      "bytes": 1067,
+      "sha256": "5650794f3f18556e4d29b9756ce43ed7083a95430ed5645ab10cebb03c82f2b8"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/reports/summary.json",
+      "bytes": 2185,
+      "sha256": "a93c7ccda34da472c27838e8db6d665a71d3bc3808e37a383d3e4d1c25c54cd9"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/run.json",
+      "bytes": 126818,
+      "sha256": "0f458b78e839c308e668e0403c7a76709a72fc6a8f43beed733b467db441a1dc"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/snapshot-manifest.json",
+      "bytes": 115586,
+      "sha256": "bb7d8253ef155442d180aec73b5b367fccfbb5f1827ab89a58ce97bf925963ff"
+    },
+    {
+      "path": "target/phase-26/validation-runner/final-stores-postgres-r4/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/container.log",
+      "bytes": 166,
+      "sha256": "79bac80d4c2d48d4594b688ce30439d65034426076710bbfedd32ed96da34b09"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/in-container.mjs",
+      "bytes": 2475,
+      "sha256": "84472498247cc0ad132fd8295ebab0654599718c0e41fdd90798454419596521"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/reports/stores-build.log",
+      "bytes": 145,
+      "sha256": "8d5033eee57a5332f3808a74ee7a0993405021f947f7ad5c00528c1de33e1abf"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/reports/stores-live.log",
+      "bytes": 3315,
+      "sha256": "bc4ea3a38e7dbb93ec1a12f5fd902718cd6077ce46b33aa82afe4d3d56e10b44"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/reports/summary.json",
+      "bytes": 1537,
+      "sha256": "ddf31b341f923ec7d6a73c64c414aa78db4fe822749e436343ffa0b89a74b670"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/reports/work-orders-build.log",
+      "bytes": 72,
+      "sha256": "beed191cf5cd39a57477a6d66e9acb53f3b4efe7566a30e0ada805357a0fe6ff"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/run.json",
+      "bytes": 124854,
+      "sha256": "730296740fb3feac5cda2c62cd3acdfc3a8330fe303e656f83b730575596470a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-audit-r1/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "e8b9931493b9e46cff9540cae456545d569b8e5a191e39133fa12090cbd8ffd7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/container.log",
+      "bytes": 5809,
+      "sha256": "96b9c9b3c87f0a97c786b1372065dda03502ce815e736c553c727a2a5e65754c"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/in-container.mjs",
+      "bytes": 2475,
+      "sha256": "84472498247cc0ad132fd8295ebab0654599718c0e41fdd90798454419596521"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/reports/stores-build.log",
+      "bytes": 145,
+      "sha256": "c31c8afba7a2647bd53047e1b61f71a38949f3b90835b4172375bc7931ac84a2"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/reports/stores-live.log",
+      "bytes": 5643,
+      "sha256": "940968597347618076e250e6ae65e52bde3db7f0d607044f08cf593dc094a9a7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/reports/summary.json",
+      "bytes": 1542,
+      "sha256": "37c9d2bd60e5d0992bed3bb654782272237111bf519585dde0f44e5319953f2f"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/reports/work-orders-build.log",
+      "bytes": 2213,
+      "sha256": "8264b45476095d2f3985b65c9a2e2b8b48e89b1375ec7261a3bcf729d3b260d5"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/run.json",
+      "bytes": 124859,
+      "sha256": "43cb468400bed4d2c73a7eb0c60f925abe30e59d29f877ff7ac1d267facefb1a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r1/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "39e0f051123948cd3143c46b88fa3321652aba0db15e45ae55629567485d86ab"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/container.log",
+      "bytes": 166,
+      "sha256": "79bac80d4c2d48d4594b688ce30439d65034426076710bbfedd32ed96da34b09"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/in-container.mjs",
+      "bytes": 2475,
+      "sha256": "84472498247cc0ad132fd8295ebab0654599718c0e41fdd90798454419596521"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/reports/stores-build.log",
+      "bytes": 145,
+      "sha256": "34321bbd20f97debdc10d4c796dd9019e21e6b0e3ac6534ed43105fc56596418"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/reports/stores-live.log",
+      "bytes": 3048,
+      "sha256": "090a93a6b267b0d61f205393bb2ca0ce30a56db62d084139417ad796805db3fd"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/reports/summary.json",
+      "bytes": 1537,
+      "sha256": "ddf34f61fcafead58896aa30eb1cd02b8a83c50c98f3182b5feb3fb53de9e5a4"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/reports/work-orders-build.log",
+      "bytes": 72,
+      "sha256": "8950be1e8f4499f41b8e38ef15f09a0e2671be53a43aa5dec4d794320908881d"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/run.json",
+      "bytes": 124854,
+      "sha256": "1f97d1050ccf6e316f369fa7b1ce836cc0cec9ed042e76d156d14e49e3473752"
+    },
+    {
+      "path": "target/phase-26/validation-runner/live-r2/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "491c51d41e1508f49152c77698dc08e09b15b30ed735f3a572c68bb1295c1877"
+    },
+    {
+      "path": "target/phase-26/validation-runner/sql-r1/container.log",
+      "bytes": 48,
+      "sha256": "4c92ed38e36f0aa8f970e23fe660a0fbed401207348d96ad0d3cc485c0d1c3d1"
+    },
+    {
+      "path": "target/phase-26/validation-runner/sql-r1/in-container.mjs",
+      "bytes": 2127,
+      "sha256": "362e7046de05800cb242b06332e254447a02ebf7cd6331e01b86902a33321f47"
+    },
+    {
+      "path": "target/phase-26/validation-runner/sql-r1/reports/stores-sql.log",
+      "bytes": 1066,
+      "sha256": "60e5baa15b0dcd91423f6466f065ed0d2def64a6894e237ef0bd2b6d26fbb7a2"
+    },
+    {
+      "path": "target/phase-26/validation-runner/sql-r1/reports/summary.json",
+      "bytes": 723,
+      "sha256": "126ca47c7a74df3d93b139301088e4c040a6819bc04898599a16110250607656"
+    },
+    {
+      "path": "target/phase-26/validation-runner/sql-r1/run.json",
+      "bytes": 124039,
+      "sha256": "e55543f351f5e6a3d72dedbe9be6a4ad4ed68e2487d27daed3817c0243f9bc36"
+    },
+    {
+      "path": "target/phase-26/validation-runner/sql-r1/source-manifest.json",
+      "bytes": 131832,
+      "sha256": "d53d28303e9923fa9bde89ed6429f3661942c3cac3ca4fd4528037d1bd8d4143"
+    },
+    {
+      "path": "target/phase-26/validation-runner/units-r1/container.log",
+      "bytes": 52,
+      "sha256": "239a29dcb3626fe4337330773db1713a8107065d6f539ac157d8d0a12f768426"
+    },
+    {
+      "path": "target/phase-26/validation-runner/units-r1/in-container.mjs",
+      "bytes": 1567,
+      "sha256": "e53ae413afad049c2cdb19d068c1189c85f0028878589a13ae52b2aa2950d39a"
+    },
+    {
+      "path": "target/phase-26/validation-runner/units-r1/reports/stores-units.log",
+      "bytes": 11097,
+      "sha256": "1ce48d71f01cf024c9a21352e80404a0160343d381dce2feed86d4550ef1bda7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/units-r1/reports/summary.json",
+      "bytes": 400,
+      "sha256": "91c1ae6a45a3f88e598655b656f4f2d7df192479c07d1388d2601ce69810aaf1"
+    },
+    {
+      "path": "target/phase-26/validation-runner/units-r1/run.json",
+      "bytes": 122975,
+      "sha256": "473cb4af69e553db8ccea0e4d036eb1ac747023c4b8a126b528d65c73d1147a7"
+    },
+    {
+      "path": "target/phase-26/validation-runner/units-r1/source-manifest.json",
+      "bytes": 131525,
+      "sha256": "9eb1a403291f98e9e61899f1166219cdec1270bbf046b3bae6ba5eda25e7de4d"
+    },
+    {
+      "path": "target/phase-26/verify-completion.mjs",
+      "bytes": 5208,
+      "sha256": "9f27bbb1981e95da36f2bba795c239b7b50ef8761d150b5614b991e907d2ce8f"
+    }
+  ],
+  "artifactsSha256": "b71d36cc6c57ae86f30c2576d801cff743e0e048df762d4fe4beef1d861c163b",
+  "limitations": [
+    "Phase26 acceptance covers the stores backend and actual local Linux HTTP/PostgreSQL integration; Phase27 frontend and production deployment are separate work.",
+    "Controlled membership has an absolute bounded witness lifetime; the last platform membership check and business database COMMIT retain a cross-database race.",
+    "An unknown business commit requires an authorized read-back; create operations do not introduce a new idempotency receipt protocol.",
+    "Original Windows loopback, compile and early live failures remain separate development observations; final counts contain only the three fresh adopted runs."
+  ]
+}

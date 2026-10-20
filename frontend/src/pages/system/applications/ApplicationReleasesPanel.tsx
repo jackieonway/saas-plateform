@@ -2,10 +2,10 @@ import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { CheckCircle2, FileCheck2, Loader2, Plus, RefreshCw, Rocket, RotateCcw, XCircle } from "lucide-react"
+import { CheckCircle2, FileCheck2, Link2, Loader2, Plus, RefreshCw, Rocket, RotateCcw, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { applicationsApi } from "@/api/applications"
-import type { ApplicationEnvironment, ApplicationRecord, ApplicationReleaseRecord } from "@/api/types"
+import type { ApplicationEnvironment, ApplicationRecord, ApplicationReleasePayload, ApplicationReleaseRecord } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,9 @@ import {
 import { EmptyState, ErrorState } from "@/components/states"
 import { zResolver } from "@/lib/form"
 import { cn } from "@/lib/utils"
+import { ExternalReleaseForm } from "./ExternalReleaseForm"
+import { ZipDistributionPanel } from "./ZipDistributionPanel"
+import { ManagedDeploymentPanel } from "./ManagedDeploymentPanel"
 
 const ENVIRONMENTS: { value: ApplicationEnvironment; label: string }[] = [
   { value: "development", label: "开发 · development" },
@@ -39,9 +42,12 @@ const releaseSchema = z.object({
 })
 
 type ReleaseForm = z.infer<typeof releaseSchema>
-type DeploymentAction =
+type ReleaseTarget = { applicationId: string; environment: ApplicationEnvironment }
+type DeploymentAction = (
   | { kind: "activate"; release: ApplicationReleaseRecord }
   | { kind: "rollback"; environment: ApplicationEnvironment; version: string }
+) & { target: ReleaseTarget }
+type PanelProps = { application: ApplicationRecord; open: boolean; onOpenChange: (open: boolean) => void }
 
 function dateLabel(value: string | null | undefined) {
   if (!value) return "尚未预检"
@@ -70,17 +76,27 @@ function ValidationBadge({ release }: { release: ApplicationReleaseRecord }) {
   return <Badge variant="secondary">待预检</Badge>
 }
 
-export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
-  application: ApplicationRecord
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
+export function ApplicationReleasesPanel(props: PanelProps) {
+  // An application change gets its own form and mutation observers.
+  return <ApplicationReleasesPanelContent key={props.application.id} {...props} />
+}
+
+function ApplicationReleasesPanelContent({ application, open, onOpenChange }: PanelProps) {
   const queryClient = useQueryClient()
   const [environment, setEnvironment] = React.useState<ApplicationEnvironment>("development")
   const [registerOpen, setRegisterOpen] = React.useState(false)
+  const [externalOpen, setExternalOpen] = React.useState(false)
   const [archiveFile, setArchiveFile] = React.useState<File | null>(null)
   const archiveInput = React.useRef<HTMLInputElement>(null)
   const [action, setAction] = React.useState<DeploymentAction | null>(null)
+  const mounted = React.useRef(true)
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const currentTarget = React.useRef({ applicationId: application.id, environment, open })
+  currentTarget.current = { applicationId: application.id, environment, open }
+  const target = { applicationId: application.id, environment }
+  const isCurrentTarget = (requested: ReleaseTarget) => mounted.current && currentTarget.current.open
+    && currentTarget.current.applicationId === requested.applicationId
+    && currentTarget.current.environment === requested.environment
   const releasesKey = ["application-releases", application.id, environment]
   const deploymentsKey = ["application-deployments", application.id]
   const releasesQuery = useQuery({
@@ -106,9 +122,9 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
     defaultValues: { version: "" },
   })
 
-  const refreshReleaseData = () => Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["application-releases", application.id] }),
-    queryClient.invalidateQueries({ queryKey: deploymentsKey }),
+  const refreshReleaseData = (requested: ReleaseTarget = target) => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["application-releases", requested.applicationId] }),
+    queryClient.invalidateQueries({ queryKey: ["application-deployments", requested.applicationId] }),
   ])
   const refreshActiveApplication = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ["applications"] }),
@@ -116,54 +132,72 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
   ])
 
   const registerMutation = useMutation({
-    mutationFn: (values: ReleaseForm) => applicationsApi.uploadRelease(application.id, environment, values.version, "HTML", archiveFile!),
-    onSuccess: (release) => {
+    mutationFn: (requested: { target: ReleaseTarget; version: string; file: File }) => applicationsApi.uploadRelease(requested.target.applicationId, requested.target.environment, requested.version, "HTML", requested.file),
+    onSuccess: (release, requested) => {
+      if (!isCurrentTarget(requested.target)) return
       if (release.validationStatus === "PASSED") toast.success("版本包已上传，预检通过", { description: "确认版本后即可激活。" })
+      else if (release.validationStatus === "DRAFT") toast.success("版本包已上传，等待节点分发", { description: "请先完成下方ZIP节点分发，再执行预检和激活。" })
       else toast.error("版本包已上传，预检未通过", { description: "查看诊断；若包内容有误，请使用新版本号重新上传。" })
       form.reset({ version: "" })
       setArchiveFile(null)
       if (archiveInput.current) archiveInput.current.value = ""
       setRegisterOpen(false)
     },
-    onError: (error: Error) => toast.error(error.message || "版本登记失败"),
-    onSettled: refreshReleaseData,
+    onError: (error: Error, requested) => { if (isCurrentTarget(requested.target)) toast.error(error.message || "版本登记失败") },
+    onSettled: (_release, _error, requested) => refreshReleaseData(requested.target),
+  })
+
+  const externalMutation = useMutation({
+    mutationFn: (requested: { target: ReleaseTarget; payload: ApplicationReleasePayload }) => applicationsApi.registerRelease(requested.target.applicationId, requested.payload),
+    onSuccess: (release, requested) => {
+      if (!isCurrentTarget(requested.target)) return
+      toast.success(`版本 ${release.version} URL 已登记，待预检`, { description: "请执行预检，通过后再手动激活。" })
+      setExternalOpen(false)
+    },
+    onError: (error: Error, requested) => { if (isCurrentTarget(requested.target)) toast.error(error.message || "URL 登记失败", { description: "请求结果不明时请先刷新版本记录核对，不要改来源或重复登记。" }) },
+    onSettled: (_release, _error, requested) => refreshReleaseData(requested.target),
   })
 
   const preflightMutation = useMutation({
-    mutationFn: (releaseId: string) => applicationsApi.preflightRelease(application.id, releaseId),
-    onSuccess: (release) => {
-      queryClient.setQueryData<ApplicationReleaseRecord[]>(releasesKey, (old) => old?.map((item) => item.id === release.id ? release : item))
+    mutationFn: (requested: { target: ReleaseTarget; releaseId: string }) => applicationsApi.preflightRelease(requested.target.applicationId, requested.releaseId),
+    onSuccess: (release, requested) => {
+      queryClient.setQueryData<ApplicationReleaseRecord[]>(["application-releases", requested.target.applicationId, requested.target.environment], (old) => old?.map((item) => item.id === release.id ? release : item))
+      if (!isCurrentTarget(requested.target)) return
       if (release.validationStatus === "PASSED") toast.success(`版本 ${release.version} 预检通过`)
-      else toast.error(`版本 ${release.version} 预检失败`, { description: "请查看逐资源诊断；包内容有误时使用新版本号。" })
+      else toast.error(`版本 ${release.version} 预检失败`, { description: "请查看逐资源诊断并核对部署；产物内容变化时使用新版本号。" })
     },
-    onError: (error: Error) => toast.error(error.message || "预检请求失败"),
-    onSettled: refreshReleaseData,
+    onError: (error: Error, requested) => { if (isCurrentTarget(requested.target)) toast.error(error.message || "预检请求失败") },
+    onSettled: (_release, _error, requested) => refreshReleaseData(requested.target),
   })
 
   const deploymentMutation = useMutation({
     mutationFn: (next: DeploymentAction) => next.kind === "activate"
-      ? applicationsApi.activateRelease(application.id, next.release.id)
-      : applicationsApi.rollbackDeployment(application.id, next.environment),
+      ? applicationsApi.activateRelease(next.target.applicationId, next.release.id)
+      : applicationsApi.rollbackDeployment(next.target.applicationId, next.environment),
     onSuccess: async (next, requested) => {
-      toast.success(requested.kind === "activate" ? `已激活版本 ${next.version}` : `已回滚至版本 ${next.version}`, {
-        description: `环境：${next.environment}`,
-      })
-      setAction(null)
+      if (isCurrentTarget(requested.target)) {
+        toast.success(requested.kind === "activate" ? `已激活版本 ${next.version}` : `已回滚至版本 ${next.version}`, {
+          description: `环境：${next.environment}`,
+        })
+        setAction(null)
+      }
       await refreshActiveApplication()
     },
-    onError: (error: Error) => {
+    onError: (error: Error, requested) => {
+      if (!isCurrentTarget(requested.target)) return
       toast.error(error.message || "部署切换失败", { description: "部署与预检结果已重新加载，请查看最新诊断。" })
       setAction(null)
     },
-    onSettled: refreshReleaseData,
+    onSettled: (_deployment, _error, requested) => refreshReleaseData(requested.target),
   })
 
-  const busy = registerMutation.isPending || preflightMutation.isPending || deploymentMutation.isPending
+  const busy = registerMutation.isPending || externalMutation.isPending || preflightMutation.isPending || deploymentMutation.isPending
   const selectEnvironment = (value: ApplicationEnvironment) => {
     if (busy) return
     setEnvironment(value)
     setAction(null)
     setRegisterOpen(false)
+    setExternalOpen(false)
     form.reset({ version: "" })
     setArchiveFile(null)
     if (archiveInput.current) archiveInput.current.value = ""
@@ -175,7 +209,7 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
         <SheetContent className="w-full gap-0 sm:max-w-3xl">
           <SheetHeader className="shrink-0 border-b p-5 pr-12">
             <SheetTitle className="flex items-center gap-2"><Rocket className="size-5 text-primary" />{application.name} · 发布版本</SheetTitle>
-            <SheetDescription>上传 ZIP 或 tar.gz 前端构建包，按环境预检、激活或回滚。</SheetDescription>
+            <SheetDescription>登记已部署的 HTML URL 或上传构建包，按环境预检、激活或回滚。</SheetDescription>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="font-mono">{application.code}</Badge>
               <Badge variant="secondary">iframe 隔离 · HTML</Badge>
@@ -192,7 +226,8 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
                 <Button variant="ghost" size="icon" aria-label="刷新版本与部署" disabled={busy || releasesQuery.isFetching || deploymentsQuery.isFetching} onClick={() => refreshReleaseData()}>
                   <RefreshCw className={cn("size-4", (releasesQuery.isFetching || deploymentsQuery.isFetching) && "animate-spin")} />
                 </Button>
-                <Button size="sm" variant={registerOpen ? "secondary" : "default"} disabled={busy} onClick={() => setRegisterOpen((value) => !value)}><Plus className="size-4" />上传版本包</Button>
+                <Button size="sm" variant={externalOpen ? "secondary" : "default"} disabled={busy} onClick={() => { setExternalOpen(value => !value); setRegisterOpen(false) }}><Link2 className="size-4" />登记已部署 URL</Button>
+                <Button size="sm" variant={registerOpen ? "secondary" : "outline"} disabled={busy} onClick={() => { setRegisterOpen(value => !value); setExternalOpen(false) }}><Plus className="size-4" />上传版本包</Button>
               </div>
             </div>
 
@@ -219,14 +254,19 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
                     size="sm"
                     disabled={busy || !enabled || deploymentsQuery.isError || previousRelease?.validationStatus !== "PASSED" || previousUnsupported}
                     title={!enabled ? "应用停用期间不能切换部署" : previousUnsupported ? "iframe 隔离应用无法回滚至 ESM 版本" : previousRelease?.validationStatus !== "PASSED" ? "上一版本需预检通过后才能回滚" : undefined}
-                    onClick={() => setAction({ kind: "rollback", environment, version: previousRelease?.version ?? deployment.previousReleaseId! })}
+                    onClick={() => setAction({ kind: "rollback", target, environment, version: previousRelease?.version ?? deployment.previousReleaseId! })}
                   ><RotateCcw className="size-4" />回滚{previousRelease ? `至 ${previousRelease.version}` : "至上一版本"}</Button>
                 )}
               </div>
               <p className="mt-3 border-t pt-3 text-xs leading-relaxed text-muted-foreground">宿主使用服务端配置的环境入口；切换此筛选只查看并管理该环境的版本。激活后仍沿用现有菜单与授权。</p>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">外部 URL 流程由部署系统先行部署并配置版本路由，平台登记、预检和切换公开入口，不拉取镜像、启停容器或生成 Nginx 规则。已配置受管目标时，也可在下方提交镜像部署任务；发布不会新增授权。</p>
               {!enabled && <p className="mt-2 text-xs text-destructive">应用停用期间可登记与预检，请启用应用后再激活或回滚。</p>}
               {previousUnsupported && <p className="mt-2 text-xs text-destructive">上一部署为旧 ESM 版本，无法在 iframe 中回滚；请选择已验证的 HTML 版本。</p>}
             </section>
+
+            <ZipDistributionPanel app={application.id} code={application.code} environment={environment} open={open} />
+            <ManagedDeploymentPanel app={application.id} code={application.code} environment={environment} releases={releasesQuery.data ?? []} open={open} />
+            {externalOpen && <ExternalReleaseForm key={`${application.id}:${environment}`} environment={environment} busy={busy} pending={externalMutation.isPending} onSubmit={payload => { if (!busy && isCurrentTarget(target)) externalMutation.mutate({ target, payload }) }} />}
 
             {registerOpen && (
               <section className="mb-5 rounded-lg border p-4" aria-label="上传新版本">
@@ -236,12 +276,12 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
                 </div>
                 <Form {...form}>
                   <form className="space-y-4" onSubmit={form.handleSubmit((values) => {
-                    if (busy) return
+                    if (busy || !isCurrentTarget(target)) return
                     if (!archiveFile) {
                       toast.error("请选择 ZIP 或 tar.gz 构建包")
                       return
                     }
-                    registerMutation.mutate(values)
+                    registerMutation.mutate({ target, version: values.version, file: archiveFile })
                   })}>
                     <div>
                       <FormField control={form.control} name="version" render={({ field }) => (
@@ -272,13 +312,13 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
             {releasesQuery.isLoading ? <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取版本…</div> : releasesQuery.isError ? (
               <ErrorState message={releasesQuery.error instanceof Error ? releasesQuery.error.message : undefined} onRetry={() => releasesQuery.refetch()} />
             ) : releases.length === 0 ? (
-              <EmptyState title="该环境还没有版本" description="上传构建包后系统自动预检，通过即可激活。" icon={<Rocket className="size-6" />} action={<Button variant="outline" size="sm" disabled={busy} onClick={() => setRegisterOpen(true)}><Plus className="size-4" />上传第一个版本</Button>} />
+              <EmptyState title="该环境还没有版本" description="可登记已部署 URL 或上传构建包；配置分发目标时先完成节点分发，再预检和激活。" icon={<Rocket className="size-6" />} action={<Button variant="outline" size="sm" disabled={busy} onClick={() => { setRegisterOpen(true); setExternalOpen(false) }}><Plus className="size-4" />上传第一个版本</Button>} />
             ) : (
               <div className="space-y-3">
                 {releases.map((release) => {
                   const active = deployment ? deployment.activeReleaseId === release.id : release.active
                   const checks = Array.isArray(release.validationResult?.checks) ? release.validationResult.checks : []
-                  const preflighting = preflightMutation.isPending && preflightMutation.variables === release.id
+                  const preflighting = preflightMutation.isPending && preflightMutation.variables?.releaseId === release.id
                   const unsupported = release.entryType === "ESM"
                   return (
                     <article key={release.id} className={cn("rounded-lg border p-4", active && "border-primary/40 bg-primary/5")}>
@@ -288,8 +328,8 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
                           <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{release.entryUrl}</p>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                          <Button variant="outline" size="sm" disabled={busy} onClick={() => preflightMutation.mutate(release.id)}>{preflighting ? <Loader2 className="size-4 animate-spin" /> : <FileCheck2 className="size-4" />}{release.checkedAt ? "重新预检" : "预检"}</Button>
-                          <Button size="sm" disabled={busy || !enabled || active || release.validationStatus !== "PASSED" || unsupported || deploymentsQuery.isLoading || deploymentsQuery.isError} onClick={() => setAction({ kind: "activate", release })}><Rocket className="size-4" />{active ? "已激活" : "激活"}</Button>
+                          <Button variant="outline" size="sm" disabled={busy} onClick={() => preflightMutation.mutate({ target, releaseId: release.id })}>{preflighting ? <Loader2 className="size-4 animate-spin" /> : <FileCheck2 className="size-4" />}{release.checkedAt ? "重新预检" : "预检"}</Button>
+                          <Button size="sm" disabled={busy || !enabled || active || release.validationStatus !== "PASSED" || unsupported || deploymentsQuery.isLoading || deploymentsQuery.isError} onClick={() => setAction({ kind: "activate", target, release })}><Rocket className="size-4" />{active ? "已激活" : "激活"}</Button>
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>登记 {dateLabel(release.createdAt)}</span><span>预检 {dateLabel(release.checkedAt)}</span><span>{release.resources.length} 项登记资源</span></div>
@@ -316,7 +356,7 @@ export function ApplicationReleasesPanel({ application, open, onOpenChange }: {
               </div>
             )}
           </div>
-          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : "上传版本包"}，完成后可切换环境或关闭面板。</div>}
+          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : externalMutation.isPending ? "登记公开 URL" : "上传版本包"}，完成后可切换环境或关闭面板。</div>}
         </SheetContent>
       </Sheet>
 

@@ -1,0 +1,9 @@
+{
+  "kind": "micro-static",
+  "publicOrigin": "https://platform.example.invalid",
+  "listener": "0.0.0.0:8080",
+  "microRoot": "/micro-apps",
+  "applicationOrigins": [],
+  "imageOrigins": [],
+  "trustedHtmlEval": false
+}

@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "phase": 4,
+  "status": "PASS",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "inputsSha256": "5ce0a2dc2e05a0e48d3442bd4822c1dac233de255c221ab98126dad0dc71d7bc",
+  "tools": {
+    "node": "v24.18.0",
+    "platform": "linux",
+    "architecture": "x64",
+    "npm": "11.16.0",
+    "rust": "rustc 1.97.0 (2d8144b78 2026-07-07)"
+  },
+  "toolchainImage": {
+    "requested": "sha256:3357639bea66a9ba6dc17bca9a7711ef2097e55dce8bd90de32300415725f977",
+    "id": "sha256:3357639bea66a9ba6dc17bca9a7711ef2097e55dce8bd90de32300415725f977",
+    "localRepoDigests": [],
+    "architecture": "amd64",
+    "os": "linux"
+  },
+  "postgres": {
+    "container": "ci-1792045363021-6d53050f-postgres",
+    "image": "sha256:8745eeb23be1055bd80c88e509a5247110cce0f2496c7492d165f3d0fc1975cd",
+    "localRepoDigests": [
+      "postgres@sha256:8745eeb23be1055bd80c88e509a5247110cce0f2496c7492d165f3d0fc1975cd"
+    ],
+    "version": "postgres (PostgreSQL) 17.6 (Debian 17.6-2.pgdg12+1)",
+    "hostPorts": [],
+    "storage": "owned tmpfs; removed with container"
+  },
+  "counts": {
+    "pass": 21,
+    "fail": 0,
+    "skip": 0
+  },
+  "suites": [
+    {
+      "name": "production_security_tests",
+      "expected": 8,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "backend/Cargo.toml",
+        "--locked",
+        "--bin",
+        "saas-platform-backend",
+        "production_security_tests",
+        "--",
+        "--ignored",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "platform_settings_tests",
+      "expected": 4,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "backend/Cargo.toml",
+        "--locked",
+        "--bin",
+        "saas-platform-backend",
+        "platform_settings_tests",
+        "--",
+        "--ignored",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "authorization_isolation_tests",
+      "expected": 3,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "backend/Cargo.toml",
+        "--locked",
+        "--bin",
+        "saas-platform-backend",
+        "authorization_isolation_tests",
+        "--",
+        "--ignored",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "entity_creation_tests",
+      "expected": 6,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "backend/Cargo.toml",
+        "--locked",
+        "--bin",
+        "saas-platform-backend",
+        "entity_creation_tests",
+        "--",
+        "--ignored",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "status": "PASS"
+    }
+  ],
+  "cleanup": {
+    "owner": "ci-1792045363021-6d53050f",
+    "cleanupErrors": [],
+    "schemaVersion": 1,
+    "status": "PASS",
+    "gate": "postgres",
+    "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "inputsSha256": "5ce0a2dc2e05a0e48d3442bd4822c1dac233de255c221ab98126dad0dc71d7bc",
+    "mandatoryFailureCount": 0,
+    "mandatorySkipCount": 0,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "perDatabaseCleanupConfirmed": {
+      "authorization_isolation_tests.log": 3,
+      "entity_creation_tests.log": 6,
+      "platform_settings_tests.log": 4,
+      "production_security_tests.log": 8
+    },
+    "totalDatabaseCleanupConfirmed": 21,
+    "additionalSharedRedactionAppliedToLogs": 0,
+    "ownedContainerNetworkCleanup": "PASS; actual docker label queries empty"
+  },
+  "evidence": [
+    {
+      "path": "target/phase-04/linux-postgres-r1/linux-runner-result.json",
+      "sha256": "0ef0e0ef7829252e775676b6e073cb3e6be8f06cf1e6b3b93643194549c7b382"
+    },
+    {
+      "path": "target/phase-04/linux-postgres-r1/reports/postgres/summary.json",
+      "sha256": "1853fafb8a3bf6828b5fa75404a5bb05b3c95afa7b75f04cacb87b524b9720ac"
+    },
+    {
+      "path": "target/phase-04/linux-postgres-r1/reports/postgres/source-manifest.json",
+      "sha256": "1e9b02114990b179c894a8556a442b27281886b32fb62e24c29b84b40a245eca"
+    },
+    {
+      "path": "target/phase-04/linux-postgres-r1/reports/postgres/postgres/postgres-result.json",
+      "sha256": "3dd12fd85fe0663b37c5b1b61fc20bdcca55ef8f8ea1d0c93ef973b7ea48795b"
+    },
+    {
+      "path": "target/phase-04/linux-postgres-r1/posthoc-audit.json",
+      "sha256": "f02e71beac6398d1db055744cfba094ee4088a1a6a8c76a0da9966918855d003"
+    }
+  ],
+  "scope": "Selected existing-platform tests only; no production data or future Rust business-service acceptance",
+  "snapshotNote": "Executed earlier source snapshot. Final helper reporting and cancellation changes are separately regression-tested; no platform Rust files changed."
+}

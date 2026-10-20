@@ -1,16 +1,27 @@
+mod app_authorization;
 mod app_token;
 mod authorization;
+mod client_ip;
+mod confidential_clients;
 mod config;
+mod data_grants;
 mod database;
 mod error;
 mod extractors;
+mod login_limits;
+mod managed_deployments;
+mod artifact_distribution;
 mod notifications;
+mod oauth_issuance;
 mod observability;
 mod platform_settings;
-mod releases;
+mod public_contract;
 mod region_seed;
 mod region_selection;
+mod release_archive_maintenance;
 mod release_archives;
+mod release_operations;
+mod releases;
 mod routes;
 mod seed;
 mod session;
@@ -40,6 +51,41 @@ mod entity_creation_tests;
 mod platform_session_refresh_tests;
 
 #[cfg(test)]
+mod oauth_issuance_tests;
+
+#[cfg(test)]
+mod login_protection_tests;
+
+#[cfg(test)]
+mod management_audit_tests;
+
+#[cfg(test)]
+mod data_grant_tests;
+
+#[cfg(test)]
+mod data_grant_discovery_tests;
+
+#[cfg(test)]
+mod data_grant_ui_tests;
+
+#[cfg(test)]
+mod oauth_playground_ui_tests;
+
+#[cfg(test)]
+mod platform_admin_cli_tests;
+
+#[cfg(test)]
+mod phase17_work_orders_tests;
+#[cfg(test)]
+mod phase18_work_orders_tests;
+#[cfg(test)]
+mod phase19_work_orders_tests;
+#[cfg(test)]
+mod phase20_work_orders_tests;
+#[cfg(test)]
+mod phase26_stores_tests;
+
+#[cfg(test)]
 mod authorization_isolation_tests;
 
 #[cfg(test)]
@@ -48,11 +94,14 @@ mod organization_subtree_user_role_tests;
 #[cfg(test)]
 mod organization_subtree_reporting_tests;
 
+#[cfg(test)]
+mod public_contract_tests;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{ConnectInfo, Request, State};
+use axum::extract::{Request, State};
 use axum::http::{header, HeaderValue, Method};
 use axum::middleware::Next;
 use axum::response::Response;
@@ -64,6 +113,13 @@ use crate::state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if !arguments.is_empty()
+        && tokio::task::spawn_blocking(move || release_archive_maintenance::run(arguments))
+            .await??
+    {
+        return Ok(());
+    }
     config::load_environment()?;
     let config = Arc::new(Config::try_from_env()?);
     let filter =
@@ -81,8 +137,20 @@ async fn main() -> anyhow::Result<()> {
     let mut attempt = 0u32;
     let pool = loop {
         match PgPoolOptions::new()
-            .max_connections(10)
-            .acquire_timeout(Duration::from_secs(5))
+            .max_connections(config.db_max_connections)
+            .acquire_timeout(Duration::from_millis(config.db_acquire_timeout_ms))
+            .after_connect({
+                let statement = config.db_statement_timeout_ms.to_string();
+                let lock = config.db_lock_timeout_ms.to_string();
+                move |connection, _| {
+                    let statement=statement.clone(); let lock=lock.clone();
+                    Box::pin(async move {
+                        sqlx::query("SELECT set_config('statement_timeout',$1,false),set_config('lock_timeout',$2,false)")
+                            .bind(statement).bind(lock).execute(connection).await?;
+                        Ok(())
+                    })
+                }
+            })
             .connect(&config.database_url)
             .await
         {
@@ -132,6 +200,7 @@ async fn main() -> anyhow::Result<()> {
     })?;
 
     let state = AppState::new(pool, config.clone());
+    artifact_distribution::start(state.clone());
 
     // 后台维护任务: 每 10 分钟把过期仍 PENDING 的设备码标记为 EXPIRED (供设备码轮询端点识别)
     {
@@ -274,7 +343,11 @@ async fn opaque_iframe_cors_only_allows_legacy_user_views() {
         .route("/api/external/roles", axum::routing::get(|| async { "ok" }))
         .route("/api/auth/profile", axum::routing::get(|| async { "ok" }))
         .layer(cors_layer(&config));
-    for path in ["/api/external/menus", "/api/external/roles", "/api/auth/profile"] {
+    for path in [
+        "/api/external/menus",
+        "/api/external/roles",
+        "/api/auth/profile",
+    ] {
         let request = Request::builder()
             .method(Method::OPTIONS)
             .uri(path)
@@ -302,36 +375,6 @@ pub(crate) async fn normalize_client_ip(
     mut request: Request,
     next: Next,
 ) -> Response {
-    let peer = request
-        .extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|peer| peer.0.ip());
-    let forwarded = if peer.is_some_and(|peer| state.config.trusted_proxy_ips.contains(&peer)) {
-        request
-            .headers()
-            .get("x-real-ip")
-            .and_then(|header| header.to_str().ok())
-            .and_then(|raw| raw.trim().parse::<std::net::IpAddr>().ok())
-            .or_else(|| {
-                request
-                    .headers()
-                    .get("x-forwarded-for")
-                    .and_then(|header| header.to_str().ok())
-                    .and_then(|raw| raw.split(',').next())
-                    .and_then(|raw| raw.trim().parse::<std::net::IpAddr>().ok())
-            })
-    } else {
-        None
-    };
-    let identity = forwarded
-        .or(peer)
-        .map(|ip| ip.to_string())
-        .unwrap_or_else(|| "unknown".into());
-    request.headers_mut().remove("x-real-ip");
-    request.headers_mut().remove("x-forwarded-for");
-    request.headers_mut().insert(
-        "x-real-ip",
-        HeaderValue::from_str(&identity).expect("valid normalized IP"),
-    );
+    client_ip::normalize(&mut request, &state.config.trusted_proxy_ips);
     next.run(request).await
 }

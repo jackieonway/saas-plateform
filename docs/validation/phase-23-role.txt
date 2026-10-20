@@ -1,0 +1,33 @@
+e0e682021c1ee7583ba019aa092949c58120d29277184f5aea74ada7c313bc7c
+CREATE TABLE
+CREATE TABLE
+
+BEGIN
+DO
+ALTER ROLE
+ALTER ROLE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+GRANT
+COMMIT
+
+ default_transaction_read_only 
+-------------------------------
+ on
+(1 row)
+
+ id | user_id | tenant_id | organization_id | source_kind | application_id | publication_id | type | title | content | link | created_at 
+----+---------+-----------+-----------------+-------------+----------------+----------------+------+-------+---------+------+------------
+(0 rows)
+
+LISTEN
+
+DENIED: SELECT * FROM users
+DENIED: INSERT INTO notifications(id) VALUES (gen_random_uuid())
+DENIED: DELETE FROM notifications
+DENIED: UPDATE notifications SET title='forbidden'
+PASS: deployed SQL executed; 12-column scoped read and LISTEN permitted; user-table read and notification writes denied; read-only transaction setting on.
+CLEANUP: owned temporary database container removed

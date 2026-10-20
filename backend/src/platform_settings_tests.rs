@@ -745,7 +745,33 @@ async fn initial_schema_creates_generic_branding_and_preserves_settings_on_resta
         sqlx::query("UPDATE platform_settings SET platform_name='自定义平台'")
             .execute(&database.pool)
             .await?;
-        sqlx::migrate!("./migrations").run(&database.pool).await?;
+        let baseline_checksum: Vec<u8> = sqlx::query_scalar(
+            "SELECT checksum FROM _sqlx_migrations WHERE version=1",
+        ).fetch_one(&database.pool).await?;
+        let migrator = sqlx::migrate!("./migrations");
+        migrator.run(&database.pool).await?;
+        // Exercise the startup menu repair with an actual SQL NULL parent, while
+        // skipping the unrelated full catalog COPY in this restart regression.
+        let system: Uuid = sqlx::query_scalar(
+            "INSERT INTO applications(code,name) VALUES('system','System') RETURNING id",
+        ).fetch_one(&database.pool).await?;
+        sqlx::query("INSERT INTO menus(application_id,parent_id,title,path) VALUES($1,NULL,'Menus','/system/menus')")
+            .bind(system).execute(&database.pool).await?;
+        sqlx::query("INSERT INTO region_versions(version,label,imported) VALUES('2023','2023版',true)")
+            .execute(&database.pool).await?;
+        crate::region_seed::initialize(&database.pool).await?;
+        let first: (Uuid, Option<Uuid>) = sqlx::query_as(
+            "SELECT id,parent_id FROM menus WHERE application_id=$1 AND path='/system/regions'",
+        ).bind(system).fetch_one(&database.pool).await?;
+        ensure!(first.1.is_none(), "startup changed the root menu's NULL parent");
+        crate::region_seed::initialize(&database.pool).await?;
+        let after: Vec<(Uuid, Option<Uuid>)> = sqlx::query_as(
+            "SELECT id,parent_id FROM menus WHERE application_id=$1 AND path='/system/regions'",
+        ).bind(system).fetch_all(&database.pool).await?;
+        ensure!(after == vec![first], "restart duplicated or moved the repaired region menu");
+        let region_count: i64 = sqlx::query_scalar("SELECT count(*) FROM regions")
+            .fetch_one(&database.pool).await?;
+        ensure!(region_count == 0, "restart ignored the imported catalog marker");
         let name: String =
             sqlx::query_scalar("SELECT platform_name FROM platform_settings WHERE singleton")
                 .fetch_one(&database.pool)
@@ -755,7 +781,16 @@ async fn initial_schema_creates_generic_branding_and_preserves_settings_on_resta
             sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
                 .fetch_all(&database.pool)
                 .await?;
-        ensure!(versions == vec![1], "initialization did not use the unified baseline");
+        let expected_versions: Vec<i64> = migrator.iter().map(|migration| migration.version).collect();
+        ensure!(expected_versions.first() == Some(&1) && versions == expected_versions,
+            "initialization did not apply the unified baseline and exact embedded migrations");
+        let after_checksum: Vec<u8> = sqlx::query_scalar(
+            "SELECT checksum FROM _sqlx_migrations WHERE version=1",
+        ).fetch_one(&database.pool).await?;
+        let embedded_baseline = migrator.iter().find(|migration| migration.version == 1)
+            .ok_or_else(|| anyhow!("embedded unified baseline is missing"))?;
+        ensure!(baseline_checksum == after_checksum && baseline_checksum.as_slice() == embedded_baseline.checksum.as_ref(),
+            "restart changed the unified baseline checksum");
         Ok(())
     }
     .await;

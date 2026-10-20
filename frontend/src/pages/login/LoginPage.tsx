@@ -1,6 +1,5 @@
 import * as React from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zResolver } from "@/lib/form"
@@ -33,7 +32,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ThemeToggleGroup } from "@/components/theme-toggle"
 import { BrandMark } from "@/components/brand"
 import { authApi } from "@/api/auth"
-import { useAuthStore } from "@/stores/auth"
+import { captureSessionFence, useAuthStore, type SessionFence } from "@/stores/auth"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { toast } from "sonner"
@@ -42,6 +41,10 @@ import { ApiError } from "@/lib/api"
 import type { LoginResp, Membership } from "@/api/types"
 
 const REMEMBER_KEY = "platform-remember-username"
+
+function rememberedUsername() {
+  try { return localStorage.getItem(REMEMBER_KEY) ?? "" } catch { return "" }
+}
 
 const FEATURES = [
   { icon: Layers, title: "多租户隔离", desc: "租户、组织与应用边界由服务端统一校验" },
@@ -67,14 +70,13 @@ type FormData = z.infer<typeof schema>
 export default function LoginPage() {
   const { platformName, platformDescription, loginTitle, loginDescription, footerText } = usePlatformBranding()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [params] = useSearchParams()
   const returnTo = params.get("return") || "/"
   const setSession = useAuthStore((s) => s.setSession)
   useDocumentTitle("登录")
 
   const [step, setStep] = React.useState<"form" | "tenant" | "organization">("form")
-  const [loginData, setLoginData] = React.useState<LoginResp | null>(null)
+  const [loginData, setLoginData] = React.useState<(LoginResp & { sessionFence: SessionFence }) | null>(null)
   const [selectedTenantId, setSelectedTenantId] = React.useState<string | null>(null)
   const [selectionSearch, setSelectionSearch] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
@@ -90,9 +92,9 @@ export default function LoginPage() {
   } = useForm<FormData>({
     resolver: zResolver(schema),
     defaultValues: {
-      username: localStorage.getItem(REMEMBER_KEY) ?? "",
+      username: rememberedUsername(),
       password: "",
-      remember: !!localStorage.getItem(REMEMBER_KEY),
+      remember: !!rememberedUsername(),
     },
   })
   const remember = watch("remember")
@@ -129,16 +131,19 @@ export default function LoginPage() {
   }
 
   const onSubmit = async (data: FormData) => {
+    const sessionFence = captureSessionFence()
     setError(null)
     try {
-      if (data.remember) localStorage.setItem(REMEMBER_KEY, data.username)
-      else localStorage.removeItem(REMEMBER_KEY)
+      try {
+        if (data.remember) localStorage.setItem(REMEMBER_KEY, data.username)
+        else localStorage.removeItem(REMEMBER_KEY)
+      } catch { /* Optional username preference never supplies session coordination. */ }
       const resp = await authApi.login(data.username, data.password)
       if (!resp.memberships || resp.memberships.length === 0) {
         setError("该账号未加入任何组织,请联系管理员")
         return
       }
-      setLoginData(resp)
+      setLoginData({ ...resp, sessionFence })
       setSelectedTenantId(null)
       setSelectionSearch("")
       setStep("tenant")
@@ -147,7 +152,7 @@ export default function LoginPage() {
     }
   }
 
-  const selectContext = async (organizationId: string, data: LoginResp, userId?: string) => {
+  const selectContext = async (organizationId: string, data: LoginResp & { sessionFence: SessionFence }, userId?: string) => {
     if (!data.ticket) {
       setError("登录票据缺失,请重新登录")
       setStep("form")
@@ -157,10 +162,15 @@ export default function LoginPage() {
     setError(null)
     try {
       const ctx = await authApi.selectContext(organizationId, data.ticket, userId)
-      // 清空上一会话的所有缓存,避免残留他人数据
-      await queryClient.cancelQueries()
-      queryClient.clear()
-      setSession(ctx.accessToken, ctx.refreshToken)
+      // The captured login intent cannot replace a login made by another page.
+      // Epoch subscribers clear the prior cache only when this commit succeeds.
+      const committed = await setSession(ctx.accessToken, ctx.refreshToken, data.sessionFence)
+      if (!committed) {
+        setError("其他页面的登录已变化，请重新登录后选择组织")
+        setStep("form")
+        setLoginData(null)
+        return
+      }
       toast.success(`欢迎回来,${ctx.user.realName || ctx.user.username}`)
       navigate(returnTo, { replace: true })
     } catch (e) {

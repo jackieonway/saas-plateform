@@ -17,55 +17,6 @@ use crate::session;
 use crate::state::AppState;
 use crate::util::{audit, jwt, password as pw};
 
-/// 登录限流: 同一 用户名+IP 在 10 分钟窗口内最多 5 次失败尝试 (内存态, 进程重启即清零)
-static LOGIN_ATTEMPTS: std::sync::OnceLock<
-    std::sync::Mutex<std::collections::HashMap<String, (u32, i64)>>,
-> = std::sync::OnceLock::new();
-const LOGIN_WINDOW_SECS: i64 = 600;
-const LOGIN_MAX_FAILURES: u32 = 5;
-
-fn attempts_map() -> &'static std::sync::Mutex<std::collections::HashMap<String, (u32, i64)>> {
-    LOGIN_ATTEMPTS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
-}
-
-fn attempt_key(username: &str, ip: &str) -> String {
-    format!("{username}|{ip}")
-}
-
-fn login_locked(username: &str, ip: &str) -> bool {
-    let map = attempts_map();
-    let guard = match map.lock() {
-        Ok(g) => g,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    let now = Utc::now().timestamp();
-    match guard.get(&attempt_key(username, ip)) {
-        Some((count, window_start)) => {
-            now - window_start <= LOGIN_WINDOW_SECS && *count >= LOGIN_MAX_FAILURES
-        }
-        None => false,
-    }
-}
-
-fn record_login_failure(username: &str, ip: &str) {
-    let map = attempts_map();
-    let Ok(mut guard) = map.lock() else { return };
-    let now = Utc::now().timestamp();
-    let key = attempt_key(username, ip);
-    let entry = guard.entry(key).or_insert((0, now));
-    if now - entry.1 > LOGIN_WINDOW_SECS {
-        *entry = (0, now);
-    }
-    entry.0 += 1;
-}
-
-fn clear_login_failures(username: &str, ip: &str) {
-    let map = attempts_map();
-    if let Ok(mut guard) = map.lock() {
-        guard.remove(&attempt_key(username, ip));
-    }
-}
-
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/auth/login", post(login))
@@ -160,14 +111,23 @@ async fn login(
 ) -> Result<Json<Value>, AppError> {
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
+    if body.username.len() > state.config.login_identifier_max_bytes || body.password.len() > 1024 {
+        return Err(AppError::bad_request("登录账号或密码超出长度上限"));
+    }
     let identifier = body.username.trim().to_string();
     if identifier.is_empty() || body.password.is_empty() {
         return Err(AppError::bad_request("登录账号与密码不能为空"));
     }
     let phone = crate::routes::contact::phone_identifier(&identifier);
     let email = if identifier.contains('@') { identifier.to_lowercase() } else { String::new() };
-    if phone.is_empty() && email.is_empty() && login_locked(&identifier, &ip) {
-        return Err(AppError::forbidden("登录尝试过于频繁, 请 10 分钟后再试"));
+    if let Some(retry) = state.login_limits.admit_source(&ip) {
+        return Err(AppError::RateLimited(retry));
+    }
+    let input_key = format!("input:{}", crate::util::hash::sha256_hex(
+        if !phone.is_empty() { &phone } else if !email.is_empty() { &email } else { &identifier },
+    ));
+    if let Some(retry) = state.login_limits.check_account(&input_key) {
+        return Err(AppError::RateLimited(retry));
     }
     let rows: Vec<LoginUserRow> = sqlx::query_as(
         "SELECT id, username, password_hash, status, session_version, COALESCE(real_name,'') AS real_name \
@@ -178,7 +138,7 @@ async fn login(
         return Err(AppError::bad_request("该电话或 Email 关联账号过多，请使用其他登录账号"));
     }
     if rows.is_empty() {
-        record_login_failure(&identifier, &ip);
+        state.login_limits.record_failure(&input_key);
         audit::write(&state.pool, audit::AuditInfo {
             user_id: None, username: &identifier, tenant_id: None, organization_id: None,
             action: "LOGIN_FAILED", detail: "用户不存在", ip: &ip, user_agent: &ua,
@@ -187,21 +147,26 @@ async fn login(
     }
     let mut accounts = Vec::new();
     let mut choices = Vec::new();
-    let mut locked = false;
+    let mut locked = None;
     let mut authenticated_without_membership = false;
     let mut failures = Vec::new();
+    let verify_deadline = tokio::time::Instant::now()
+        + std::time::Duration::from_millis(state.config.login_verify_budget_ms);
     for row in rows {
-        if login_locked(&row.username, &ip) { locked = true; continue; }
+        if tokio::time::Instant::now() >= verify_deadline {
+            return Err(AppError::RateLimited(1));
+        }
+        let account_key = format!("user:{}", row.id);
+        if let Some(retry) = state.login_limits.check_account(&account_key) { locked = Some(retry); continue; }
         if row.status != "ENABLED" { continue; }
-        let hash = row.password_hash;
-        let secret = body.password.clone();
-        let valid = tokio::task::spawn_blocking(move || pw::verify_password(&hash, &secret))
-            .await.map_err(|_| anyhow::anyhow!("password verification worker failed"))?;
+        let valid = tokio::time::timeout_at(
+            verify_deadline, state.passwords.verify(&row.password_hash, &body.password),
+        ).await.map_err(|_| AppError::RateLimited(1))??;
         if !valid {
             failures.push((row.id, row.username));
             continue;
         }
-        clear_login_failures(&row.username, &ip);
+        state.login_limits.clear_account(&account_key);
         let memberships = fetch_memberships(&state.pool, row.id).await?;
         if memberships.is_empty() { authenticated_without_membership = true; continue; }
         for membership in &memberships {
@@ -224,20 +189,22 @@ async fn login(
         // A successful shared-alias login must not count as a failed attempt
         // against the other accounts using that alias.
         if !authenticated_without_membership {
+            state.login_limits.record_failure(&input_key);
             for (id, username) in failures {
-                record_login_failure(&username, &ip);
+                state.login_limits.record_failure(&format!("user:{id}"));
                 audit::write(&state.pool, audit::AuditInfo {
                     user_id: Some(id), username: &username, tenant_id: None, organization_id: None,
                     action: "LOGIN_FAILED", detail: "密码错误", ip: &ip, user_agent: &ua,
                 }).await;
             }
         }
-        if locked { return Err(AppError::forbidden("登录尝试过于频繁, 请 10 分钟后再试")); }
+        if let Some(retry) = locked { return Err(AppError::RateLimited(retry)); }
         if authenticated_without_membership {
             return Err(AppError::forbidden("所属租户或组织已到期, 无法登录"));
         }
         return Err(AppError::unauthorized("用户名或密码错误"));
     };
+    state.login_limits.clear_account(&input_key);
     let now = Utc::now().timestamp();
     let account_count = accounts.len();
     let claims = jwt::Claims {
@@ -399,15 +366,18 @@ async fn context(
         iat: now,
     };
     let access_token = jwt::sign(&session, &state.config.jwt_secret)?;
-    tx.commit().await?;
-
     if claims.typ == "session" {
-        audit::write(&state.pool, audit::AuditInfo {
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
             user_id: Some(user_id), username: &username,
             tenant_id: Some(tenant_id), organization_id: Some(org_id),
-            action: "CONTEXT_SWITCH", detail: &format!("切换组织上下文: {}", org_name), ip: &ip, user_agent: &ua,
-        }).await;
+            action: "CONTEXT_SWITCH", detail: &audit::change_detail("platform_session", session_id,
+                json!({"previousSessionId": old_session_id, "organizationId": claims.org,
+                    "tenantId": claims.tenant, "username": username}),
+                json!({"organizationId": org_id, "organizationName": org_name,
+                    "tenantId": tenant_id, "username": username})), ip: &ip, user_agent: &ua,
+        }).await?;
     }
+    tx.commit().await?;
 
     Ok(Json(json!({
         "accessToken": access_token,
@@ -527,14 +497,27 @@ async fn logout(
     headers: HeaderMap,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
-    session::revoke_one(&state.pool, user.user_id, user.session_id).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let mut tx = state.pool.begin().await?;
+    // Follow the same user-before-session lock order as refresh/password changes.
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+        .bind(user.user_id).fetch_one(&mut *tx).await?;
+    let changed = sqlx::query(
+        "UPDATE platform_sessions SET revoked_at=now() \
+         WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL",
+    ).bind(user.session_id).bind(user.user_id).execute(&mut *tx).await?.rows_affected();
+    if changed != 1 {
+        return Err(AppError::unauthorized("会话已失效，请重新登录"));
+    }
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "LOGOUT", detail: "退出登录", ip: &ip, user_agent: &ua,
-    }).await;
+        action: "LOGOUT", detail: &audit::change_detail("platform_session", user.session_id,
+            json!({"username": user.username, "revoked": false}),
+            json!({"username": user.username, "revoked": true})), ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -557,18 +540,31 @@ async fn change_password(
         .bind(user.user_id)
         .fetch_one(&state.pool)
         .await?;
-    if !pw::verify_password(&hash, &body.old_password) {
+    if !state.passwords.verify(&hash, &body.old_password).await? {
         return Err(AppError::bad_request("原密码不正确"));
     }
-    let new_hash = pw::hash_password(&body.new_password)?;
-    session::revoke_all(&state.pool, user.user_id, Some(&new_hash)).await?;
+    let new_hash = state.passwords.hash(&body.new_password).await?;
+    let mut tx = state.pool.begin().await?;
+    let (current_hash, before_version): (String, i64) = sqlx::query_as(
+        "SELECT password_hash, session_version FROM users WHERE id=$1 FOR UPDATE")
+        .bind(user.user_id).fetch_one(&mut *tx).await?;
+    if current_hash != hash {
+        return Err(AppError::conflict("密码已变更，请重新验证"));
+    }
+    let revoked = session::revoke_all_in_tx(&mut tx, user.user_id, Some(&new_hash)).await?;
+    let after_version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
+        .bind(user.user_id).fetch_one(&mut *tx).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_PASSWORD", detail: "修改个人密码", ip: &ip, user_agent: &ua,
-    }).await;
+        action: "UPDATE_PASSWORD", detail: &audit::change_detail("user", user.user_id,
+            json!({"username": user.username, "sessionVersion": before_version}),
+            json!({"username": user.username, "sessionVersion": after_version,
+                "passwordChanged": true, "revokedSessions": revoked})), ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -699,20 +695,26 @@ async fn revoke_my_session(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+        .bind(user.user_id).fetch_one(&mut *tx).await?;
     let target: Option<(Uuid, Uuid)> = sqlx::query_as(
         "UPDATE platform_sessions SET revoked_at = now() \
          WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL \
          RETURNING tenant_id, organization_id",
     )
-    .bind(id).bind(user.user_id).fetch_optional(&state.pool).await?;
+    .bind(id).bind(user.user_id).fetch_optional(&mut *tx).await?;
     let (tenant_id, org_id) = target.ok_or_else(|| AppError::not_found("会话不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "REVOKE_SESSION", detail: &format!("撤销设备会话: {}", id),
+        action: "REVOKE_SESSION", detail: &audit::change_detail("platform_session", id,
+            json!({"username": user.username, "revoked": false}),
+            json!({"username": user.username, "revoked": true})),
         ip: &ip, user_agent: &ua,
-    }).await;
+    }).await?;
+    tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }

@@ -76,6 +76,22 @@ fn dept_json(r: &DeptRowTuple) -> Value {
     })
 }
 
+fn dept_summary(row: &DeptRowTuple) -> Value {
+    json!({"id": row.0, "organizationId": row.1, "parentId": row.2,
+           "name": row.3, "code": row.4, "sortOrder": row.5, "status": row.7})
+}
+
+async fn lock_department(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+) -> Result<DeptRowTuple, AppError> {
+    sqlx::query_as(
+        "SELECT id, organization_id, parent_id, name, COALESCE(code,''), \
+         sort_order, COALESCE(description,''), status FROM departments WHERE id=$1 FOR UPDATE",
+    ).bind(id).fetch_optional(&mut **tx).await?
+        .ok_or_else(|| AppError::not_found("部门不存在"))
+}
+
 /// GET /api/departments/tree?organizationId=
 async fn tree_handler(
     State(state): State<AppState>,
@@ -154,6 +170,7 @@ async fn create(
     if name.is_empty() {
         return Err(AppError::bad_request("部门名称不能为空"));
     }
+    let mut tx = state.pool.begin().await?;
     let row: DeptRowTuple = sqlx::query_as(
         "INSERT INTO departments (organization_id, parent_id, name, code, sort_order, description) \
          VALUES ($1, $2, $3, $4, $5, $6) \
@@ -166,15 +183,17 @@ async fn create(
     .bind(&body.code)
     .bind(body.sort_order)
     .bind(&body.description)
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("department", row.0, Value::Null, dept_summary(&row));
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(org_tenant), organization_id: Some(org_id),
-        action: "CREATE_DEPARTMENT", detail: &format!("创建部门: {}", name), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "CREATE_DEPARTMENT", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
     Ok(Json(dept_json(&row)))
 }
 
@@ -207,6 +226,8 @@ async fn update(
             return Err(AppError::bad_request("部门名称不能为空"));
         }
     }
+    let mut tx = state.pool.begin().await?;
+    let before = lock_department(&mut tx, id).await?;
     let row: DeptRowTuple = sqlx::query_as(
         "UPDATE departments SET name = COALESCE($2, name), code = COALESCE($3, code), \
          sort_order = COALESCE($4, sort_order), description = COALESCE($5, description), updated_at = now() \
@@ -219,19 +240,28 @@ async fn update(
     .bind(&body.code)
     .bind(body.sort_order)
     .bind(&body.description)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("部门不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(
-            sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
-                .bind(row.1).fetch_one(&state.pool).await?
-        ), organization_id: Some(row.1),
-        action: "UPDATE_DEPARTMENT", detail: &format!("更新部门: {}", row.3), ip: &ip, user_agent: &ua,
-    }).await;
+    let tenant_id = sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
+        .bind(row.1).fetch_one(&mut *tx).await?;
+    let changed_fields: Vec<&str> = [
+        ("name", before.3 != row.3), ("code", before.4 != row.4),
+        ("sortOrder", before.5 != row.5), ("description", before.6 != row.6),
+    ].into_iter().filter_map(|(field, changed)| changed.then_some(field)).collect();
+    if !changed_fields.is_empty() {
+        let mut after = dept_summary(&row);
+        after["changedFields"] = json!(changed_fields);
+        let detail = audit::change_detail("department", id, dept_summary(&before), after);
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(tenant_id), organization_id: Some(row.1),
+            action: "UPDATE_DEPARTMENT", detail: &detail, ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
     Ok(Json(dept_json(&row)))
 }
 
@@ -245,20 +275,22 @@ async fn delete(
     RequirePermission("system:department").check(&state, &user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_dept_in_scope(&state, &user, id).await?;
-    let (name, org_id): (String, Uuid) = sqlx::query_as("DELETE FROM departments WHERE id = $1 RETURNING name, organization_id")
+    let mut tx = state.pool.begin().await?;
+    let before = lock_department(&mut tx, id).await?;
+    let tenant_id = sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
+        .bind(before.1).fetch_one(&mut *tx).await?;
+    sqlx::query("DELETE FROM departments WHERE id = $1")
         .bind(id)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(|| AppError::not_found("部门不存在"))?;
+        .execute(&mut *tx)
+        .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("department", id, dept_summary(&before), Value::Null);
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(
-            sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
-                .bind(org_id).fetch_one(&state.pool).await?
-        ), organization_id: Some(org_id),
-        action: "DELETE_DEPARTMENT", detail: &format!("删除部门: {}", name), ip: &ip, user_agent: &ua,
-    }).await;
+        tenant_id: Some(tenant_id), organization_id: Some(before.1),
+        action: "DELETE_DEPARTMENT", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }

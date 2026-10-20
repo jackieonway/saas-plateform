@@ -1,0 +1,452 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Work-orders embedded bootstrap manifest",
+  "description": "The Rust binary embeds this reviewed manifest. It accepts no external bootstrap manifest. All fields are required; seven menu entries have fixed order and semantics. No default grants are allowed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "application",
+    "oauthClient",
+    "menus",
+    "grants"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "name",
+        "icon",
+        "basePath",
+        "entryType",
+        "entryUrl",
+        "runtimeMode",
+        "autoCreateMenu",
+        "description",
+        "sortOrder",
+        "status"
+      ],
+      "properties": {
+        "code": {
+          "const": "work-orders"
+        },
+        "name": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "basePath": {
+          "const": "/micro/work-orders"
+        },
+        "entryType": {
+          "const": "HTML"
+        },
+        "entryUrl": {
+          "const": "/sub-apps/work-orders/unreleased/index.html"
+        },
+        "runtimeMode": {
+          "const": "IFRAME"
+        },
+        "autoCreateMenu": {
+          "const": false
+        },
+        "description": {
+          "type": "string"
+        },
+        "sortOrder": {
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "status": {
+          "const": "ENABLED"
+        }
+      }
+    },
+    "oauthClient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientName",
+        "clientType",
+        "grantTypes",
+        "scopes",
+        "redirectUris",
+        "accessTokenValidity",
+        "refreshTokenValidity",
+        "provisioning"
+      ],
+      "properties": {
+        "clientName": {
+          "const": "work-orders-client"
+        },
+        "clientType": {
+          "const": "CONFIDENTIAL"
+        },
+        "grantTypes": {
+          "const": [
+            "client_credentials"
+          ]
+        },
+        "scopes": {
+          "const": [
+            "openid"
+          ]
+        },
+        "redirectUris": {
+          "const": []
+        },
+        "accessTokenValidity": {
+          "const": 300
+        },
+        "refreshTokenValidity": {
+          "const": 300
+        },
+        "provisioning": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "menus": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": false,
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "parentKey",
+            "type",
+            "title",
+            "path",
+            "permission",
+            "sortOrder",
+            "visible",
+            "linkTarget"
+          ],
+          "properties": {
+            "key": {
+              "const": "root"
+            },
+            "parentKey": {
+              "const": null
+            },
+            "type": {
+              "const": "MENU"
+            },
+            "title": {
+              "type": "string"
+            },
+            "path": {
+              "const": "/micro/work-orders"
+            },
+            "permission": {
+              "const": ""
+            },
+            "sortOrder": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "visible": {
+              "const": true
+            },
+            "linkTarget": {
+              "const": "MICRO"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "parentKey",
+            "type",
+            "title",
+            "path",
+            "permission",
+            "sortOrder",
+            "visible",
+            "linkTarget"
+          ],
+          "properties": {
+            "key": {
+              "const": "ticket:read"
+            },
+            "parentKey": {
+              "const": "root"
+            },
+            "type": {
+              "const": "MENU"
+            },
+            "title": {
+              "type": "string"
+            },
+            "path": {
+              "const": "/micro/work-orders/tickets/:id"
+            },
+            "permission": {
+              "const": "ticket:read"
+            },
+            "sortOrder": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "visible": {
+              "const": false
+            },
+            "linkTarget": {
+              "const": "MICRO"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "parentKey",
+            "type",
+            "title",
+            "path",
+            "permission",
+            "sortOrder",
+            "visible",
+            "linkTarget"
+          ],
+          "properties": {
+            "key": {
+              "const": "ticket:create"
+            },
+            "parentKey": {
+              "const": "root"
+            },
+            "type": {
+              "const": "MENU"
+            },
+            "title": {
+              "type": "string"
+            },
+            "path": {
+              "const": "/micro/work-orders/ticket-create"
+            },
+            "permission": {
+              "const": "ticket:create"
+            },
+            "sortOrder": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "visible": {
+              "const": true
+            },
+            "linkTarget": {
+              "const": "MICRO"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "parentKey",
+            "type",
+            "title",
+            "path",
+            "permission",
+            "sortOrder",
+            "visible",
+            "linkTarget"
+          ],
+          "properties": {
+            "key": {
+              "const": "ticket:update"
+            },
+            "parentKey": {
+              "const": "root"
+            },
+            "type": {
+              "const": "BUTTON"
+            },
+            "title": {
+              "type": "string"
+            },
+            "path": {
+              "const": ""
+            },
+            "permission": {
+              "const": "ticket:update"
+            },
+            "sortOrder": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "visible": {
+              "const": false
+            },
+            "linkTarget": {
+              "const": "BLANK"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "parentKey",
+            "type",
+            "title",
+            "path",
+            "permission",
+            "sortOrder",
+            "visible",
+            "linkTarget"
+          ],
+          "properties": {
+            "key": {
+              "const": "ticket:delete"
+            },
+            "parentKey": {
+              "const": "root"
+            },
+            "type": {
+              "const": "BUTTON"
+            },
+            "title": {
+              "type": "string"
+            },
+            "path": {
+              "const": ""
+            },
+            "permission": {
+              "const": "ticket:delete"
+            },
+            "sortOrder": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "visible": {
+              "const": false
+            },
+            "linkTarget": {
+              "const": "BLANK"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "parentKey",
+            "type",
+            "title",
+            "path",
+            "permission",
+            "sortOrder",
+            "visible",
+            "linkTarget"
+          ],
+          "properties": {
+            "key": {
+              "const": "ticket:export"
+            },
+            "parentKey": {
+              "const": "root"
+            },
+            "type": {
+              "const": "BUTTON"
+            },
+            "title": {
+              "type": "string"
+            },
+            "path": {
+              "const": ""
+            },
+            "permission": {
+              "const": "ticket:export"
+            },
+            "sortOrder": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "visible": {
+              "const": false
+            },
+            "linkTarget": {
+              "const": "BLANK"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "parentKey",
+            "type",
+            "title",
+            "path",
+            "permission",
+            "sortOrder",
+            "visible",
+            "linkTarget"
+          ],
+          "properties": {
+            "key": {
+              "const": "notification:publish"
+            },
+            "parentKey": {
+              "const": "root"
+            },
+            "type": {
+              "const": "BUTTON"
+            },
+            "title": {
+              "type": "string"
+            },
+            "path": {
+              "const": ""
+            },
+            "permission": {
+              "const": "notification:publish"
+            },
+            "sortOrder": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "visible": {
+              "const": false
+            },
+            "linkTarget": {
+              "const": "BLANK"
+            }
+          }
+        }
+      ]
+    },
+    "grants": {
+      "type": "array",
+      "maxItems": 0
+    }
+  }
+}

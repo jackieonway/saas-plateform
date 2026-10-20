@@ -5,20 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>micro-vue · 微前端子应用</title>
   <meta name="micro-app-entry" content="micro-vue">
-  <!--
-    本页是「仿乾坤」微前端的子应用 HTML 入口, 支持两种伺服形态 (Task 23 双形态):
-    - 开发形态: 启动 mini-services/micro-vue (3005), 主应用 entry_url=/sub/vue/,
-      经 Vite 代理拉取本页 (去前缀转发), 配合 bun --hot 热迭代;
-    - 生产/静态形态 (当前默认): 本目录文件同步至 frontend/public/sub-apps/vue/,
-      entry_url=/sub-apps/vue/index.html, 由主应用静态伺服直接返回 ——
-      挂载不依赖任何子应用进程/端口, 等价于线上 nginx 静态目录或 CDN 部署;
-    - 资源一律用**相对路径**(相对入口基址解析: new URL(src, '/sub-apps/vue/index.html')
-      → /sub-apps/vue/vendor/...), 根绝对路径会被 new URL 压过基址打到主应用根,
-      被 Vite SPA fallback 吞掉(乾坤生态同款约定: publicPath 用 './');
-    - 生命周期契约 window.__MICRO_APP__ = { name, mount(container, props), unmount() }
-      实现在 app.js，消费 MicroProps 2.0，update(props) 更新完整上下文并取消旧请求;
-    - 子应用在主应用 realm 内执行, fetch('/api/...') 即同源主应用请求。
-  -->
+  <!-- Vite 构建入口。classic 脚本相对于本版本 HTML 加载，生命周期由宿主挂载。 -->
   <script>
     (function () {
       // HTML 入口在主应用沙箱执行时保持主应用标题，仅独立页面读取品牌。
@@ -27,7 +14,7 @@
       var initialTitle = document.title;
       var controller = new AbortController();
       var timer = window.setTimeout(function () { controller.abort(); }, 1500);
-      fetch('/api/platform/branding', { signal: controller.signal, headers: { Accept: 'application/json' } })
+      fetch('/api/platform/branding', { credentials: 'omit', signal: controller.signal, headers: { Accept: 'application/json' } })
         .then(function (response) {
           if (!response.ok) throw new Error('Branding unavailable');
           return response.json();
@@ -45,6 +32,7 @@
 <body>
   <div id="app"></div>
   <script src="vendor/vue.global.prod.js"></script>
+  <script src="vendor/micro-sdk.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

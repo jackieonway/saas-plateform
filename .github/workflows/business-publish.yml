@@ -1,0 +1,118 @@
+name: Protected business image publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful managed main candidate run ID
+        type: string
+        required: true
+      candidate_run_attempt:
+        description: Exact successful candidate run attempt
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: protected-business-image-publication
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    name: Verify trusted business candidate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      head_sha: ${{ steps.candidate.outputs.head_sha }}
+      artifact_id: ${{ steps.candidate.outputs.artifact_id }}
+      artifact_name: ${{ steps.candidate.outputs.artifact_name }}
+      run_id: ${{ steps.candidate.outputs.run_id }}
+      run_attempt: ${{ steps.candidate.outputs.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Verify exact managed candidate run
+        id: candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_RUN_ATTEMPT: ${{ inputs.candidate_run_attempt }}
+        run: |
+          node scripts/ci/business-images-publish.mjs --verify-run --run-id "$CANDIDATE_RUN_ID" --run-attempt "$CANDIDATE_RUN_ATTEMPT" --out-file "$RUNNER_TEMP/verified-business-run.json"
+
+  publish:
+    name: Publish verified business images
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    environment: business-image-publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Download exact verified candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify.outputs.artifact_id }}
+          run-id: ${{ needs.verify.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/business-candidate
+          merge-multiple: true
+      - name: Verify downloaded candidate archives
+        env:
+          CANDIDATE_SOURCE_REVISION: ${{ needs.verify.outputs.head_sha }}
+        run: |
+          node scripts/ci/business-images-publish.mjs --verify-candidate --candidate-dir "$RUNNER_TEMP/business-candidate" --source-revision "$CANDIDATE_SOURCE_REVISION"
+      - name: Docker Login approved registry
+        env:
+          REGISTRY: ${{ vars.BUSINESS_REGISTRY }}
+          REGISTRY_USERNAME: ${{ secrets.BUSINESS_REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.BUSINESS_REGISTRY_PASSWORD }}
+        run: |
+          test -n "$REGISTRY"
+          test -n "$REGISTRY_USERNAME"
+          test -n "$REGISTRY_PASSWORD"
+          printf '%s' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+      - name: Publish same verified archives
+        env:
+          BUSINESS_PUBLICATION_ALLOWED: protected-release
+          REGISTRY: ${{ vars.BUSINESS_REGISTRY }}
+          REPOSITORY_PREFIX: ${{ vars.BUSINESS_REPOSITORY_PREFIX }}
+          CANDIDATE_SOURCE_REVISION: ${{ needs.verify.outputs.head_sha }}
+        run: |
+          test -n "$REPOSITORY_PREFIX"
+          node scripts/ci/business-images-publish.mjs --publish --candidate-dir "$RUNNER_TEMP/business-candidate" --source-revision "$CANDIDATE_SOURCE_REVISION" --registry "$REGISTRY" --repository-prefix "$REPOSITORY_PREFIX" --out-dir "$RUNNER_TEMP/business-publication"
+      - name: Save actual publication digest manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-publication-${{ needs.verify.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/business-publication/publication-result.json
+            ${{ runner.temp }}/business-publication/logs/*.log
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove registry login from this runner
+        if: always()
+        env:
+          REGISTRY: ${{ vars.BUSINESS_REGISTRY }}
+        run: |
+          if test -n "$REGISTRY"; then docker logout "$REGISTRY"; fi

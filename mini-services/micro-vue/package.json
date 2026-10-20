@@ -3,12 +3,22 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "SaaS Platform 微前端子应用 · Vue 3 (HTML 入口 + 沙箱, __MICRO_APP__ 契约, 端口 3005, bun --hot 静态服务)",
+  "description": "SaaS Platform Vue 3 静态微应用，Vite 开发/构建与 classic HTML 生命周期入口",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "npm": ">=11.16.0 <12"
+  },
   "scripts": {
-    "dev": "bun --hot index.ts",
-    "test": "node --test smoke-test.cjs"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test smoke-test.cjs static-delivery.test.cjs"
   },
   "dependencies": {
-    "vue": "^3.5.13"
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
   }
 }

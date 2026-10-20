@@ -1,0 +1,24 @@
+# Merge inside the existing trusted gateway server, replacing its ZIP-only route.
+# Fixed node names, CA and SNI belong to the operator's whitelist, not request data.
+# This example assumes both node certificates contain nodes.example.test.
+# Define upstream zip_required_nodes in the enclosing http context:
+# upstream zip_required_nodes { server node1.example.test:8443; server node2.example.test:8443; }
+location = /_zip_distribution_ready {
+    internal;
+    proxy_pass http://backend:3001/api/zip-distribution/route-ready;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header X-Original-URI $request_uri;
+}
+location /sub-apps/ {
+    auth_request /_zip_distribution_ready;
+    proxy_pass https://zip_required_nodes;
+    proxy_ssl_verify on;
+    proxy_ssl_trusted_certificate /etc/nginx/tls/node-ca.pem;
+    proxy_ssl_server_name on;
+    proxy_ssl_name nodes.example.test;
+    proxy_hide_header X-Content-Type-Options;
+    add_header X-Content-Type-Options nosniff always;
+}
+# Keep higher-priority managed image routes and existing private-path denials.
+# Never apply this ZIP gate to image delivery or mount node roots into the platform.

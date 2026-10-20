@@ -1,0 +1,666 @@
+{
+  "schemaVersion": 1,
+  "phase": 17,
+  "status": "QUERY_PLAN_ARCHIVE_VERIFIED",
+  "clientDate": "2026-10-17",
+  "clientTimezone": "Asia/Shanghai",
+  "extractedAt": "2026-10-17T00:45:00.898Z",
+  "source": {
+    "log": {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-read-postgres/work-orders-read-contracts.log",
+      "sha256": "8c63ab6c8c1242b9e9cab680fae1e7f68ee98162b0283b9786b1c5a77b977c8e",
+      "bytes": 16235
+    },
+    "marker": "WORK_ORDERS_QUERY_PLAN ",
+    "freeze": {
+      "path": "target/phase-17/inputs-wip-r1.json",
+      "sha256": "e3ab10e8acbbe1fedeedb39e558c2e589c903354dadc5b47e5523c699b0df63d",
+      "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+      "inputsSha256": "59b0f8d12db41b566e42f59d0aeba38f2afe72c547a18ca3501dabb53a654028",
+      "inputCount": 674,
+      "capturedAt": "2026-10-17T00:20:54.876Z"
+    },
+    "frozenSourceFiles": [
+      {
+        "path": "business-apps/work-orders/backend/tests/read_contracts.rs",
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/reads.rs",
+        "bytes": 8174,
+        "sha256": "d72931140407b239793e0aa77019a3e4b5abf7d1fb2371b7f1c1a222c8580b85"
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/reads/query.rs",
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/authorization/policy.rs",
+        "bytes": 8243,
+        "sha256": "7571d27c0cad4f3dab82640c4b24bc475ec6e0cfc11cbf7e936fb41d26529265"
+      },
+      {
+        "path": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      }
+    ],
+    "readSuite": {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/postgres/work-orders-read-postgres/postgres-result.json",
+      "sha256": "d19a5c582dd7739220b6114f0490bf5eed0cbc49865e6e878c3a45dfcbe28fad",
+      "status": "PASS",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "startedAt": "2026-10-17T00:34:31.489Z",
+      "finishedAt": "2026-10-17T00:34:44.296Z",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "business-apps/work-orders/backend/Cargo.toml",
+        "--locked",
+        "--test",
+        "read_contracts",
+        "-j",
+        "2",
+        "--",
+        "--ignored",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    "sourceVerification": {
+      "path": "target/phase-17/linux-postgres-wip-r2/reports/source-verification.json",
+      "sha256": "a89ffe66162fe7088889ea05e3fb5a5f1ca3541c18bfe400ec92436942ca41c8",
+      "scope": "full",
+      "before": "59b0f8d12db41b566e42f59d0aeba38f2afe72c547a18ca3501dabb53a654028",
+      "after": "59b0f8d12db41b566e42f59d0aeba38f2afe72c547a18ca3501dabb53a654028",
+      "inputsUnchanged": true,
+      "gateExitCode": 0,
+      "cacheCleanup": "PASS"
+    },
+    "outerRunner": {
+      "path": "target/phase-17/linux-postgres-wip-r2/linux-runner-result.json",
+      "sha256": "1a73beda053c33961c97186698ad1584d2f5f4bf0915f284cb5a77a50eed0db5",
+      "status": "FAIL",
+      "driverError": "Phase 17 executable or CI input changed: scripts/ci/manifest.mjs",
+      "startedAt": "2026-10-17T00:22:04.191Z",
+      "finishedAt": "2026-10-17T00:35:19.304Z",
+      "meaning": "The read suite passed against the frozen candidate. The outer runner retained FAIL for shared host manifest drift; this archive does not relabel that result."
+    },
+    "environment": {
+      "postgresVersion": "postgres (PostgreSQL) 17.6 (Debian 17.6-2.pgdg12+1)",
+      "postgresImage": "sha256:8745eeb23be1055bd80c88e509a5247110cce0f2496c7492d165f3d0fc1975cd",
+      "toolchainImage": "sha256:42e1b7fb5fea569fba2abada59030185286c9d642643cb7fa63ed7a5715b87b7",
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "dataset": {
+    "totalRows": 24008,
+    "targetTenantRowsIncludingDeleted": 19207,
+    "targetTenantSoftDeletedRows": 1,
+    "targetTenantActiveRows": 19206,
+    "organizationCeilingActiveRows": 1602,
+    "origin": "24,000 representative inserted rows plus eight controlled fixture rows. Original log supplies total/tenant/ceiling values; tenant active and ceiling scan rows are also visible in the preserved actual plans."
+  },
+  "correspondence": {
+    "projection": "Representative page SQL mirrors production reads.rs RECORDS projection, including both UTC to_char timestamps.",
+    "ordering": "Production ORDER BY created_at DESC,id ASC.",
+    "parameters": "Typed tenant/organization/owner/search bindings correspond to the production scope and query components. The original logger parameters object is retained; ordered bindings are additionally reconstructed from the frozen fixture.",
+    "scope": "Representative tenant + deleted_at + organization ceiling / owner components; not every possible grant scope or filter combination.",
+    "export": "Representative production capacity CTE limits selected rows to 1001 and computes count plus minimum textual byte cost."
+  },
+  "limitations": [
+    "Representative SQL aligned with production projection, ordering, parameter types and scope components; not a byte-for-byte SQL capture of each HTTP request.",
+    "Single controlled PostgreSQL fixture observations, not production latency, throughput, cold-cache behavior, a production SLA, or statistical performance estimates.",
+    "Eight plans do not cover all grant shapes, organization-list cardinalities, filters, tenant sizes or data distributions.",
+    "Buffers are recorded per original plan node; the table uses root execution buffers and planning buffers separately, never sums nested hits. Missing planning buffer output remains null.",
+    "The read suite result and outer runner result are separate; this archive does not certify whole-phase completion."
+  ],
+  "indexDecision": {
+    "newIndexes": [],
+    "reason": "No new index was added in Phase 17. Preserve these measured baseline plans and existing work_orders_tenant_org_active / work_orders_tenant_owner_active indexes; this sample does not establish a universal index recommendation."
+  },
+  "planCount": 8,
+  "plans": [
+    {
+      "case": "org_first_page",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 0,
+        "organizationIds": [
+          "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+        ],
+        "ownerUserId": null,
+        "pattern": null,
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Limit  (cost=911.57..911.62 rows=20 width=480) (actual time=6.417..6.422 rows=20 loops=1)",
+        "  Buffers: shared hit=734",
+        "  ->  Sort  (cost=911.57..915.58 rows=1603 width=480) (actual time=6.415..6.417 rows=20 loops=1)",
+        "        Sort Key: created_at DESC, id",
+        "        Sort Method: top-N heapsort  Memory: 35kB",
+        "        Buffers: shared hit=734",
+        "        ->  Bitmap Heap Scan on work_orders  (cost=124.84..868.91 rows=1603 width=480) (actual time=0.484..5.065 rows=1602 loops=1)",
+        "              Recheck Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])) AND (deleted_at IS NULL))",
+        "              Heap Blocks: exact=705",
+        "              Buffers: shared hit=734",
+        "              ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.210..0.210 rows=1602 loops=1)",
+        "                    Index Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])))",
+        "                    Buffers: shared hit=29",
+        "Planning:",
+        "  Buffers: shared hit=99",
+        "Planning Time: 0.344 ms",
+        "Execution Time: 6.456 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT id,number,title,description,priority,status,tenant_id,organization_id,organization_name,owner_user_id,owner_display_name,assignee_user_id,assignee_display_name,version,pg_catalog.to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_iso,pg_catalog.to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_iso FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL AND organization_id=ANY($2::uuid[]) ORDER BY created_at DESC,id ASC LIMIT $3 OFFSET $4",
+      "tenantRows": 19207,
+      "sourceLogLine": 24,
+      "originalJsonSha256": "3b84f15e1299ad6395e9c7b0d2f70c8dca4db181a97b54606e8802fac7e71d09",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78",
+          [
+            "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+          ],
+          20,
+          0
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.344",
+        "executionTimeMs": "6.456",
+        "scanLines": [
+          "        ->  Bitmap Heap Scan on work_orders  (cost=124.84..868.91 rows=1603 width=480) (actual time=0.484..5.065 rows=1602 loops=1)",
+          "              ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.210..0.210 rows=1602 loops=1)"
+        ],
+        "indexNames": [
+          "work_orders_tenant_org_active"
+        ],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=734",
+          "sharedHits": "734"
+        },
+        "planningBuffers": {
+          "raw": "  Buffers: shared hit=99",
+          "sharedHits": "99"
+        },
+        "allBufferLines": [
+          "  Buffers: shared hit=734",
+          "        Buffers: shared hit=734",
+          "              Buffers: shared hit=734",
+          "                    Buffers: shared hit=29",
+          "  Buffers: shared hit=99"
+        ]
+      }
+    },
+    {
+      "case": "org_maximum_offset",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 99999900,
+        "organizationIds": [
+          "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+        ],
+        "ownerUserId": null,
+        "pattern": null,
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Limit  (cost=958.25..958.26 rows=1 width=480) (actual time=8.303..8.304 rows=0 loops=1)",
+        "  Buffers: shared hit=740",
+        "  ->  Sort  (cost=954.25..958.25 rows=1603 width=480) (actual time=8.126..8.220 rows=1602 loops=1)",
+        "        Sort Key: created_at DESC, id",
+        "        Sort Method: quicksort  Memory: 858kB",
+        "        Buffers: shared hit=740",
+        "        ->  Bitmap Heap Scan on work_orders  (cost=124.84..868.91 rows=1603 width=480) (actual time=0.715..4.819 rows=1602 loops=1)",
+        "              Recheck Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])) AND (deleted_at IS NULL))",
+        "              Heap Blocks: exact=705",
+        "              Buffers: shared hit=734",
+        "              ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.458..0.458 rows=1602 loops=1)",
+        "                    Index Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])))",
+        "                    Buffers: shared hit=29",
+        "Planning:",
+        "  Buffers: shared hit=77",
+        "Planning Time: 0.476 ms",
+        "Execution Time: 8.574 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT id,number,title,description,priority,status,tenant_id,organization_id,organization_name,owner_user_id,owner_display_name,assignee_user_id,assignee_display_name,version,pg_catalog.to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_iso,pg_catalog.to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_iso FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL AND organization_id=ANY($2::uuid[]) ORDER BY created_at DESC,id ASC LIMIT $3 OFFSET $4",
+      "tenantRows": 19207,
+      "sourceLogLine": 25,
+      "originalJsonSha256": "5dfdfdb8bbe670227fce09531750371bf7bddb0adeaf4e0fb5ff603d10195f4c",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78",
+          [
+            "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+          ],
+          100,
+          99999900
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.476",
+        "executionTimeMs": "8.574",
+        "scanLines": [
+          "        ->  Bitmap Heap Scan on work_orders  (cost=124.84..868.91 rows=1603 width=480) (actual time=0.715..4.819 rows=1602 loops=1)",
+          "              ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.458..0.458 rows=1602 loops=1)"
+        ],
+        "indexNames": [
+          "work_orders_tenant_org_active"
+        ],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=740",
+          "sharedHits": "740"
+        },
+        "planningBuffers": {
+          "raw": "  Buffers: shared hit=77",
+          "sharedHits": "77"
+        },
+        "allBufferLines": [
+          "  Buffers: shared hit=740",
+          "        Buffers: shared hit=740",
+          "              Buffers: shared hit=734",
+          "                    Buffers: shared hit=29",
+          "  Buffers: shared hit=77"
+        ]
+      }
+    },
+    {
+      "case": "org_count",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 0,
+        "organizationIds": [
+          "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+        ],
+        "ownerUserId": null,
+        "pattern": null,
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Aggregate  (cost=856.89..856.90 rows=1 width=8) (actual time=1.300..1.301 rows=1 loops=1)",
+        "  Buffers: shared hit=734",
+        "  ->  Bitmap Heap Scan on work_orders  (cost=124.84..852.88 rows=1603 width=0) (actual time=0.301..1.125 rows=1602 loops=1)",
+        "        Recheck Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])) AND (deleted_at IS NULL))",
+        "        Heap Blocks: exact=705",
+        "        Buffers: shared hit=734",
+        "        ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.199..0.199 rows=1602 loops=1)",
+        "              Index Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])))",
+        "              Buffers: shared hit=29",
+        "Planning:",
+        "  Buffers: shared hit=3",
+        "Planning Time: 0.119 ms",
+        "Execution Time: 1.322 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT count(*)::bigint FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL AND organization_id=ANY($2::uuid[])",
+      "tenantRows": 19207,
+      "sourceLogLine": 26,
+      "originalJsonSha256": "d9287b515ca3169396b9b15f4cb595791dc4277b6435ec0b6c08389482514e6c",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78",
+          [
+            "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+          ]
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.119",
+        "executionTimeMs": "1.322",
+        "scanLines": [
+          "  ->  Bitmap Heap Scan on work_orders  (cost=124.84..852.88 rows=1603 width=0) (actual time=0.301..1.125 rows=1602 loops=1)",
+          "        ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.199..0.199 rows=1602 loops=1)"
+        ],
+        "indexNames": [
+          "work_orders_tenant_org_active"
+        ],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=734",
+          "sharedHits": "734"
+        },
+        "planningBuffers": {
+          "raw": "  Buffers: shared hit=3",
+          "sharedHits": "3"
+        },
+        "allBufferLines": [
+          "  Buffers: shared hit=734",
+          "        Buffers: shared hit=734",
+          "              Buffers: shared hit=29",
+          "  Buffers: shared hit=3"
+        ]
+      }
+    },
+    {
+      "case": "org_literal_search",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 0,
+        "organizationIds": [
+          "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+        ],
+        "ownerUserId": null,
+        "pattern": "%100\\%\\_\\\\%",
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Limit  (cost=864.99..865.03 rows=16 width=480) (actual time=4.770..4.774 rows=17 loops=1)",
+        "  Buffers: shared hit=734",
+        "  ->  Sort  (cost=864.99..865.03 rows=16 width=480) (actual time=4.768..4.770 rows=17 loops=1)",
+        "        Sort Key: created_at DESC, id",
+        "        Sort Method: quicksort  Memory: 29kB",
+        "        Buffers: shared hit=734",
+        "        ->  Bitmap Heap Scan on work_orders  (cost=124.45..864.67 rows=16 width=480) (actual time=0.321..4.731 rows=17 loops=1)",
+        "              Recheck Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])) AND (deleted_at IS NULL))",
+        "              Filter: (((title)::text ~~* '%100\\%\\_\\\\%'::text) OR (description ~~* '%100\\%\\_\\\\%'::text) OR ((number)::text ~~* '%100\\%\\_\\\\%'::text))",
+        "              Rows Removed by Filter: 1585",
+        "              Heap Blocks: exact=705",
+        "              Buffers: shared hit=734",
+        "              ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.212..0.213 rows=1602 loops=1)",
+        "                    Index Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])))",
+        "                    Buffers: shared hit=29",
+        "Planning Time: 0.571 ms",
+        "Execution Time: 4.880 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT id,number,title,description,priority,status,tenant_id,organization_id,organization_name,owner_user_id,owner_display_name,assignee_user_id,assignee_display_name,version,pg_catalog.to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_iso,pg_catalog.to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_iso FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL AND organization_id=ANY($2::uuid[]) AND (title ILIKE $3 ESCAPE CHR(92) OR description ILIKE $4 ESCAPE CHR(92) OR number ILIKE $5 ESCAPE CHR(92)) ORDER BY created_at DESC,id ASC LIMIT $6 OFFSET $7",
+      "tenantRows": 19207,
+      "sourceLogLine": 27,
+      "originalJsonSha256": "0733e94137e63fbb663e497cc150f6f902b3603569f297f98ae9032e088934ed",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78",
+          [
+            "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+          ],
+          "%100\\%\\_\\\\%",
+          "%100\\%\\_\\\\%",
+          "%100\\%\\_\\\\%",
+          100,
+          0
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.571",
+        "executionTimeMs": "4.880",
+        "scanLines": [
+          "        ->  Bitmap Heap Scan on work_orders  (cost=124.45..864.67 rows=16 width=480) (actual time=0.321..4.731 rows=17 loops=1)",
+          "              ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.212..0.213 rows=1602 loops=1)"
+        ],
+        "indexNames": [
+          "work_orders_tenant_org_active"
+        ],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=734",
+          "sharedHits": "734"
+        },
+        "planningBuffers": null,
+        "allBufferLines": [
+          "  Buffers: shared hit=734",
+          "        Buffers: shared hit=734",
+          "              Buffers: shared hit=734",
+          "                    Buffers: shared hit=29"
+        ]
+      }
+    },
+    {
+      "case": "org_export_capacity",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 0,
+        "organizationIds": [
+          "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+        ],
+        "ownerUserId": null,
+        "pattern": null,
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Aggregate  (cost=985.77..985.78 rows=1 width=16) (actual time=2.675..2.676 rows=1 loops=1)",
+        "  Buffers: shared hit=734",
+        "  ->  Limit  (cost=938.22..940.72 rows=1001 width=337) (actual time=2.217..2.437 rows=1001 loops=1)",
+        "        Buffers: shared hit=734",
+        "        ->  Sort  (cost=938.22..942.22 rows=1603 width=337) (actual time=2.216..2.278 rows=1001 loops=1)",
+        "              Sort Key: work_orders.created_at DESC, work_orders.id",
+        "              Sort Method: quicksort  Memory: 459kB",
+        "              Buffers: shared hit=734",
+        "              ->  Bitmap Heap Scan on work_orders  (cost=124.84..852.88 rows=1603 width=337) (actual time=0.343..1.443 rows=1602 loops=1)",
+        "                    Recheck Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])) AND (deleted_at IS NULL))",
+        "                    Heap Blocks: exact=705",
+        "                    Buffers: shared hit=734",
+        "                    ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.240..0.240 rows=1602 loops=1)",
+        "                          Index Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (organization_id = ANY ('{e08cd2f8-16d5-447a-a71e-a792061c73b3}'::uuid[])))",
+        "                          Buffers: shared hit=29",
+        "Planning:",
+        "  Buffers: shared hit=9",
+        "Planning Time: 0.318 ms",
+        "Execution Time: 2.709 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) WITH selected AS (SELECT number,title,description,organization_name,owner_display_name,assignee_display_name FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL AND organization_id=ANY($2::uuid[]) ORDER BY created_at DESC,id ASC LIMIT 1001) SELECT count(*)::bigint AS total,COALESCE(sum(octet_length(number)::bigint+octet_length(title)+octet_length(description)+octet_length(organization_name)+octet_length(owner_display_name)+octet_length(COALESCE(assignee_display_name,''))),0)::bigint AS minimum_bytes FROM selected",
+      "tenantRows": 19207,
+      "sourceLogLine": 28,
+      "originalJsonSha256": "c5a5f0bf2b227b122ec8b3af61dfd54bf0b3241b2f5fd314261327046681401a",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78",
+          [
+            "e08cd2f8-16d5-447a-a71e-a792061c73b3"
+          ]
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.318",
+        "executionTimeMs": "2.709",
+        "scanLines": [
+          "              ->  Bitmap Heap Scan on work_orders  (cost=124.84..852.88 rows=1603 width=337) (actual time=0.343..1.443 rows=1602 loops=1)",
+          "                    ->  Bitmap Index Scan on work_orders_tenant_org_active  (cost=0.00..124.44 rows=1603 width=0) (actual time=0.240..0.240 rows=1602 loops=1)"
+        ],
+        "indexNames": [
+          "work_orders_tenant_org_active"
+        ],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=734",
+          "sharedHits": "734"
+        },
+        "planningBuffers": {
+          "raw": "  Buffers: shared hit=9",
+          "sharedHits": "9"
+        },
+        "allBufferLines": [
+          "  Buffers: shared hit=734",
+          "        Buffers: shared hit=734",
+          "              Buffers: shared hit=734",
+          "                    Buffers: shared hit=734",
+          "                          Buffers: shared hit=29",
+          "  Buffers: shared hit=9"
+        ]
+      }
+    },
+    {
+      "case": "tenant_first_page",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 0,
+        "organizationIds": null,
+        "ownerUserId": null,
+        "pattern": null,
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Limit  (cost=1709.22..1709.27 rows=20 width=480) (actual time=40.678..40.683 rows=20 loops=1)",
+        "  Buffers: shared hit=706",
+        "  ->  Sort  (cost=1709.22..1757.24 rows=19206 width=480) (actual time=40.677..40.679 rows=20 loops=1)",
+        "        Sort Key: created_at DESC, id",
+        "        Sort Method: top-N heapsort  Memory: 36kB",
+        "        Buffers: shared hit=706",
+        "        ->  Seq Scan on work_orders  (cost=0.00..1198.16 rows=19206 width=480) (actual time=0.018..31.744 rows=19206 loops=1)",
+        "              Filter: ((deleted_at IS NULL) AND (tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid))",
+        "              Rows Removed by Filter: 4802",
+        "              Buffers: shared hit=706",
+        "Planning Time: 0.096 ms",
+        "Execution Time: 40.713 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT id,number,title,description,priority,status,tenant_id,organization_id,organization_name,owner_user_id,owner_display_name,assignee_user_id,assignee_display_name,version,pg_catalog.to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_iso,pg_catalog.to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_iso FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC,id ASC LIMIT $2 OFFSET $3",
+      "tenantRows": 19207,
+      "sourceLogLine": 29,
+      "originalJsonSha256": "72ae962b6bef0534bcbfa67cd699ec7ae0e57c4122410ad826ef9bcfd5e21782",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78",
+          20,
+          0
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.096",
+        "executionTimeMs": "40.713",
+        "scanLines": [
+          "        ->  Seq Scan on work_orders  (cost=0.00..1198.16 rows=19206 width=480) (actual time=0.018..31.744 rows=19206 loops=1)"
+        ],
+        "indexNames": [],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=706",
+          "sharedHits": "706"
+        },
+        "planningBuffers": null,
+        "allBufferLines": [
+          "  Buffers: shared hit=706",
+          "        Buffers: shared hit=706",
+          "              Buffers: shared hit=706"
+        ]
+      }
+    },
+    {
+      "case": "tenant_count",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 0,
+        "organizationIds": null,
+        "ownerUserId": null,
+        "pattern": null,
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Aggregate  (cost=1054.12..1054.12 rows=1 width=8) (actual time=7.801..7.802 rows=1 loops=1)",
+        "  Buffers: shared hit=706",
+        "  ->  Seq Scan on work_orders  (cost=0.00..1006.10 rows=19206 width=0) (actual time=0.010..6.305 rows=19206 loops=1)",
+        "        Filter: ((deleted_at IS NULL) AND (tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid))",
+        "        Rows Removed by Filter: 4802",
+        "        Buffers: shared hit=706",
+        "Planning:",
+        "  Buffers: shared hit=3",
+        "Planning Time: 0.143 ms",
+        "Execution Time: 7.824 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT count(*)::bigint FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL",
+      "tenantRows": 19207,
+      "sourceLogLine": 30,
+      "originalJsonSha256": "d45fefc377e40d0915185ceacbc44336e8499603ff6ced6f159ceda59e370a32",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.143",
+        "executionTimeMs": "7.824",
+        "scanLines": [
+          "  ->  Seq Scan on work_orders  (cost=0.00..1006.10 rows=19206 width=0) (actual time=0.010..6.305 rows=19206 loops=1)"
+        ],
+        "indexNames": [],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=706",
+          "sharedHits": "706"
+        },
+        "planningBuffers": {
+          "raw": "  Buffers: shared hit=3",
+          "sharedHits": "3"
+        },
+        "allBufferLines": [
+          "  Buffers: shared hit=706",
+          "        Buffers: shared hit=706",
+          "  Buffers: shared hit=3"
+        ]
+      }
+    },
+    {
+      "case": "self_first_page",
+      "ceilingRows": 1602,
+      "newIndexes": [],
+      "parameters": {
+        "maximumOffset": 0,
+        "organizationIds": null,
+        "ownerUserId": "2c669f0a-5ab1-4d45-ae63-55c6866cb56d",
+        "pattern": null,
+        "tenantId": "7d757fc3-a388-4d5d-b5f9-b1a411343f78"
+      },
+      "plan": [
+        "Limit  (cost=0.41..6.82 rows=20 width=480) (actual time=0.029..0.072 rows=20 loops=1)",
+        "  Buffers: shared hit=6",
+        "  ->  Index Scan using work_orders_tenant_owner_active on work_orders  (cost=0.41..3076.00 rows=9605 width=480) (actual time=0.028..0.068 rows=20 loops=1)",
+        "        Index Cond: ((tenant_id = '7d757fc3-a388-4d5d-b5f9-b1a411343f78'::uuid) AND (owner_user_id = '2c669f0a-5ab1-4d45-ae63-55c6866cb56d'::uuid))",
+        "        Buffers: shared hit=6",
+        "Planning Time: 0.114 ms",
+        "Execution Time: 0.095 ms"
+      ],
+      "rows": 24008,
+      "sql": "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT id,number,title,description,priority,status,tenant_id,organization_id,organization_name,owner_user_id,owner_display_name,assignee_user_id,assignee_display_name,version,pg_catalog.to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_iso,pg_catalog.to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_iso FROM public.work_orders WHERE tenant_id=$1 AND deleted_at IS NULL AND owner_user_id=$2 ORDER BY created_at DESC,id ASC LIMIT $3 OFFSET $4",
+      "tenantRows": 19207,
+      "sourceLogLine": 31,
+      "originalJsonSha256": "2d089d836a168026f7d7abc84fdea76903235a629c7feb7d801d3811476ecfe4",
+      "orderedBindingsFromFrozenFixture": {
+        "values": [
+          "7d757fc3-a388-4d5d-b5f9-b1a411343f78",
+          "2c669f0a-5ab1-4d45-ae63-55c6866cb56d",
+          20,
+          0
+        ],
+        "origin": "Reconstructed from the frozen explain_plan QueryBuilder bind order and literal limit/offset choices; original parameters field above remains unchanged."
+      },
+      "metrics": {
+        "planningTimeMs": "0.114",
+        "executionTimeMs": "0.095",
+        "scanLines": [
+          "  ->  Index Scan using work_orders_tenant_owner_active on work_orders  (cost=0.41..3076.00 rows=9605 width=480) (actual time=0.028..0.068 rows=20 loops=1)"
+        ],
+        "indexNames": [
+          "work_orders_tenant_owner_active"
+        ],
+        "rootExecutionBuffers": {
+          "raw": "  Buffers: shared hit=6",
+          "sharedHits": "6"
+        },
+        "planningBuffers": null,
+        "allBufferLines": [
+          "  Buffers: shared hit=6",
+          "        Buffers: shared hit=6"
+        ]
+      }
+    }
+  ]
+}

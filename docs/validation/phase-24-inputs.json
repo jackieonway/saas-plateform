@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "scope": "Phase24 selected deliverables; unrelated concurrent phases are not claimed",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "componentInputsSha256": "2efc48b954ad0815b0f3aae4aec03ef1426778ddceff681f987d4b0b17718d85",
+  "files": [
+    {
+      "path": ".dockerignore",
+      "bytes": 1103,
+      "sha256": "4d71cc769e9cb7e1530321b65a9ba24f7af2466678c4a4c0cc384a80887cc22c"
+    },
+    {
+      "path": "backend/Cargo.lock",
+      "bytes": 80293,
+      "sha256": "f82770102b1111cf4f757c78a5703f00280c38bd1143ea7bf55fa1004eef4a2a"
+    },
+    {
+      "path": "backend/Cargo.toml",
+      "bytes": 1576,
+      "sha256": "f1cce7da79999ea5c750cf2229883790c5a0ce461de5e2f30f38587cafd78cb6"
+    },
+    {
+      "path": "backend/Dockerfile",
+      "bytes": 1640,
+      "sha256": "0448f9de7f7eb61964fae12bbcf0d8e207aae20c1f9cb86a3250bab2894bbcb8"
+    },
+    {
+      "path": "backend/src/main.rs",
+      "bytes": 11024,
+      "sha256": "8be9b0dff121584cdea7e41bd0c07741ee412e75d5b580b21ad7767e84b18195"
+    },
+    {
+      "path": "backend/src/oauth_playground_ui_tests.rs",
+      "bytes": 14661,
+      "sha256": "ff93fa68fec28b528244ad8aa0f43789fe5d957ebc8ec9a0b1d089dbf203d110"
+    },
+    {
+      "path": "deploy/native/build.mjs",
+      "bytes": 17819,
+      "sha256": "f25633c9a8070ce443bcead34c32d6ae57c2c08ba12d5f0d97edfcdc4ed27591"
+    },
+    {
+      "path": "deploy/native/tests/build.test.mjs",
+      "bytes": 17771,
+      "sha256": "93f8531ac5c644e0ecd8df7fdb5676e5371658add3f45d359eefdc88244af4d0"
+    },
+    {
+      "path": "mini-services/oauth-playground/.dockerignore",
+      "bytes": 178,
+      "sha256": "1f12f1583f9144fc6b0bb754074f41cb9519a9d9a677ed7e8ea90b6f9bf8d193"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/Cargo.lock",
+      "bytes": 37555,
+      "sha256": "c23bfb68178a003be011ead32062771bd681b915dec87fb65d548a7ad556d771"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/Cargo.toml",
+      "bytes": 741,
+      "sha256": "2fbf35b2aa02acc5b85802ec688bed06378b2f762bfbca0d9722f5cd76c7a116"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/README.md",
+      "bytes": 7282,
+      "sha256": "97ca0decf19319f1d42ad955bac06e29dd923ad9909e6eb19c7d1064f72a5282"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/src/config.rs",
+      "bytes": 9010,
+      "sha256": "a3b71fa03de28620b98ad541f7601c044e592e6d86f96366c4ba2974b68e0e21"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/src/http.rs",
+      "bytes": 26598,
+      "sha256": "493abed66ffd014b54daa1b6bdc6a842735876c19e48e60e38bd766d1046f395"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/src/lib.rs",
+      "bytes": 261,
+      "sha256": "f4afb92433f34c7d366bfe232e6abc5c025e8ad169f99d41c85c1787725730dd"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/src/main.rs",
+      "bytes": 626,
+      "sha256": "aac5c8cddf918dee6285827ff989580cae210542f6ed79e00d65b2f8056069d3"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/src/session.rs",
+      "bytes": 6414,
+      "sha256": "315a6afc612e0aa27bfc8ebce5fac091568d378c5ee109d949e16b61fa5bf330"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/src/upstream.rs",
+      "bytes": 6649,
+      "sha256": "824e291d69d405726717c87b76aa8892aef73715610ca15cde9ca412fd46ebd6"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/tests/security.rs",
+      "bytes": 12037,
+      "sha256": "dfcdfc7a9ac6fb32b66e286bc156e0c03ec6228586e4cfd6a33dcd2b177254a7"
+    },
+    {
+      "path": "mini-services/oauth-playground/backend/tests/upstream_contract.rs",
+      "bytes": 21677,
+      "sha256": "e890c1c98599cb905881c7fdc0cb7b08cd3d8ebc856ed1a64feac0400acd8a2e"
+    },
+    {
+      "path": "mini-services/oauth-playground/deploy/compose.yml",
+      "bytes": 2191,
+      "sha256": "c3b0550f3ba4620dae8699a56ee7e15ae09b8dbfa97f27155a174520ee3269cc"
+    },
+    {
+      "path": "mini-services/oauth-playground/deploy/Dockerfile.api",
+      "bytes": 1216,
+      "sha256": "e4373369bcaa59f877ebaf8a3b501299fa8a6b603c75a83d2118af406ca725a2"
+    },
+    {
+      "path": "mini-services/oauth-playground/deploy/Dockerfile.frontend",
+      "bytes": 1048,
+      "sha256": "42cffcfad10b19a3937602374cffab7813fc1a1b0259719dde491684abbba594"
+    },
+    {
+      "path": "mini-services/oauth-playground/deploy/edge.example.json",
+      "bytes": 114,
+      "sha256": "32bd03639eb265db8539b8b917dd0e3fa26815204e90d05ee2200596f9d0858c"
+    },
+    {
+      "path": "mini-services/oauth-playground/deploy/render-edge.mjs",
+      "bytes": 3714,
+      "sha256": "a8c9267c9447b4b68fe3110bb0221b4bd8fc255d4615360e9270d11d08bcf7e7"
+    },
+    {
+      "path": "mini-services/oauth-playground/deploy/static.nginx.conf",
+      "bytes": 1775,
+      "sha256": "ec013d5764861072d826a3c31b49e27096712612fbc285a276e0f3d4175be0e0"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/.gitignore",
+      "bytes": 22,
+      "sha256": "488d014193ec25869d6c7835e7e91e00a8c80c79a9ff48e43b6988b2aaffbba5"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/.npmrc",
+      "bytes": 19,
+      "sha256": "7151cf397def0c2cb0ab65643701d27d335a72c90f775675b5f826bc7005818a"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/callback.html",
+      "bytes": 493,
+      "sha256": "f3119cdc0ba0a7824380f9fc127a437991cfb1093b408813cdac5eff03ced21a"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/index.html",
+      "bytes": 477,
+      "sha256": "c2a7e7f52fff22bb56c52fa837276e825a4282ed15158a38483c9606e23c310d"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/package-lock.json",
+      "bytes": 25493,
+      "sha256": "ad737236e5d6dd8c508a4a7e75adf7f49e6a55a0e311667ddb643fd9929d9344"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/package.json",
+      "bytes": 493,
+      "sha256": "1cddb5ef4934a4cee761dc459ea7b21d1a83c95a108a68dc4345e25bac29190e"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/README.md",
+      "bytes": 2514,
+      "sha256": "dd7b042f2bf07ff67492cdd75aa0b533ba30d0f34f0557830b98078b44c8ab60"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/src/api.js",
+      "bytes": 4220,
+      "sha256": "ba698b0a24cf86a15379ac184d43cca24795ffb79fbafad808e690b44c8b59cc"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/src/app.js",
+      "bytes": 24067,
+      "sha256": "1dcd448f33d31df10a97757a575dddd8ce80134352a1f7759c24d2d5ec13e63c"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/src/device-poller.js",
+      "bytes": 2248,
+      "sha256": "141eaa6ee84267f16b266d24d2c02dd412b8a0efa7e32aa345e447b0d865709e"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/src/favicon.svg",
+      "bytes": 231,
+      "sha256": "e528974828897d517e73b0ef9f04234088b7fcb99181b4d71221b7474c6ac9ce"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/src/style.css",
+      "bytes": 18860,
+      "sha256": "82b764e813ec8140f61e98e29d87161a495f576f0cb6e2164af9d945fbfad9b2"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/tests/api.test.mjs",
+      "bytes": 3880,
+      "sha256": "c7571438900cb753ca52b70a2c909c410b70dcfc22e3a716cd7a90f9dd1c0298"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/tests/device-poller.test.mjs",
+      "bytes": 3874,
+      "sha256": "769169a8dcec82e5d252eeeafb2c45630e11560b01050379477809ab6dfdbcaa"
+    },
+    {
+      "path": "mini-services/oauth-playground/frontend/vite.config.mjs",
+      "bytes": 1247,
+      "sha256": "9637c09ace4d04249e09187227279834f68ee3c6559916ac60838e0dc06004b3"
+    },
+    {
+      "path": "mini-services/oauth-playground/package-lock.json",
+      "bytes": 287,
+      "sha256": "4d76ee8d624144d63e72b4b78595e55cc65c2d001a33a1780b7f4c00188a771e"
+    },
+    {
+      "path": "mini-services/oauth-playground/package.json",
+      "bytes": 741,
+      "sha256": "f2725cd5331251ffe0d07384dd5dc7fe7bbcad0fac14a7747bebea7e5cdf1be9"
+    },
+    {
+      "path": "mini-services/oauth-playground/README.md",
+      "bytes": 9717,
+      "sha256": "2eb381778402d414024cb8cd896f3cd6f022cfc66a4e4a51664856fcea3cce28"
+    },
+    {
+      "path": "mini-services/oauth-playground/tests/delivery.mjs",
+      "bytes": 6116,
+      "sha256": "b28265bb80d7645a8ce694a6c2dbc897692ee8654dbee831404f7e9e7350edec"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 14756,
+      "sha256": "bea63fd3a04fb22ebbf41f0322215a24ce5098e79e78480f3fa5a3729f363bf6"
+    },
+    {
+      "path": "package.json",
+      "bytes": 2842,
+      "sha256": "914cdf8f2543ba5c544ee8d1f0699aa0ea2d1cde41684003a39b9c857ed1c480"
+    },
+    {
+      "path": "scripts/ci/manifest.mjs",
+      "bytes": 3808,
+      "sha256": "8c3aa09a2b6635e4604b22b21fc7798b579a4df3c54a7db648a4208dc2494c26"
+    },
+    {
+      "path": "scripts/ci/oauth-playground-delivery.mjs",
+      "bytes": 21813,
+      "sha256": "50e160f7e5abc52c78f007c121cd1faceaa279a4ad853374c06c8dcafde43418"
+    },
+    {
+      "path": "scripts/ci/oauth-playground.mjs",
+      "bytes": 6693,
+      "sha256": "4303826325284355796b5f7d503a0ab561028037af3e28335e637cba6a397338"
+    },
+    {
+      "path": "scripts/ci/provenance.mjs",
+      "bytes": 4321,
+      "sha256": "f60e6a257eea2a4e0db3a348649e11fcf418a4cb2d4fa795c3ba1ea40ae5302f"
+    },
+    {
+      "path": "scripts/ci/run.mjs",
+      "bytes": 14992,
+      "sha256": "e906354c895e31941428f5cc6f53dcc4f4f9044f3dcd7d0df49241036d3aa5d5"
+    },
+    {
+      "path": "scripts/dev.mjs",
+      "bytes": 17672,
+      "sha256": "c48b642eb41d0a76cc935cfe95ab9559c5eccb47c03ff70f78d59e5c00f8190a"
+    },
+    {
+      "path": "tests/ci-runner.mjs",
+      "bytes": 23557,
+      "sha256": "5d2dc3d49b60b0341f9d33ca6eb730d62a82400dc067c1ddb785caef0a95cb5c"
+    },
+    {
+      "path": "tests/dev-runner.mjs",
+      "bytes": 15234,
+      "sha256": "ee044ddaa57f5fdef8ffd819f940ab627eff0bd3d255a02920a642814786bc5e"
+    },
+    {
+      "path": "tests/phase24-oauth-browser.mjs",
+      "bytes": 17536,
+      "sha256": "2a3c43f9b22b00ca664e5e67276c2bf448e714a85638fd23d96c2c9701d66d9b"
+    }
+  ],
+  "inputsSha256": "03a5eea5e0628d0a7135fcb23f656fb64594e76341faaaaafd2530bbd01db9f7"
+}

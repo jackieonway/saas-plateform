@@ -2,30 +2,25 @@
  * Platform branding/settings regression: real Vite/React pages and Chromium.
  * HTTP API responses are isolated fixtures; no live backend, database or credentials.
  * Run with Node 20+: node tests/platform-settings-browser.mjs [scenario]
- * PLAYWRIGHT_MODULE, BROWSER_EXECUTABLE, PLATFORM_BROWSER_BIND and PLATFORM_BROWSER_PORT
+ * PLATFORM_BROWSER_BIND and PLATFORM_BROWSER_PORT
  * may override existing runtimes and the owned Vite listener.
  */
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
-import { createRequire } from "node:module"
-import os from "node:os"
+import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { launchBrowser } from "./browser/runtime.mjs"
 
-const require = createRequire(import.meta.url)
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const bundledNode = path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node")
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || path.join(bundledNode, "node_modules/playwright"))
-assert(Number(process.versions.node.split(".")[0]) >= 20, "Vite requires Node 20+.")
-const browserExecutable = process.env.BROWSER_EXECUTABLE || [
-  chromium.executablePath(),
-  path.join(process.env["ProgramFiles(x86)"] || "C:/Program Files (x86)", "Microsoft/Edge/Application/msedge.exe"),
-  path.join(process.env.ProgramFiles || "C:/Program Files", "Microsoft/Edge/Application/msedge.exe"),
-].find((candidate) => existsSync(candidate))
-assert(browserExecutable && existsSync(browserExecutable), "An existing Chromium or Edge is required; this test does not install browsers.")
-const bindHost = process.env.PLATFORM_BROWSER_BIND || "::1"
-const port = Number(process.env.PLATFORM_BROWSER_PORT || 3017)
+const bindHost = process.env.PLATFORM_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
+const port = process.env.PLATFORM_BROWSER_PORT ? Number(process.env.PLATFORM_BROWSER_PORT) : await new Promise((resolve, reject) => {
+  const probe = net.createServer().on('error', reject)
+  probe.listen(0, bindHost, () => {
+    const available = probe.address().port
+    probe.close((error) => error ? reject(error) : resolve(available))
+  })
+})
 assert(Number.isInteger(port) && port > 0 && port <= 65535, "PLATFORM_BROWSER_PORT must be a valid port.")
 const origin = `http://${bindHost.includes(":") ? `[${bindHost}]` : bindHost}:${port}`
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -88,7 +83,7 @@ async function withFixture(options, run) {
     requests: [], saves: [], errors: [], routeErrors: [], failSave: false, theme: "light", ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript(({ authenticated, theme }) => {
-    if (authenticated) localStorage.setItem("platform-token", "test-platform-settings-session")
+    if (authenticated) if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "test-platform-settings-session", refreshToken: null }))
     localStorage.setItem("platform-theme", theme)
   }, { authenticated: state.authenticated, theme: state.theme })
   // A notification transport is unrelated to branding; prevent any live service connection.
@@ -148,6 +143,31 @@ async function withFixture(options, run) {
 async function readySettings(page) {
   await page.getByLabel("平台租户名称", { exact: true }).waitFor()
   await page.waitForFunction((tenantName) => document.querySelector('button[aria-label="切换组织上下文"]')?.textContent.includes(tenantName), originalSettings.platformTenantName)
+}
+async function saveThemeColor(page, state, color) {
+  const normalized = color.toUpperCase()
+  const saveCount = state.saves.length
+  await page.getByLabel("主题主色", { exact: true }).fill(color)
+  // A disabled submit button can also mean the request is still in flight.
+  // Bind completion to this color's response before inspecting the saved state.
+  const responsePromise = page.waitForResponse((response) => {
+    const request = response.request()
+    return new URL(response.url()).pathname === "/api/platform/settings"
+      && request.method() === "PUT" && request.postDataJSON()?.primaryColor === normalized
+  })
+  await page.getByRole("button", { name: "保存设置", exact: true }).click()
+  const response = await responsePromise
+  assert.equal(response.ok(), true, "The current theme update must succeed.")
+  assert.equal(await response.finished(), null)
+  await page.waitForFunction((savedColor) => {
+    const submit = document.querySelector('button[type="submit"]')
+    const fieldset = document.querySelector("fieldset")
+    return document.querySelector('input[name="primaryColor"]')?.value === savedColor
+      && submit?.textContent.trim() === "保存设置" && submit.disabled
+      && fieldset?.disabled === false
+  }, normalized)
+  assert.equal(state.saves.length, saveCount + 1)
+  assert.equal(state.saves.at(-1).primaryColor, normalized, "Custom colors must be normalized before saving.")
 }
 async function expectTitle(page, title) {
   await page.waitForFunction((expected) => document.title === expected, title)
@@ -312,22 +332,14 @@ const scenarios = {
       assert.equal(state.saves.length, 0, "Invalid colors must not reach the update API.")
     }
     for (const color of ["#ffffff", "#000000", "#b4530a"]) {
-      const saveCount = state.saves.length
-      await input.fill(color)
-      await submit.click()
-      await page.waitForFunction(() => document.querySelector('input[name="primaryColor"]')?.value === document.querySelector('input[name="primaryColor"]')?.value.toUpperCase())
-      assert.equal(state.saves.length, saveCount + 1)
-      assert.equal(state.saves.at(-1).primaryColor, color.toUpperCase(), "Custom colors must be normalized before saving.")
+      await saveThemeColor(page, state, color)
       await expectThemeContrast(page, true)
     }
   }),
   theme_custom_contrast_light: async () => withFixture({}, async ({ page, state }) => {
     await readySettings(page)
     for (const color of ["#FFFFFF", "#000000", "#FFFF00"]) {
-      await page.getByLabel("主题主色", { exact: true }).fill(color)
-      await page.getByRole("button", { name: "保存设置", exact: true }).click()
-      await page.waitForFunction((savedColor) => document.querySelector('input[name="primaryColor"]')?.value === savedColor && document.querySelector('button[type="submit"]')?.disabled, color)
-      assert.equal(state.saves.at(-1).primaryColor, color)
+      await saveThemeColor(page, state, color)
       await expectThemeContrast(page, false)
     }
   }),
@@ -345,7 +357,7 @@ const scenarios = {
     assert.equal(state.saves.length, 2)
   }),
   tenant_denied: async () => withFixture({ isPlatform: false }, async ({ page, state }) => {
-    await page.getByText("暂无平台设置权限", { exact: true }).waitFor()
+    await page.getByText("无访问权限", { exact: true }).waitFor()
     assert.equal(await page.getByRole("button", { name: "保存设置", exact: true }).count(), 0)
     assert.equal(state.requests.some((request) => request.pathname === "/api/platform/settings"), false, "Customer tenant users must not request platform settings even when their fixture menu contains the route.")
   }),
@@ -361,7 +373,7 @@ try {
   const selector = process.argv[2] || "all"
   assert(selector === "all" || Object.hasOwn(scenarios, selector), `Unknown scenario: ${selector}`)
   await startServer()
-  browser = await chromium.launch({ headless: true, executablePath: browserExecutable, args: ["--no-proxy-server"] })
+  browser = await launchBrowser()
   for (const [name, run] of Object.entries(scenarios)) {
     if (selector !== "all" && selector !== name) continue
     await run()

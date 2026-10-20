@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useSearchParams } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Building2, Info, Loader2, Save, ShieldCheck } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -28,11 +28,14 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/stores/auth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
+import { useAuthorizedPaths } from "@/hooks/use-authorized-paths"
 import { hasPlatformContext } from "@/lib/platform-context"
 import type { AuthorizationMenu, AuthorizationResp, OrgNode, TenantRecord } from "@/api/types"
 
 export default function AuthorizationsPage() {
   const [params, setParams] = useSearchParams()
+  const grantAccess = useAuthorizedPaths()
+  const canReadDataGrants = grantAccess.access("/system/data-grants").status === "allowed"
 
   /* 「租户授权」为平台根组织职能，并且需要 system:tenant 权限。 */
   const isPlatformTenant = useAuthStore((s) => hasPlatformContext(s.profile))
@@ -106,7 +109,16 @@ export default function AuthorizationsPage() {
             : "组织授权 ⊇ 角色菜单,在租户授权范围内为组织分配应用与菜单"
         }
         icon={<ShieldCheck className="size-5" />}
+        actions={canReadDataGrants ? (
+          <Button asChild variant="outline">
+            <Link to="/system/data-grants">管理直接成员数据范围</Link>
+          </Button>
+        ) : undefined}
       />
+
+      <p className="mb-4 text-sm text-muted-foreground">
+        此处配置应用、菜单和按钮功能权限；成员数据范围需独立授权，不随祖先角色继承。
+      </p>
 
       <Tabs value={activeTab} onValueChange={switchTab}>
         {canTenantAuthz && (

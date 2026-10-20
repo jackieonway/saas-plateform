@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Known application immutable artifact declaration",
+  "description": "Separate local CLI/CI metadata. This is not RegisterBody, registry verification, Docker readiness, or platform digest storage. All three paths used with this input must be absolute, regular/owned local paths without symlink/reparse-point ancestors. Rust additionally checks exact origin, selected application, source/digest consistency, closed journal history, and canonical release definition.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "applicationCode", "publicOrigin", "source", "digest", "commit", "buildId", "inputsSha256"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "applicationCode": {"enum": ["work-orders", "stores"]},
+    "publicOrigin": {"type": "string", "minLength": 1, "description": "Exact HTTPS origin without trailing slash, credentials, path, query or fragment; explicit development loopback HTTP is the only exception."},
+    "source": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "identity", "targetPlatform"],
+          "properties": {
+            "kind": {"const": "OCI_IMAGE"},
+            "identity": {"type": "string", "maxLength": 512, "pattern": "^[a-z0-9.:-]+/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$", "description": "Lowercase registry/repository and verified distribution manifest digest, never a Docker image/config ID. Rust also validates registry and repository components."},
+            "targetPlatform": {"enum": ["linux/amd64", "linux/arm64"]}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "identity"],
+          "properties": {
+            "kind": {"const": "STATIC_ARTIFACT"},
+            "identity": {"type": "string", "maxLength": 2000, "pattern": "^https://", "description": "Fixed canonical public source artifact coordinate without credentials/query/fragment. Its actual canonical resource manifest digest must be verified by CI; a URL hash is not artifact identity."}
+          }
+        }
+      ]
+    },
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "buildId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", "not": {"pattern": "\\.\\."}},
+    "inputsSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

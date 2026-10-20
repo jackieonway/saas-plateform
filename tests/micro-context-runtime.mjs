@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { MicroContextRuntime, MicroLifecycleSession, microPropsSignature } from '../frontend/src/components/micro/runtime.ts'
 import { createContextClient } from '../examples/micro-app-sdk/context-client.mjs'
+import { detectBrowserCapabilities, assertBrowserCapabilities } from '../examples/micro-app-sdk/src/capabilities.mjs'
 
 const deferred = () => {
   let resolve, reject
@@ -9,6 +10,14 @@ const deferred = () => {
   return { promise, resolve, reject }
 }
 const tick = async () => { for (let n = 0; n < 10; n++) await Promise.resolve() }
+function jsonResponse(value) {
+  const body = new ReadableStream({ async start(controller) {
+    const result = await value
+    try { controller.enqueue(new TextEncoder().encode(JSON.stringify(result))); controller.close() }
+    catch { /* The bounded reader may already have cancelled this test stream. */ }
+  } })
+  return new Response(body, { headers: { 'Content-Type': 'application/json' } })
+}
 function clock() {
   let time = 1000, next = 0
   const timers = new Map()
@@ -111,6 +120,48 @@ test('unavailable authorization fails closed and cancels timers', async () => {
   assert.equal(time.timers.size, 0)
 })
 
+test('unknown context contract versions are rejected before publishing any authorization snapshot', async () => {
+  for (const contractVersion of ['2.0', '999.0', '', undefined]) {
+    const { runtime, changes, errors, time } = setup({
+      context: async () => ({ ...context(1000), contractVersion }),
+    })
+    await runtime.refresh()
+    assert.deepEqual(changes, [null])
+    assert.equal(errors.length, 1)
+    assert.equal(time.timers.size, 0)
+    runtime.stop()
+  }
+})
+
+test('capability modes require only their actual client or browser APIs and never weaken isolation', () => {
+  const client = { fetch() {}, Headers, URL, AbortController, DOMException, TextEncoder, TextDecoder,
+    ReadableStream, Response, crypto }
+  assert.deepEqual(detectBrowserCapabilities('client', client), { mode: 'client', supported: true, missing: [] })
+  const iframe = { ...client, MessageChannel, postMessage() {}, addEventListener() {}, removeEventListener() {} }
+  assert.equal(detectBrowserCapabilities('iframe', iframe).supported, true)
+  class Frame {}
+  Frame.prototype.sandbox = {}
+  const host = { ...client, AbortSignal, MessageChannel, MutationObserver: class {}, HTMLIFrameElement: Frame,
+    document: { createElement() {} }, Blob, URL }
+  assert.equal(assertBrowserCapabilities('host', host).supported, true)
+  for (const [api, replacement] of [['MessageChannel', undefined], ['HTMLIFrameElement', class {}],
+    ['AbortSignal', { timeout: AbortSignal.timeout }], ['crypto', {}], ['Response', class {}]]) {
+    assert.throws(() => assertBrowserCapabilities('host', { ...host, [api]: replacement }),
+      (error) => error.code === 'BROWSER_CAPABILITIES_UNSUPPORTED' && error.missing.length > 0)
+  }
+  assert.equal(detectBrowserCapabilities('client', client).supported, true,
+    'A client requires no DOM or MessageChannel, while host isolation still fails closed.')
+})
+
+test('capability diagnostics contain fixed API names and ignore hostile environment details', () => {
+  const environment = new Proxy({}, { get() { throw new Error('application-token-secret') } })
+  assert.throws(() => assertBrowserCapabilities('iframe', environment),
+    (error) => error.code === 'BROWSER_CAPABILITIES_UNSUPPORTED' &&
+      !error.message.includes('secret') && error.missing.includes('MessageChannel'))
+  assert.throws(() => detectBrowserCapabilities('application-token-secret', {}),
+    (error) => error instanceof TypeError && !error.message.includes('secret'))
+})
+
 test('late asynchronous mount is followed by final unmount and queued updates are dropped', async () => {
   const mounting = deferred(), calls = []
   const session = new MicroLifecycleSession(() => calls.push('cleanup'))
@@ -157,6 +208,7 @@ test('full prop signature notices same-length menu/permission changes and token 
   assert.notEqual(first, microPropsSignature({ ...props, menus: [{ id: 'one', title: 'Changed' }] }))
   assert.notEqual(first, microPropsSignature({ ...props, permissions: ['order:write'] }))
   assert.notEqual(first, microPropsSignature({ ...props, token: 'token-2' }))
+  assert.notEqual(first, microPropsSignature({ ...props, sdkVersion: '1.0.0' }))
   assert.notEqual(first, microPropsSignature({ ...props, organization: { id: 'org-b' } }))
   assert.notEqual(first, microPropsSignature({ ...props, organizationScopeIds: ['org-a', 'org-child'] }))
   assert.notEqual(microPropsSignature({ ...props, organizationScopeIds: ['org-a'] }),
@@ -171,13 +223,15 @@ test('portable SDK aborts delayed JSON on renewal and sends only the current app
     token: 'old-token', tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(), signal: new AbortController().signal }
   const client = createContextClient(props, async (_, options) => {
     requests.push(options)
-    return { ok: true, json: async () => requests.length === 1 ? body.promise : { current: true } }
+    return jsonResponse(requests.length === 1 ? body.promise : { current: true })
   })
-  const pending = client.requestJson('/orders'); await tick()
+  const pending = client.requestJson('/orders')
+  const rejected = assert.rejects(pending, (error) => error.name === 'AbortError')
+  await tick()
   client.update({ ...props, contextEpoch: 2, token: 'new-token', signal: new AbortController().signal })
   assert.ok(requests[0].signal.aborted)
   body.resolve({ old: true })
-  await assert.rejects(pending, (error) => error.name === 'AbortError')
+  await rejected
   assert.deepEqual(await client.requestJson('/orders'), { current: true })
   assert.equal(requests[1].headers.get('Authorization'), 'Bearer new-token')
   client.dispose(); assert.equal(client.current(), null)
@@ -190,11 +244,13 @@ test('portable SDK rejects expired contexts and joins caller cancellation with h
     token: 'token', tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(), signal: host.signal }
   const client = createContextClient(props, async (_, options) => {
     requestSignal = options.signal
-    return { ok: true, json: async () => body.promise }
+    return jsonResponse(body.promise)
   })
-  const pending = client.requestJson('/orders', { signal: caller.signal }); await tick()
+  const pending = client.requestJson('/orders', { signal: caller.signal })
+  const rejected = assert.rejects(pending, (error) => error.name === 'AbortError')
+  await tick()
   caller.abort(); assert.ok(requestSignal.aborted); body.resolve({})
-  await assert.rejects(pending, (error) => error.name === 'AbortError')
+  await rejected
   host.abort(); assert.equal(client.current(), null)
   await assert.rejects(client.requestJson('/orders'), (error) => error.name === 'AbortError')
   client.dispose()

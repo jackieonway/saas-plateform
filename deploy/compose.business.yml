@@ -1,0 +1,69 @@
+# Explicitly merge with docker-compose.yml. No source/dist/shared artifact mounts.
+# Business databases and least-privilege accounts are provisioned independently.
+x-business-runtime: &business-runtime
+  user: "10001:10001"
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  stop_grace_period: 20s
+  networks: [edge, database]
+x-static-runtime: &static-runtime
+  user: "101:101"
+  expose: ["8080"]
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  networks: [edge]
+services:
+  work-orders-api:
+    <<: *business-runtime
+    image: ${WORK_ORDERS_API_IMAGE:?Set the Rust work orders repository@sha256 digest}
+    expose: ["3004"]
+    environment:
+      NODE_ENV: production
+      WORK_ORDERS_HOST: 0.0.0.0
+      WORK_ORDERS_PORT: 3004
+      WORK_ORDERS_DATABASE_URL: ${WORK_ORDERS_DATABASE_URL:?Set the independent work orders database URL}
+      WORK_ORDERS_ALLOWED_ORIGINS: "null"
+      WORK_ORDERS_METRICS_TOKEN: ${WORK_ORDERS_METRICS_TOKEN:-}
+      PLATFORM_API_ORIGIN: ${PUBLIC_APP_URL:?Set the exact public HTTPS platform origin}
+      PLATFORM_CLIENT_ID: ${WORK_ORDERS_PLATFORM_CLIENT_ID:?Set the actual work orders confidential client ID}
+      PLATFORM_CLIENT_SECRET: ${WORK_ORDERS_PLATFORM_CLIENT_SECRET:?Set the work orders confidential client secret}
+      PLATFORM_AUTHORIZATION_MODE: ${WORK_ORDERS_PLATFORM_AUTHORIZATION_MODE:-combined}
+      RUST_LOG: info
+    depends_on:
+      backend: {condition: service_healthy}
+  stores-api:
+    <<: *business-runtime
+    image: ${STORES_API_IMAGE:?Set the Rust stores repository@sha256 digest}
+    expose: ["3031"]
+    environment:
+      NODE_ENV: production
+      STORES_HOST: 0.0.0.0
+      STORES_PORT: 3031
+      STORES_DATABASE_URL: ${STORES_DATABASE_URL:?Set the independent stores database URL}
+      STORES_ALLOWED_ORIGINS: "null"
+      STORES_METRICS_TOKEN: ${STORES_METRICS_TOKEN:-}
+      PLATFORM_API_ORIGIN: ${PUBLIC_APP_URL:?Set the exact public HTTPS platform origin}
+      PLATFORM_CLIENT_ID: ${STORES_PLATFORM_CLIENT_ID:?Set the actual stores confidential client ID}
+      PLATFORM_CLIENT_SECRET: ${STORES_PLATFORM_CLIENT_SECRET:?Set the stores confidential client secret}
+      PLATFORM_AUTHORIZATION_MODE: ${STORES_PLATFORM_AUTHORIZATION_MODE:-legacy}
+      RUST_LOG: info
+    depends_on:
+      backend: {condition: service_healthy}
+  work-orders-v1:
+    <<: *static-runtime
+    image: ${WORK_ORDERS_V1_IMAGE:?Set the retained work orders v1 repository@sha256 digest}
+  work-orders-v2:
+    <<: *static-runtime
+    image: ${WORK_ORDERS_V2_IMAGE:?Set the candidate work orders v2 repository@sha256 digest}
+  stores-v1:
+    <<: *static-runtime
+    image: ${STORES_V1_IMAGE:?Set the retained stores v1 repository@sha256 digest}
+  stores-v2:
+    <<: *static-runtime
+    image: ${STORES_V2_IMAGE:?Set the candidate stores v2 repository@sha256 digest}

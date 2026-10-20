@@ -1,0 +1,6 @@
+{
+  "publicOrigin": "https://oauth.example.invalid",
+  "frontend": "oauth-web:8080",
+  "api": "oauth-api:3011"
+}
+

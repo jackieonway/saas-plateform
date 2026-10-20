@@ -1,28 +1,17 @@
 /**
  * Tenant/organization type and simplified creation integration through real pages.
  * Vite mounts the production React pages; HTTP fixtures isolate persistence.
- * Run with Node 24. PLAYWRIGHT_MODULE and BROWSER_EXECUTABLE override runtimes.
+ * Run with Node 24. Browsers are installed and launched by tests/browser.
  */
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
-import { createRequire } from "node:module"
 import net from "node:net"
-import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { launchBrowser } from "./browser/runtime.mjs"
 
-const require = createRequire(import.meta.url)
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const bundledNode = path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node")
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || path.join(bundledNode, "node_modules/playwright"))
-assert(Number(process.versions.node.split(".")[0]) >= 20, "Run this script with Node 24.")
-const browserExecutable = process.env.BROWSER_EXECUTABLE || [chromium.executablePath(),
-  path.join(process.env["ProgramFiles(x86)"] || "C:/Program Files (x86)", "Microsoft/Edge/Application/msedge.exe"),
-  path.join(process.env.ProgramFiles || "C:/Program Files", "Microsoft/Edge/Application/msedge.exe"),
-].find(existsSync)
-assert(browserExecutable, "Existing Chromium or Edge is required; this test does not install browsers.")
-const bindHost = process.env.ENTITY_TYPES_BROWSER_BIND || "::1"
+const bindHost = process.env.ENTITY_TYPES_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const freePort = () => new Promise((resolve, reject) => {
   const server = net.createServer().on("error", reject)
@@ -83,7 +72,7 @@ async function fixture(kind, legacy = false) {
   if (legacy) { delete tenantRecord.tenantType; delete childRecord.organizationType }
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript(() => {
-    localStorage.setItem("platform-token", "test-entity-types-session")
+    if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "test-entity-types-session", refreshToken: null }))
     localStorage.setItem("platform-theme", "light")
   })
   // Disable HMR: a reload would undo the fixture entry's production-page import.
@@ -433,7 +422,7 @@ async function verifyLoginIdentitySelection(sameOrganization, singleMembership =
     await choice.click()
     await waitState(() => state.selections.length === 1, "The selected account and organization must both be submitted.")
     await page.waitForURL(`${origin}/`)
-    assert.equal(await page.evaluate(() => localStorage.getItem("platform-refresh-token")), "selected-refresh-fixture",
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("platform-session-v1") || "null")?.refreshToken), "selected-refresh-fixture",
       "Login should retain the refresh token from the selected context.")
     assert.deepEqual(state.errors, [])
     assert.deepEqual(state.unexpected, [])
@@ -443,7 +432,7 @@ async function verifyLoginIdentitySelection(sameOrganization, singleMembership =
 
 try {
   await startServer()
-  browser = await chromium.launch({ headless: true, executablePath: browserExecutable, args: ["--no-proxy-server"] })
+  browser = await launchBrowser()
   for (const kind of ["tenant", "organization"]) {
     await verifyCreateTypes(kind)
     await verifyEdit(kind, false)

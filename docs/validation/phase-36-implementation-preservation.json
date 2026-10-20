@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "phase": 36,
+  "inputsSha256": "2ea7c8ff026406727382e8ae905ce78317a433fa44f986c9e489812a7eb1d893",
+  "priorEvidenceFiles": 169,
+  "changedPriorEvidence": [],
+  "oldMigrations": [
+    {
+      "path": "backend/migrations/0001_init.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0002_release_artifacts.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0003_oauth_issuance.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0004_release_operation_protection.sql",
+      "unchanged": true
+    }
+  ],
+  "untouchedPhaseBodies": [
+    {
+      "phase": 1,
+      "unchanged": true
+    },
+    {
+      "phase": 2,
+      "unchanged": true
+    },
+    {
+      "phase": 3,
+      "unchanged": true
+    },
+    {
+      "phase": 4,
+      "unchanged": true
+    },
+    {
+      "phase": 5,
+      "unchanged": true
+    },
+    {
+      "phase": 6,
+      "unchanged": true
+    },
+    {
+      "phase": 7,
+      "unchanged": true
+    },
+    {
+      "phase": 8,
+      "unchanged": true
+    },
+    {
+      "phase": 9,
+      "unchanged": true
+    },
+    {
+      "phase": 10,
+      "unchanged": true
+    },
+    {
+      "phase": 11,
+      "unchanged": true
+    },
+    {
+      "phase": 12,
+      "unchanged": true
+    },
+    {
+      "phase": 13,
+      "unchanged": true
+    },
+    {
+      "phase": 14,
+      "unchanged": true
+    },
+    {
+      "phase": 15,
+      "unchanged": true
+    },
+    {
+      "phase": 16,
+      "unchanged": true
+    },
+    {
+      "phase": 17,
+      "unchanged": true
+    },
+    {
+      "phase": 18,
+      "unchanged": true
+    },
+    {
+      "phase": 19,
+      "unchanged": true
+    },
+    {
+      "phase": 20,
+      "unchanged": true
+    },
+    {
+      "phase": 21,
+      "unchanged": true
+    },
+    {
+      "phase": 22,
+      "unchanged": true
+    },
+    {
+      "phase": 23,
+      "unchanged": true
+    },
+    {
+      "phase": 24,
+      "unchanged": true
+    },
+    {
+      "phase": 25,
+      "unchanged": true
+    },
+    {
+      "phase": 26,
+      "unchanged": true
+    },
+    {
+      "phase": 27,
+      "unchanged": true
+    },
+    {
+      "phase": 28,
+      "unchanged": true
+    },
+    {
+      "phase": 29,
+      "unchanged": true
+    },
+    {
+      "phase": 30,
+      "unchanged": true
+    },
+    {
+      "phase": 31,
+      "unchanged": true
+    },
+    {
+      "phase": 32,
+      "unchanged": true
+    },
+    {
+      "phase": 33,
+      "unchanged": true
+    },
+    {
+      "phase": 34,
+      "unchanged": true
+    },
+    {
+      "phase": 37,
+      "unchanged": true
+    }
+  ],
+  "dependencyChanges": {
+    "changedPackages": [
+      "saas-platform-backend 1.0.0"
+    ],
+    "addedPackages": [
+      "deployment-contract 0.1.0"
+    ]
+  },
+  "formatRestoration": {
+    "restored": [
+      "backend/src/entity_creation_tests.rs",
+      "backend/src/extractors.rs",
+      "backend/src/notifications.rs",
+      "backend/src/observability.rs",
+      "backend/src/platform_session_refresh_tests.rs",
+      "backend/src/platform_settings_tests.rs",
+      "backend/src/region_seed.rs",
+      "backend/src/release_tests.rs",
+      "backend/src/routes/applications.rs",
+      "backend/src/routes/audit.rs",
+      "backend/src/routes/auth.rs",
+      "backend/src/routes/departments.rs",
+      "backend/src/routes/device.rs",
+      "backend/src/routes/external.rs",
+      "backend/src/routes/maps.rs",
+      "backend/src/routes/menus.rs",
+      "backend/src/routes/monitor.rs",
+      "backend/src/routes/oauth_admin.rs",
+      "backend/src/routes/oauth2.rs",
+      "backend/src/routes/onboarding.rs",
+      "backend/src/routes/organizations.rs",
+      "backend/src/routes/regions.rs",
+      "backend/src/routes/roles.rs",
+      "backend/src/routes/search.rs",
+      "backend/src/routes/tenants.rs",
+      "backend/src/routes/users.rs",
+      "backend/src/scope_tests.rs",
+      "backend/src/util/hash.rs",
+      "backend/src/util/jwt.rs",
+      "backend/src/util/tree.rs"
+    ],
+    "failures": []
+  }
+}

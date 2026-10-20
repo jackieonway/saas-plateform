@@ -3,30 +3,19 @@
  * HTTP inbox/profile data and Socket.IO authorization payloads are isolated fixtures;
  * these checks do not connect to PostgreSQL or claim backend authorization coverage.
  * Node 24: node tests/notification-frontend-browser.mjs [recovery|events|switch|unauthorized|muted|dnd|mutations|palette|publish|publish_self]
- * NOTIFICATION_BROWSER_SCENARIO, PLAYWRIGHT_MODULE and BROWSER_EXECUTABLE are optional overrides.
+ * NOTIFICATION_BROWSER_SCENARIO selects a local diagnostic scenario; the mandatory runner always runs all.
  */
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
 import http from "node:http"
-import { createRequire } from "node:module"
 import net from "node:net"
-import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { launchBrowser, socketServer } from "./browser/runtime.mjs"
 
-const require = createRequire(import.meta.url)
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const bundledNode = path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node")
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || path.join(bundledNode, "node_modules/playwright"))
-const { Server } = require(path.join(workspace, "mini-services/notification-ws/node_modules/socket.io"))
-assert(Number(process.versions.node.split(".")[0]) >= 20, "Run this script with Node 24.")
-const browserExecutable = process.env.BROWSER_EXECUTABLE || [chromium.executablePath(),
-  path.join(process.env["ProgramFiles(x86)"] || "C:/Program Files (x86)", "Microsoft/Edge/Application/msedge.exe"),
-  path.join(process.env.ProgramFiles || "C:/Program Files", "Microsoft/Edge/Application/msedge.exe"),
-].find((candidate) => existsSync(candidate))
-assert(browserExecutable, "Existing Chromium or Edge is required; browsers are not installed by this test.")
-const bindHost = process.env.NOTIFICATION_BROWSER_BIND || "::1"
+const Server = socketServer
+const bindHost = process.env.NOTIFICATION_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
 const hostUrl = (port) => `http://${bindHost.includes(":") ? `[${bindHost}]` : bindHost}:${port}`
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const deferred = () => {
@@ -140,7 +129,7 @@ async function fixture(options = {}) {
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()) })
   page.on("requestfailed", (request) => failedRequests.push({ pathname: new URL(request.url()).pathname, error: request.failure()?.errorText }))
   await context.addInitScript(({ token }) => {
-    localStorage.setItem("platform-token", token)
+    if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: token, refreshToken: null }))
     localStorage.setItem("platform-theme", "light")
     window.__notificationUi = { swings: 0 }
     const observed = new WeakSet()
@@ -171,6 +160,8 @@ async function fixture(options = {}) {
   })
   await context.route((url) => url.origin === origin && url.pathname.startsWith("/api/"), async (route) => {
     const request = route.request(), url = new URL(request.url())
+    if (url.pathname === '/api/platform/branding') return fulfill(route, { platformName: '通知验收平台',
+      platformDescription: '隔离浏览器测试', logoUrl: '', loginTitle: '登录', loginDescription: '', footerText: '' })
     const group = Object.keys(tokens).find((candidate) => request.headers().authorization === `Bearer ${tokens[candidate]}`)
     assert(group, "Every fixture API request must carry a captured platform session.")
     const record = { group, pathname: url.pathname, query: url.search, method: request.method(),
@@ -265,7 +256,7 @@ async function settled(test) {
 async function setToken(test, group) {
   await test.page.evaluate(async (token) => {
     const { useAuthStore } = await import("/src/stores/auth.ts")
-    useAuthStore.getState().setToken(token)
+    await useAuthStore.getState().setToken(token)
   }, test.tokens[group])
 }
 async function beginSwitch(test) {
@@ -578,7 +569,7 @@ try {
   const selector = process.argv[2] || process.env.NOTIFICATION_BROWSER_SCENARIO || "all"
   assert(selector === "all" || Object.hasOwn(scenarios, selector), `Unknown scenario: ${selector}`)
   await startServers()
-  browser = await chromium.launch({ headless: true, executablePath: browserExecutable, args: ["--no-proxy-server"] })
+  browser = await launchBrowser()
   for (const [name, run] of Object.entries(scenarios)) {
     if (selector !== "all" && selector !== name) continue
     await run()

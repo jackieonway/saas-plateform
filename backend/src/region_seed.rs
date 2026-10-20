@@ -37,8 +37,8 @@ pub async fn initialize(pool: &PgPool) -> anyhow::Result<()> {
         .fetch_optional(&mut *tx).await?;
     if let Some(app) = app {
         let app_id: uuid::Uuid = app.try_get("id")?;
-        let parent: Option<uuid::Uuid> = sqlx::query_scalar("SELECT parent_id FROM menus WHERE application_id=$1 AND path='/system/menus' LIMIT 1")
-            .bind(app_id).fetch_optional(&mut *tx).await?;
+        let parent: Option<uuid::Uuid> = sqlx::query_scalar::<_, Option<uuid::Uuid>>("SELECT parent_id FROM menus WHERE application_id=$1 AND path='/system/menus' LIMIT 1")
+            .bind(app_id).fetch_optional(&mut *tx).await?.flatten();
         let existing: Option<uuid::Uuid> = sqlx::query_scalar("SELECT id FROM menus WHERE application_id=$1 AND path='/system/regions' LIMIT 1")
             .bind(app_id).fetch_optional(&mut *tx).await?;
         let menu_id = if let Some(id) = existing { id } else {

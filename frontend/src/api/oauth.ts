@@ -1,4 +1,5 @@
 import { api } from "@/lib/api"
+import { capturePlatformSessionFence } from "@/stores/auth"
 import type {
   DeviceCodeRecord,
   AdminPlatformSession,
@@ -36,7 +37,9 @@ export const oauthApi = {
 
   /** 微应用短期受众令牌；宿主在令牌和完整上下文就绪后才挂载。 */
   sessionToken: (appCode: string, bearer?: string, signal?: AbortSignal) =>
-    api.post<OAuthSessionTokenResp>("/api/oauth/session-token", { appCode }, { bearer, signal, suppress401: true }),
+    api.post<OAuthSessionTokenResp>("/api/oauth/session-token", { appCode }, {
+      bearer, signal, suppress401: true, sessionFence: bearer === undefined ? undefined : capturePlatformSessionFence(bearer),
+    }),
 
   discovery: () => api.get<unknown>("/oauth/.well-known/openid-configuration", { skipAuth: true }),
 }

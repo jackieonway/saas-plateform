@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "owner": "phase23-image-1792199495528-a6d5e468",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "startedAt": "2026-10-17T01:11:35.528Z",
+  "publication": "NOT_REQUESTED",
+  "productionDeployment": "NOT_REQUESTED",
+  "checks": [
+    "clean-Rust-source-locked-release-build-and-image-identity",
+    "nonroot-no-Node-runtime",
+    "default-closed-stdin-keeps-production-service-running",
+    "liveness-UP-readiness-DOWN-with-dependencies-unavailable",
+    "metrics-require-independent-Bearer",
+    "read-only-capability-free-private-container-without-host-mounts",
+    "SIGTERM-graceful-zero-exit",
+    "logs-exclude-private-credentials",
+    "candidate-inputs-match-current-Rust-source"
+  ],
+  "commands": [
+    {
+      "name": "docker-version",
+      "exitCode": 0,
+      "log": "logs/001-docker-version.log"
+    },
+    {
+      "name": "base-image",
+      "exitCode": 0,
+      "log": "logs/002-base-image.log"
+    },
+    {
+      "name": "base-image",
+      "exitCode": 0,
+      "log": "logs/003-base-image.log"
+    },
+    {
+      "name": "build",
+      "exitCode": 0,
+      "log": "logs/004-build.log"
+    },
+    {
+      "name": "candidate-image",
+      "exitCode": 0,
+      "log": "logs/005-candidate-image.log"
+    },
+    {
+      "name": "run",
+      "exitCode": 0,
+      "log": "logs/006-run.log"
+    },
+    {
+      "name": "runtime-probe",
+      "exitCode": 0,
+      "log": "logs/007-runtime-probe.log"
+    },
+    {
+      "name": "probe--health-live",
+      "exitCode": 0,
+      "log": "logs/008-probe--health-live.log"
+    },
+    {
+      "name": "probe--health-ready",
+      "exitCode": 0,
+      "log": "logs/009-probe--health-ready.log"
+    },
+    {
+      "name": "probe--health",
+      "exitCode": 0,
+      "log": "logs/010-probe--health.log"
+    },
+    {
+      "name": "probe--metrics",
+      "exitCode": 0,
+      "log": "logs/011-probe--metrics.log"
+    },
+    {
+      "name": "metrics-authorized",
+      "exitCode": 0,
+      "log": "logs/012-metrics-authorized.log"
+    },
+    {
+      "name": "runtime-inspect",
+      "exitCode": 0,
+      "log": "logs/013-runtime-inspect.log"
+    },
+    {
+      "name": "sigterm-stop",
+      "exitCode": 0,
+      "log": "logs/014-sigterm-stop.log"
+    },
+    {
+      "name": "stopped-inspect",
+      "exitCode": 0,
+      "log": "logs/015-stopped-inspect.log"
+    },
+    {
+      "name": "runtime-logs",
+      "exitCode": 0,
+      "log": "logs/016-runtime-logs.log"
+    },
+    {
+      "name": "cleanup-owner",
+      "exitCode": 0,
+      "log": "logs/017-cleanup-owner.log"
+    },
+    {
+      "name": "cleanup-container",
+      "exitCode": 0,
+      "log": "logs/018-cleanup-container.log"
+    }
+  ],
+  "images": [
+    {
+      "role": "base",
+      "requested": "rust:1.97.0-slim-bookworm",
+      "imageId": "sha256:11fc4535720ab96327337ff1591a2204833f9e5f930e6bc28b57e9fbe3e452d5",
+      "repoDigests": [
+        "rust@sha256:11fc4535720ab96327337ff1591a2204833f9e5f930e6bc28b57e9fbe3e452d5"
+      ]
+    },
+    {
+      "role": "base",
+      "requested": "debian:bookworm-slim",
+      "imageId": "sha256:97049525bbb2470c8694cd9cab09d92d5784c937a9de8d2dbe1aa28baed2074d",
+      "repoDigests": [
+        "debian@sha256:97049525bbb2470c8694cd9cab09d92d5784c937a9de8d2dbe1aa28baed2074d"
+      ]
+    },
+    {
+      "role": "candidate",
+      "tag": "phase23-image-1792199495528-a6d5e468:candidate",
+      "imageId": "sha256:cac73730a08fcca8587e2227aea72c22f67ae384f0f98ee12e23cb322b829541",
+      "labels": {
+        "org.opencontainers.image.revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+        "org.opencontainers.image.title": "Rust notification service",
+        "saas.ci.inputs-sha256": "2127b07f61cb6417da0253bf4b5c331efd1155e25f862c6be09713ad8833148d",
+        "saas.phase23.image.owner": "phase23-image-1792199495528-a6d5e468"
+      },
+      "identityMeaning": "local image ID; no registry publication"
+    }
+  ],
+  "cleanupErrors": [],
+  "wslLease": {
+    "mode": "owned WSL foreground stdin lease; no global configuration changes",
+    "ready": true,
+    "stopped": true,
+    "exitCode": 0
+  },
+  "dockerVersion": "29.1.3",
+  "inputsSha256": "2127b07f61cb6417da0253bf4b5c331efd1155e25f862c6be09713ad8833148d",
+  "runtime": {
+    "user": "10003:10003",
+    "readOnly": true,
+    "capabilities": [],
+    "noNewPrivileges": true,
+    "hostPorts": [],
+    "sourceOrSocketMounts": [],
+    "openStdin": false
+  },
+  "shutdown": {
+    "signal": "SIGTERM",
+    "exitCode": 0,
+    "elapsedMs": 2992
+  },
+  "currentSourceMatch": true,
+  "finishedAt": "2026-10-17T01:12:50.556Z",
+  "sourceManifest": {
+    "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "files": [
+      {
+        "path": ".dockerignore",
+        "bytes": 247,
+        "sha256": "cdd62c72f96cbf903862cbfd62919e0fb932921c0bdcde633f86795c961e9c69"
+      },
+      {
+        "path": "Cargo.lock",
+        "bytes": 67308,
+        "sha256": "6436eb88ba89bd7d089e7f084d73222eabe2d52df25632436aa9a89268da106d"
+      },
+      {
+        "path": "Cargo.toml",
+        "bytes": 1069,
+        "sha256": "1980e119b6b89787af544af7cac9063159f1f703044738033e765cc3447c0800"
+      },
+      {
+        "path": "Dockerfile",
+        "bytes": 1872,
+        "sha256": "91d4226347594fb2e557319117c1275b9c5281708f33ad0bf3499e16b254afe3"
+      },
+      {
+        "path": "src/config.rs",
+        "bytes": 16360,
+        "sha256": "2dbef2953ca8ea33e6844ce5df23d5a94ce32d3f25f1d43bad5f2be32d37e7a3"
+      },
+      {
+        "path": "src/lib.rs",
+        "bytes": 216,
+        "sha256": "f2a243168c33b45445fb5ae88a4e15f4c2f444c0db2c16d3dab64d943df21742"
+      },
+      {
+        "path": "src/main.rs",
+        "bytes": 200,
+        "sha256": "b0779e8c2d6aed6891b1912716790ccbe7a9e04d654de7fac4cd5a398518a69b"
+      },
+      {
+        "path": "src/metrics.rs",
+        "bytes": 8279,
+        "sha256": "9d538fdf6ec6e5f5a5111a16a732847b363351ce8fae8800a99f962047b8a2d7"
+      },
+      {
+        "path": "src/platform.rs",
+        "bytes": 11225,
+        "sha256": "9f43ac17db5371b99f632f34f8a6e76ca0e9edd5f80865f5f6d073ba64070d59"
+      },
+      {
+        "path": "src/protocol.rs",
+        "bytes": 7241,
+        "sha256": "2c058a01d91aa97a08172f1bf9e4a78012d9417fae46d0cc67d77ee2b0a614cb"
+      },
+      {
+        "path": "src/scheduler.rs",
+        "bytes": 19983,
+        "sha256": "dddcf57486bbc7837cafb6e4c190e81104410c29125bdb1071fe9b9358421754"
+      },
+      {
+        "path": "src/server.rs",
+        "bytes": 28978,
+        "sha256": "e0ce72bc13adc7904c39379f548a3ca36a98ea8584c9907ef7e11baf2436fdb5"
+      },
+      {
+        "path": "src/store.rs",
+        "bytes": 14233,
+        "sha256": "e5cb65470d0fb6c5b88c83ae9cd7b08296a9820e654b23f2a4140afab81e193b"
+      },
+      {
+        "path": "src/transport.rs",
+        "bytes": 22894,
+        "sha256": "b91b901bf7f1ba25592cba6699c44c4646af51f8460f6dec04719d65971196bf"
+      }
+    ],
+    "inputsSha256": "2127b07f61cb6417da0253bf4b5c331efd1155e25f862c6be09713ad8833148d"
+  },
+  "rawEvidenceDirectory": "D:/WorkSpace/rust/saas/phase23-image-acceptance-20261017-r7"
+}

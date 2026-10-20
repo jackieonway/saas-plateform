@@ -1,4 +1,5 @@
 import type { NotificationRecord, NotificationSocketContext, RealtimeNotification } from "../api/types"
+import { NOTIFICATION_CONTRACT_VERSION } from "../../../examples/micro-app-sdk/generated/protocol.mjs"
 
 export interface NotificationIdentity { userId: string; tenantId: string; organizationId: string }
 const types = new Set(["INFO", "SUCCESS", "WARNING", "SECURITY"])
@@ -13,7 +14,7 @@ export function notificationBelongsTo(value: NotificationIdentity, identity: Not
 }
 
 export function isNotificationSocketContext(value: unknown, identity: NotificationIdentity, now = Date.now()): value is NotificationSocketContext {
-  return object(value) && value.contractVersion === "1.0" && id(value.userId) && id(value.tenantId) && id(value.organizationId) &&
+  return object(value) && value.contractVersion === NOTIFICATION_CONTRACT_VERSION && id(value.userId) && id(value.tenantId) && id(value.organizationId) &&
     date(value.expiresAt) && Date.parse(value.expiresAt) > now && notificationBelongsTo(value as unknown as NotificationIdentity, identity)
 }
 
@@ -29,7 +30,7 @@ export function isNotificationRecord(value: unknown): value is NotificationRecor
 }
 
 export function isRealtimeNotification(value: unknown, identity: NotificationIdentity): value is RealtimeNotification {
-  return object(value) && value.contractVersion === "1.0" && id(value.id) && id(value.userId) && id(value.tenantId) && id(value.organizationId) &&
+  return object(value) && value.contractVersion === NOTIFICATION_CONTRACT_VERSION && id(value.id) && id(value.userId) && id(value.tenantId) && id(value.organizationId) &&
     types.has(value.type as string) && boundedText(value.title, 200) && !!(value.title as string).trim() &&
     boundedText(value.content, 8192) && boundedText(value.link, 300) && date(value.createdAt) &&
     ((value.applicationId === null && value.publicationId === null) || (id(value.applicationId) && id(value.publicationId))) &&

@@ -1,0 +1,11 @@
+[Unit]
+Description=Authenticate selected remotely available SaaS recovery point and check age
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/saas-recovery age /var/lib/saas-recovery/events.latest.json
+TimeoutStartSec=35min
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/saas-recovery

@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::app_token;
+use crate::oauth_issuance::{self, IssuanceIdentity};
 use crate::error::AppError;
 use crate::extractors::{bearer_token, ApiJson, CurrentUser};
 use crate::routes::oauth_admin::{fetch_client, ClientFull};
@@ -43,6 +44,7 @@ pub fn consent_routes() -> Router<AppState> {
 pub struct OAuthError {
     status: StatusCode,
     body: Value,
+    retry_after: Option<u64>,
 }
 
 impl OAuthError {
@@ -50,6 +52,7 @@ impl OAuthError {
         Self {
             status,
             body: json!({"error": code, "error_description": desc}),
+            retry_after: None,
         }
     }
     pub fn bad_request(code: &str, desc: &str) -> Self {
@@ -67,6 +70,11 @@ impl OAuthError {
     pub fn invalid_token(desc: &str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, "invalid_token", desc)
     }
+    fn rate_limited(retry: u64) -> Self {
+        let mut error = Self::new(StatusCode::TOO_MANY_REQUESTS, "temporarily_unavailable", "认证请求过多，请稍后重试");
+        error.retry_after = Some(retry.max(1));
+        error
+    }
     pub fn server(_e: impl std::fmt::Display) -> Self {
         tracing::error!(error_code="OAUTH_SERVER_ERROR", "OAuth server operation failed");
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "服务器内部错误")
@@ -75,7 +83,13 @@ impl OAuthError {
 
 impl IntoResponse for OAuthError {
     fn into_response(self) -> Response {
-        (self.status, Json(self.body)).into_response()
+        let mut response = (self.status, Json(self.body)).into_response();
+        if let Some(retry) = self.retry_after {
+            if let Ok(value) = axum::http::HeaderValue::from_str(&retry.to_string()) {
+                response.headers_mut().insert(header::RETRY_AFTER, value);
+            }
+        }
+        response
     }
 }
 
@@ -99,44 +113,6 @@ fn check_oauth_rate(state: &AppState, headers: &HeaderMap) -> Result<String, Res
     }
 }
 
-fn percent_decode(s: &str) -> String {
-    let b = s.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        match b[i] {
-            b'+' => {
-                out.push(b' ');
-                i += 1;
-            }
-            b'%' if i + 2 < b.len() => match (hex_val(b[i + 1]), hex_val(b[i + 2])) {
-                (Some(h), Some(l)) => {
-                    out.push(h * 16 + l);
-                    i += 3;
-                }
-                _ => {
-                    out.push(b[i]);
-                    i += 1;
-                }
-            },
-            c => {
-                out.push(c);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn hex_val(c: u8) -> Option<u8> {
-    match c {
-        b'0'..=b'9' => Some(c - b'0'),
-        b'a'..=b'f' => Some(c - b'a' + 10),
-        b'A'..=b'F' => Some(c - b'A' + 10),
-        _ => None,
-    }
-}
-
 fn encode_query(s: &str) -> String {
     let mut out = String::new();
     for b in s.bytes() {
@@ -149,15 +125,7 @@ fn encode_query(s: &str) -> String {
 }
 
 /// Basic 客户端认证 (client_id:client_secret base64, 分量 URL 解码)
-fn parse_basic_auth(headers: &HeaderMap) -> Option<(String, String)> {
-    use base64::Engine;
-    let v = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
-    let b64 = v.strip_prefix("Basic ")?;
-    let decoded = base64::engine::general_purpose::STANDARD.decode(b64.trim()).ok()?;
-    let s = String::from_utf8(decoded).ok()?;
-    let (u, p) = s.split_once(':')?;
-    Some((percent_decode(u), percent_decode(p)))
-}
+fn parse_basic_auth(headers:&HeaderMap)->Option<(String,String)> { crate::confidential_clients::parse_basic_auth(headers) }
 
 /// 客户端认证: client_secret_basic 或 client_secret_post
 async fn authenticate_client(
@@ -342,18 +310,38 @@ async fn decide_consent(
     Path(request_id): Path<String>,
     ApiJson(body): ApiJson<DecisionBody>,
 ) -> Result<Json<Value>, AppError> {
-    let id: Uuid = request_id.parse().map_err(|_| AppError::not_found("授权请求不存在或已失效"))?;
+    let id: Uuid = request_id
+        .parse()
+        .map_err(|_| AppError::not_found("授权请求不存在或已失效"))?;
     let row = load_consent(&state.pool, id)
         .await?
         .ok_or_else(|| AppError::not_found("授权请求不存在或已失效"))?;
     if row.consumed || row.expires_at < Utc::now() {
         return Err(AppError::not_found("授权请求不存在或已失效"));
     }
+    let client = fetch_client(&state.pool, &row.client_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("客户端已失效"))?;
+    let mut tx = begin_issuance(&state, &client, Some(user.user_id))
+        .await
+        .map_err(oauth_error_into)?;
+    if oauth_issuance::active_identity(
+        &mut tx,
+        Some(user.user_id),
+        Some(user.tenant_id),
+        Some(user.org_id),
+        &row.client_id,
+    )
+    .await?
+    .is_none()
+    {
+        return Err(AppError::unauthorized("授权上下文已失效"));
+    }
     let marked = sqlx::query(
-        "UPDATE oauth_authorization_requests SET consumed = true WHERE id = $1 AND consumed = false",
+        "UPDATE oauth_authorization_requests SET consumed = true WHERE id = $1 AND consumed = false AND expires_at > clock_timestamp()",
     )
     .bind(id)
-    .execute(&state.pool)
+    .execute(&mut *tx)
     .await?;
     if marked.rows_affected() == 0 {
         return Err(AppError::not_found("授权请求不存在或已失效"));
@@ -362,7 +350,7 @@ async fn decide_consent(
     let ua = audit::ua_of(&headers);
     let redirect_to = if body.approve {
         let code = hash::random_token(43);
-        sqlx::query(
+        let inserted = sqlx::query(
             "INSERT INTO oauth_authorization_codes \
              (code_hash, client_id, user_id, tenant_id, organization_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at) \
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + interval '60 seconds')",
@@ -376,21 +364,67 @@ async fn decide_consent(
         .bind(&row.scope)
         .bind(&row.code_challenge)
         .bind(&row.code_challenge_method)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-            action: "CONSENT_APPROVE", detail: &format!("批准授权: 客户端 {} scope={}", row.client_id, row.scope), ip: &ip, user_agent: &ua,
-        }).await;
-        append_query(&row.redirect_uri, &[("code", code), ("state", row.state.clone())])
+        if inserted.rows_affected() != 1 {
+            return Err(AppError::Server(anyhow::anyhow!(
+                "authorization code was not persisted"
+            )));
+        }
+        let detail = audit::change_detail(
+            "oauth_consent",
+            id,
+            json!({"clientId": row.client_id, "consumed": false}),
+            json!({"clientId": row.client_id, "consumed": true, "decision": "APPROVED", "scope": row.scope}),
+        );
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "CONSENT_APPROVE",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
+        tx.commit().await?;
+        append_query(
+            &row.redirect_uri,
+            &[("code", code), ("state", row.state.clone())],
+        )
     } else {
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-            action: "CONSENT_DENY", detail: &format!("拒绝授权: 客户端 {}", row.client_id), ip: &ip, user_agent: &ua,
-        }).await;
-        append_query(&row.redirect_uri, &[("error", "access_denied".into()), ("state", row.state.clone())])
+        let detail = audit::change_detail(
+            "oauth_consent",
+            id,
+            json!({"clientId": row.client_id, "consumed": false}),
+            json!({"clientId": row.client_id, "consumed": true, "decision": "DENIED"}),
+        );
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "CONSENT_DENY",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
+        tx.commit().await?;
+        append_query(
+            &row.redirect_uri,
+            &[
+                ("error", "access_denied".into()),
+                ("state", row.state.clone()),
+            ],
+        )
     };
     Ok(Json(json!({"redirectTo": redirect_to})))
 }
@@ -490,22 +524,27 @@ async fn session_token(
         iat: now.timestamp(), exp: expires_at.timestamp(),
     };
     let access_token = jwt::sign(&claims, &state.config.jwt_secret)?;
-    sqlx::query(
+    let mut tx = state.pool.begin().await?;
+    let token_id: Uuid = sqlx::query_scalar(
         "INSERT INTO oauth_tokens \
          (token_hash, token_type, jwt, user_id, client_id, tenant_id, organization_id, \
           scope, expires_at, token_use, audience, jti, application_id, platform_session_id) \
-         VALUES ($1, 'access', NULL, $2, $3, $4, $5, $6, $7, 'app', $8, $9, $10, $11)",
+         VALUES ($1, 'access', NULL, $2, $3, $4, $5, $6, $7, 'app', $8, $9, $10, $11) RETURNING id",
     )
     .bind(hash::sha256_hex(&access_token)).bind(user.user_id).bind(&client.client_id)
     .bind(user.tenant_id).bind(user.org_id).bind(&scope).bind(expires_at)
     .bind(app_code).bind(jti).bind(app_id).bind(user.session_id)
-    .execute(&state.pool).await?;
-    audit::write(&state.pool, audit::AuditInfo {
+    .fetch_one(&mut *tx).await?;
+    let detail = audit::change_detail("app_token", token_id, Value::Null,
+        json!({"applicationId": app_id, "clientId": client.client_id, "audience": app_code,
+            "jti": jti, "expiresAt": expires_at}));
+    audit::write_in_tx_for_app(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "TOKEN_ISSUED", detail: &format!("签发应用令牌: app={} client={} jti={}", app_code, client.client_id, jti),
+        action: "TOKEN_ISSUED", detail: &detail,
         ip: &ip, user_agent: &ua,
-    }).await;
+    }, app_id).await?;
+    tx.commit().await?;
     Ok((
         StatusCode::CREATED,
         Json(json!({
@@ -524,7 +563,98 @@ struct IssuedToken {
     response: Value,
 }
 
-/// 签发 access (+refresh) 并写库与审计
+type IssuanceClientConfig = (String, Option<String>, String, String, String, i64, i64);
+
+/// Lock mutations in the same order as session/member revocation: user, client,
+/// then the one-time credential. Re-read the authenticated client under its lock.
+async fn begin_issuance<'a>(
+    state: &'a AppState,
+    client: &ClientFull,
+    user_id: Option<Uuid>,
+) -> Result<sqlx::Transaction<'a, sqlx::Postgres>, OAuthError> {
+    let mut tx = state.pool.begin().await?;
+    oauth_issuance::lock_user(&mut tx, user_id).await?;
+    let current: Option<IssuanceClientConfig> =
+        sqlx::query_as(
+            "SELECT status, client_secret_hash, client_type, grant_types, scopes, \
+             access_token_validity, refresh_token_validity FROM oauth_clients \
+             WHERE id=$1 AND client_id=$2 FOR UPDATE",
+        )
+        .bind(client.id)
+        .bind(&client.client_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    let Some((status, secret, kind, grants, scopes, access_ttl, refresh_ttl)) = current else {
+        return Err(OAuthError::invalid_client("客户端已失效"));
+    };
+    if status != "ENABLED"
+        || secret != client.client_secret_hash
+        || kind != client.client_type
+        || grants != client.grant_types
+        || scopes != client.scopes
+        || access_ttl != client.access_token_validity
+        || refresh_ttl != client.refresh_token_validity
+    {
+        return Err(OAuthError::invalid_client("客户端配置已变更，请重新请求"));
+    }
+    Ok(tx)
+}
+
+/// Sign and persist the complete pair and its issuance audit in the caller's transaction.
+#[allow(clippy::too_many_arguments)]
+async fn issue_tokens_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    state: &AppState,
+    client: &ClientFull,
+    user_id: Option<Uuid>,
+    username: &str,
+    tenant_id: Option<Uuid>,
+    org_id: Option<Uuid>,
+    scope: &str,
+    ip: &str,
+    ua: &str,
+) -> Result<IssuedToken, OAuthError> {
+    let allowed = client.scope_list();
+    if scope
+        .split_whitespace()
+        .any(|part| !allowed.iter().any(|value| value == part))
+    {
+        return Err(OAuthError::bad_request(
+            "invalid_scope",
+            "scope 超出客户端当前注册范围",
+        ));
+    }
+    let response = oauth_issuance::issue_in_tx(
+        tx,
+        state,
+        client,
+        IssuanceIdentity {
+            user_id,
+            tenant_id,
+            organization_id: org_id,
+        },
+        scope,
+    )
+    .await
+    .map_err(|e| match e {
+        AppError::Unauthorized(_) => OAuthError::invalid_grant("用户或授权上下文已失效"),
+        _ => OAuthError::server(e),
+    })?;
+    let audit_written = sqlx::query(
+        "INSERT INTO audit_logs(user_id,username,tenant_id,organization_id,action,detail,ip,user_agent,request_id) \
+         VALUES($1,COALESCE((SELECT username FROM users WHERE id=$1),$2),$3,$4,'TOKEN_ISSUED',$5,$6,$7,$8)",
+    )
+    .bind(user_id).bind(if username.is_empty() { &client.client_id } else { username })
+    .bind(tenant_id).bind(org_id)
+    .bind(format!("签发令牌: 客户端 {} scope={}", client.client_id, scope))
+    .bind(ip).bind(ua).bind(crate::observability::request_id())
+    .execute(&mut **tx).await?;
+    if audit_written.rows_affected() != 1 {
+        return Err(OAuthError::server("issuance audit was not persisted"));
+    }
+    Ok(IssuedToken { response })
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn issue_tokens(
     state: &AppState,
@@ -537,97 +667,13 @@ async fn issue_tokens(
     ip: &str,
     ua: &str,
 ) -> Result<IssuedToken, OAuthError> {
-    let now = Utc::now().timestamp();
-    let access_ttl = client.access_token_validity;
-    let claims = jwt::Claims {
-        sub: user_id
-            .map(|u| u.to_string())
-            .unwrap_or_else(|| client.client_id.clone()),
-        typ: "access".into(),
-        tenant: tenant_id.map(|t| t.to_string()),
-        org: org_id.map(|o| o.to_string()),
-        cid: Some(client.client_id.clone()),
-        scope: Some(scope.to_string()),
-        sid: None,
-        ver: None,
-        aud: None,
-        jti: None,
-        exp: now + access_ttl,
-        iat: now,
-    };
-    let access = jwt::sign(&claims, &state.config.jwt_secret).map_err(OAuthError::server)?;
-    // 同一秒内重复请求会得到完全相同的 JWT (确定性签名 + 秒级 iat/exp),
-    // 唯一冲突时改为刷新既有行的过期时间 (返回的令牌串本就相同, 幂等)
-    sqlx::query(
-        "INSERT INTO oauth_tokens (token_hash, token_type, jwt, user_id, client_id, tenant_id, organization_id, scope, expires_at) \
-         VALUES ($1, 'access', $2, $3, $4, $5, $6, $7, now() + make_interval(secs => $8::float8)) \
-         ON CONFLICT (token_hash) DO UPDATE SET expires_at = EXCLUDED.expires_at",
+    let mut tx = begin_issuance(state, client, user_id).await?;
+    let result = issue_tokens_in_tx(
+        &mut tx, state, client, user_id, username, tenant_id, org_id, scope, ip, ua,
     )
-    .bind(hash::sha256_hex(&access))
-    .bind(&access)
-    .bind(user_id)
-    .bind(&client.client_id)
-    .bind(tenant_id)
-    .bind(org_id)
-    .bind(scope)
-    .bind(access_ttl)
-    .execute(&state.pool)
-    .await
-    .map_err(OAuthError::server)?;
-
-    let mut response = json!({
-        "access_token": access,
-        "token_type": "Bearer",
-        "expires_in": access_ttl,
-        "scope": scope,
-    });
-    if client.has_grant("refresh_token") {
-        let refresh = hash::random_token(43);
-        sqlx::query(
-            "INSERT INTO oauth_tokens (token_hash, token_type, jwt, user_id, client_id, tenant_id, organization_id, scope, expires_at) \
-             VALUES ($1, 'refresh', NULL, $2, $3, $4, $5, $6, now() + make_interval(secs => $7::float8))",
-        )
-        .bind(hash::sha256_hex(&refresh))
-        .bind(user_id)
-        .bind(&client.client_id)
-        .bind(tenant_id)
-        .bind(org_id)
-        .bind(scope)
-        .bind(client.refresh_token_validity)
-        .execute(&state.pool)
-        .await
-        .map_err(OAuthError::server)?;
-        response["refresh_token"] = json!(refresh);
-    }
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id,
-        username: if username.is_empty() { &client.client_id } else { username },
-        tenant_id,
-        organization_id: org_id,
-        action: "TOKEN_ISSUED",
-        detail: &format!("签发令牌: 客户端 {} scope={}", client.client_id, scope),
-        ip,
-        user_agent: ua,
-    })
-    .await;
-    Ok(IssuedToken {
-        response,
-    })
-}
-
-async fn username_of(pool: &sqlx::PgPool, user_id: Option<Uuid>) -> String {
-    match user_id {
-        None => String::new(),
-        Some(uid) => {
-            sqlx::query_scalar::<_, String>("SELECT username FROM users WHERE id = $1")
-                .bind(uid)
-                .fetch_optional(pool)
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or_default()
-        }
-    }
+    .await?;
+    tx.commit().await?;
+    Ok(result)
 }
 
 /// POST /oauth/token — 5 种授权模式
@@ -679,7 +725,7 @@ async fn token(
         "urn:ietf:params:oauth:grant-type:device_code" => grant_device_code(&state, &client, &form, &ip, &ua).await,
         _ => Err(OAuthError::bad_request("unsupported_grant_type", "不支持的授权模式")),
     }?;
-    Ok(Json(result.response).into_response())
+    Ok(([(header::CACHE_CONTROL, "no-store"), (header::PRAGMA, "no-cache")], Json(result.response)).into_response())
 }
 
 #[derive(sqlx::FromRow)]
@@ -704,23 +750,33 @@ async fn grant_authorization_code(
     ip: &str,
     ua: &str,
 ) -> Result<IssuedToken, OAuthError> {
-    let code = form.get("code").ok_or_else(|| OAuthError::invalid_request("缺少 code"))?;
+    let code = form
+        .get("code")
+        .ok_or_else(|| OAuthError::invalid_request("缺少 code"))?;
     let redirect_uri = form
         .get("redirect_uri")
         .ok_or_else(|| OAuthError::invalid_request("缺少 redirect_uri"))?;
+    let digest = hash::sha256_hex(code);
+    let owner: Uuid =
+        sqlx::query_scalar("SELECT user_id FROM oauth_authorization_codes WHERE code_hash=$1")
+            .bind(&digest)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| OAuthError::invalid_grant("授权码无效"))?;
+    let mut tx = begin_issuance(state, client, Some(owner)).await?;
     let row = sqlx::query_as::<_, AuthCodeRow>(
         "SELECT id, client_id, user_id, tenant_id, organization_id, redirect_uri, scope, \
          COALESCE(code_challenge,'') AS code_challenge, COALESCE(code_challenge_method,'') AS code_challenge_method, \
-         expires_at, consumed FROM oauth_authorization_codes WHERE code_hash = $1",
+         expires_at, consumed FROM oauth_authorization_codes WHERE code_hash = $1 FOR UPDATE",
     )
-    .bind(hash::sha256_hex(code))
-    .fetch_optional(&state.pool)
+    .bind(&digest)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| OAuthError::invalid_grant("授权码无效"))?;
-    if row.consumed {
+    if row.consumed || row.user_id != owner {
         return Err(OAuthError::invalid_grant("授权码已被使用"));
     }
-    if row.expires_at < Utc::now() {
+    if row.expires_at <= Utc::now() {
         return Err(OAuthError::invalid_grant("授权码已过期"));
     }
     if row.client_id != client.client_id {
@@ -742,16 +798,29 @@ async fn grant_authorization_code(
         }
     }
     let marked = sqlx::query(
-        "UPDATE oauth_authorization_codes SET consumed = true WHERE id = $1 AND consumed = false",
+        "UPDATE oauth_authorization_codes SET consumed = true WHERE id = $1 AND consumed = false AND expires_at > clock_timestamp()",
     )
     .bind(row.id)
-    .execute(&state.pool)
+    .execute(&mut *tx)
     .await?;
     if marked.rows_affected() == 0 {
         return Err(OAuthError::invalid_grant("授权码已被使用"));
     }
-    let username = username_of(&state.pool, Some(row.user_id)).await;
-    issue_tokens(state, client, Some(row.user_id), &username, row.tenant_id, row.organization_id, &row.scope, ip, ua).await
+    let result = issue_tokens_in_tx(
+        &mut tx,
+        state,
+        client,
+        Some(row.user_id),
+        "",
+        row.tenant_id,
+        row.organization_id,
+        &row.scope,
+        ip,
+        ua,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(result)
 }
 
 #[derive(sqlx::FromRow)]
@@ -776,21 +845,27 @@ async fn grant_refresh_token(
     let rt = form
         .get("refresh_token")
         .ok_or_else(|| OAuthError::invalid_request("缺少 refresh_token"))?;
+    let digest = hash::sha256_hex(rt);
+    let owner: Option<Uuid> = sqlx::query_scalar(
+        "SELECT user_id FROM oauth_tokens WHERE token_hash=$1 AND token_type='refresh' AND token_use='oauth'",
+    ).bind(&digest).fetch_optional(&state.pool).await?
+     .ok_or_else(|| OAuthError::invalid_grant("刷新令牌无效"))?;
+    let mut tx = begin_issuance(state, client, owner).await?;
     let row = sqlx::query_as::<_, RefreshRow>(
         "SELECT id, user_id, client_id, tenant_id, organization_id, COALESCE(scope,'') AS scope, \
-         expires_at, revoked FROM oauth_tokens WHERE token_hash = $1 AND token_type = 'refresh'",
+         expires_at, revoked FROM oauth_tokens WHERE token_hash = $1 AND token_type = 'refresh' AND token_use='oauth' FOR UPDATE",
     )
-    .bind(hash::sha256_hex(rt))
-    .fetch_optional(&state.pool)
+    .bind(&digest)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| OAuthError::invalid_grant("刷新令牌无效"))?;
-    if row.client_id != client.client_id {
+    if row.client_id != client.client_id || row.user_id != owner {
         return Err(OAuthError::invalid_grant("刷新令牌与客户端不匹配"));
     }
     if row.revoked {
         return Err(OAuthError::invalid_grant("刷新令牌已被吊销"));
     }
-    if row.expires_at < Utc::now() {
+    if row.expires_at <= Utc::now() {
         return Err(OAuthError::invalid_grant("刷新令牌已过期"));
     }
     // scope 可收窄, 不可扩大; 省略时沿用原令牌 scope (RFC 6749 §6: omitted → original grant)
@@ -804,7 +879,10 @@ async fn grant_refresh_token(
             let allowed = client.scope_list();
             for p in s.split_whitespace() {
                 if !allowed.iter().any(|a| a == p) {
-                    return Err(OAuthError::bad_request("invalid_scope", "请求的 scope 超出客户端注册范围"));
+                    return Err(OAuthError::bad_request(
+                        "invalid_scope",
+                        "请求的 scope 超出客户端注册范围",
+                    ));
                 }
             }
             s.split_whitespace().collect::<Vec<_>>().join(" ")
@@ -813,17 +891,40 @@ async fn grant_refresh_token(
     let original: Vec<&str> = row.scope.split_whitespace().collect();
     for p in scope.split_whitespace() {
         if !original.iter().any(|o| *o == p) {
-            return Err(OAuthError::bad_request("invalid_scope", "scope 超出原令牌范围"));
+            return Err(OAuthError::bad_request(
+                "invalid_scope",
+                "scope 超出原令牌范围",
+            ));
         }
     }
-    let final_scope = if scope.is_empty() { row.scope.clone() } else { scope };
+    let final_scope = if scope.is_empty() {
+        row.scope.clone()
+    } else {
+        scope
+    };
     // 轮换: 旧 refresh 吊销
-    sqlx::query("UPDATE oauth_tokens SET revoked = true WHERE id = $1")
+    let marked = sqlx::query("UPDATE oauth_tokens SET revoked = true WHERE id = $1 AND revoked=false AND expires_at > clock_timestamp()")
         .bind(row.id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
-    let username = username_of(&state.pool, row.user_id).await;
-    issue_tokens(state, client, row.user_id, &username, row.tenant_id, row.organization_id, &final_scope, ip, ua).await
+    if marked.rows_affected() != 1 {
+        return Err(OAuthError::invalid_grant("刷新令牌已被使用或已过期"));
+    }
+    let result = issue_tokens_in_tx(
+        &mut tx,
+        state,
+        client,
+        row.user_id,
+        "",
+        row.tenant_id,
+        row.organization_id,
+        &final_scope,
+        ip,
+        ua,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(result)
 }
 
 async fn grant_client_credentials(
@@ -844,22 +945,51 @@ async fn grant_password(
     ip: &str,
     ua: &str,
 ) -> Result<IssuedToken, OAuthError> {
-    let username = form.get("username").ok_or_else(|| OAuthError::invalid_request("缺少 username"))?;
-    let password = form.get("password").ok_or_else(|| OAuthError::invalid_request("缺少 password"))?;
+    let username = form
+        .get("username")
+        .ok_or_else(|| OAuthError::invalid_request("缺少 username"))?;
+    let password = form
+        .get("password")
+        .ok_or_else(|| OAuthError::invalid_request("缺少 password"))?;
+    if username.is_empty() || username.len() > state.config.login_identifier_max_bytes || password.is_empty() || password.len() > 1024 {
+        return Err(OAuthError::invalid_request("账号或密码超出允许长度"));
+    }
+    if let Some(retry) = state.login_limits.admit_source(ip) {
+        return Err(OAuthError::rate_limited(retry));
+    }
+    let input_key = format!("input:{}", hash::sha256_hex(username));
+    if let Some(retry) = state.login_limits.check_account(&input_key) {
+        return Err(OAuthError::rate_limited(retry));
+    }
     let row = sqlx::query_as::<_, (Uuid, String, String, bool)>(
         "SELECT id, password_hash, status, is_super_admin FROM users WHERE username = $1",
     )
     .bind(username)
     .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| OAuthError::invalid_grant("用户名或密码错误"))?;
+    .await?;
+    let Some(row) = row else {
+        state.login_limits.record_failure(&input_key);
+        return Err(OAuthError::invalid_grant("用户名或密码错误"));
+    };
     let (user_id, password_hash, status, _) = row;
+    let account_key = format!("user:{user_id}");
+    if let Some(retry) = state.login_limits.check_account(&account_key) {
+        return Err(OAuthError::rate_limited(retry));
+    }
     if status != "ENABLED" {
         return Err(OAuthError::invalid_grant("用户已被禁用"));
     }
-    if !crate::util::password::verify_password(&password_hash, password) {
+    let verified = state.passwords.verify(&password_hash, password).await.map_err(|error| match error {
+        AppError::RateLimited(retry) => OAuthError::rate_limited(retry),
+        other => OAuthError::server(other),
+    })?;
+    if !verified {
+        state.login_limits.record_failure(&input_key);
+        state.login_limits.record_failure(&account_key);
         return Err(OAuthError::invalid_grant("用户名或密码错误"));
     }
+    state.login_limits.clear_account(&input_key);
+    state.login_limits.clear_account(&account_key);
     // 默认取第一个 membership 作为上下文
     let ctx = sqlx::query_as::<_, (Uuid, Uuid)>(
         "SELECT o.tenant_id, m.organization_id FROM memberships m \
@@ -871,7 +1001,30 @@ async fn grant_password(
     .await?
     .ok_or_else(|| OAuthError::invalid_grant("用户无组织成员关系, 无法签发令牌"))?;
     let scope = resolve_scope(form.get("scope"), client)?;
-    issue_tokens(state, client, Some(user_id), username, Some(ctx.0), Some(ctx.1), &scope, ip, ua).await
+    let mut tx = begin_issuance(state, client, Some(user_id)).await?;
+    let current_password: Option<String> =
+        sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1")
+            .bind(user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    if current_password.as_deref() != Some(password_hash.as_str()) {
+        return Err(OAuthError::invalid_grant("用户凭据已变更，请重新认证"));
+    }
+    let result = issue_tokens_in_tx(
+        &mut tx,
+        state,
+        client,
+        Some(user_id),
+        username,
+        Some(ctx.0),
+        Some(ctx.1),
+        &scope,
+        ip,
+        ua,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(result)
 }
 
 #[derive(sqlx::FromRow)]
@@ -898,55 +1051,97 @@ async fn grant_device_code(
     let device_code = form
         .get("device_code")
         .ok_or_else(|| OAuthError::invalid_request("缺少 device_code"))?;
+    let digest = hash::sha256_hex(device_code);
+    let owner: Option<Uuid> =
+        sqlx::query_scalar("SELECT user_id FROM oauth_device_codes WHERE device_code_hash=$1")
+            .bind(&digest)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| OAuthError::invalid_grant("设备码无效"))?;
+    let mut tx = begin_issuance(state, client, owner).await?;
     let row = sqlx::query_as::<_, DeviceRow>(
         "SELECT id, client_id, COALESCE(scope,'') AS scope, status, user_id, tenant_id, organization_id, \
-         interval_seconds, last_polled_at, expires_at FROM oauth_device_codes WHERE device_code_hash = $1",
+         interval_seconds, last_polled_at, expires_at FROM oauth_device_codes WHERE device_code_hash = $1 FOR UPDATE",
     )
-    .bind(hash::sha256_hex(device_code))
-    .fetch_optional(&state.pool)
+    .bind(&digest)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| OAuthError::invalid_grant("设备码无效"))?;
-    if row.client_id != client.client_id {
+    if row.client_id != client.client_id || row.user_id != owner {
         return Err(OAuthError::invalid_grant("设备码与客户端不匹配"));
     }
     let now = Utc::now();
     let mut status = row.status.clone();
-    if status == "PENDING" && now > row.expires_at {
+    if now >= row.expires_at {
         sqlx::query("UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1")
             .bind(row.id)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
         status = "EXPIRED".into();
     }
-    // 记录轮询时间 (每次)
-    sqlx::query("UPDATE oauth_device_codes SET last_polled_at = now() WHERE id = $1")
+    // Polling metadata and non-issuance terminal states commit independently of
+    // OAuth error responses; approved consumption stays with the complete pair.
+    sqlx::query("UPDATE oauth_device_codes SET last_polled_at = clock_timestamp() WHERE id = $1")
         .bind(row.id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
     if status == "EXPIRED" {
+        tx.commit().await?;
         return Err(OAuthError::bad_request("expired_token", "设备码已过期"));
     }
     if let Some(last) = row.last_polled_at {
         if (now - last).num_seconds() < row.interval_seconds {
-            return Err(OAuthError::bad_request("slow_down", "轮询过于频繁, 请稍后再试"));
+            tx.commit().await?;
+            return Err(OAuthError::bad_request(
+                "slow_down",
+                "轮询过于频繁, 请稍后再试",
+            ));
         }
     }
     match status.as_str() {
-        "DENIED" => Err(OAuthError::bad_request("access_denied", "用户拒绝了该设备授权")),
-        "PENDING" => Err(OAuthError::bad_request("authorization_pending", "设备授权尚未完成")),
+        "DENIED" => {
+            tx.commit().await?;
+            Err(OAuthError::bad_request(
+                "access_denied",
+                "用户拒绝了该设备授权",
+            ))
+        }
+        "PENDING" => {
+            tx.commit().await?;
+            Err(OAuthError::bad_request(
+                "authorization_pending",
+                "设备授权尚未完成",
+            ))
+        }
         "APPROVED" => {
             // 标记已消费, 防止重复签发
             let marked = sqlx::query(
-                "UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1 AND status = 'APPROVED'",
+                "UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1 AND status = 'APPROVED' AND expires_at > clock_timestamp()",
             )
             .bind(row.id)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
             if marked.rows_affected() == 0 {
                 return Err(OAuthError::bad_request("expired_token", "设备码已使用"));
             }
-            let username = username_of(&state.pool, row.user_id).await;
-            issue_tokens(state, client, row.user_id, &username, row.tenant_id, row.organization_id, &row.scope, ip, ua).await
+            if row.user_id.is_none() {
+                return Err(OAuthError::invalid_grant("设备码缺少用户身份"));
+            }
+            let result = issue_tokens_in_tx(
+                &mut tx,
+                state,
+                client,
+                row.user_id,
+                "",
+                row.tenant_id,
+                row.organization_id,
+                &row.scope,
+                ip,
+                ua,
+            )
+            .await?;
+            tx.commit().await?;
+            Ok(result)
         }
         _ => Err(OAuthError::invalid_grant("设备码状态异常")),
     }
@@ -955,26 +1150,45 @@ async fn grant_device_code(
 // ===== 用户信息 =====
 
 /// GET /oauth/userinfo — Bearer access token
-async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>, OAuthError> {
+async fn userinfo(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, OAuthError> {
     let token = bearer_token(&headers).map_err(|_| OAuthError::invalid_token("缺少访问令牌"))?;
-    let claims = jwt::verify(&token, &state.config.jwt_secret).map_err(|_| OAuthError::invalid_token("令牌无效或已过期"))?;
+    let claims = jwt::verify(&token, &state.config.jwt_secret)
+        .map_err(|_| OAuthError::invalid_token("令牌无效或已过期"))?;
     if claims.typ != "access" {
         return Err(OAuthError::invalid_token("令牌类型错误"));
     }
-    let row = sqlx::query_as::<_, (Option<Uuid>, Option<Uuid>, Option<Uuid>, String, bool, DateTime<Utc>, String)>(
-        "SELECT user_id, tenant_id, organization_id, COALESCE(scope,'') AS scope, revoked, expires_at, token_use \
+    let row = sqlx::query_as::<_, (Option<Uuid>, Option<Uuid>, Option<Uuid>, String, bool, DateTime<Utc>, String, String)>(
+        "SELECT user_id, tenant_id, organization_id, COALESCE(scope,'') AS scope, revoked, expires_at, token_use, client_id \
          FROM oauth_tokens WHERE token_hash = $1 AND token_type = 'access'",
     )
     .bind(hash::sha256_hex(&token))
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| OAuthError::invalid_token("令牌无效或已过期"))?;
-    let (user_id, tenant_id, org_id, scope, revoked, expires_at, token_use) = row;
-    if revoked || expires_at < Utc::now() {
+    let (user_id, tenant_id, org_id, scope, revoked, expires_at, token_use, client_id) = row;
+    if revoked || expires_at <= Utc::now() {
         return Err(OAuthError::invalid_token("令牌已被吊销或已过期"));
     }
-    if token_use == "app" && app_token::inspect(&state.pool, &token, &claims).await?.is_none() {
+    if token_use == "app"
+        && app_token::inspect(&state.pool, &token, &claims)
+            .await?
+            .is_none()
+    {
         return Err(OAuthError::invalid_token("应用令牌已失效"));
+    }
+    if token_use == "oauth" {
+        let mut connection = state.pool.acquire().await?;
+        if oauth_issuance::active_identity(&mut connection, user_id, tenant_id, org_id, &client_id)
+            .await?
+            .is_none()
+        {
+            return Err(OAuthError::invalid_token("用户或授权上下文已失效"));
+        }
+    } else if token_use != "app" {
+        return Err(OAuthError::invalid_token("令牌用途错误"));
     }
     let user_id = user_id.ok_or_else(|| OAuthError::invalid_token("该令牌没有关联用户"))?;
     let (username, real_name, email, phone) = sqlx::query_as::<_, (String, String, String, String)>(
@@ -986,21 +1200,25 @@ async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Result<J
     .ok_or_else(|| OAuthError::invalid_token("用户不存在"))?;
 
     let tenant_json = match tenant_id {
-        Some(t) => sqlx::query_as::<_, (Uuid, String)>("SELECT id, name FROM tenants WHERE id = $1")
-            .bind(t)
-            .fetch_optional(&state.pool)
-            .await?
-            .map(|(id, name)| json!({"id": id, "name": name}))
-            .unwrap_or(Value::Null),
+        Some(t) => {
+            sqlx::query_as::<_, (Uuid, String)>("SELECT id, name FROM tenants WHERE id = $1")
+                .bind(t)
+                .fetch_optional(&state.pool)
+                .await?
+                .map(|(id, name)| json!({"id": id, "name": name}))
+                .unwrap_or(Value::Null)
+        }
         None => Value::Null,
     };
     let org_json = match org_id {
-        Some(o) => sqlx::query_as::<_, (Uuid, String)>("SELECT id, name FROM organizations WHERE id = $1")
-            .bind(o)
-            .fetch_optional(&state.pool)
-            .await?
-            .map(|(id, name)| json!({"id": id, "name": name}))
-            .unwrap_or(Value::Null),
+        Some(o) => {
+            sqlx::query_as::<_, (Uuid, String)>("SELECT id, name FROM organizations WHERE id = $1")
+                .bind(o)
+                .fetch_optional(&state.pool)
+                .await?
+                .map(|(id, name)| json!({"id": id, "name": name}))
+                .unwrap_or(Value::Null)
+        }
         None => Value::Null,
     };
     let roles: Vec<Value> = if let Some(o) = org_id {
@@ -1083,11 +1301,13 @@ async fn introspect(
             Option<i64>,
             String,
             String,
+            Option<Uuid>,
+            Option<Uuid>,
         ),
     >(
         "SELECT user_id, client_id, COALESCE(scope,'') AS scope, created_at, expires_at, revoked, \
          EXTRACT(EPOCH FROM expires_at)::bigint AS exp_epoch, token_use \
-         , token_type \
+         , token_type, tenant_id, organization_id \
          FROM oauth_tokens WHERE token_hash = $1",
     )
     .bind(hash::sha256_hex(token))
@@ -1103,6 +1323,8 @@ async fn introspect(
         exp_epoch,
         token_use,
         token_type,
+        tenant_id,
+        organization_id,
     )) = row
     else {
         crate::observability::record_auth_failure("inactive_token");
@@ -1144,7 +1366,23 @@ async fn introspect(
         crate::observability::record_auth_failure("invalid_token");
         return Ok(Json(json!({"active": false})).into_response());
     }
-    let active = !revoked && expires_at > Utc::now();
+    let mut connection = state.pool.acquire().await?;
+    let identity = if token_use == "oauth" {
+        oauth_issuance::active_identity(
+            &mut connection,
+            user_id,
+            tenant_id,
+            organization_id,
+            &client_id,
+        )
+        .await?
+    } else {
+        None
+    };
+    drop(connection);
+    // Introspection authenticates opaque bearer material by its stored digest.
+    // Preserve that contract for legacy callers; userinfo still verifies JWTs.
+    let active = !revoked && expires_at > Utc::now() && identity.is_some();
     if !active {
         crate::observability::record_auth_failure(if expires_at <= Utc::now() {
             "expired_token"
@@ -1153,7 +1391,7 @@ async fn introspect(
         });
         return Ok(Json(json!({"active": false})).into_response());
     }
-    let username = username_of(&state.pool, user_id).await;
+    let username = identity.unwrap_or_default();
     Ok(Json(json!({
         "active": true,
         "scope": scope,
@@ -1177,27 +1415,51 @@ async fn revoke(
         return Ok(resp);
     }
     let client = authenticate_client(&state, &headers, &form).await?;
-    let token = form.get("token").ok_or_else(|| OAuthError::invalid_request("缺少 token"))?;
-    let row = sqlx::query_as::<_, (Uuid, String)>(
-        "SELECT id, client_id FROM oauth_tokens WHERE token_hash = $1",
+    let token = form
+        .get("token")
+        .ok_or_else(|| OAuthError::invalid_request("缺少 token"))?;
+    let mut tx = state.pool.begin().await?;
+    let row = sqlx::query_as::<_, (Uuid, String, bool, String, String, Option<Uuid>, Option<Uuid>)>(
+        "SELECT id, client_id, revoked, token_type, token_use, tenant_id, organization_id \
+         FROM oauth_tokens WHERE token_hash = $1 FOR UPDATE",
     )
     .bind(hash::sha256_hex(token))
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?;
-    if let Some((id, owner_client)) = row {
-        if owner_client == client.client_id {
-            sqlx::query("UPDATE oauth_tokens SET revoked = true WHERE id = $1")
+    if let Some((id, owner_client, revoked, token_type, token_use, tenant_id, org_id)) = row {
+        if owner_client == client.client_id && !revoked {
+            let changed = sqlx::query("UPDATE oauth_tokens SET revoked = true WHERE id = $1 AND revoked = false")
                 .bind(id)
-                .execute(&state.pool)
+                .execute(&mut *tx)
                 .await?;
+            if changed.rows_affected() != 1 {
+                return Err(OAuthError::server("token revocation did not update one row"));
+            }
             let ip = audit::client_ip(&headers);
             let ua = audit::ua_of(&headers);
-            audit::write(&state.pool, audit::AuditInfo {
-                user_id: None, username: client.client_id.as_str(), tenant_id: None, organization_id: None,
-                action: "TOKEN_REVOKED", detail: "吊销令牌 (RFC7009)", ip: &ip, user_agent: &ua,
-            }).await;
+            let detail = audit::change_detail(
+                "oauth_token",
+                id,
+                json!({"clientId": owner_client, "tokenType": token_type, "tokenUse": token_use, "revoked": false}),
+                json!({"clientId": owner_client, "tokenType": token_type, "tokenUse": token_use, "revoked": true}),
+            );
+            audit::write_in_tx(
+                &mut tx,
+                audit::AuditInfo {
+                    user_id: None,
+                    username: client.client_id.as_str(),
+                    tenant_id,
+                    organization_id: org_id,
+                    action: "TOKEN_REVOKED",
+                    detail: &detail,
+                    ip: &ip,
+                    user_agent: &ua,
+                },
+            )
+            .await.map_err(OAuthError::server)?;
         }
     }
+    tx.commit().await?;
     Ok(Json(json!({})).into_response())
 }
 

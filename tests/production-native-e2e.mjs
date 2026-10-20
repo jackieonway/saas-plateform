@@ -15,8 +15,9 @@ const workspace=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..')
 process.env.SAAS_PRODUCTION_ACCEPTANCE='1'
 process.env.WORK_ORDERS_E2E_SCENARIO='full'
 if(!process.env.WORK_ORDERS_E2E_PLATFORM_DATABASE_URL && process.env.TEST_DATABASE_URL)process.env.WORK_ORDERS_E2E_PLATFORM_DATABASE_URL=process.env.TEST_DATABASE_URL
+if(!process.env.PLATFORM_ADMIN_BIN && process.env.PHASE25_CLI_BIN)process.env.PLATFORM_ADMIN_BIN=process.env.PHASE25_CLI_BIN
 const { fixture, runFullAcceptance }=await import('../business-apps/work-orders/tests/platform-e2e.mjs')
-const required=['WORK_ORDERS_E2E_BACKEND_BINARY','WORK_ORDERS_E2E_PLATFORM_DATABASE_URL','NGINX_BIN','NGINX_MIME_TYPES','WORK_ORDERS_E2E_HOST_DIST','PLAYWRIGHT_MODULE','BROWSER_EXECUTABLE',
+const required=['WORK_ORDERS_E2E_BACKEND_BINARY','NOTIFICATION_E2E_SERVICE_BINARY','PLATFORM_ADMIN_BIN','WORK_ORDERS_E2E_PLATFORM_DATABASE_URL','NGINX_BIN','NGINX_MIME_TYPES','WORK_ORDERS_E2E_HOST_DIST','PLAYWRIGHT_MODULE','BROWSER_EXECUTABLE',
   'PRODUCTION_ARTIFACT_ROOT','PRODUCTION_SOURCE_ROOT','PRODUCTION_CA_FILE','PRODUCTION_GATEWAY_CERTIFICATE','PRODUCTION_GATEWAY_PRIVATE_KEY','PRODUCTION_CERTUTIL_BIN','PG_DUMP_BIN','PG_RESTORE_BIN','PSQL_BIN','PG_CLIENT_LIBRARY_PATH']
 const missing=required.filter((key)=>!process.env[key])
 const sleep=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms))
@@ -91,13 +92,13 @@ async function faults(h,t) {
     try {
     await sleep(3500)
     assert.ok(!events().some((event)=>event.event==='DOWN'),'healthy actual production deployment must not alarm')
-    for(const [name,item,entry,environment] of [
-      ['business-health',h.business,path.join(process.env.PRODUCTION_ARTIFACT_ROOT,'work-orders-api/index.mjs'),h.businessEnvironment],
-      ['notification-health',h.notificationProcess,path.join(process.env.PRODUCTION_ARTIFACT_ROOT,'notification-ws/index.ts'),h.notificationEnvironment],
+    for(const [name,item,executable,args,environment] of [
+      ['business-health',h.business,process.execPath,[path.join(process.env.PRODUCTION_ARTIFACT_ROOT,'work-orders-api/index.mjs')],h.businessEnvironment],
+      ['notification-health',h.notificationProcess,h.notificationBinary,[],h.notificationEnvironment],
     ]) {
       await h.stop(item)
       await until(()=>events().some((event)=>event.target===name && event.event==='DOWN'),'actual service failure must alert')
-      const replacement=h.launch(name==='business-health'?'business':'notification',process.execPath,[entry],{env:environment})
+      const replacement=h.launch(name==='business-health'?'business':'notification',executable,args,{env:environment})
       if(name==='business-health')h.business=replacement;else h.notificationProcess=replacement
       await until(()=>events().some((event)=>event.target===name && event.event==='RECOVERED'),'actual service recovery must alert')
     }
@@ -310,7 +311,7 @@ async function recovery(h,t) {
     h.platform=h.launch('platform-restore-auth-check',process.env.WORK_ORDERS_E2E_BACKEND_BINARY,[],{env:restoredOldKeyEnvironment})
     await until(async()=>{try{return (await h.http(h.gatewayBase,'GET','/api/health')).status===200}catch{return false}},'restored platform must become ready',60000)
     h.business=h.launch('business',process.execPath,[path.join(process.env.PRODUCTION_ARTIFACT_ROOT,'work-orders-api/index.mjs')],{env:h.businessEnvironment})
-    h.notificationProcess=h.launch('notification',process.execPath,[path.join(process.env.PRODUCTION_ARTIFACT_ROOT,'notification-ws/index.ts')],{env:h.notificationEnvironment})
+    h.notificationProcess=h.launch('notification',h.notificationBinary,[],{env:h.notificationEnvironment})
     await until(async()=>{try{return (await h.http(h.gatewayBase,'GET','/work-orders-api/health')).data?.status==='UP' && (await h.http(h.gatewayBase,'GET','/notification-health')).data?.status==='UP'}catch{return false}},'restored independent services must become ready',30000)
     assert.equal((await h.http(h.gatewayBase,'GET','/api/auth/profile',oldSession)).status,401)
     assert.equal((await h.http(h.gatewayBase,'GET','/work-orders-api/tickets',oldApp)).status,401)

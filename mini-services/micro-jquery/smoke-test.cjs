@@ -5,6 +5,7 @@ const vm = require('node:vm')
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const code = fs.readFileSync(path.join(__dirname, 'public/app.js'), 'utf8')
+const sdkCode = fs.readFileSync(path.join(__dirname, 'public/vendor/micro-sdk.js'), 'utf8')
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
 function trackedSignal() {
   const controller = new AbortController(), signal = controller.signal, listeners = new Set()
@@ -51,8 +52,8 @@ function setup() {
   const window = { jQuery: jquery,
     setInterval(fn) { timers.set(++id, fn); return id }, clearInterval(timerId) { timers.delete(timerId) },
   }
-  vm.runInNewContext(code, {
-    window, document, AbortController, Date: Clock, console,
+  vm.runInNewContext(sdkCode + '\n' + code, {
+    window, document, AbortController, Date: Clock, console, Headers, URL, TextEncoder, TextDecoder, DOMException, Uint8Array, Response, ReadableStream, crypto,
     fetch(url, options) { const result = deferred(); requests.push({ url, options, ...result }); return result.promise },
   })
   const props = {
@@ -74,7 +75,8 @@ function setup() {
     advance(ms) { clockNow += ms; for (const tick of timers.values()) tick() },
   }
 }
-function response(body, status = 200) { return { ok: status < 400, status, json: async () => body } }
+function response(body, status = 200) { return new Response(JSON.stringify(body), { status }) }
+function delayedResponse(promise) { return new Response(new ReadableStream({ async pull(controller) { const value = await promise; try { controller.enqueue(new TextEncoder().encode(JSON.stringify(value))); controller.close() } catch {} } })) }
 const settle = () => new Promise(resolve => setImmediate(resolve))
 
 test('MicroProps 2.0 displays tenant, organization, roles, operations and independent grants', async () => {
@@ -92,20 +94,22 @@ test('MicroProps 2.0 displays tenant, organization, roles, operations and indepe
 test('renewed token aborts old request, refuses late response and sends new token', async () => {
   const t = setup(); await t.lifecycle.mount(t.container, t.props)
   const oldRequest = t.click('#mf-jq-btn-menus')
-  assert.equal(t.requests[0].options.headers.Authorization, 'Bearer application-token-a')
+  assert.equal(t.requests[0].options.headers.get('Authorization'), 'Bearer application-token-a')
+  assert.equal(t.requests[0].options.credentials, 'omit')
+  assert.equal(t.lifecycle.sdkVersion, '1.0.0')
   await t.lifecycle.update({ ...t.props, token: 'application-token-b', contextEpoch: 2 })
   assert.equal(t.requests[0].options.signal.aborted, true)
   t.requests[0].resolve(response({ menus: [{ title: 'old organization' }] })); await oldRequest
   assert.equal(t.find('#mf-jq-menu-list').innerHTML, '')
   const newRequest = t.click('#mf-jq-btn-menus')
-  assert.equal(t.requests[1].options.headers.Authorization, 'Bearer application-token-b')
+  assert.equal(t.requests[1].options.headers.get('Authorization'), 'Bearer application-token-b')
   t.requests[1].resolve(response({ menus: [{ title: 'fresh menu' }] })); await newRequest
   assert.ok(t.find('#mf-jq-menu-list').innerHTML.includes('fresh menu')); await t.lifecycle.unmount()
 })
 test('organization changes reject delayed JSON and replace independent permissions', async () => {
   const t = setup(); await t.lifecycle.mount(t.container, t.props)
   const pending = t.click('#mf-jq-btn-menus'), json = deferred()
-  t.requests[0].resolve({ ok: true, status: 200, json: () => json.promise }); await settle()
+  t.requests[0].resolve(delayedResponse(json.promise)); await settle()
   await t.lifecycle.update({ ...t.props, contextVersion: 'context-b', contextEpoch: 2,
     organization: { id: 'org-b', name: 'Organization B', path: '/b' }, roles: [], permissions: [], dataGrants: [], menus: [] })
   json.resolve({ menus: [{ title: 'old organization' }] }); await pending
@@ -149,4 +153,19 @@ test('rejects legacy and malformed context; escapes values and keeps public mirr
   await assert.rejects(t.lifecycle.update({ ...t.props, signal: undefined }), /MicroProps 2.0/)
   assert.ok(t.find('#mf-jq-context').innerHTML.includes('上下文已失效')); await t.lifecycle.unmount()
   assert.equal(fs.readFileSync(path.join(__dirname, '../../frontend/public/sub-apps/jquery/app.js'), 'utf8'), code)
+})
+
+test('display updates preserve pending reads while same-hash grant replacement cancels and clears them', async () => {
+  const t = setup(); await t.lifecycle.mount(t.container, t.props)
+  const display = t.click('#mf-jq-btn-menus')
+  await t.lifecycle.update({ ...t.props, theme: 'dark' })
+  assert.equal(t.requests[0].options.signal.aborted, false)
+  t.requests[0].resolve(response({ menus: [{ title: 'same authorization' }] })); await display
+  assert.ok(t.find('#mf-jq-menu-list').innerHTML.includes('same authorization'))
+  const old = t.click('#mf-jq-btn-menus')
+  await t.lifecycle.update({ ...t.props, theme: 'dark', permissions: [], dataGrants: [] })
+  assert.equal(t.requests[1].options.signal.aborted, true)
+  t.requests[1].resolve(response({ menus: [{ title: 'removed authorization' }] })); await old
+  assert.equal(t.find('#mf-jq-menu-list').innerHTML, '')
+  await t.lifecycle.unmount()
 })

@@ -1,9 +1,10 @@
-import { lazy, Suspense } from "react"
-import { Navigate, Route, Routes } from "react-router-dom"
-import { Loader2 } from "lucide-react"
-import AppLayout from "@/components/layout/AppLayout"
+import { lazy } from "react"
+import { Navigate, Route, Routes, useLocation } from "react-router-dom"
+import { RouteRecoveryBoundary } from "@/components/RouteRecoveryBoundary"
+import { useAuthStore } from "@/stores/auth"
 import { usePlatformBrandingMetadata } from "@/hooks/use-platform-branding"
 
+const AppLayout = lazy(() => import("@/components/layout/AppLayout"))
 const LoginPage = lazy(() => import("@/pages/login/LoginPage"))
 const DevicePage = lazy(() => import("@/pages/device/DevicePage"))
 const ConsentPage = lazy(() => import("@/pages/consent/ConsentPage"))
@@ -17,6 +18,7 @@ const MenusPage = lazy(() => import("@/pages/system/menus/MenusPage"))
 const OrganizationsPage = lazy(() => import("@/pages/system/organizations/OrganizationsPage"))
 const DepartmentsPage = lazy(() => import("@/pages/system/departments/DepartmentsPage"))
 const AuthorizationsPage = lazy(() => import("@/pages/system/authorizations/AuthorizationsPage"))
+const DataGrantsPage = lazy(() => import("@/pages/system/data-grants/DataGrantsPage"))
 const UsersPage = lazy(() => import("@/pages/system/users/UsersPage"))
 const RolesPage = lazy(() => import("@/pages/system/roles/RolesPage"))
 const RegionsPage = lazy(() => import("@/pages/system/regions/RegionsPage"))
@@ -33,12 +35,11 @@ const HermesInboxPage = lazy(() => import("@/pages/hermes/InboxPage"))
 const HermesNotificationsPage = lazy(() => import("@/pages/hermes/NotificationsPage"))
 const MicroAppContainer = lazy(() => import("@/components/micro/MicroAppContainer"))
 
-function PageLoading() {
-  return (
-    <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="页面加载中">
-      <Loader2 className="size-6 animate-spin text-muted-foreground" />
-    </div>
-  )
+function ProtectedLayout() {
+  const token = useAuthStore((state) => state.token)
+  const { pathname, search } = useLocation()
+  if (!token) return <Navigate to={`/login?return=${encodeURIComponent(pathname + search)}`} replace />
+  return <AppLayout />
 }
 
 function NotFound() {
@@ -55,8 +56,9 @@ function NotFound() {
 
 export default function App() {
   usePlatformBrandingMetadata()
+  const { pathname } = useLocation()
   return (
-    <Suspense fallback={<PageLoading />}>
+    <RouteRecoveryBoundary key={pathname === "/login" || pathname === "/device" || pathname === "/consent" ? pathname : "protected"}>
       <Routes>
         {/* 公开路由 */}
         <Route path="/login" element={<LoginPage />} />
@@ -64,7 +66,7 @@ export default function App() {
         <Route path="/consent" element={<ConsentPage />} />
 
         {/* 受保护路由(AppLayout 内含登录守卫) */}
-        <Route element={<AppLayout />}>
+        <Route element={<ProtectedLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
@@ -78,6 +80,7 @@ export default function App() {
           <Route path="/system/organizations" element={<OrganizationsPage />} />
           <Route path="/system/departments" element={<DepartmentsPage />} />
           <Route path="/system/authorizations" element={<AuthorizationsPage />} />
+          <Route path="/system/data-grants" element={<DataGrantsPage />} />
           <Route path="/system/users" element={<UsersPage />} />
           <Route path="/system/roles" element={<RolesPage />} />
           <Route path="/system/regions" element={<RegionsPage />} />
@@ -101,6 +104,6 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
-    </Suspense>
+    </RouteRecoveryBoundary>
   )
 }

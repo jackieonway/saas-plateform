@@ -3,10 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "npm": ">=11.16.0 <12"
+  },
   "scripts": {
+    "test:host:browser": "node ../tests/phase29-browser-gate.mjs",
     "dev": "vite --port 3000 --strictPort --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "test:micro": "node --test ../tests/micro-context-runtime.mjs ../tests/micro-sandbox-lifecycle.mjs ../tests/micro-iframe-protocol.mjs ../tests/package-microapp.mjs ../mini-services/micro-vue/smoke-test.cjs ../mini-services/micro-jquery/smoke-test.cjs",
+    "test:micro": "node --test ../tests/micro-context-runtime.mjs ../tests/micro-context-updates.mjs ../tests/micro-sandbox-lifecycle.mjs ../tests/micro-iframe-protocol.mjs ../tests/micro-sdk-client.mjs ../business-apps/work-orders/frontend/tests/client.mjs ../business-apps/work-orders/frontend/tests/app.mjs ../tests/package-microapp.mjs ../mini-services/micro-vue/smoke-test.cjs ../mini-services/micro-jquery/smoke-test.cjs",
     "test:micro:gateways": "node --test ../tests/micro-release-gateways.mjs",
     "test:micro:browser": "node ../tests/micro-host-browser.mjs",
     "test:notifications": "node --test ../tests/notification-context.mjs",
@@ -16,10 +22,16 @@
     "test:regions:browser": "node ../tests/region-location-browser.mjs",
     "test:entities:browser": "node ../tests/entity-types-browser.mjs",
     "test:auth:routes": "node ../tests/route-permissions-browser.mjs",
-    "test:auth:refresh": "node --test ../tests/session-refresh.mjs",
+    "test:auth": "node --test ../tests/auth-queries.mjs ../tests/route-policy.mjs ../tests/route-policy-guard.mjs ../tests/application-navigation.mjs ../business-apps/work-orders/frontend/tests/client.mjs ../business-apps/work-orders/frontend/tests/app.mjs ../tests/session-refresh.mjs ../tests/session-coordinator.mjs ../tests/session-integration.mjs ../tests/data-grants.mjs ../tests/data-grants-transport.mjs ../tests/platform-admin-contract.mjs",
+    "test:auth:navigation:browser": "node ../tests/phase9-navigation-browser.mjs",
+    "test:auth:refresh": "node --test ../tests/session-refresh.mjs ../tests/session-coordinator.mjs ../tests/session-integration.mjs",
     "test:departments:browser": "node ../tests/department-context-browser.mjs",
     "preview": "vite preview",
-    "lint": "eslint src --ext ts,tsx"
+    "lint": "eslint src vite.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:contracts": "node --test ../tests/micro-context-runtime.mjs ../tests/micro-context-updates.mjs ../tests/micro-sandbox-lifecycle.mjs ../tests/micro-runtime-faults.mjs ../tests/micro-iframe-protocol.mjs ../tests/micro-sdk-client.mjs ../business-apps/work-orders/frontend/tests/client.mjs ../business-apps/work-orders/frontend/tests/app.mjs ../tests/notification-context.mjs ../tests/session-refresh.mjs ../tests/map-location-regions.mjs ../mini-services/micro-vue/smoke-test.cjs ../mini-services/micro-jquery/smoke-test.cjs ../examples/app-backend/authorize.test.mjs ../tests/auth-queries.mjs ../tests/route-policy.mjs ../tests/route-policy-guard.mjs ../tests/application-navigation.mjs ../tests/session-coordinator.mjs ../tests/session-integration.mjs ../tests/data-grants.mjs ../tests/data-grants-transport.mjs ../tests/platform-admin-contract.mjs",
+    "test:auth:session:browser": "node ../tests/phase10-session-browser.mjs",
+    "test:platform-admin": "cargo test --locked --manifest-path ../tools/platform-admin/Cargo.toml --all-targets"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.5",
@@ -78,15 +90,19 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@tailwindcss/vite": "^4.1.8",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4.5.0",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "tailwindcss": "^4.1.8",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5.8.3",
+    "typescript-eslint": "8.71.2",
     "vite": "^6.3.5"
   }
 }

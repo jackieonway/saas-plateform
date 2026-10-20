@@ -1,0 +1,817 @@
+{
+  "schemaVersion": 1,
+  "phase": 12,
+  "status": "COMPLETED",
+  "date": "2026-10-16",
+  "timezone": "Asia/Shanghai",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "inputsSha256": "9b016ace67d06993c31f31de8f622db1b52ed21548b9c0f9a84951bc5821684c",
+  "inputFiles": 505,
+  "finalVerification": "PASS",
+  "mandatoryPostgres": {
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0,
+    "suites": [
+      {
+        "name": "production_security_tests",
+        "expected": 8,
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "platform_settings_tests",
+        "expected": 4,
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "authorization_isolation_tests",
+        "expected": 3,
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "entity_creation_tests",
+        "expected": 6,
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "release_tests::zip_registration",
+        "expected": 6,
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "oauth_issuance_tests",
+        "expected": 10,
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "platform_session_refresh_tests",
+        "expected": 4,
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      },
+      {
+        "name": "login_protection_tests",
+        "expected": 5,
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "status": "PASS"
+      }
+    ]
+  },
+  "fast": {
+    "status": "PASS",
+    "steps": 27,
+    "tools": {
+      "node": "v24.18.0",
+      "platform": "linux",
+      "architecture": "x64",
+      "npm": "11.16.0",
+      "rust": "rustc 1.97.0 (2d8144b78 2026-07-07)"
+    },
+    "checks": [
+      {
+        "id": "contracts",
+        "counts": {
+          "tests": 362,
+          "pass": 362,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "deployment-unit",
+        "counts": {
+          "tests": 36,
+          "pass": 36,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "ci-policy",
+        "counts": {
+          "tests": 52,
+          "pass": 52,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "dev-and-vite",
+        "counts": {
+          "tests": 19,
+          "pass": 19,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "rust-config-units",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 154
+        }
+      },
+      {
+        "id": "rust-archive-units",
+        "counts": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 142
+        }
+      },
+      {
+        "id": "rust-staging-maintenance-units",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 155
+        }
+      },
+      {
+        "id": "rust-public-contract-units",
+        "counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 149
+        }
+      },
+      {
+        "id": "rust-oauth-issuance-units",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 157
+        }
+      },
+      {
+        "id": "rust-login-limit-units",
+        "counts": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 150
+        }
+      },
+      {
+        "id": "rust-password-units",
+        "counts": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 150
+        }
+      },
+      {
+        "id": "rust-client-ip-units",
+        "counts": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 152
+        }
+      },
+      {
+        "id": "rust-transport-units",
+        "counts": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      }
+    ]
+  },
+  "boundary": {
+    "changedPaths": 20,
+    "removed": 0,
+    "historicalMigrationsAndConsumerInputsUnchanged": true,
+    "ledgerUpdateAuthorized": true,
+    "all37LedgerStatusesConsistent": true,
+    "currentPhase": 13,
+    "currentStatus": "NOT_STARTED",
+    "phase11": "COMPLETED",
+    "phase12": "COMPLETED"
+  },
+  "resources": {
+    "status": "PASS",
+    "label": "saas.phase12.owner",
+    "containers": "",
+    "networks": "",
+    "volumes": ""
+  },
+  "auditLease": {
+    "mode": "owned WSL foreground stdin lease; no global configuration changes",
+    "ready": true,
+    "stopped": true,
+    "exitCode": 0
+  },
+  "staticChecks": [
+    {
+      "id": "rust-check",
+      "status": "PASS",
+      "exitCode": 0,
+      "log": "target/phase-12/static-final/rust-check.log"
+    },
+    {
+      "id": "windows-default-tests",
+      "status": "PASS",
+      "exitCode": 0,
+      "log": "target/phase-12/static-final/windows-default-tests.log"
+    },
+    {
+      "id": "rust-doc",
+      "status": "PASS",
+      "exitCode": 0,
+      "log": "target/phase-12/static-final/rust-doc.log"
+    },
+    {
+      "id": "strict-clippy",
+      "status": "FAIL",
+      "exitCode": 101,
+      "log": "target/phase-12/static-final/strict-clippy.log"
+    },
+    {
+      "id": "strict-fmt",
+      "status": "FAIL",
+      "exitCode": 1,
+      "log": "target/phase-12/static-final/strict-fmt.log"
+    },
+    {
+      "id": "new-module-format",
+      "status": "PASS",
+      "exitCode": 0,
+      "log": "target/phase-12/static-final/new-module-format.log"
+    },
+    {
+      "id": "phase-diff-whitespace",
+      "status": "PASS",
+      "exitCode": 0,
+      "log": "target/phase-12/static-final/phase-diff-whitespace.log"
+    }
+  ],
+  "limitations": [
+    "Full strict Clippy and fmt retain pre-existing repository debt; their actual failures are preserved.",
+    "Windows default suite has 73 ignored DB tests; mandatory selected PG46 ran explicitly with zero skips.",
+    "Budgets are process-local; N replicas multiply capacity and restart resets counters, with no shared-quota mode claimed.",
+    "No password-policy/Argon2 reduction; arbitrary non-default PHC memory is not bounded by worker-count limits and was not benchmarked here.",
+    "No production migration, external publishing, or Phase13 implementation was performed."
+  ],
+  "firstFailure": {
+    "scope": "WIP only, not final source",
+    "inputsSha256": "58978bb0c39c163fdbd0cb798210abe196659d21457813d64e10eb5d94793d3f",
+    "passed": 4,
+    "failed": 1,
+    "skipped": 0,
+    "reason": "New fixture assumed password reset revoked ordinary OAuth access; final tests preserve the existing independent-revocation contract and assert explicit revoke, platform/psr/app invalidation, and stale password rejection."
+  },
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 17981,
+      "sha256": "4fd09098bfa8da92c4c001bf7aa2aca810d9f1a56c1a5e0d599ee8b1e06c83bf"
+    },
+    {
+      "path": "docs/architecture-optimization-ledger.md",
+      "bytes": 163709,
+      "sha256": "9ab9be52116926281689c9ab05ca42e749c6b926be76112f5768ceb019435f8d"
+    },
+    {
+      "path": "docs/architecture.md",
+      "bytes": 101946,
+      "sha256": "1d10ac48a529bbfdf568b122a36359dc4e50d5e37ab5c5195e52c2d1507fe522"
+    },
+    {
+      "path": "docs/engineering-baseline.md",
+      "bytes": 35252,
+      "sha256": "cbc8fece26f1dee34f4a2fe0100881b8fa09726edc9d8b71753a61ac872239e7"
+    },
+    {
+      "path": "docs/login-protection.md",
+      "bytes": 10190,
+      "sha256": "52aa9258c187b63908e480d9a4890591a127ee6dfef27cb679dfc0614a808e17"
+    },
+    {
+      "path": "docs/validation/phase-12-boundaries.json",
+      "bytes": 7527,
+      "sha256": "bcf4344018f614378f72ca5ae1e787d3d2ecd492d4b42a4d2a09a7c9701f6f0a"
+    },
+    {
+      "path": "docs/validation/phase-12-inputs.json",
+      "bytes": 86461,
+      "sha256": "4ec7b534b52872aca9e28abc462b828d9a44f7a8515070c2e733674750aec6ff"
+    },
+    {
+      "path": "docs/validation/phase-12-ledger-update.md",
+      "bytes": 4511,
+      "sha256": "72635e838da471fb795130a1c2307451dafcc46f9412f2743c9c9b5fe052fb0b"
+    },
+    {
+      "path": "docs/validation/phase-12.md",
+      "bytes": 14187,
+      "sha256": "e4dc6940843e24de166cb354c1b181bf142ba30a274cce3fecf6af465456af0d"
+    },
+    {
+      "path": "target/phase-12/check-boundaries.mjs",
+      "bytes": 4481,
+      "sha256": "f107b92c8494e3ce12087392944c1356b052584dac5e999c0320c89bfd4515ec"
+    },
+    {
+      "path": "target/phase-12/clippy-prefreeze.log",
+      "bytes": 23844,
+      "sha256": "e165e3180481220b8852d5189f8213015c193874232447f42b076752ad456c0f"
+    },
+    {
+      "path": "target/phase-12/collect-final.mjs",
+      "bytes": 8591,
+      "sha256": "68ebe84d9e24276a94d7051628f2fb6e0fa2818dfcbb5851ebade48318c3130b"
+    },
+    {
+      "path": "target/phase-12/collect-runner-evidence.mjs",
+      "bytes": 6618,
+      "sha256": "3c68230c9f1d5a744a9878f16a839044ebe10d41b057caf6e0fa138fe0823057"
+    },
+    {
+      "path": "target/phase-12/ledger-before-adoption.md",
+      "bytes": 159900,
+      "sha256": "ac9df97c04b994669346393fbbbaa9947496d150796b11c6158253f7fb5da08f"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/container.log",
+      "bytes": 1614,
+      "sha256": "76efba8505b5d1d88b1f90c17b256982966ba4646760c34d7594534757b90092"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/driver-archive-verification.json",
+      "bytes": 314,
+      "sha256": "6442fd75c13bb5a0afb2c91c33a413f3c6216d4eec8d7e488f6ad3c42274b657"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/linux-runner-result.json",
+      "bytes": 2251,
+      "sha256": "c293334393fd3349d8bff5eef75bc7368b6dd2f446e9cd372f53c7ae87840568"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/phase-12-inputs.json",
+      "bytes": 86461,
+      "sha256": "4ec7b534b52872aca9e28abc462b828d9a44f7a8515070c2e733674750aec6ff"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/01-node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/02-npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/03-rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/04-install-root.log",
+      "bytes": 25,
+      "sha256": "ed3488c0dad53ade8657c9fabb0a14b8fd232ce67362e4c5489d14bc4ef97686"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/05-install-frontend.log",
+      "bytes": 27,
+      "sha256": "0eb243a917ff40a9f59a876fec059a54beed9e2c1d48081b3e2906e546db672b"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/06-install-mini-services-micro-vue.log",
+      "bytes": 26,
+      "sha256": "c5d9a86c1734743c0dc905ee9cc319f4137d4ec38adee54ec0fa4f0d9bc7f947"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/07-install-mini-services-micro-jquery.log",
+      "bytes": 25,
+      "sha256": "23a99653960f8b39d2cdee77427e5c76ebd3c463eac108b9afc6ac3d29b448bc"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/08-install-examples-websocket.log",
+      "bytes": 25,
+      "sha256": "4863de8fad4a6440f80f45059ad615c15615638a020336af3bb47e0ad940c4ae"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/09-install-scripts-ci.log",
+      "bytes": 23,
+      "sha256": "da13ab9d025b19c91553bc7d4c450975d3e4e36dd7c5fef6f223f8008ba39547"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/10-sdk-drift.log",
+      "bytes": 87,
+      "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/11-build-frontends.log",
+      "bytes": 18832,
+      "sha256": "558f9c97f72c2abccb26ddbf14e2b3b3230ce0d455e6c2fd6d377762997ee01a"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/12-lint.log",
+      "bytes": 11362,
+      "sha256": "1cc3955eff01afcd8a722419ca1d3b5f8c255563560a224adc791c821220dc0e"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/13-typecheck.log",
+      "bytes": 69,
+      "sha256": "763e90b76b62e6c308e153dc0e982734104069f3384703603d3ab3778e580ab5"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/14-contracts.log",
+      "bytes": 86988,
+      "sha256": "d891ee934cd6411d01ee76b1fbc89027c248b29af5b9c6d3b32f679807196fc6"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/15-deployment-unit.log",
+      "bytes": 8453,
+      "sha256": "f2010d1ee891917dd409b69d658043e2207991790c049e987165bb5144339d27"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/16-ci-policy.log",
+      "bytes": 12002,
+      "sha256": "eceabf1695d9ad6469f2a22474a2a6f184d367e19e8b5eb8a17e412fc28cbd15"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/17-dev-and-vite.log",
+      "bytes": 4557,
+      "sha256": "b0add13f6a98d548ef21064311c8572759026b91aaf2cdafb7cc296405073d9c"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/18-rust-check.log",
+      "bytes": 16474,
+      "sha256": "bdb25381dccff009c988e7642dd2cef75f4d1efd5961ecb0c70f93b46ce6e672"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/19-rust-config-units.log",
+      "bytes": 7326,
+      "sha256": "41b3a294539949239596a6d232b57e658b8771d955753f76acbca95a05a83744"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/20-rust-archive-units.log",
+      "bytes": 2085,
+      "sha256": "c2d55b81e33171c20b547ae39662c04a37060d50f442dda6fcbac6a5842323fe"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/21-rust-staging-maintenance-units.log",
+      "bytes": 591,
+      "sha256": "99358cf21321465f7ebfddb0141bcfd640f1da24cab7d6dd48bc8fda304bb0c0"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/22-rust-public-contract-units.log",
+      "bytes": 1267,
+      "sha256": "5de46a2d5f08d39ba1ec719c83a70c6caad2be2c6ef462a9b1f92acf3e28318d"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/23-rust-oauth-issuance-units.log",
+      "bytes": 382,
+      "sha256": "a6b0d89f72c03aa8486ec09a7160dee2b11d2ab115f8e07e56cde9409a8a2230"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/24-rust-login-limit-units.log",
+      "bytes": 1094,
+      "sha256": "d02e3337f1cc8c99c940b037d05308eb8be3bb7574f76a0add6b4928726a51bc"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/25-rust-password-units.log",
+      "bytes": 594,
+      "sha256": "67d4bde848639ac9cb50c41af6559551b9427cf08359b5557cf4f238a08c51f6"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/26-rust-client-ip-units.log",
+      "bytes": 796,
+      "sha256": "85a3479a61648b3701fce6443a1ffa2960893923803bcd6e7a874aa023303fc0"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/logs/27-rust-transport-units.log",
+      "bytes": 3990,
+      "sha256": "a4d746ab06b3a1994b09fd31065d83fa531c41bec56b2dac60cee0257543fc7d"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/source-manifest.json",
+      "bytes": 86461,
+      "sha256": "4ec7b534b52872aca9e28abc462b828d9a44f7a8515070c2e733674750aec6ff"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/fast/summary.json",
+      "bytes": 17687,
+      "sha256": "d84282b89cc1fa6b78f4427755ea8f6a3f0ecb2aa7491b5a3faf85bc7607c01c"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/reports/source-verification.json",
+      "bytes": 255,
+      "sha256": "e14ce93e67d856e0a557112a8f856455486c24acada6c36ebef4941745b320b6"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/run-postgres-linux.mjs",
+      "bytes": 9910,
+      "sha256": "4eb3b435bc0e8f1c5b63e01341fbbc119abd4a9e3ba694f407a93096bae496dc"
+    },
+    {
+      "path": "target/phase-12/linux-fast-r1/snapshot-manifest.json",
+      "bytes": 75568,
+      "sha256": "722a5a31bfaebc5082bcc95238ad51164e232696d8c2679e3085a2fc274cdd27"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/container.log",
+      "bytes": 17421,
+      "sha256": "6a5dfc528aaa27c9581d3e0d91d2ab1a5c05351fcc0c203f7c4934bccd4a52ca"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/driver-archive-verification.json",
+      "bytes": 311,
+      "sha256": "a7d872a3ae779403f24be414093d59e626957d1810adc273c637a341de3576e8"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/linux-runner-result.json",
+      "bytes": 3298,
+      "sha256": "f044ad618cb6894d2f1c5ed372d32daeb5f606b96688994b66c4084c6760cfb2"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/reports/postgres/login-result.json",
+      "bytes": 1053,
+      "sha256": "7fb3ba9a4b6c67a6a787226a0820dff4dcebd85428f02788801a992294addf67"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/reports/postgres/login_protection_tests.log",
+      "bytes": 17423,
+      "sha256": "30378a7a8a0f7002fd8f78fff2c24bf2db88cb457463b7c8905dd083de72f84f"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/reports/postgres/summary.json",
+      "bytes": 813,
+      "sha256": "c36344618e469eaf67d6f0db9aa677b357e39e923e4d5d738981980c5eae1c00"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/reports/source-verification.json",
+      "bytes": 256,
+      "sha256": "cc39e37c759fb40a80b3f39f1847bd9f95ee7f299f5d29e2df874f33a5ca7cb8"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/run-postgres-linux.mjs",
+      "bytes": 9910,
+      "sha256": "4eb3b435bc0e8f1c5b63e01341fbbc119abd4a9e3ba694f407a93096bae496dc"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/snapshot-manifest.json",
+      "bytes": 75568,
+      "sha256": "f047785e6ce67b90674c7a42002dd547133d5318ed4068fb760b9ae1462b9aad"
+    },
+    {
+      "path": "target/phase-12/linux-login-wip-r1/wip-1-inputs.json",
+      "bytes": 86460,
+      "sha256": "b2f51302bfeb045321049ee930073ed3cd86a5fc3259dcab1c475f9cfc7a35e7"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/container.log",
+      "bytes": 239,
+      "sha256": "14895c588b963538983e15a2beba3edeec13ac0963fd8f3cd4335d66ee02c055"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/driver-archive-verification.json",
+      "bytes": 314,
+      "sha256": "6442fd75c13bb5a0afb2c91c33a413f3c6216d4eec8d7e488f6ad3c42274b657"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/linux-runner-result.json",
+      "bytes": 3655,
+      "sha256": "b0f2096ed7e88c2269392af82af77b03f4ccb0fb6b91814177a894f8e41b9053"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/phase-12-inputs.json",
+      "bytes": 86461,
+      "sha256": "4ec7b534b52872aca9e28abc462b828d9a44f7a8515070c2e733674750aec6ff"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/logs/01-node-version.log",
+      "bytes": 9,
+      "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/logs/02-npm-version.log",
+      "bytes": 8,
+      "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/logs/03-rust-version.log",
+      "bytes": 36,
+      "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/logs/04-postgres.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/authorization_isolation_tests.log",
+      "bytes": 899,
+      "sha256": "7c644585eec02e053cf859989cd75005d8711ce10e28e18216dee1ba0bbc15b0"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/entity_creation_tests.log",
+      "bytes": 1448,
+      "sha256": "31b0312f408676d84daac9fd824a33d882f355b39e03af715ab28c494bbe0937"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/login_protection_tests.log",
+      "bytes": 1256,
+      "sha256": "1f25a5f8d19f5f83d446e650653a6a9cab2027eba88878f6fbf310b95ea9ac99"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/oauth_issuance_tests.log",
+      "bytes": 2110,
+      "sha256": "7918046ac341cd48e9ce836f195c51081028329b611dc51e939d0f22169dff2c"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/platform_session_refresh_tests.log",
+      "bytes": 1044,
+      "sha256": "7ee2a966a229ba173b5dee633d5f51def6afa58fa56058046074ead32930bf3e"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/platform_settings_tests.log",
+      "bytes": 1059,
+      "sha256": "b3b70d90f326f4ec63d46aeef07fb77949d8f8de6752c049f7736b15f5c70cf2"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/postgres-result.json",
+      "bytes": 5164,
+      "sha256": "c58e92921fdb0b337a68bfe4bb0db93cac86bc57167b9b2433ee0504fb2a1c72"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/production_security_tests.log",
+      "bytes": 17798,
+      "sha256": "b793cbd3d9724393b737c3a181e0788c18d30baa83c169366d4286f18b1f3824"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/postgres/release_tests-zip_registration.log",
+      "bytes": 2302,
+      "sha256": "e2f44191e082fd409f6c864c5ce50735f0479902ed269135f574046f1f1c2375"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/source-manifest.json",
+      "bytes": 86461,
+      "sha256": "4ec7b534b52872aca9e28abc462b828d9a44f7a8515070c2e733674750aec6ff"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/postgres/summary.json",
+      "bytes": 3399,
+      "sha256": "bfcb21fcc05e7191cd13bd4b168123ec47d9ff9ae1f010fbcfe37ba5bab5e169"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/reports/source-verification.json",
+      "bytes": 255,
+      "sha256": "1aaa2d9e7e3fa108448d67fd2fb1768a71ff3a0ac41b32e8b1376091b2ba2e35"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/run-postgres-linux.mjs",
+      "bytes": 9910,
+      "sha256": "4eb3b435bc0e8f1c5b63e01341fbbc119abd4a9e3ba694f407a93096bae496dc"
+    },
+    {
+      "path": "target/phase-12/linux-postgres-r1/snapshot-manifest.json",
+      "bytes": 75568,
+      "sha256": "722a5a31bfaebc5082bcc95238ad51164e232696d8c2679e3085a2fc274cdd27"
+    },
+    {
+      "path": "target/phase-12/run-postgres-linux.mjs",
+      "bytes": 9910,
+      "sha256": "4eb3b435bc0e8f1c5b63e01341fbbc119abd4a9e3ba694f407a93096bae496dc"
+    },
+    {
+      "path": "target/phase-12/run-static-checks.mjs",
+      "bytes": 2483,
+      "sha256": "6325f9cbc89f0dd34519e711eefa7bd59588b4b0a475db22489c60b37d544348"
+    },
+    {
+      "path": "target/phase-12/runner-final-verification.json",
+      "bytes": 13773,
+      "sha256": "3fd90680647c93eee0b6249cac5b6a5b3af30a8f0ab2ae85a8bf4e7b23c850a5"
+    },
+    {
+      "path": "target/phase-12/static-final/new-module-format.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-12/static-final/phase-diff-whitespace.log",
+      "bytes": 112,
+      "sha256": "2f3173bc02e7f4dd5b8bc873d6142f30d144d1a993fc6533caeac2bc8e34ee31"
+    },
+    {
+      "path": "target/phase-12/static-final/result.json",
+      "bytes": 4108,
+      "sha256": "f0d92e783851c8d3430f647c2004656d754f76f4f374529210518903d6be1e3d"
+    },
+    {
+      "path": "target/phase-12/static-final/rust-check.log",
+      "bytes": 563,
+      "sha256": "e34a3cba03b9b7d0ea3bbac10beb6a4e1e71726eb29ff4afc5bbee1335582452"
+    },
+    {
+      "path": "target/phase-12/static-final/rust-doc.log",
+      "bytes": 1033,
+      "sha256": "a360460b372d1151332a2d88b5349715023114a8f183a6e00f59f8cb5c9cb5bd"
+    },
+    {
+      "path": "target/phase-12/static-final/strict-clippy.log",
+      "bytes": 21978,
+      "sha256": "2744cadb4931cfe4b59c6f3e5265f76d380cefe0bdae15533a3a96e81fdb5938"
+    },
+    {
+      "path": "target/phase-12/static-final/strict-fmt.log",
+      "bytes": 386193,
+      "sha256": "8c6a6ba43ad7291178e4a77ddaed36855fbbd4f35557bd9d1b47e3551175cd5b"
+    },
+    {
+      "path": "target/phase-12/static-final/windows-default-tests.log",
+      "bytes": 21570,
+      "sha256": "798a3da8f33f0f1c2091e93f3c4c59c90737981b56bd6ebaeb6db450d574916e"
+    },
+    {
+      "path": "target/phase-12/update-ledger-complete.mjs",
+      "bytes": 7820,
+      "sha256": "f54679fa7beb2655c4abf0f357e670cc2e705a62a86b9a5ef896ae52a52b7b77"
+    },
+    {
+      "path": "target/phase-12/update-ledger-start.mjs",
+      "bytes": 6814,
+      "sha256": "61ca381ec674345f4409329f0fc4f332f473ce7a33bb253b0136cd09f58a8df5"
+    },
+    {
+      "path": "target/phase-12/wip-1-inputs.json",
+      "bytes": 86460,
+      "sha256": "b2f51302bfeb045321049ee930073ed3cd86a5fc3259dcab1c475f9cfc7a35e7"
+    }
+  ],
+  "finishedAt": "2026-10-16T08:18:53.284Z"
+}

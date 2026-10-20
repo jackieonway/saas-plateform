@@ -425,7 +425,12 @@ impl Harness {
             .execute(pool)
             .await?;
         grant_application(pool, platform, platform_org, applications[0]).await?;
-        for permission in ["notification:publish", "system:user", "system:role", "system:audit"] {
+        for permission in [
+            "notification:publish",
+            "system:user",
+            "system:role",
+            "system:audit",
+        ] {
             let menu = if permission == "notification:publish" {
                 menus[0]
             } else if permission == "system:audit" {
@@ -435,13 +440,26 @@ impl Harness {
                     .bind(applications[0]).bind(permission).fetch_one(pool).await?
             };
             sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
-                .bind(platform).bind(menu).execute(pool).await?;
+                .bind(platform)
+                .bind(menu)
+                .execute(pool)
+                .await?;
             sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
-                .bind(platform_org).bind(menu).execute(pool).await?;
+                .bind(platform_org)
+                .bind(menu)
+                .execute(pool)
+                .await?;
         }
         let mut config = Config::from_env();
         config.database_url = "postgres://unused/notification-test".into();
         config.jwt_secret = SECRET.into();
+        config.data_grant_policy = crate::data_grants::policy::Policy::from_json(&json!({
+            "applications":[{"applicationId":applications[0],"capabilities":[
+                {"resource":"ticket","action":"create","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]},
+                {"resource":"ticket","action":"update","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]}],
+                "memberLookups":[{"resource":"ticket","action":"create"},{"resource":"ticket","action":"update"}]}],
+            "managementScopes":[]
+        }).to_string())?;
         let router = routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config)));
         let h = Self {
             pool: pool.clone(),
@@ -634,67 +652,209 @@ async fn notification_tenant_grants_obey_selected_organization_subtree() -> Resu
     let result: Result<()> = async {
         let h = Harness::create(&db.pool).await?;
         let ancestor: Uuid = sqlx::query_scalar("SELECT parent_id FROM organizations WHERE id=$1")
-            .bind(h.root).fetch_one(&db.pool).await?;
+            .bind(h.root)
+            .fetch_one(&db.pool)
+            .await?;
         let grandchild = organization(&db.pool, h.tenant_a, "nested child", Some(h.child)).await?;
-        let grandchild_user = user(&db.pool, "notification-nested-child", false, &[grandchild]).await?;
+        let grandchild_user =
+            user(&db.pool, "notification-nested-child", false, &[grandchild]).await?;
         grant_application(&db.pool, h.tenant_a, grandchild, h.main_app).await?;
 
         let (platform_user, platform_tenant, platform_root): (Uuid, Uuid, Uuid) = sqlx::query_as(
             "SELECT user_id,tenant_id,organization_id FROM platform_sessions WHERE id=$1",
-        ).bind(h.platform_session.id).fetch_one(&db.pool).await?;
-        let platform_child = organization(&db.pool, platform_tenant, "platform child", Some(platform_root)).await?;
-        let platform_leaf = organization(&db.pool, platform_tenant, "platform leaf", Some(platform_child)).await?;
-        let platform_peer = organization(&db.pool, platform_tenant, "platform peer", Some(platform_root)).await?;
+        )
+        .bind(h.platform_session.id)
+        .fetch_one(&db.pool)
+        .await?;
+        let platform_child = organization(
+            &db.pool,
+            platform_tenant,
+            "platform child",
+            Some(platform_root),
+        )
+        .await?;
+        let platform_leaf = organization(
+            &db.pool,
+            platform_tenant,
+            "platform leaf",
+            Some(platform_child),
+        )
+        .await?;
+        let platform_peer = organization(
+            &db.pool,
+            platform_tenant,
+            "platform peer",
+            Some(platform_root),
+        )
+        .await?;
         for org in [platform_child, platform_leaf, platform_peer] {
             sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
-                .bind(platform_user).bind(org).execute(&db.pool).await?;
+                .bind(platform_user)
+                .bind(org)
+                .execute(&db.pool)
+                .await?;
             grant_application(&db.pool, platform_tenant, org, h.main_app).await?;
             sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
-                .bind(org).bind(h.publish_menu).execute(&db.pool).await?;
+                .bind(org)
+                .bind(h.publish_menu)
+                .execute(&db.pool)
+                .await?;
         }
-        let platform_child_session = session(&db.pool, platform_user, platform_tenant, platform_child, 3600, 3600).await?;
+        let platform_child_session = session(
+            &db.pool,
+            platform_user,
+            platform_tenant,
+            platform_child,
+            3600,
+            3600,
+        )
+        .await?;
         h.grant(h.publisher, h.child, h.main_app, "TENANT").await?;
-        h.grant(platform_user, platform_child, h.main_app, "TENANT").await?;
-        h.grant(platform_user, platform_root, h.main_app, "TENANT").await?;
+        h.grant(platform_user, platform_child, h.main_app, "TENANT")
+            .await?;
+        h.grant(platform_user, platform_root, h.main_app, "TENANT")
+            .await?;
         let path = format!("/api/apps/{APP_CODE}/notifications");
         for (label, session_token, current, descendant, recipient, outside) in [
-            ("ordinary-branch", h.publisher_session.token.as_str(), h.root, h.child, h.child_user, vec![(ancestor, h.publisher), (h.peer, h.peer_user)]),
-            ("ordinary-child", h.child_session.token.as_str(), h.child, grandchild, grandchild_user, vec![(h.root, h.publisher), (h.peer, h.peer_user)]),
-            ("platform-child", platform_child_session.token.as_str(), platform_child, platform_leaf, platform_user, vec![(platform_root, platform_user), (platform_peer, platform_user)]),
+            (
+                "ordinary-branch",
+                h.publisher_session.token.as_str(),
+                h.root,
+                h.child,
+                h.child_user,
+                vec![(ancestor, h.publisher), (h.peer, h.peer_user)],
+            ),
+            (
+                "ordinary-child",
+                h.child_session.token.as_str(),
+                h.child,
+                grandchild,
+                grandchild_user,
+                vec![(h.root, h.publisher), (h.peer, h.peer_user)],
+            ),
+            (
+                "platform-child",
+                platform_child_session.token.as_str(),
+                platform_child,
+                platform_leaf,
+                platform_user,
+                vec![
+                    (platform_root, platform_user),
+                    (platform_peer, platform_user),
+                ],
+            ),
         ] {
             let token = h.app_token(session_token, APP_CODE).await?;
-            let context = ok(&h.router, Method::GET, &format!("/api/apps/{APP_CODE}/context"), &token, None).await?;
-            let grant = context["dataGrants"].as_array().and_then(|grants| grants.iter().find(|grant| {
-                grant["resource"] == "notification" && grant["action"] == "publish"
-            })).ok_or_else(|| anyhow!("missing notification grant for {label}"))?;
-            let ids = grant["organizationIds"].as_array().ok_or_else(|| anyhow!("missing subtree IDs for {label}"))?;
-            ensure!(grant["scope"] == "ORG_SUBTREE" && ids.contains(&json!(current)) && ids.contains(&json!(descendant)),
-                "TENANT grant was not capped to selected subtree for {label}");
-            let published = h.publish(&token, body(&format!("{label}:descendant"), user_target(recipient, descendant))).await?;
-            ensure!(h.deliveries(&published).await? == vec![(if label == "platform-child" { platform_tenant } else { h.tenant_a }, descendant, recipient)],
-                "descendant publication delivered outside its target for {label}");
+            let context = ok(
+                &h.router,
+                Method::GET,
+                &format!("/api/apps/{APP_CODE}/context"),
+                &token,
+                None,
+            )
+            .await?;
+            let grant = context["dataGrants"]
+                .as_array()
+                .and_then(|grants| {
+                    grants.iter().find(|grant| {
+                        grant["resource"] == "notification" && grant["action"] == "publish"
+                    })
+                })
+                .ok_or_else(|| anyhow!("missing notification grant for {label}"))?;
+            let ids = grant["organizationIds"]
+                .as_array()
+                .ok_or_else(|| anyhow!("missing subtree IDs for {label}"))?;
+            ensure!(
+                grant["scope"] == "ORG_SUBTREE"
+                    && ids.contains(&json!(current))
+                    && ids.contains(&json!(descendant)),
+                "TENANT grant was not capped to selected subtree for {label}"
+            );
+            let published = h
+                .publish(
+                    &token,
+                    body(
+                        &format!("{label}:descendant"),
+                        user_target(recipient, descendant),
+                    ),
+                )
+                .await?;
+            ensure!(
+                h.deliveries(&published).await?
+                    == vec![(
+                        if label == "platform-child" {
+                            platform_tenant
+                        } else {
+                            h.tenant_a
+                        },
+                        descendant,
+                        recipient
+                    )],
+                "descendant publication delivered outside its target for {label}"
+            );
             for (org, uid) in outside {
-                ensure!(!ids.contains(&json!(org)), "ancestor/sibling leaked into app context for {label}");
-                for (kind, target) in [("user", user_target(uid, org)), ("organization", org_target(org))] {
+                ensure!(
+                    !ids.contains(&json!(org)),
+                    "ancestor/sibling leaked into app context for {label}"
+                );
+                for (kind, target) in [
+                    ("user", user_target(uid, org)),
+                    ("organization", org_target(org)),
+                ] {
                     let key = format!("{label}:{kind}:{org}");
-                    rejected(&h.router, Method::POST, &path, &token, Some(body(&key, target)), &[StatusCode::NOT_FOUND]).await?;
-                    ensure!(h.counts(&key).await? == (0, 0), "rejected out-of-subtree target created records for {label}");
+                    rejected(
+                        &h.router,
+                        Method::POST,
+                        &path,
+                        &token,
+                        Some(body(&key, target)),
+                        &[StatusCode::NOT_FOUND],
+                    )
+                    .await?;
+                    ensure!(
+                        h.counts(&key).await? == (0, 0),
+                        "rejected out-of-subtree target created records for {label}"
+                    );
                 }
             }
             let key = format!("{label}:tenant");
-            rejected(&h.router, Method::POST, &path, &token, Some(body(&key, json!({"kind":"TENANT"}))), &[StatusCode::FORBIDDEN]).await?;
-            ensure!(h.counts(&key).await? == (0, 0), "child context broadcast to entire tenant for {label}");
+            rejected(
+                &h.router,
+                Method::POST,
+                &path,
+                &token,
+                Some(body(&key, json!({"kind":"TENANT"}))),
+                &[StatusCode::FORBIDDEN],
+            )
+            .await?;
+            ensure!(
+                h.counts(&key).await? == (0, 0),
+                "child context broadcast to entire tenant for {label}"
+            );
         }
 
         let token = h.app_token(&h.platform_session.token, APP_CODE).await?;
-        let publication = h.publish(&token, body("platform-root:tenant", json!({"kind":"TENANT"}))).await?;
+        let publication = h
+            .publish(
+                &token,
+                body("platform-root:tenant", json!({"kind":"TENANT"})),
+            )
+            .await?;
         let rows = h.deliveries(&publication).await?;
-        ensure!(rows.len() == 4 && rows.iter().all(|(tenant, _, uid)| *tenant == platform_tenant && *uid == platform_user),
-            "platform-root tenant broadcast did not preserve tenant/recipient isolation");
-        ensure!(publication["recipientCount"] == 1 && publication["deliveryCount"] == 4,
-            "multi-organization recipient publication counts changed");
+        ensure!(
+            rows.len() == 4
+                && rows
+                    .iter()
+                    .all(|(tenant, _, uid)| *tenant == platform_tenant && *uid == platform_user),
+            "platform-root tenant broadcast did not preserve tenant/recipient isolation"
+        );
+        ensure!(
+            publication["recipientCount"] == 1 && publication["deliveryCount"] == 4,
+            "multi-organization recipient publication counts changed"
+        );
         Ok(())
-    }.await;
+    }
+    .await;
     db.finish(result).await
 }
 
@@ -1246,6 +1406,87 @@ async fn app_members_authorization_and_next_request_revocation() -> Result<()> {
         ok(&h.router,Method::GET,&path,&token,None).await?;
         sqlx::query("DELETE FROM memberships WHERE user_id=$1 AND organization_id=$2").bind(h.publisher).bind(h.root).execute(&db.pool).await?;
         rejected(&h.router,Method::GET,&path,&token,None,&[StatusCode::UNAUTHORIZED]).await?;
+        Ok(())
+    }.await;
+    db.finish(result).await
+}
+
+fn member_policy_router(h: &Harness, policy: &Value) -> Result<Router> {
+    let config = Config::from_values(&std::collections::HashMap::from([
+        (
+            "DATABASE_URL".into(),
+            "postgres://unused/phase19-members".into(),
+        ),
+        ("JWT_SECRET".into(), SECRET.into()),
+        ("DATA_GRANT_POLICY".into(), policy.to_string()),
+    ]))?;
+    Ok(routes::api_router().with_state(AppState::new(h.pool.clone(), Arc::new(config))))
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn app_members_require_explicit_same_application_assignment_declarations() -> Result<()> {
+    let db = Database::create().await?;
+    let result = async {
+        let h = Harness::create(&db.pool).await?;
+        app_members_setup(&h).await?;
+        app_members_grant(&h, h.root, "create", "TENANT").await?;
+        let token = h.app_token(&h.publisher_session.token, APP_CODE).await?;
+        let path = app_members_path(h.root, "create", None);
+        for policy in [
+            json!({"applications":[],"managementScopes":[]}),
+            json!({"applications":[{"applicationId":h.main_app,"capabilities":[{"resource":"ticket","action":"create","scopes":["TENANT"]}]}],"managementScopes":[]}),
+            json!({"applications":[{"applicationId":h.other_app,"capabilities":[{"resource":"ticket","action":"create","scopes":["TENANT"]}],"memberLookups":[{"resource":"ticket","action":"create"}]}],"managementScopes":[]}),
+        ] {
+            let app = member_policy_router(&h, &policy)?;
+            rejected(&app, Method::GET, &path, &token, None, &[StatusCode::BAD_REQUEST]).await?;
+            rejected(&app, Method::GET, &app_members_path(h.root, "create", Some(h.recipient)), &token, None, &[StatusCode::BAD_REQUEST]).await?;
+        }
+        let policy = json!({"applications":[{"applicationId":h.main_app,"capabilities":[{"resource":"ticket","action":"create","scopes":["TENANT"]}],"memberLookups":[{"resource":"ticket","action":"create"}]}],"managementScopes":[]});
+        let app = member_policy_router(&h, &policy)?;
+        // The stored TENANT grant is emitted as effective ORG_SUBTREE here.
+        // Management's allowed stored scopes must not reject that reduction.
+        ok(&app, Method::GET, &path, &token, None).await?;
+        ok(&app, Method::GET, &app_members_path(h.child, "create", None), &token, None).await?;
+        rejected(&app, Method::GET, &app_members_path(h.peer, "create", None), &token, None, &[StatusCode::NOT_FOUND]).await?;
+        rejected(&app, Method::GET, &app_members_path(h.root, "update", None), &token, None, &[StatusCode::BAD_REQUEST]).await?;
+        Ok(())
+    }.await;
+    db.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn app_members_registered_pair_is_not_a_ticket_special_case() -> Result<()> {
+    let db = Database::create().await?;
+    let result = async {
+        let h = Harness::create(&db.pool).await?;
+        // A protocol fixture pair proves the route consumes its declaration.
+        // This does not implement a second business application or its schema.
+        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON','Assignment protocol fixture','record:assign') RETURNING id")
+            .bind(h.main_app).fetch_one(&h.pool).await?;
+        sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)").bind(h.tenant_a).bind(menu).execute(&h.pool).await?;
+        for org in [h.root,h.child,h.peer] {
+            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)").bind(org).bind(menu).execute(&h.pool).await?;
+        }
+        sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)").bind(h.root_role).bind(menu).execute(&h.pool).await?;
+        sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) SELECT id,$3,'record','assign','TENANT' FROM memberships WHERE user_id=$1 AND organization_id=$2")
+            .bind(h.publisher).bind(h.root).bind(h.main_app).execute(&h.pool).await?;
+        let policy = json!({"applications":[{"applicationId":h.main_app,"capabilities":[{"resource":"record","action":"assign","scopes":["TENANT"]}],"memberLookups":[{"resource":"record","action":"assign"}]}],"managementScopes":[]});
+        let app = member_policy_router(&h, &policy)?;
+        let token = h.app_token(&h.publisher_session.token, APP_CODE).await?;
+        let path = |org:Uuid,user:Option<Uuid>| app_members_path(org,"assign",user).replace("resource=ticket","resource=record");
+        let list = ok(&app,Method::GET,&path(h.root,None),&token,None).await?;
+        ensure!(list["total"]==4,"declared resource changed minimal direct-member semantics");
+        let one = ok(&app,Method::GET,&path(h.root,Some(h.recipient)),&token,None).await?;
+        ensure!(one.as_object().is_some_and(|row| row.len()==3) && id_of(&one,"id")?==h.recipient,"declared pair changed member DTO");
+        ok(&app,Method::GET,&path(h.child,None),&token,None).await?;
+        rejected(&app,Method::GET,&path(h.peer,None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        rejected(&app,Method::GET,&path(h.remote,None),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        rejected(&app,Method::GET,&path(h.root,Some(h.disabled_user)),&token,None,&[StatusCode::NOT_FOUND]).await?;
+        rejected(&app,Method::GET,&app_members_path(h.root,"create",None),&token,None,&[StatusCode::BAD_REQUEST]).await?;
+        sqlx::query("DELETE FROM membership_data_grants WHERE application_id=$1 AND resource_code='record'").bind(h.main_app).execute(&h.pool).await?;
+        rejected(&app,Method::GET,&path(h.root,None),&token,None,&[StatusCode::FORBIDDEN]).await?;
         Ok(())
     }.await;
     db.finish(result).await

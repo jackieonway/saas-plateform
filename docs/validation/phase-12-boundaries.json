@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "before": {
+    "files": 502,
+    "inputsSha256": "162fb6705bd9768264d0d14581477ecba56d915da8cbaaa208cc50e75dbc0ac2"
+  },
+  "after": {
+    "files": 505,
+    "inputsSha256": "9b016ace67d06993c31f31de8f622db1b52ed21548b9c0f9a84951bc5821684c"
+  },
+  "changed": [
+    {
+      "path": "backend/src/client_ip.rs",
+      "kind": "added",
+      "before": null,
+      "after": "9b70b378297e18b7d3c00a472e42a8edc12d6d4236ff16bde985685597d14d77"
+    },
+    {
+      "path": "backend/src/config.rs",
+      "kind": "modified",
+      "before": "4f468ca84855d7636134448513c035ce3e386394e5c9e8c42a958ab06ab64a5e",
+      "after": "31e68a6b9e6b25ff099fa2d5cdb798216f87119b7240de144ddcb7622038a235"
+    },
+    {
+      "path": "backend/src/login_limits.rs",
+      "kind": "added",
+      "before": null,
+      "after": "5b3b9fcd7a7292875022b23a07c68eaa1b26589fe1faaa0073dd5cba969fa4f1"
+    },
+    {
+      "path": "backend/src/login_protection_tests.rs",
+      "kind": "added",
+      "before": null,
+      "after": "834dad54690e36e898458c2eef35e5f5b5978e316e027444c621dd3f7441204d"
+    },
+    {
+      "path": "backend/src/main.rs",
+      "kind": "modified",
+      "before": "ff88784aabdcb4497b7cfc799e62205a6aae8059c50740f429caa1d87743e1d9",
+      "after": "f7f2cd9b6aa32347d6d59cc946d4a146229059dd0088013e9efe891c464e9484"
+    },
+    {
+      "path": "backend/src/routes/auth.rs",
+      "kind": "modified",
+      "before": "102e8cd5c5b802ed3a7bb02ec67061ca6719bb120c7707ab58b94968285f1329",
+      "after": "17653126129a15fdeda573d01c0876024054051d17d2b78820416a9a93e4fa64"
+    },
+    {
+      "path": "backend/src/routes/oauth2.rs",
+      "kind": "modified",
+      "before": "29b405473227a9f87f7823df5346af2def38471ec8b77e2d4ae04268ab8271d2",
+      "after": "18f1a86fa0f29137785a703de9cb13baf6bc017b03df14f2c689d1669daf0495"
+    },
+    {
+      "path": "backend/src/routes/onboarding.rs",
+      "kind": "modified",
+      "before": "a23644d0aa367d4c88ddb441f8b518ec4ead3f5cdb82dc399f62f1f0f00736a2",
+      "after": "1bbf3d4ee09c0075bf37a8d5a937b0432bde384c55c1d035766a6fcb26beeda0"
+    },
+    {
+      "path": "backend/src/routes/organizations.rs",
+      "kind": "modified",
+      "before": "43b1df4e5625fdf2c754d7a1d60c500c68f697c0f0a824ac3db9b71abe43fd05",
+      "after": "5407b39b6edcd156f9d2ada036a07acb09d6d97c83bd1f7bbb79b488107f2688"
+    },
+    {
+      "path": "backend/src/routes/tenants.rs",
+      "kind": "modified",
+      "before": "93f196bf821d69df98c38584e57a87690ecc01035fcafd2a3c61634cc29573e0",
+      "after": "4f4e332e17c0e65bbb75abe4e6cb77f777143371c3d9c05ce70b090f40fb308a"
+    },
+    {
+      "path": "backend/src/routes/users.rs",
+      "kind": "modified",
+      "before": "a9fe8cecdd3189eca061f45eff158fc0e758b4e71a46544be92624897e93b752",
+      "after": "2ab37ac656711e2fe29f70d3f8778c75c23706e75882036d60b45082b6d531d9"
+    },
+    {
+      "path": "backend/src/session.rs",
+      "kind": "modified",
+      "before": "f61d553268f39f9891525c6f11f9a2f0ff8c1f1562b5bcb61d7eaebab5713f33",
+      "after": "77a6e3e332facd60eddde5f0914ce08ba1882fdd3d519e0345bb0f6bd8200303"
+    },
+    {
+      "path": "backend/src/state.rs",
+      "kind": "modified",
+      "before": "4bcfcea5cfe1faec905ca48e5e58105ce13838108bf53a410f47f54ddcaa85a2",
+      "after": "c3fd101df5aff01a617ff38eba077c3b29fbfbe63d132183326066adb5ac09dd"
+    },
+    {
+      "path": "backend/src/util/password.rs",
+      "kind": "modified",
+      "before": "431c0417bd8f0a2ab13687a70fe17897bc8e10554a77b8d7ab516ff51d4df2aa",
+      "after": "01effbd1054ac6a0e726aff8dbbfcf3b91430d973c036503940b285a4b79fc1f"
+    },
+    {
+      "path": "deploy/ci/README.md",
+      "kind": "modified",
+      "before": "e72120815e359e85d74a9bf29985256209d8f89646b90b0349b17a93e585e474",
+      "after": "c32be45c427a81667247abdbef731a76bf15e475afe22115505327d27c84b25c"
+    },
+    {
+      "path": "scripts/ci/manifest.mjs",
+      "kind": "modified",
+      "before": "144e49433d0bca13fa4f16d22fb4059f629ed63b3ee96b61af0e43868bbdf2d7",
+      "after": "5a63ae5191560f8b09680c71bd9196f335d84737369cb622e98110049c157117"
+    },
+    {
+      "path": "scripts/ci/postgres.test.mjs",
+      "kind": "modified",
+      "before": "936abd3db06aa755438bf7d259f22f2c614759a965c5dabe955f0d927cab0ff6",
+      "after": "0d7e6de941ef76134cde897a7f462ccfe453e0c99883aa38b2a4b84dea0c3a97"
+    },
+    {
+      "path": "scripts/ci/README.md",
+      "kind": "modified",
+      "before": "e74bff0702fb3063d455bd551bd005da00f3a3c9b753ad8b7ecec75b3b27fed5",
+      "after": "251d56acf0a1fd921bd3c799e267c513b00f67b58925bd477e46f2f70dc0b016"
+    },
+    {
+      "path": "scripts/ci/run.mjs",
+      "kind": "modified",
+      "before": "690b03a0e0a84991b874e68d50770f9d35f6c7803518200bb2e9b7e60a258806",
+      "after": "f8135c760869a4b862b61cde6e6b42e83fc280344ecbf0c04b368a5fc43bff4d"
+    },
+    {
+      "path": "tests/ci-runner.mjs",
+      "kind": "modified",
+      "before": "dbb0b38a5d210722004b3a4a98498dc3fce98cfbaf71b67adcb6a69395509d13",
+      "after": "f77bf00d75346ca78ba03faa0a4fb1846046c4de680866bf6031dee000904cf7"
+    }
+  ],
+  "removed": [],
+  "protected": [
+    "0001/0002/0003 migrations",
+    "OAuth issuance storage/consumption module",
+    "app token protocol",
+    "psr implementation except test-only standalone wrapper annotation",
+    "Cargo manifest/lock",
+    "source allowlist",
+    "frontend/SDK/business-consumer input files"
+  ],
+  "history": [
+    {
+      "path": "docs/validation/phase-11.md",
+      "sha256": "7534310deb93f2176c5d63d01a5ed51e7c06a8e805d13b0eae709c694e7fec83",
+      "meaning": "Historical Phase11 execution-time evidence preserved; references to subsequently edited current files are not recursively reinterpreted as Phase12 source."
+    },
+    {
+      "path": "docs/validation/phase-11-inputs.json",
+      "sha256": "55d2d5ea0cae809ffc0f68809f0c076c459d48cfe54ee49741ecd60bb5ac0b52",
+      "meaning": "Historical Phase11 execution-time evidence preserved; references to subsequently edited current files are not recursively reinterpreted as Phase12 source."
+    },
+    {
+      "path": "docs/validation/phase-11-runtime.json",
+      "sha256": "84fb2c840912d0c49a5de919aa203f0fd461de1987173f7910c1f46db22d4c2d",
+      "meaning": "Historical Phase11 execution-time evidence preserved; references to subsequently edited current files are not recursively reinterpreted as Phase12 source."
+    },
+    {
+      "path": "docs/validation/phase-11-boundaries.json",
+      "sha256": "ea1a7aadee011d5d72beb2ee0128922d5e1dfaf2ebd6b4db7de80c2143e69d3d",
+      "meaning": "Historical Phase11 execution-time evidence preserved; references to subsequently edited current files are not recursively reinterpreted as Phase12 source."
+    },
+    {
+      "path": "docs/validation/phase-11-ledger-update.md",
+      "sha256": "f30c56acdd4e09cd3ab12d359a75d1cf9ae8b831ac07e99b96438ab550503eb8",
+      "meaning": "Historical Phase11 execution-time evidence preserved; references to subsequently edited current files are not recursively reinterpreted as Phase12 source."
+    }
+  ],
+  "ledgerUpdateAuthorized": true,
+  "ledgerBeforeAdoption": {
+    "path": "target/phase-12/ledger-before-adoption.md",
+    "sha256": "ac9df97c04b994669346393fbbbaa9947496d150796b11c6158253f7fb5da08f"
+  },
+  "scopeExpansion": "onboarding plus tenants/organizations are the necessary existing HTTP password call chain; PasswordContext passes only policy and shared budget, without business or transaction restructuring."
+}

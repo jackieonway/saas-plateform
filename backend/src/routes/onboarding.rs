@@ -22,10 +22,13 @@ pub(super) struct ContactAdministrator {
 
 type ContactUserRow = (Uuid, String, String, String, String, String, bool);
 
+/// Credential policy and the shared process budget are passed as one capability.
+pub(super) type PasswordContext<'a> = (&'a Config, &'a password::PasswordService);
+
 /// Provision a contact in the same transaction as the entity and managed role.
 /// The returned password is never persisted, logged, or returned by read APIs.
 pub(super) async fn provision_contact_administrator(
-    tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid, org_id: Uuid,
+    tx: &mut Transaction<'_, Postgres>, (config, passwords): PasswordContext<'_>, tenant_id: Uuid, org_id: Uuid,
     contact: &Contact, role_code: &str, existing_org_scope: Option<&[Uuid]>,
 ) -> Result<Option<ContactAdministrator>, AppError> {
     if contact.is_empty() { return Ok(None); }
@@ -71,9 +74,7 @@ pub(super) async fn provision_contact_administrator(
         rand::rngs::OsRng.try_fill_bytes(&mut bytes).map_err(|_| anyhow::anyhow!("initial password generation failed"))?;
         let initial_password = hex::encode(bytes);
         password::validate_for_config(&initial_password, config)?;
-        let secret = initial_password.clone();
-        let hash = tokio::task::spawn_blocking(move || password::hash_password(&secret))
-            .await.map_err(|_| anyhow::anyhow!("password hashing worker failed"))??;
+        let hash = passwords.hash(&initial_password).await?;
         let id = sqlx::query_scalar(
             "INSERT INTO users(username,password_hash,real_name,phone,email) VALUES($1,$2,$3,$4,$5) RETURNING id",
         ).bind(&username).bind(hash).bind(&contact.contact_name).bind(&contact.contact_phone)
@@ -210,10 +211,10 @@ pub(super) async fn sync_org_admin(
 /// Explicit, serialized initialization for existing entities. Never replaces an
 /// administrator or changes an existing account password/profile.
 pub(super) async fn initialize_existing_administrator(
-    tx: &mut Transaction<'_, Postgres>, config: &Config, tenant_id: Uuid,
+    tx: &mut Transaction<'_, Postgres>, passwords: PasswordContext<'_>, tenant_id: Uuid,
     org_id: Uuid, contact: &Contact, role_code: &str, existing_org_scope: Option<&[Uuid]>,
 ) -> Result<ContactAdministrator, AppError> {
-    sqlx::query("SELECT id FROM organizations WHERE id=$1 FOR UPDATE")
+    sqlx::query("SELECT id FROM organizations WHERE id=$1 FOR NO KEY UPDATE")
         .bind(org_id).fetch_one(&mut **tx).await?;
     let existing: Option<(Uuid, String, String, String, String, bool, bool)> = sqlx::query_as(
         "SELECT u.id,u.username,r.name,u.status,r.status,r.built_in AND r.code=$2, \
@@ -250,6 +251,6 @@ pub(super) async fn initialize_existing_administrator(
         }
     }
     sync_org_admin(tx, org_id).await?;
-    provision_contact_administrator(tx, config, tenant_id, org_id, contact, role_code, existing_org_scope)
+    provision_contact_administrator(tx, passwords, tenant_id, org_id, contact, role_code, existing_org_scope)
         .await?.ok_or_else(|| AppError::bad_request("联系人信息不完整"))
 }

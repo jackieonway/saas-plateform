@@ -1,0 +1,3791 @@
+{
+  "schemaVersion": 1,
+  "phase": 19,
+  "status": "BOUNDARIES_PASS",
+  "capturedAt": "2026-10-17T04:24:19.122Z",
+  "clientTimezone": "Asia/Shanghai",
+  "clientDate": "2026-10-17",
+  "scope": "Source/ownership/preservation/closure and observed host drift only. This collector neither executes nor certifies acceptance gates, production deployment or whole-phase completion.",
+  "collector": {
+    "path": "target/phase-19/collect-boundaries.mjs",
+    "sha256": "fadfe0b0d759be9993fb8ba9770b2cce4ede93ada0acd1f8ac7a2c2570bc5e2b"
+  },
+  "sourceDefinition": {
+    "path": "target/phase-19/source-closure.mjs",
+    "sha256": "cb1ebd57720e17dfbcb1cb7d0b1542f3264414ccedc496a7a2bd3ad58b899112",
+    "predicate": "phase19Owned",
+    "requiredExport": "phase19RequiredInputs"
+  },
+  "checks": [
+    {
+      "name": "phase18-reference-bound-to-previous-boundary",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate-selector-bytes-bound-to-manifest",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate-all-selected-bytes-match-own-selector",
+      "result": "PASS"
+    },
+    {
+      "name": "phase18-all-retained-selected-bytes-match-historical-manifest",
+      "result": "PASS"
+    },
+    {
+      "name": "shared-closure-definition-matches-archived-capture-driver",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate-revalidated-with-shared-required-inputs-and-closure",
+      "result": "PASS"
+    },
+    {
+      "name": "observed-start-declares-pre-product-edit-working-tree-boundary",
+      "result": "PASS"
+    },
+    {
+      "name": "phase19-owned-required-inputs-match-candidate-and-current-host",
+      "result": "PASS"
+    },
+    {
+      "name": "necessary-member-test-and-ci-registrations-present",
+      "result": "PASS"
+    },
+    {
+      "name": "declared-legacy-node-backend-compatibility-set-preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "both-existing-business-migrations-preserve-pinned-bytes",
+      "result": "PASS"
+    },
+    {
+      "name": "business-cargo-manifest-and-lock-preserved-from-phase18",
+      "result": "PASS"
+    },
+    {
+      "name": "phase18-dependency-metadata-reference-matches-unchanged-lock",
+      "result": "PASS"
+    },
+    {
+      "name": "all-declared-documents-and-public-template-exist",
+      "result": "PASS"
+    },
+    {
+      "name": "public-template-remains-excluded-from-both-executable-manifests",
+      "result": "PASS"
+    },
+    {
+      "name": "named-test-fixture-routes-and-gates-stay-out-of-production-route-sources",
+      "result": "PASS"
+    },
+    {
+      "name": "owned-source-and-shared-definitions-stable-during-collection",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate-all-selected-inputs-still-immutable-at-end",
+      "result": "PASS"
+    }
+  ],
+  "sourceClosure": {
+    "status": "PASS",
+    "tool": {
+      "path": "target/phase-19/source-closure.mjs",
+      "sha256": "cb1ebd57720e17dfbcb1cb7d0b1542f3264414ccedc496a7a2bd3ad58b899112",
+      "predicate": "phase19Owned",
+      "requiredExport": "phase19RequiredInputs"
+    },
+    "explicitRequired": [
+      "scripts/ci/provenance.mjs",
+      "scripts/ci/linux-runner.mjs",
+      "scripts/ci/run.mjs",
+      "scripts/ci/report.mjs",
+      "business-apps/work-orders/backend/Cargo.toml",
+      "business-apps/work-orders/backend/Cargo.lock",
+      "business-apps/work-orders/backend/tests/migrations.rs",
+      "business-apps/work-orders/backend/tests/read_contracts.rs",
+      "business-apps/work-orders/backend/tests/write_contracts.rs",
+      "business-apps/work-orders/backend/tests/member_contracts.rs",
+      "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+      "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+      "backend/src/phase17_work_orders_tests.rs",
+      "backend/src/phase19_work_orders_tests.rs",
+      "backend/src/routes/app_members.rs",
+      "backend/src/data_grants/policy.rs",
+      "backend/src/notification_tests.rs",
+      "backend/src/data_grant_tests.rs",
+      "backend/src/platform_admin_cli_tests.rs",
+      "backend/src/phase18_work_orders_tests.rs",
+      "business-apps/work-orders/tests/platform-e2e.mjs",
+      "tests/ci-runner.mjs",
+      "tests/platform-admin-tls.mjs",
+      "tools/platform-admin/Cargo.toml",
+      "tools/platform-admin/Cargo.lock",
+      "scripts/ci/work-orders-postgres.mjs",
+      "scripts/ci/work-orders-read-postgres.mjs",
+      "scripts/ci/work-orders-write-postgres.mjs",
+      "scripts/ci/work-orders-member-postgres.mjs",
+      "scripts/ci/work-orders-live-postgres.mjs",
+      "scripts/ci/work-orders-write-live-postgres.mjs",
+      "scripts/ci/work-orders-member-live-postgres.mjs",
+      "scripts/ci/work-orders-member-live-results.mjs"
+    ],
+    "registeredTestFiles": [
+      "tests/platform-admin-contract.mjs",
+      "tests/data-grants.mjs",
+      "tests/data-grants-transport.mjs",
+      "tests/auth-queries.mjs",
+      "tests/route-policy.mjs",
+      "tests/route-policy-guard.mjs",
+      "tests/application-navigation.mjs",
+      "tests/micro-context-runtime.mjs",
+      "tests/micro-context-updates.mjs",
+      "tests/micro-sandbox-lifecycle.mjs",
+      "tests/micro-runtime-faults.mjs",
+      "tests/micro-iframe-protocol.mjs",
+      "tests/micro-sdk-client.mjs",
+      "tests/micro-sdk-generation.mjs",
+      "tests/notification-context.mjs",
+      "tests/session-refresh.mjs",
+      "tests/session-coordinator.mjs",
+      "tests/session-integration.mjs",
+      "tests/map-location-regions.mjs",
+      "mini-services/micro-vue/smoke-test.cjs",
+      "mini-services/micro-jquery/smoke-test.cjs",
+      "business-apps/work-orders/frontend/tests/client.mjs",
+      "business-apps/work-orders/frontend/tests/app.mjs",
+      "business-apps/work-orders/backend/tests/cors.test.mjs",
+      "examples/app-backend/authorize.test.mjs",
+      "tests/package-microapp.mjs",
+      "tests/ci-runner.mjs",
+      "tests/ci-workflow.mjs",
+      "tests/notification-ci-policy.mjs",
+      "tests/notification-e2e-launch-policy.mjs",
+      "scripts/ci/postgres.test.mjs",
+      "scripts/ci/platform-admin.test.mjs",
+      "scripts/ci/work-orders.test.mjs",
+      "scripts/ci/work-orders-write.test.mjs",
+      "scripts/ci/work-orders-member.test.mjs",
+      "scripts/ci/linux-runner.test.mjs",
+      "scripts/ci/release.test.mjs",
+      "tests/browser/results.test.mjs",
+      "tests/browser/wait.test.mjs",
+      "tests/zip-release-e2e-policy.mjs",
+      "tests/nginx-render-policy.mjs",
+      "deploy/static/tests/static-image-policy.mjs",
+      "deploy/native/tests/build.test.mjs"
+    ],
+    "parserTool": {
+      "package": "typescript",
+      "version": "5.9.3",
+      "entrySha256": "3ae902c92cc44dace175c0e69e13a4b0899f6983c6121d76b9ab8dd5795e7675",
+      "source": "Existing frontend lock-bound parser used only by the local capture tool; no runtime dependency was added."
+    },
+    "resolvedEdges": 267,
+    "graphSha256": "d589d41e214904f1d3b447dc0b4a53bf040f6392cbb5b9ab7bdf8cc1c90ed383",
+    "installedPackageEdges": [
+      {
+        "from": "tests/micro-runtime-faults.mjs",
+        "to": "frontend/node_modules/typescript/lib/typescript.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/micro-runtime-faults.mjs",
+        "to": "frontend/node_modules/import-html-entry/lib/index.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/micro-sandbox-lifecycle.mjs",
+        "to": "frontend/node_modules/typescript/lib/typescript.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/vite-example-delivery.mjs",
+        "to": "frontend/node_modules/vite/dist/node/index.js",
+        "kind": "locked-installed-package"
+      },
+      {
+        "from": "tests/vite-host-static.mjs",
+        "to": "frontend/node_modules/vite/dist/node/index.js",
+        "kind": "locked-installed-package"
+      }
+    ],
+    "limits": [
+      "Static exact local imports, literal Rust embedded sources and explicitly registered fixtures are checked here. Dynamic paths, installed packages and bundler resolution are additionally verified by locked installation, the real build and tests."
+    ],
+    "frozenStatus": "PASS"
+  },
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "candidate": {
+    "path": "target/phase-19/inputs-candidate-r3.json",
+    "fileSha256": "9b6f2923bd9a53fc1e8f780f3b359cc04b5dfa9eaa22f48b392492d95f66f60e",
+    "inputsSha256": "52ebb7a5904b82fa94f5f16b69e9cad924b8afcea4ae60df75fa1423a101741e",
+    "inputCount": 700,
+    "executionSourceRoot": "D:\\WorkSpace\\rust\\saas\\rust-saas\\target\\phase-19\\source-candidate-r3",
+    "capturedAt": "2026-10-17T04:04:01.019Z"
+  },
+  "references": {
+    "phase18": {
+      "path": "docs/validation/phase-18-inputs.json",
+      "sha256": "824dcdf6816fcf41547976d3b17a7487ed576653b823d63ccb546923d4eb3d85",
+      "inputsSha256": "9bea11c1855bdea5126fec3503e6b22d69e87a0d00a31f5f86b4187e8825ffec",
+      "inputCount": 691,
+      "executionSourceRoot": "D:\\WorkSpace\\rust\\saas\\rust-saas\\target\\phase-18\\source-candidate-r1"
+    },
+    "phase18Boundaries": {
+      "path": "docs/validation/phase-18-boundaries.json",
+      "sha256": "f9fb905e9b1367eae18fcec13f0b2e85fc2042d7890e6f1ba8ed171bd2c583a3"
+    },
+    "observedStart": {
+      "path": "target/phase-19/observed-start-inputs.json",
+      "sha256": "2cce4f2f9a43711971e4dd9dbef046b0571cf45883d32b1a75b1218c8e890bde",
+      "inputsSha256": "93ef087aedaee9caeded7a558801941188948bd4a96ad9834ce328916aaf76c1",
+      "inputCount": 691,
+      "capturedAt": "2026-10-17T03:13:26.415Z",
+      "note": "Observed before any Phase 19 product edits. Initial delegation was read-only. This working-tree baseline preserves earlier uncommitted phases and post-Phase18 documentation changes.",
+      "beforePhase19ProductEdits": true,
+      "pristineCommittedTree": false
+    }
+  },
+  "ownedExecutableInputs": [
+    {
+      "path": "backend/src/data_grant_tests.rs",
+      "phase18": {
+        "bytes": 56379,
+        "sha256": "03d574abf641e7d8d979f0bff9869b56223866ae91de1a785e42f448915955b8"
+      },
+      "observedStart": {
+        "bytes": 56379,
+        "sha256": "03d574abf641e7d8d979f0bff9869b56223866ae91de1a785e42f448915955b8"
+      },
+      "candidate": {
+        "bytes": 56490,
+        "sha256": "6be445dba3ee69e8192df6fe4965066d73af741b22954fba0fdc4983ffd96dd4"
+      },
+      "host": {
+        "bytes": 56490,
+        "sha256": "6be445dba3ee69e8192df6fe4965066d73af741b22954fba0fdc4983ffd96dd4"
+      },
+      "hostOnDisk": {
+        "bytes": 56490,
+        "sha256": "6be445dba3ee69e8192df6fe4965066d73af741b22954fba0fdc4983ffd96dd4"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "backend/src/data_grants/policy.rs",
+      "phase18": {
+        "bytes": 17112,
+        "sha256": "a14ea10134aa5f4113fdc8dfa8167a34c9a000b94048abf550ccece6b2b73198"
+      },
+      "observedStart": {
+        "bytes": 17112,
+        "sha256": "a14ea10134aa5f4113fdc8dfa8167a34c9a000b94048abf550ccece6b2b73198"
+      },
+      "candidate": {
+        "bytes": 23517,
+        "sha256": "8ef83e9d2a8add82e1bf7e10742c44719a35e6b64e148ae667976d878d8956e0"
+      },
+      "host": {
+        "bytes": 23517,
+        "sha256": "8ef83e9d2a8add82e1bf7e10742c44719a35e6b64e148ae667976d878d8956e0"
+      },
+      "hostOnDisk": {
+        "bytes": 23517,
+        "sha256": "8ef83e9d2a8add82e1bf7e10742c44719a35e6b64e148ae667976d878d8956e0"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "backend/src/notification_tests.rs",
+      "phase18": {
+        "bytes": 81586,
+        "sha256": "d5c9cd3d3509efa23f9c6fa7cc5a9ca5da79b173c8c7ca28363366f201aec194"
+      },
+      "observedStart": {
+        "bytes": 81586,
+        "sha256": "d5c9cd3d3509efa23f9c6fa7cc5a9ca5da79b173c8c7ca28363366f201aec194"
+      },
+      "candidate": {
+        "bytes": 90556,
+        "sha256": "f12e2edac6bb3ac62d3a4610dc1be75c6309cdb2b037e00d595920fc53dbc69c"
+      },
+      "host": {
+        "bytes": 90556,
+        "sha256": "f12e2edac6bb3ac62d3a4610dc1be75c6309cdb2b037e00d595920fc53dbc69c"
+      },
+      "hostOnDisk": {
+        "bytes": 90556,
+        "sha256": "f12e2edac6bb3ac62d3a4610dc1be75c6309cdb2b037e00d595920fc53dbc69c"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "backend/src/phase18_work_orders_tests.rs",
+      "phase18": {
+        "bytes": 42234,
+        "sha256": "0901dc527ecbd2bff2d06c14652d2ade149dd0d289b4c6d964959a248795c157"
+      },
+      "observedStart": {
+        "bytes": 42234,
+        "sha256": "0901dc527ecbd2bff2d06c14652d2ade149dd0d289b4c6d964959a248795c157"
+      },
+      "candidate": {
+        "bytes": 42234,
+        "sha256": "4bb795bd20835b3d5822a058d0b09742a0682e590d5e9ff4fbcafb78719620c4"
+      },
+      "host": {
+        "bytes": 42234,
+        "sha256": "4bb795bd20835b3d5822a058d0b09742a0682e590d5e9ff4fbcafb78719620c4"
+      },
+      "hostOnDisk": {
+        "bytes": 42234,
+        "sha256": "4bb795bd20835b3d5822a058d0b09742a0682e590d5e9ff4fbcafb78719620c4"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "backend/src/phase19_work_orders_tests.rs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 57225,
+        "sha256": "13183cb7e37c17ad352f4c9b3220be77991a5f58906f034d1f3fb79ccf13c215"
+      },
+      "host": {
+        "bytes": 57225,
+        "sha256": "13183cb7e37c17ad352f4c9b3220be77991a5f58906f034d1f3fb79ccf13c215"
+      },
+      "hostOnDisk": {
+        "bytes": 57225,
+        "sha256": "13183cb7e37c17ad352f4c9b3220be77991a5f58906f034d1f3fb79ccf13c215"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "backend/src/platform_admin_cli_tests.rs",
+      "phase18": {
+        "bytes": 50660,
+        "sha256": "d2472d46358b4d06a39cdc9ca1c2ec650777d468bf87d8dd60a11086a637cb16"
+      },
+      "observedStart": {
+        "bytes": 50660,
+        "sha256": "d2472d46358b4d06a39cdc9ca1c2ec650777d468bf87d8dd60a11086a637cb16"
+      },
+      "candidate": {
+        "bytes": 50767,
+        "sha256": "3facdcadf82aef1d600d240bd47f83edff0ea0060e9a8ebf1ac029cfce0a27ee"
+      },
+      "host": {
+        "bytes": 50767,
+        "sha256": "3facdcadf82aef1d600d240bd47f83edff0ea0060e9a8ebf1ac029cfce0a27ee"
+      },
+      "hostOnDisk": {
+        "bytes": 50767,
+        "sha256": "3facdcadf82aef1d600d240bd47f83edff0ea0060e9a8ebf1ac029cfce0a27ee"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "backend/src/routes/app_members.rs",
+      "phase18": {
+        "bytes": 7532,
+        "sha256": "217db6d48729dc78a9f0f0441aa4eccd0b0581fcdd58d8d6519e6c050a798066"
+      },
+      "observedStart": {
+        "bytes": 7532,
+        "sha256": "217db6d48729dc78a9f0f0441aa4eccd0b0581fcdd58d8d6519e6c050a798066"
+      },
+      "candidate": {
+        "bytes": 10071,
+        "sha256": "82c377d012cc7159a6e2542908aa5e77ba20d9fa64a1a9e06211f643a331bf5b"
+      },
+      "host": {
+        "bytes": 10071,
+        "sha256": "82c377d012cc7159a6e2542908aa5e77ba20d9fa64a1a9e06211f643a331bf5b"
+      },
+      "hostOnDisk": {
+        "bytes": 10071,
+        "sha256": "82c377d012cc7159a6e2542908aa5e77ba20d9fa64a1a9e06211f643a331bf5b"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/.dockerignore",
+      "phase18": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "observedStart": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "candidate": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "host": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "hostOnDisk": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/Cargo.lock",
+      "phase18": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "observedStart": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "candidate": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "host": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "hostOnDisk": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/Cargo.toml",
+      "phase18": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "observedStart": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "candidate": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "host": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "hostOnDisk": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/Dockerfile",
+      "phase18": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "observedStart": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "candidate": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "host": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "hostOnDisk": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/auth.mjs",
+      "phase18": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "observedStart": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "candidate": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "host": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "hostOnDisk": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/config.mjs",
+      "phase18": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "observedStart": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "candidate": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "host": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "hostOnDisk": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/db.mjs",
+      "phase18": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "observedStart": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "candidate": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "host": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "hostOnDisk": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/errors.mjs",
+      "phase18": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "observedStart": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "candidate": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "host": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "hostOnDisk": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/index.mjs",
+      "phase18": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "observedStart": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "candidate": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "host": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "hostOnDisk": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+      "phase18": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "observedStart": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "candidate": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "host": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "hostOnDisk": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+      "phase18": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "observedStart": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "candidate": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "host": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "hostOnDisk": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/observability.mjs",
+      "phase18": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "observedStart": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "candidate": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "host": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "hostOnDisk": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/package-lock.json",
+      "phase18": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "observedStart": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "candidate": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "host": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "hostOnDisk": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/package.json",
+      "phase18": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "observedStart": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "candidate": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "host": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "hostOnDisk": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/server.mjs",
+      "phase18": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "observedStart": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "candidate": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "host": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "hostOnDisk": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization.rs",
+      "phase18": {
+        "bytes": 3753,
+        "sha256": "95329c54dcc9da5ca0c26c18055c787e84c88543b80e2cd63467408ee67ce54b"
+      },
+      "observedStart": {
+        "bytes": 3753,
+        "sha256": "95329c54dcc9da5ca0c26c18055c787e84c88543b80e2cd63467408ee67ce54b"
+      },
+      "candidate": {
+        "bytes": 5973,
+        "sha256": "de472e7d1f455b0d97061e4837cd5e1d4f8f642191e97a075e2cd605eb3f27c8"
+      },
+      "host": {
+        "bytes": 5973,
+        "sha256": "de472e7d1f455b0d97061e4837cd5e1d4f8f642191e97a075e2cd605eb3f27c8"
+      },
+      "hostOnDisk": {
+        "bytes": 5973,
+        "sha256": "de472e7d1f455b0d97061e4837cd5e1d4f8f642191e97a075e2cd605eb3f27c8"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization/client.rs",
+      "phase18": {
+        "bytes": 5654,
+        "sha256": "9b6c89e26be7c7a63871225ae02593d3e9ebff325a6047941e48fd069942b3b0"
+      },
+      "observedStart": {
+        "bytes": 5654,
+        "sha256": "9b6c89e26be7c7a63871225ae02593d3e9ebff325a6047941e48fd069942b3b0"
+      },
+      "candidate": {
+        "bytes": 8041,
+        "sha256": "1c76d2150a5591803cc0f0232fad5b0a3fdcc14f701c37491b3c10377da8d73f"
+      },
+      "host": {
+        "bytes": 8041,
+        "sha256": "1c76d2150a5591803cc0f0232fad5b0a3fdcc14f701c37491b3c10377da8d73f"
+      },
+      "hostOnDisk": {
+        "bytes": 8041,
+        "sha256": "1c76d2150a5591803cc0f0232fad5b0a3fdcc14f701c37491b3c10377da8d73f"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization/policy.rs",
+      "phase18": {
+        "bytes": 10373,
+        "sha256": "f844dafd9d4f2ed8ae28772dbe98326cd69075f82327b313d4b8d0e0d8d5fe65"
+      },
+      "observedStart": {
+        "bytes": 10373,
+        "sha256": "f844dafd9d4f2ed8ae28772dbe98326cd69075f82327b313d4b8d0e0d8d5fe65"
+      },
+      "candidate": {
+        "bytes": 10373,
+        "sha256": "f844dafd9d4f2ed8ae28772dbe98326cd69075f82327b313d4b8d0e0d8d5fe65"
+      },
+      "host": {
+        "bytes": 10373,
+        "sha256": "f844dafd9d4f2ed8ae28772dbe98326cd69075f82327b313d4b8d0e0d8d5fe65"
+      },
+      "hostOnDisk": {
+        "bytes": 10373,
+        "sha256": "f844dafd9d4f2ed8ae28772dbe98326cd69075f82327b313d4b8d0e0d8d5fe65"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/authorization/tests.rs",
+      "phase18": {
+        "bytes": 18082,
+        "sha256": "3cdd38e090524b6516e61915b6aacda65b60b90e08edcda1100395ec4750642c"
+      },
+      "observedStart": {
+        "bytes": 18082,
+        "sha256": "3cdd38e090524b6516e61915b6aacda65b60b90e08edcda1100395ec4750642c"
+      },
+      "candidate": {
+        "bytes": 18082,
+        "sha256": "3cdd38e090524b6516e61915b6aacda65b60b90e08edcda1100395ec4750642c"
+      },
+      "host": {
+        "bytes": 18082,
+        "sha256": "3cdd38e090524b6516e61915b6aacda65b60b90e08edcda1100395ec4750642c"
+      },
+      "hostOnDisk": {
+        "bytes": 18082,
+        "sha256": "3cdd38e090524b6516e61915b6aacda65b60b90e08edcda1100395ec4750642c"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/config.rs",
+      "phase18": {
+        "bytes": 18056,
+        "sha256": "ab706d655268372e1f59d12100b97f008fac7fd363340149aa3308b2b344e232"
+      },
+      "observedStart": {
+        "bytes": 18056,
+        "sha256": "ab706d655268372e1f59d12100b97f008fac7fd363340149aa3308b2b344e232"
+      },
+      "candidate": {
+        "bytes": 18056,
+        "sha256": "ab706d655268372e1f59d12100b97f008fac7fd363340149aa3308b2b344e232"
+      },
+      "host": {
+        "bytes": 18056,
+        "sha256": "ab706d655268372e1f59d12100b97f008fac7fd363340149aa3308b2b344e232"
+      },
+      "hostOnDisk": {
+        "bytes": 18056,
+        "sha256": "ab706d655268372e1f59d12100b97f008fac7fd363340149aa3308b2b344e232"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/directory.rs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 6527,
+        "sha256": "a89ec15ee898c7d6907fa0dd86c97cff46dd37b5a1c77f662b22d6cce69c5a52"
+      },
+      "host": {
+        "bytes": 6527,
+        "sha256": "a89ec15ee898c7d6907fa0dd86c97cff46dd37b5a1c77f662b22d6cce69c5a52"
+      },
+      "hostOnDisk": {
+        "bytes": 6527,
+        "sha256": "a89ec15ee898c7d6907fa0dd86c97cff46dd37b5a1c77f662b22d6cce69c5a52"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/directory/query.rs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 5747,
+        "sha256": "f9ddd5fb704f304249aaa0a47204638c1d1a29402120529785e49b942646e343"
+      },
+      "host": {
+        "bytes": 5747,
+        "sha256": "f9ddd5fb704f304249aaa0a47204638c1d1a29402120529785e49b942646e343"
+      },
+      "hostOnDisk": {
+        "bytes": 5747,
+        "sha256": "f9ddd5fb704f304249aaa0a47204638c1d1a29402120529785e49b942646e343"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/directory/tests.rs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 4348,
+        "sha256": "e5943b4a4499ef613ced765d5ca05b7312936bc94fb09197912e09f0ac0c6bea"
+      },
+      "host": {
+        "bytes": 4348,
+        "sha256": "e5943b4a4499ef613ced765d5ca05b7312936bc94fb09197912e09f0ac0c6bea"
+      },
+      "hostOnDisk": {
+        "bytes": 4348,
+        "sha256": "e5943b4a4499ef613ced765d5ca05b7312936bc94fb09197912e09f0ac0c6bea"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/error.rs",
+      "phase18": {
+        "bytes": 7118,
+        "sha256": "37777b7081cffff32d7279fef45a01095fcd6c7b31facd8fbc19dd3eb7d03da9"
+      },
+      "observedStart": {
+        "bytes": 7118,
+        "sha256": "37777b7081cffff32d7279fef45a01095fcd6c7b31facd8fbc19dd3eb7d03da9"
+      },
+      "candidate": {
+        "bytes": 7118,
+        "sha256": "37777b7081cffff32d7279fef45a01095fcd6c7b31facd8fbc19dd3eb7d03da9"
+      },
+      "host": {
+        "bytes": 7118,
+        "sha256": "37777b7081cffff32d7279fef45a01095fcd6c7b31facd8fbc19dd3eb7d03da9"
+      },
+      "hostOnDisk": {
+        "bytes": 7118,
+        "sha256": "37777b7081cffff32d7279fef45a01095fcd6c7b31facd8fbc19dd3eb7d03da9"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/http.rs",
+      "phase18": {
+        "bytes": 27326,
+        "sha256": "db573215809e69485c132b941896df14d5be2b91e4fc8e41a8e88bf075338f95"
+      },
+      "observedStart": {
+        "bytes": 27326,
+        "sha256": "db573215809e69485c132b941896df14d5be2b91e4fc8e41a8e88bf075338f95"
+      },
+      "candidate": {
+        "bytes": 27989,
+        "sha256": "fe5e372c7ae66d9075ae7718c7e924875eb25ab21e1439766e0ad9d0cc3dbc5b"
+      },
+      "host": {
+        "bytes": 27989,
+        "sha256": "fe5e372c7ae66d9075ae7718c7e924875eb25ab21e1439766e0ad9d0cc3dbc5b"
+      },
+      "hostOnDisk": {
+        "bytes": 27989,
+        "sha256": "fe5e372c7ae66d9075ae7718c7e924875eb25ab21e1439766e0ad9d0cc3dbc5b"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/lib.rs",
+      "phase18": {
+        "bytes": 7000,
+        "sha256": "a194cb69ec7237480bc14de44e3541c67903b9172d63776308beaa2b249e288d"
+      },
+      "observedStart": {
+        "bytes": 7000,
+        "sha256": "a194cb69ec7237480bc14de44e3541c67903b9172d63776308beaa2b249e288d"
+      },
+      "candidate": {
+        "bytes": 7104,
+        "sha256": "a32d24e7a20280d3e64155ca1abf859ebcf1561d38fd239e5a98154933676176"
+      },
+      "host": {
+        "bytes": 7104,
+        "sha256": "a32d24e7a20280d3e64155ca1abf859ebcf1561d38fd239e5a98154933676176"
+      },
+      "hostOnDisk": {
+        "bytes": 7104,
+        "sha256": "a32d24e7a20280d3e64155ca1abf859ebcf1561d38fd239e5a98154933676176"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/main.rs",
+      "phase18": {
+        "bytes": 716,
+        "sha256": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+      },
+      "observedStart": {
+        "bytes": 716,
+        "sha256": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+      },
+      "candidate": {
+        "bytes": 716,
+        "sha256": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+      },
+      "host": {
+        "bytes": 716,
+        "sha256": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+      },
+      "hostOnDisk": {
+        "bytes": 716,
+        "sha256": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/migrations.rs",
+      "phase18": {
+        "bytes": 17270,
+        "sha256": "82a187e40897f56690084988ed83bde021109debbac5cb9aaa3c39dd1de1e005"
+      },
+      "observedStart": {
+        "bytes": 17270,
+        "sha256": "82a187e40897f56690084988ed83bde021109debbac5cb9aaa3c39dd1de1e005"
+      },
+      "candidate": {
+        "bytes": 17270,
+        "sha256": "82a187e40897f56690084988ed83bde021109debbac5cb9aaa3c39dd1de1e005"
+      },
+      "host": {
+        "bytes": 17270,
+        "sha256": "82a187e40897f56690084988ed83bde021109debbac5cb9aaa3c39dd1de1e005"
+      },
+      "hostOnDisk": {
+        "bytes": 17270,
+        "sha256": "82a187e40897f56690084988ed83bde021109debbac5cb9aaa3c39dd1de1e005"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/migrations/catalog.rs",
+      "phase18": {
+        "bytes": 11146,
+        "sha256": "b5adc66fa4e1aa46badf209adf342c4ce2aee8341338ae6345de96ff17c00f5f"
+      },
+      "observedStart": {
+        "bytes": 11146,
+        "sha256": "b5adc66fa4e1aa46badf209adf342c4ce2aee8341338ae6345de96ff17c00f5f"
+      },
+      "candidate": {
+        "bytes": 11146,
+        "sha256": "b5adc66fa4e1aa46badf209adf342c4ce2aee8341338ae6345de96ff17c00f5f"
+      },
+      "host": {
+        "bytes": 11146,
+        "sha256": "b5adc66fa4e1aa46badf209adf342c4ce2aee8341338ae6345de96ff17c00f5f"
+      },
+      "hostOnDisk": {
+        "bytes": 11146,
+        "sha256": "b5adc66fa4e1aa46badf209adf342c4ce2aee8341338ae6345de96ff17c00f5f"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reads.rs",
+      "phase18": {
+        "bytes": 8365,
+        "sha256": "09a71fb403d9aa3306f6220b4fa38d3be77191fb15a6e051b346f5118eaaaad6"
+      },
+      "observedStart": {
+        "bytes": 8365,
+        "sha256": "09a71fb403d9aa3306f6220b4fa38d3be77191fb15a6e051b346f5118eaaaad6"
+      },
+      "candidate": {
+        "bytes": 8365,
+        "sha256": "09a71fb403d9aa3306f6220b4fa38d3be77191fb15a6e051b346f5118eaaaad6"
+      },
+      "host": {
+        "bytes": 8365,
+        "sha256": "09a71fb403d9aa3306f6220b4fa38d3be77191fb15a6e051b346f5118eaaaad6"
+      },
+      "hostOnDisk": {
+        "bytes": 8365,
+        "sha256": "09a71fb403d9aa3306f6220b4fa38d3be77191fb15a6e051b346f5118eaaaad6"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reads/csv.rs",
+      "phase18": {
+        "bytes": 6370,
+        "sha256": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c"
+      },
+      "observedStart": {
+        "bytes": 6370,
+        "sha256": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c"
+      },
+      "candidate": {
+        "bytes": 6370,
+        "sha256": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c"
+      },
+      "host": {
+        "bytes": 6370,
+        "sha256": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c"
+      },
+      "hostOnDisk": {
+        "bytes": 6370,
+        "sha256": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/reads/query.rs",
+      "phase18": {
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      },
+      "observedStart": {
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      },
+      "candidate": {
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      },
+      "host": {
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      },
+      "hostOnDisk": {
+        "bytes": 7575,
+        "sha256": "87a0b88878e1800018add3df2f6829b1bbcb77c7f03e240caf7a094d4b004e58"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/writes.rs",
+      "phase18": {
+        "bytes": 12697,
+        "sha256": "291abb46382a0b2b0e5cabd6a009a3362c6e0d1926a1dcaa7aa5a861d41dbbcf"
+      },
+      "observedStart": {
+        "bytes": 12697,
+        "sha256": "291abb46382a0b2b0e5cabd6a009a3362c6e0d1926a1dcaa7aa5a861d41dbbcf"
+      },
+      "candidate": {
+        "bytes": 18698,
+        "sha256": "bf346f76011fc44d0e273b19569dbf380320e1a43f94f5e333174b7e5774af15"
+      },
+      "host": {
+        "bytes": 18698,
+        "sha256": "bf346f76011fc44d0e273b19569dbf380320e1a43f94f5e333174b7e5774af15"
+      },
+      "hostOnDisk": {
+        "bytes": 18698,
+        "sha256": "bf346f76011fc44d0e273b19569dbf380320e1a43f94f5e333174b7e5774af15"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/src/writes/dto.rs",
+      "phase18": {
+        "bytes": 13412,
+        "sha256": "42f3406adc032d8aa585ea2f68f00ba5a4bf36fc5d808da6953c9d242cc96f29"
+      },
+      "observedStart": {
+        "bytes": 13412,
+        "sha256": "42f3406adc032d8aa585ea2f68f00ba5a4bf36fc5d808da6953c9d242cc96f29"
+      },
+      "candidate": {
+        "bytes": 14362,
+        "sha256": "a61c9c58c587934a28e3f7b2e332aa563b91ea1302b24922063411d8eeeabbd5"
+      },
+      "host": {
+        "bytes": 14362,
+        "sha256": "a61c9c58c587934a28e3f7b2e332aa563b91ea1302b24922063411d8eeeabbd5"
+      },
+      "hostOnDisk": {
+        "bytes": 14362,
+        "sha256": "a61c9c58c587934a28e3f7b2e332aa563b91ea1302b24922063411d8eeeabbd5"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/api.test.mjs",
+      "phase18": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "observedStart": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "candidate": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "host": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "hostOnDisk": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/config.test.mjs",
+      "phase18": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "observedStart": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "candidate": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "host": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "hostOnDisk": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/cors.test.mjs",
+      "phase18": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "observedStart": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "candidate": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "host": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "hostOnDisk": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/helpers.mjs",
+      "phase18": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "observedStart": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "candidate": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "host": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "hostOnDisk": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/member_contracts.rs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 58366,
+        "sha256": "0f28be0c03fbf797bcb19d73e492419d017851ef70f6bef268dc988bf2f89508"
+      },
+      "host": {
+        "bytes": 58366,
+        "sha256": "0f28be0c03fbf797bcb19d73e492419d017851ef70f6bef268dc988bf2f89508"
+      },
+      "hostOnDisk": {
+        "bytes": 58366,
+        "sha256": "0f28be0c03fbf797bcb19d73e492419d017851ef70f6bef268dc988bf2f89508"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/migrations.rs",
+      "phase18": {
+        "bytes": 32291,
+        "sha256": "e0d0d5e50cfc141f1c14c0f9a988d43667fdd98c889fe3cac3e55956f8d9cea3"
+      },
+      "observedStart": {
+        "bytes": 32291,
+        "sha256": "e0d0d5e50cfc141f1c14c0f9a988d43667fdd98c889fe3cac3e55956f8d9cea3"
+      },
+      "candidate": {
+        "bytes": 32291,
+        "sha256": "e0d0d5e50cfc141f1c14c0f9a988d43667fdd98c889fe3cac3e55956f8d9cea3"
+      },
+      "host": {
+        "bytes": 32291,
+        "sha256": "e0d0d5e50cfc141f1c14c0f9a988d43667fdd98c889fe3cac3e55956f8d9cea3"
+      },
+      "hostOnDisk": {
+        "bytes": 32291,
+        "sha256": "e0d0d5e50cfc141f1c14c0f9a988d43667fdd98c889fe3cac3e55956f8d9cea3"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/observability.test.mjs",
+      "phase18": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "observedStart": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "candidate": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "host": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "hostOnDisk": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/read_contracts.rs",
+      "phase18": {
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      },
+      "observedStart": {
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      },
+      "candidate": {
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      },
+      "host": {
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      },
+      "hostOnDisk": {
+        "bytes": 47552,
+        "sha256": "4cfca0c2f7b6ae0369ae3fbb44b9a49d216ba0e76f41d60e3b59547ed4311763"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/write_contracts.rs",
+      "phase18": {
+        "bytes": 47668,
+        "sha256": "a95573a3f31d8e92603b76e6d5ea8a3b510994b746d51929a0ec51b84c1ee2e8"
+      },
+      "observedStart": {
+        "bytes": 47668,
+        "sha256": "a95573a3f31d8e92603b76e6d5ea8a3b510994b746d51929a0ec51b84c1ee2e8"
+      },
+      "candidate": {
+        "bytes": 48375,
+        "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+      },
+      "host": {
+        "bytes": 48375,
+        "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+      },
+      "hostOnDisk": {
+        "bytes": 48375,
+        "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "business-apps/work-orders/tests/platform-e2e.mjs",
+      "phase18": {
+        "bytes": 89908,
+        "sha256": "1980ad9d63969f3635fcc9146dfc7b265fef5b34efc59a14a05a34a59632e73a"
+      },
+      "observedStart": {
+        "bytes": 89908,
+        "sha256": "1980ad9d63969f3635fcc9146dfc7b265fef5b34efc59a14a05a34a59632e73a"
+      },
+      "candidate": {
+        "bytes": 91160,
+        "sha256": "ae932356aaa97adf7daa6eac49e11b1436d437e791b412f01c4fc11569025cd1"
+      },
+      "host": {
+        "bytes": 91160,
+        "sha256": "ae932356aaa97adf7daa6eac49e11b1436d437e791b412f01c4fc11569025cd1"
+      },
+      "hostOnDisk": {
+        "bytes": 91160,
+        "sha256": "ae932356aaa97adf7daa6eac49e11b1436d437e791b412f01c4fc11569025cd1"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "scripts/ci/work-orders-member-live-postgres.mjs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 1841,
+        "sha256": "c07e97cdeff6cb55664e7a497f15bed4fa22065fe1e522d3cedc48c6659aea6d"
+      },
+      "host": {
+        "bytes": 1841,
+        "sha256": "c07e97cdeff6cb55664e7a497f15bed4fa22065fe1e522d3cedc48c6659aea6d"
+      },
+      "hostOnDisk": {
+        "bytes": 1841,
+        "sha256": "c07e97cdeff6cb55664e7a497f15bed4fa22065fe1e522d3cedc48c6659aea6d"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "scripts/ci/work-orders-member-live-results.mjs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 4271,
+        "sha256": "a0e6be8b29fbc8b394bab829cc83d739c5de837761dd7632ae13752f9850434c"
+      },
+      "host": {
+        "bytes": 4271,
+        "sha256": "a0e6be8b29fbc8b394bab829cc83d739c5de837761dd7632ae13752f9850434c"
+      },
+      "hostOnDisk": {
+        "bytes": 4271,
+        "sha256": "a0e6be8b29fbc8b394bab829cc83d739c5de837761dd7632ae13752f9850434c"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "scripts/ci/work-orders-member-postgres.mjs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 1694,
+        "sha256": "200cbf648ac862ed312416b79fe2d81d6c5ac5c965d7e1eb4d3a9ca6f6244d21"
+      },
+      "host": {
+        "bytes": 1694,
+        "sha256": "200cbf648ac862ed312416b79fe2d81d6c5ac5c965d7e1eb4d3a9ca6f6244d21"
+      },
+      "hostOnDisk": {
+        "bytes": 1694,
+        "sha256": "200cbf648ac862ed312416b79fe2d81d6c5ac5c965d7e1eb4d3a9ca6f6244d21"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "scripts/ci/work-orders-member.test.mjs",
+      "phase18": null,
+      "observedStart": null,
+      "candidate": {
+        "bytes": 15817,
+        "sha256": "c461b3f1e39cbae1ef419e19ab445f7aa5d994e94d1833a740735e5b02a225f5"
+      },
+      "host": {
+        "bytes": 15817,
+        "sha256": "c461b3f1e39cbae1ef419e19ab445f7aa5d994e94d1833a740735e5b02a225f5"
+      },
+      "hostOnDisk": {
+        "bytes": 15817,
+        "sha256": "c461b3f1e39cbae1ef419e19ab445f7aa5d994e94d1833a740735e5b02a225f5"
+      },
+      "hostMatchesCandidate": true
+    },
+    {
+      "path": "tests/ci-runner.mjs",
+      "phase18": {
+        "bytes": 29489,
+        "sha256": "ca4b2c2096a67371b9c64231e19befd96df0ce4d20caeec0fd7cf0a1339ad4d0"
+      },
+      "observedStart": {
+        "bytes": 29489,
+        "sha256": "ca4b2c2096a67371b9c64231e19befd96df0ce4d20caeec0fd7cf0a1339ad4d0"
+      },
+      "candidate": {
+        "bytes": 29543,
+        "sha256": "9f93d217a2a9952c899136d7996160e6fbad1c7596237d31d0d4e82bc3b8f973"
+      },
+      "host": {
+        "bytes": 29543,
+        "sha256": "9f93d217a2a9952c899136d7996160e6fbad1c7596237d31d0d4e82bc3b8f973"
+      },
+      "hostOnDisk": {
+        "bytes": 29543,
+        "sha256": "9f93d217a2a9952c899136d7996160e6fbad1c7596237d31d0d4e82bc3b8f973"
+      },
+      "hostMatchesCandidate": true
+    }
+  ],
+  "requiredSharedInputs": [
+    {
+      "path": "scripts/ci/provenance.mjs",
+      "phase18": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      },
+      "observedStart": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      },
+      "candidate": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      },
+      "host": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      }
+    },
+    {
+      "path": "scripts/ci/linux-runner.mjs",
+      "phase18": {
+        "bytes": 15376,
+        "sha256": "d3f480ddf4b1bd8cdc6cf886cf95b9613878d831b69f81af936a8af6749246d3"
+      },
+      "observedStart": {
+        "bytes": 15376,
+        "sha256": "d3f480ddf4b1bd8cdc6cf886cf95b9613878d831b69f81af936a8af6749246d3"
+      },
+      "candidate": {
+        "bytes": 15376,
+        "sha256": "d3f480ddf4b1bd8cdc6cf886cf95b9613878d831b69f81af936a8af6749246d3"
+      },
+      "host": {
+        "bytes": 15376,
+        "sha256": "d3f480ddf4b1bd8cdc6cf886cf95b9613878d831b69f81af936a8af6749246d3"
+      }
+    },
+    {
+      "path": "scripts/ci/run.mjs",
+      "phase18": {
+        "bytes": 19742,
+        "sha256": "3f33fc6e1156efe8d5debef198cfada26724442d714ba9163888d8e859db5690"
+      },
+      "observedStart": {
+        "bytes": 19742,
+        "sha256": "3f33fc6e1156efe8d5debef198cfada26724442d714ba9163888d8e859db5690"
+      },
+      "candidate": {
+        "bytes": 20585,
+        "sha256": "db03193508701efc7d95b47357d25ba48f25d08a4d1535f41f8e697e8c67de76"
+      },
+      "host": {
+        "bytes": 20585,
+        "sha256": "db03193508701efc7d95b47357d25ba48f25d08a4d1535f41f8e697e8c67de76"
+      }
+    },
+    {
+      "path": "scripts/ci/report.mjs",
+      "phase18": {
+        "bytes": 13171,
+        "sha256": "477c27194fa4377df3458ee0217563b29fb59b757951d46dab318727a1a15a03"
+      },
+      "observedStart": {
+        "bytes": 13171,
+        "sha256": "477c27194fa4377df3458ee0217563b29fb59b757951d46dab318727a1a15a03"
+      },
+      "candidate": {
+        "bytes": 14160,
+        "sha256": "7c4fe6205729896881a8a2f57e2370f81458cd58cfbfc00602db3e168643a65c"
+      },
+      "host": {
+        "bytes": 14160,
+        "sha256": "7c4fe6205729896881a8a2f57e2370f81458cd58cfbfc00602db3e168643a65c"
+      }
+    },
+    {
+      "path": "backend/src/phase17_work_orders_tests.rs",
+      "phase18": {
+        "bytes": 39898,
+        "sha256": "da658fe19b5c23d91774c4b74633bc9b3786f07d5bdec302ee73b7c7073f242b"
+      },
+      "observedStart": {
+        "bytes": 39898,
+        "sha256": "da658fe19b5c23d91774c4b74633bc9b3786f07d5bdec302ee73b7c7073f242b"
+      },
+      "candidate": {
+        "bytes": 39898,
+        "sha256": "da658fe19b5c23d91774c4b74633bc9b3786f07d5bdec302ee73b7c7073f242b"
+      },
+      "host": {
+        "bytes": 39898,
+        "sha256": "da658fe19b5c23d91774c4b74633bc9b3786f07d5bdec302ee73b7c7073f242b"
+      }
+    },
+    {
+      "path": "tests/platform-admin-tls.mjs",
+      "phase18": {
+        "bytes": 8911,
+        "sha256": "891e005dab12315421a5024a15cd9255ba6517cf38937b3350e43666e16dce84"
+      },
+      "observedStart": {
+        "bytes": 8911,
+        "sha256": "891e005dab12315421a5024a15cd9255ba6517cf38937b3350e43666e16dce84"
+      },
+      "candidate": {
+        "bytes": 8911,
+        "sha256": "891e005dab12315421a5024a15cd9255ba6517cf38937b3350e43666e16dce84"
+      },
+      "host": {
+        "bytes": 8911,
+        "sha256": "891e005dab12315421a5024a15cd9255ba6517cf38937b3350e43666e16dce84"
+      }
+    },
+    {
+      "path": "tools/platform-admin/Cargo.toml",
+      "phase18": {
+        "bytes": 461,
+        "sha256": "50a46b860e6874d96d4ed650e43cc1d6debaf19cf3d857c20f08c01e557a6fd1"
+      },
+      "observedStart": {
+        "bytes": 461,
+        "sha256": "50a46b860e6874d96d4ed650e43cc1d6debaf19cf3d857c20f08c01e557a6fd1"
+      },
+      "candidate": {
+        "bytes": 461,
+        "sha256": "50a46b860e6874d96d4ed650e43cc1d6debaf19cf3d857c20f08c01e557a6fd1"
+      },
+      "host": {
+        "bytes": 461,
+        "sha256": "50a46b860e6874d96d4ed650e43cc1d6debaf19cf3d857c20f08c01e557a6fd1"
+      }
+    },
+    {
+      "path": "tools/platform-admin/Cargo.lock",
+      "phase18": {
+        "bytes": 35130,
+        "sha256": "53901520e0db622a56db348db319e30b62a88d9cba0c592738453d70294f03e1"
+      },
+      "observedStart": {
+        "bytes": 35130,
+        "sha256": "53901520e0db622a56db348db319e30b62a88d9cba0c592738453d70294f03e1"
+      },
+      "candidate": {
+        "bytes": 35130,
+        "sha256": "53901520e0db622a56db348db319e30b62a88d9cba0c592738453d70294f03e1"
+      },
+      "host": {
+        "bytes": 35130,
+        "sha256": "53901520e0db622a56db348db319e30b62a88d9cba0c592738453d70294f03e1"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-postgres.mjs",
+      "phase18": {
+        "bytes": 1125,
+        "sha256": "138a8538623b707002c2adec0a4fd4f81c78be164571ed465c844a34c53db12c"
+      },
+      "observedStart": {
+        "bytes": 1125,
+        "sha256": "138a8538623b707002c2adec0a4fd4f81c78be164571ed465c844a34c53db12c"
+      },
+      "candidate": {
+        "bytes": 1125,
+        "sha256": "138a8538623b707002c2adec0a4fd4f81c78be164571ed465c844a34c53db12c"
+      },
+      "host": {
+        "bytes": 1125,
+        "sha256": "138a8538623b707002c2adec0a4fd4f81c78be164571ed465c844a34c53db12c"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-read-postgres.mjs",
+      "phase18": {
+        "bytes": 1151,
+        "sha256": "fc8169e39840b1fbcce30ccfc0a81f3c78c6a1cfbd692880e8f372ee2a4198a1"
+      },
+      "observedStart": {
+        "bytes": 1151,
+        "sha256": "fc8169e39840b1fbcce30ccfc0a81f3c78c6a1cfbd692880e8f372ee2a4198a1"
+      },
+      "candidate": {
+        "bytes": 1151,
+        "sha256": "fc8169e39840b1fbcce30ccfc0a81f3c78c6a1cfbd692880e8f372ee2a4198a1"
+      },
+      "host": {
+        "bytes": 1151,
+        "sha256": "fc8169e39840b1fbcce30ccfc0a81f3c78c6a1cfbd692880e8f372ee2a4198a1"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-write-postgres.mjs",
+      "phase18": {
+        "bytes": 997,
+        "sha256": "7d6ecf52727a89f5980c8f206804eb8547a9549b23162fc10e42ba3420ff8ec6"
+      },
+      "observedStart": {
+        "bytes": 997,
+        "sha256": "7d6ecf52727a89f5980c8f206804eb8547a9549b23162fc10e42ba3420ff8ec6"
+      },
+      "candidate": {
+        "bytes": 997,
+        "sha256": "7d6ecf52727a89f5980c8f206804eb8547a9549b23162fc10e42ba3420ff8ec6"
+      },
+      "host": {
+        "bytes": 997,
+        "sha256": "7d6ecf52727a89f5980c8f206804eb8547a9549b23162fc10e42ba3420ff8ec6"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-live-postgres.mjs",
+      "phase18": {
+        "bytes": 1777,
+        "sha256": "f5b0d89d558372e6c72209cfa5c6b8002914757ba0b02dbbd7cfc38f88b6c268"
+      },
+      "observedStart": {
+        "bytes": 1777,
+        "sha256": "f5b0d89d558372e6c72209cfa5c6b8002914757ba0b02dbbd7cfc38f88b6c268"
+      },
+      "candidate": {
+        "bytes": 1777,
+        "sha256": "f5b0d89d558372e6c72209cfa5c6b8002914757ba0b02dbbd7cfc38f88b6c268"
+      },
+      "host": {
+        "bytes": 1777,
+        "sha256": "f5b0d89d558372e6c72209cfa5c6b8002914757ba0b02dbbd7cfc38f88b6c268"
+      }
+    },
+    {
+      "path": "scripts/ci/work-orders-write-live-postgres.mjs",
+      "phase18": {
+        "bytes": 1831,
+        "sha256": "366055627aba3808b44c4dcd4f83fc2fab21504c62790ddc5ab1f3222f3474fe"
+      },
+      "observedStart": {
+        "bytes": 1831,
+        "sha256": "366055627aba3808b44c4dcd4f83fc2fab21504c62790ddc5ab1f3222f3474fe"
+      },
+      "candidate": {
+        "bytes": 1831,
+        "sha256": "366055627aba3808b44c4dcd4f83fc2fab21504c62790ddc5ab1f3222f3474fe"
+      },
+      "host": {
+        "bytes": 1831,
+        "sha256": "366055627aba3808b44c4dcd4f83fc2fab21504c62790ddc5ab1f3222f3474fe"
+      }
+    }
+  ],
+  "sharedRegistrations": [
+    {
+      "path": "backend/src/main.rs",
+      "phase18": {
+        "bytes": 11165,
+        "sha256": "f6602e1e36f8b0acf8b0b0580a31807a0cdea6a8015edc7c2a8cb39e7299546f"
+      },
+      "observedStart": {
+        "bytes": 11165,
+        "sha256": "f6602e1e36f8b0acf8b0b0580a31807a0cdea6a8015edc7c2a8cb39e7299546f"
+      },
+      "candidate": {
+        "bytes": 11211,
+        "sha256": "07753cd578c99ccef16f1a4d942f4bdae88d5eddf8fd7ffcec780bf8399b4d16"
+      },
+      "host": {
+        "bytes": 11211,
+        "sha256": "07753cd578c99ccef16f1a4d942f4bdae88d5eddf8fd7ffcec780bf8399b4d16"
+      }
+    },
+    {
+      "path": "scripts/ci/manifest.mjs",
+      "phase18": {
+        "bytes": 4743,
+        "sha256": "9fd89d5cb9cb9f7db0b76b21c720ccb169bb21714d4886fb237528fc9cc69381"
+      },
+      "observedStart": {
+        "bytes": 4743,
+        "sha256": "9fd89d5cb9cb9f7db0b76b21c720ccb169bb21714d4886fb237528fc9cc69381"
+      },
+      "candidate": {
+        "bytes": 5160,
+        "sha256": "c6f82c19c20119016b0af23ca3c8adcf15c49377d0c9542b5c3b22f121fd7f08"
+      },
+      "host": {
+        "bytes": 5160,
+        "sha256": "c6f82c19c20119016b0af23ca3c8adcf15c49377d0c9542b5c3b22f121fd7f08"
+      }
+    },
+    {
+      "path": "scripts/ci/run.mjs",
+      "phase18": {
+        "bytes": 19742,
+        "sha256": "3f33fc6e1156efe8d5debef198cfada26724442d714ba9163888d8e859db5690"
+      },
+      "observedStart": {
+        "bytes": 19742,
+        "sha256": "3f33fc6e1156efe8d5debef198cfada26724442d714ba9163888d8e859db5690"
+      },
+      "candidate": {
+        "bytes": 20585,
+        "sha256": "db03193508701efc7d95b47357d25ba48f25d08a4d1535f41f8e697e8c67de76"
+      },
+      "host": {
+        "bytes": 20585,
+        "sha256": "db03193508701efc7d95b47357d25ba48f25d08a4d1535f41f8e697e8c67de76"
+      }
+    },
+    {
+      "path": "scripts/ci/report.mjs",
+      "phase18": {
+        "bytes": 13171,
+        "sha256": "477c27194fa4377df3458ee0217563b29fb59b757951d46dab318727a1a15a03"
+      },
+      "observedStart": {
+        "bytes": 13171,
+        "sha256": "477c27194fa4377df3458ee0217563b29fb59b757951d46dab318727a1a15a03"
+      },
+      "candidate": {
+        "bytes": 14160,
+        "sha256": "7c4fe6205729896881a8a2f57e2370f81458cd58cfbfc00602db3e168643a65c"
+      },
+      "host": {
+        "bytes": 14160,
+        "sha256": "7c4fe6205729896881a8a2f57e2370f81458cd58cfbfc00602db3e168643a65c"
+      }
+    },
+    {
+      "path": "scripts/ci/provenance.mjs",
+      "phase18": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      },
+      "observedStart": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      },
+      "candidate": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      },
+      "host": {
+        "bytes": 4391,
+        "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+      }
+    },
+    {
+      "path": "scripts/ci/workflow-policy.mjs",
+      "phase18": {
+        "bytes": 11437,
+        "sha256": "00321b071d7dc07b091a436b0daccf84a627429f8e6d953de6d3dddca5853c85"
+      },
+      "observedStart": {
+        "bytes": 11437,
+        "sha256": "00321b071d7dc07b091a436b0daccf84a627429f8e6d953de6d3dddca5853c85"
+      },
+      "candidate": {
+        "bytes": 11754,
+        "sha256": "3057aaf96c34b24ecbc9b5b952e49c6b093e17b6ea7df17333a42a873a3bf250"
+      },
+      "host": {
+        "bytes": 11754,
+        "sha256": "3057aaf96c34b24ecbc9b5b952e49c6b093e17b6ea7df17333a42a873a3bf250"
+      }
+    },
+    {
+      "path": ".github/workflows/production-build.yml",
+      "phase18": {
+        "bytes": 12003,
+        "sha256": "0972001bec0ec4d0469e5f577ddb26345495229a3a508cd040b090e8262fba69"
+      },
+      "observedStart": {
+        "bytes": 12003,
+        "sha256": "0972001bec0ec4d0469e5f577ddb26345495229a3a508cd040b090e8262fba69"
+      },
+      "candidate": {
+        "bytes": 12419,
+        "sha256": "d0ae86f48e59f660e238c3a959122f0814963fca24bfceaeb1d193991828c5bf"
+      },
+      "host": {
+        "bytes": 12419,
+        "sha256": "d0ae86f48e59f660e238c3a959122f0814963fca24bfceaeb1d193991828c5bf"
+      }
+    }
+  ],
+  "registrationChecks": [
+    {
+      "source": "candidate",
+      "cfgTestModule": true,
+      "members": true,
+      "memberLive": true,
+      "policyTests": true,
+      "scripts/ci/run.mjs": true,
+      "scripts/ci/report.mjs": true,
+      ".github/workflows/production-build.yml": true
+    },
+    {
+      "source": "host",
+      "cfgTestModule": true,
+      "members": true,
+      "memberLive": true,
+      "policyTests": true,
+      "scripts/ci/run.mjs": true,
+      "scripts/ci/report.mjs": true,
+      ".github/workflows/production-build.yml": true
+    }
+  ],
+  "sharedRegistrationMeaning": "Only phase19 required cfg(test) and CI markers are checked here. Shared host bytes may differ from the exercised candidate; registration markers are not execution or policy-test evidence.",
+  "provenanceSelection": {
+    "candidate": {
+      "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8",
+      "sourceRoots": [
+        "backend",
+        "frontend",
+        "scripts",
+        "tests",
+        "deploy",
+        ".github",
+        "tools/platform-admin",
+        "mini-services/micro-vue",
+        "mini-services/micro-jquery",
+        "mini-services/notification-ws",
+        "mini-services/oauth-playground",
+        "examples/websocket",
+        "examples/app-backend",
+        "examples/micro-app-sdk",
+        "business-apps/work-orders/frontend",
+        "business-apps/work-orders/backend"
+      ],
+      "sourceFiles": [
+        "package.json",
+        "package-lock.json",
+        ".nvmrc",
+        ".node-version",
+        ".npmrc",
+        "rust-toolchain.toml",
+        ".dockerignore",
+        "docker-compose.yml",
+        "business-apps/work-orders/backend/server.mjs",
+        "business-apps/work-orders/backend/auth.mjs",
+        "business-apps/work-orders/backend/errors.mjs",
+        "business-apps/work-orders/backend/observability.mjs",
+        "business-apps/work-orders/backend/tests/cors.test.mjs",
+        "business-apps/work-orders/deploy/bootstrap.manifest.json",
+        "business-apps/work-orders/deploy/grants.manifest.example.json",
+        "business-apps/work-orders/tests/platform-e2e.mjs"
+      ]
+    },
+    "host": {
+      "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8",
+      "inputsSha256": "52ebb7a5904b82fa94f5f16b69e9cad924b8afcea4ae60df75fa1423a101741e",
+      "inputCount": 700,
+      "sourceRoots": [
+        "backend",
+        "frontend",
+        "scripts",
+        "tests",
+        "deploy",
+        ".github",
+        "tools/platform-admin",
+        "mini-services/micro-vue",
+        "mini-services/micro-jquery",
+        "mini-services/notification-ws",
+        "mini-services/oauth-playground",
+        "examples/websocket",
+        "examples/app-backend",
+        "examples/micro-app-sdk",
+        "business-apps/work-orders/frontend",
+        "business-apps/work-orders/backend"
+      ],
+      "sourceFiles": [
+        "package.json",
+        "package-lock.json",
+        ".nvmrc",
+        ".node-version",
+        ".npmrc",
+        "rust-toolchain.toml",
+        ".dockerignore",
+        "docker-compose.yml",
+        "business-apps/work-orders/backend/server.mjs",
+        "business-apps/work-orders/backend/auth.mjs",
+        "business-apps/work-orders/backend/errors.mjs",
+        "business-apps/work-orders/backend/observability.mjs",
+        "business-apps/work-orders/backend/tests/cors.test.mjs",
+        "business-apps/work-orders/deploy/bootstrap.manifest.json",
+        "business-apps/work-orders/deploy/grants.manifest.example.json",
+        "business-apps/work-orders/tests/platform-e2e.mjs"
+      ]
+    },
+    "rootsOnlyInHost": [],
+    "rootsOnlyInCandidate": [],
+    "filesOnlyInHost": [],
+    "filesOnlyInCandidate": [],
+    "limitation": "Union-of-selected-path deltas are not an exhaustive filesystem or external-work audit. Selection changes do not establish physical creation/deletion. Unselected work is not certified."
+  },
+  "deltas": {
+    "phase18ToObservedStart": [
+      {
+        "path": ".github/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 4351,
+          "sha256": "c9adc7909000a8fefd8e4f98168da4631cf686194c5cd7bc28450b271a57d43e"
+        },
+        "after": {
+          "bytes": 4958,
+          "sha256": "846fc752c087645f88944b14c8866d798d15b8c0c26a68caa70ff2d6b75269cd"
+        }
+      },
+      {
+        "path": "scripts/ci/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 30157,
+          "sha256": "4b8050b6d462cd23e5fcdc670da8f91d23276233756149a07f188f3e61068e0a"
+        },
+        "after": {
+          "bytes": 31171,
+          "sha256": "815ad87289d3f282ac162c8f300e2a84bc0baf2122fd34d6f5a671203bf00ae7"
+        }
+      }
+    ],
+    "observedStartToCandidate": [
+      {
+        "path": ".github/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 4958,
+          "sha256": "846fc752c087645f88944b14c8866d798d15b8c0c26a68caa70ff2d6b75269cd"
+        },
+        "after": {
+          "bytes": 6097,
+          "sha256": "8fd597a45d0841ceaea6facf3d57fba73daec15db26abe11f73f6656fe1d50b0"
+        }
+      },
+      {
+        "path": ".github/workflows/production-build.yml",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 12003,
+          "sha256": "0972001bec0ec4d0469e5f577ddb26345495229a3a508cd040b090e8262fba69"
+        },
+        "after": {
+          "bytes": 12419,
+          "sha256": "d0ae86f48e59f660e238c3a959122f0814963fca24bfceaeb1d193991828c5bf"
+        }
+      },
+      {
+        "path": "backend/src/data_grant_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 56379,
+          "sha256": "03d574abf641e7d8d979f0bff9869b56223866ae91de1a785e42f448915955b8"
+        },
+        "after": {
+          "bytes": 56490,
+          "sha256": "6be445dba3ee69e8192df6fe4965066d73af741b22954fba0fdc4983ffd96dd4"
+        }
+      },
+      {
+        "path": "backend/src/data_grants/policy.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 17112,
+          "sha256": "a14ea10134aa5f4113fdc8dfa8167a34c9a000b94048abf550ccece6b2b73198"
+        },
+        "after": {
+          "bytes": 23517,
+          "sha256": "8ef83e9d2a8add82e1bf7e10742c44719a35e6b64e148ae667976d878d8956e0"
+        }
+      },
+      {
+        "path": "backend/src/main.rs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 11165,
+          "sha256": "f6602e1e36f8b0acf8b0b0580a31807a0cdea6a8015edc7c2a8cb39e7299546f"
+        },
+        "after": {
+          "bytes": 11211,
+          "sha256": "07753cd578c99ccef16f1a4d942f4bdae88d5eddf8fd7ffcec780bf8399b4d16"
+        }
+      },
+      {
+        "path": "backend/src/notification_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 81586,
+          "sha256": "d5c9cd3d3509efa23f9c6fa7cc5a9ca5da79b173c8c7ca28363366f201aec194"
+        },
+        "after": {
+          "bytes": 90556,
+          "sha256": "f12e2edac6bb3ac62d3a4610dc1be75c6309cdb2b037e00d595920fc53dbc69c"
+        }
+      },
+      {
+        "path": "backend/src/phase18_work_orders_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 42234,
+          "sha256": "0901dc527ecbd2bff2d06c14652d2ade149dd0d289b4c6d964959a248795c157"
+        },
+        "after": {
+          "bytes": 42234,
+          "sha256": "4bb795bd20835b3d5822a058d0b09742a0682e590d5e9ff4fbcafb78719620c4"
+        }
+      },
+      {
+        "path": "backend/src/phase19_work_orders_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 57225,
+          "sha256": "13183cb7e37c17ad352f4c9b3220be77991a5f58906f034d1f3fb79ccf13c215"
+        }
+      },
+      {
+        "path": "backend/src/platform_admin_cli_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 50660,
+          "sha256": "d2472d46358b4d06a39cdc9ca1c2ec650777d468bf87d8dd60a11086a637cb16"
+        },
+        "after": {
+          "bytes": 50767,
+          "sha256": "3facdcadf82aef1d600d240bd47f83edff0ea0060e9a8ebf1ac029cfce0a27ee"
+        }
+      },
+      {
+        "path": "backend/src/routes/app_members.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 7532,
+          "sha256": "217db6d48729dc78a9f0f0441aa4eccd0b0581fcdd58d8d6519e6c050a798066"
+        },
+        "after": {
+          "bytes": 10071,
+          "sha256": "82c377d012cc7159a6e2542908aa5e77ba20d9fa64a1a9e06211f643a331bf5b"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 13580,
+          "sha256": "7dbf3c2708cde5171003f89ba593c48978804319d94ef8513252c36cccf83b20"
+        },
+        "after": {
+          "bytes": 15061,
+          "sha256": "81beb80b98ecc5da0017d13b9f93a023ba568b5e20c6bf352bf39ebda508877f"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/authorization.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 3753,
+          "sha256": "95329c54dcc9da5ca0c26c18055c787e84c88543b80e2cd63467408ee67ce54b"
+        },
+        "after": {
+          "bytes": 5973,
+          "sha256": "de472e7d1f455b0d97061e4837cd5e1d4f8f642191e97a075e2cd605eb3f27c8"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/authorization/client.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 5654,
+          "sha256": "9b6c89e26be7c7a63871225ae02593d3e9ebff325a6047941e48fd069942b3b0"
+        },
+        "after": {
+          "bytes": 8041,
+          "sha256": "1c76d2150a5591803cc0f0232fad5b0a3fdcc14f701c37491b3c10377da8d73f"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/directory.rs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 6527,
+          "sha256": "a89ec15ee898c7d6907fa0dd86c97cff46dd37b5a1c77f662b22d6cce69c5a52"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/directory/query.rs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 5747,
+          "sha256": "f9ddd5fb704f304249aaa0a47204638c1d1a29402120529785e49b942646e343"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/directory/tests.rs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 4348,
+          "sha256": "e5943b4a4499ef613ced765d5ca05b7312936bc94fb09197912e09f0ac0c6bea"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/http.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 27326,
+          "sha256": "db573215809e69485c132b941896df14d5be2b91e4fc8e41a8e88bf075338f95"
+        },
+        "after": {
+          "bytes": 27989,
+          "sha256": "fe5e372c7ae66d9075ae7718c7e924875eb25ab21e1439766e0ad9d0cc3dbc5b"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/lib.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 7000,
+          "sha256": "a194cb69ec7237480bc14de44e3541c67903b9172d63776308beaa2b249e288d"
+        },
+        "after": {
+          "bytes": 7104,
+          "sha256": "a32d24e7a20280d3e64155ca1abf859ebcf1561d38fd239e5a98154933676176"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/writes.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 12697,
+          "sha256": "291abb46382a0b2b0e5cabd6a009a3362c6e0d1926a1dcaa7aa5a861d41dbbcf"
+        },
+        "after": {
+          "bytes": 18698,
+          "sha256": "bf346f76011fc44d0e273b19569dbf380320e1a43f94f5e333174b7e5774af15"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/writes/dto.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 13412,
+          "sha256": "42f3406adc032d8aa585ea2f68f00ba5a4bf36fc5d808da6953c9d242cc96f29"
+        },
+        "after": {
+          "bytes": 14362,
+          "sha256": "a61c9c58c587934a28e3f7b2e332aa563b91ea1302b24922063411d8eeeabbd5"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/tests/member_contracts.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 58366,
+          "sha256": "0f28be0c03fbf797bcb19d73e492419d017851ef70f6bef268dc988bf2f89508"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/tests/write_contracts.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 47668,
+          "sha256": "a95573a3f31d8e92603b76e6d5ea8a3b510994b746d51929a0ec51b84c1ee2e8"
+        },
+        "after": {
+          "bytes": 48375,
+          "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/tests/platform-e2e.mjs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 89908,
+          "sha256": "1980ad9d63969f3635fcc9146dfc7b265fef5b34efc59a14a05a34a59632e73a"
+        },
+        "after": {
+          "bytes": 91160,
+          "sha256": "ae932356aaa97adf7daa6eac49e11b1436d437e791b412f01c4fc11569025cd1"
+        }
+      },
+      {
+        "path": "scripts/ci/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 31171,
+          "sha256": "815ad87289d3f282ac162c8f300e2a84bc0baf2122fd34d6f5a671203bf00ae7"
+        },
+        "after": {
+          "bytes": 32389,
+          "sha256": "7b4cee3717cdd105785e8d004bb0284251484cc1253a183e369646bc2853a83a"
+        }
+      },
+      {
+        "path": "scripts/ci/manifest.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 4743,
+          "sha256": "9fd89d5cb9cb9f7db0b76b21c720ccb169bb21714d4886fb237528fc9cc69381"
+        },
+        "after": {
+          "bytes": 5160,
+          "sha256": "c6f82c19c20119016b0af23ca3c8adcf15c49377d0c9542b5c3b22f121fd7f08"
+        }
+      },
+      {
+        "path": "scripts/ci/postgres.test.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 3345,
+          "sha256": "c346a61c4744f7ae744401b6cd27eb2aecdb82059ddb9b55f27e657b0ab4f149"
+        },
+        "after": {
+          "bytes": 3483,
+          "sha256": "a45575b2187c338280cdc763c9cefa743d88f9c82baa1cfe1a34294b0def2e51"
+        }
+      },
+      {
+        "path": "scripts/ci/report.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 13171,
+          "sha256": "477c27194fa4377df3458ee0217563b29fb59b757951d46dab318727a1a15a03"
+        },
+        "after": {
+          "bytes": 14160,
+          "sha256": "7c4fe6205729896881a8a2f57e2370f81458cd58cfbfc00602db3e168643a65c"
+        }
+      },
+      {
+        "path": "scripts/ci/run.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 19742,
+          "sha256": "3f33fc6e1156efe8d5debef198cfada26724442d714ba9163888d8e859db5690"
+        },
+        "after": {
+          "bytes": 20585,
+          "sha256": "db03193508701efc7d95b47357d25ba48f25d08a4d1535f41f8e697e8c67de76"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member-live-postgres.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 1841,
+          "sha256": "c07e97cdeff6cb55664e7a497f15bed4fa22065fe1e522d3cedc48c6659aea6d"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member-live-results.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 4271,
+          "sha256": "a0e6be8b29fbc8b394bab829cc83d739c5de837761dd7632ae13752f9850434c"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member-postgres.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 1694,
+          "sha256": "200cbf648ac862ed312416b79fe2d81d6c5ac5c965d7e1eb4d3a9ca6f6244d21"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member.test.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 15817,
+          "sha256": "c461b3f1e39cbae1ef419e19ab445f7aa5d994e94d1833a740735e5b02a225f5"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-write.test.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 8460,
+          "sha256": "6f1d1c66a6b5ccc6fae338444a62a60b8afb5928bf6b9e703771daddd21e00f1"
+        },
+        "after": {
+          "bytes": 8460,
+          "sha256": "518b8c03cbe78926fd5e2016817fe1ed233afccfdcdcdfb8fdd88d6c46187389"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders.test.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 11838,
+          "sha256": "f2558e9d1dd5700edd601c756c97327734594802024820e4687d2b6da1305588"
+        },
+        "after": {
+          "bytes": 11838,
+          "sha256": "0646b8f5d2e2d3eaf8a264ea862ddbc85829a47e8b3f5304456ede2fc7dbcccd"
+        }
+      },
+      {
+        "path": "scripts/ci/workflow-policy.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 11437,
+          "sha256": "00321b071d7dc07b091a436b0daccf84a627429f8e6d953de6d3dddca5853c85"
+        },
+        "after": {
+          "bytes": 11754,
+          "sha256": "3057aaf96c34b24ecbc9b5b952e49c6b093e17b6ea7df17333a42a873a3bf250"
+        }
+      },
+      {
+        "path": "tests/ci-runner.mjs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 29489,
+          "sha256": "ca4b2c2096a67371b9c64231e19befd96df0ce4d20caeec0fd7cf0a1339ad4d0"
+        },
+        "after": {
+          "bytes": 29543,
+          "sha256": "9f93d217a2a9952c899136d7996160e6fbad1c7596237d31d0d4e82bc3b8f973"
+        }
+      }
+    ],
+    "phase18ToCandidate": [
+      {
+        "path": ".github/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 4351,
+          "sha256": "c9adc7909000a8fefd8e4f98168da4631cf686194c5cd7bc28450b271a57d43e"
+        },
+        "after": {
+          "bytes": 6097,
+          "sha256": "8fd597a45d0841ceaea6facf3d57fba73daec15db26abe11f73f6656fe1d50b0"
+        }
+      },
+      {
+        "path": ".github/workflows/production-build.yml",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 12003,
+          "sha256": "0972001bec0ec4d0469e5f577ddb26345495229a3a508cd040b090e8262fba69"
+        },
+        "after": {
+          "bytes": 12419,
+          "sha256": "d0ae86f48e59f660e238c3a959122f0814963fca24bfceaeb1d193991828c5bf"
+        }
+      },
+      {
+        "path": "backend/src/data_grant_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 56379,
+          "sha256": "03d574abf641e7d8d979f0bff9869b56223866ae91de1a785e42f448915955b8"
+        },
+        "after": {
+          "bytes": 56490,
+          "sha256": "6be445dba3ee69e8192df6fe4965066d73af741b22954fba0fdc4983ffd96dd4"
+        }
+      },
+      {
+        "path": "backend/src/data_grants/policy.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 17112,
+          "sha256": "a14ea10134aa5f4113fdc8dfa8167a34c9a000b94048abf550ccece6b2b73198"
+        },
+        "after": {
+          "bytes": 23517,
+          "sha256": "8ef83e9d2a8add82e1bf7e10742c44719a35e6b64e148ae667976d878d8956e0"
+        }
+      },
+      {
+        "path": "backend/src/main.rs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 11165,
+          "sha256": "f6602e1e36f8b0acf8b0b0580a31807a0cdea6a8015edc7c2a8cb39e7299546f"
+        },
+        "after": {
+          "bytes": 11211,
+          "sha256": "07753cd578c99ccef16f1a4d942f4bdae88d5eddf8fd7ffcec780bf8399b4d16"
+        }
+      },
+      {
+        "path": "backend/src/notification_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 81586,
+          "sha256": "d5c9cd3d3509efa23f9c6fa7cc5a9ca5da79b173c8c7ca28363366f201aec194"
+        },
+        "after": {
+          "bytes": 90556,
+          "sha256": "f12e2edac6bb3ac62d3a4610dc1be75c6309cdb2b037e00d595920fc53dbc69c"
+        }
+      },
+      {
+        "path": "backend/src/phase18_work_orders_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 42234,
+          "sha256": "0901dc527ecbd2bff2d06c14652d2ade149dd0d289b4c6d964959a248795c157"
+        },
+        "after": {
+          "bytes": 42234,
+          "sha256": "4bb795bd20835b3d5822a058d0b09742a0682e590d5e9ff4fbcafb78719620c4"
+        }
+      },
+      {
+        "path": "backend/src/phase19_work_orders_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 57225,
+          "sha256": "13183cb7e37c17ad352f4c9b3220be77991a5f58906f034d1f3fb79ccf13c215"
+        }
+      },
+      {
+        "path": "backend/src/platform_admin_cli_tests.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 50660,
+          "sha256": "d2472d46358b4d06a39cdc9ca1c2ec650777d468bf87d8dd60a11086a637cb16"
+        },
+        "after": {
+          "bytes": 50767,
+          "sha256": "3facdcadf82aef1d600d240bd47f83edff0ea0060e9a8ebf1ac029cfce0a27ee"
+        }
+      },
+      {
+        "path": "backend/src/routes/app_members.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 7532,
+          "sha256": "217db6d48729dc78a9f0f0441aa4eccd0b0581fcdd58d8d6519e6c050a798066"
+        },
+        "after": {
+          "bytes": 10071,
+          "sha256": "82c377d012cc7159a6e2542908aa5e77ba20d9fa64a1a9e06211f643a331bf5b"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 13580,
+          "sha256": "7dbf3c2708cde5171003f89ba593c48978804319d94ef8513252c36cccf83b20"
+        },
+        "after": {
+          "bytes": 15061,
+          "sha256": "81beb80b98ecc5da0017d13b9f93a023ba568b5e20c6bf352bf39ebda508877f"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/authorization.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 3753,
+          "sha256": "95329c54dcc9da5ca0c26c18055c787e84c88543b80e2cd63467408ee67ce54b"
+        },
+        "after": {
+          "bytes": 5973,
+          "sha256": "de472e7d1f455b0d97061e4837cd5e1d4f8f642191e97a075e2cd605eb3f27c8"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/authorization/client.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 5654,
+          "sha256": "9b6c89e26be7c7a63871225ae02593d3e9ebff325a6047941e48fd069942b3b0"
+        },
+        "after": {
+          "bytes": 8041,
+          "sha256": "1c76d2150a5591803cc0f0232fad5b0a3fdcc14f701c37491b3c10377da8d73f"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/directory.rs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 6527,
+          "sha256": "a89ec15ee898c7d6907fa0dd86c97cff46dd37b5a1c77f662b22d6cce69c5a52"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/directory/query.rs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 5747,
+          "sha256": "f9ddd5fb704f304249aaa0a47204638c1d1a29402120529785e49b942646e343"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/directory/tests.rs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 4348,
+          "sha256": "e5943b4a4499ef613ced765d5ca05b7312936bc94fb09197912e09f0ac0c6bea"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/http.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 27326,
+          "sha256": "db573215809e69485c132b941896df14d5be2b91e4fc8e41a8e88bf075338f95"
+        },
+        "after": {
+          "bytes": 27989,
+          "sha256": "fe5e372c7ae66d9075ae7718c7e924875eb25ab21e1439766e0ad9d0cc3dbc5b"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/lib.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 7000,
+          "sha256": "a194cb69ec7237480bc14de44e3541c67903b9172d63776308beaa2b249e288d"
+        },
+        "after": {
+          "bytes": 7104,
+          "sha256": "a32d24e7a20280d3e64155ca1abf859ebcf1561d38fd239e5a98154933676176"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/writes.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 12697,
+          "sha256": "291abb46382a0b2b0e5cabd6a009a3362c6e0d1926a1dcaa7aa5a861d41dbbcf"
+        },
+        "after": {
+          "bytes": 18698,
+          "sha256": "bf346f76011fc44d0e273b19569dbf380320e1a43f94f5e333174b7e5774af15"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/src/writes/dto.rs",
+        "category": "phase19-owned-executable",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 13412,
+          "sha256": "42f3406adc032d8aa585ea2f68f00ba5a4bf36fc5d808da6953c9d242cc96f29"
+        },
+        "after": {
+          "bytes": 14362,
+          "sha256": "a61c9c58c587934a28e3f7b2e332aa563b91ea1302b24922063411d8eeeabbd5"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/tests/member_contracts.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 58366,
+          "sha256": "0f28be0c03fbf797bcb19d73e492419d017851ef70f6bef268dc988bf2f89508"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/backend/tests/write_contracts.rs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 47668,
+          "sha256": "a95573a3f31d8e92603b76e6d5ea8a3b510994b746d51929a0ec51b84c1ee2e8"
+        },
+        "after": {
+          "bytes": 48375,
+          "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+        }
+      },
+      {
+        "path": "business-apps/work-orders/tests/platform-e2e.mjs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 89908,
+          "sha256": "1980ad9d63969f3635fcc9146dfc7b265fef5b34efc59a14a05a34a59632e73a"
+        },
+        "after": {
+          "bytes": 91160,
+          "sha256": "ae932356aaa97adf7daa6eac49e11b1436d437e791b412f01c4fc11569025cd1"
+        }
+      },
+      {
+        "path": "scripts/ci/README.md",
+        "category": "auxiliary-documentation-or-public-template",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 30157,
+          "sha256": "4b8050b6d462cd23e5fcdc670da8f91d23276233756149a07f188f3e61068e0a"
+        },
+        "after": {
+          "bytes": 32389,
+          "sha256": "7b4cee3717cdd105785e8d004bb0284251484cc1253a183e369646bc2853a83a"
+        }
+      },
+      {
+        "path": "scripts/ci/manifest.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 4743,
+          "sha256": "9fd89d5cb9cb9f7db0b76b21c720ccb169bb21714d4886fb237528fc9cc69381"
+        },
+        "after": {
+          "bytes": 5160,
+          "sha256": "c6f82c19c20119016b0af23ca3c8adcf15c49377d0c9542b5c3b22f121fd7f08"
+        }
+      },
+      {
+        "path": "scripts/ci/postgres.test.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 3345,
+          "sha256": "c346a61c4744f7ae744401b6cd27eb2aecdb82059ddb9b55f27e657b0ab4f149"
+        },
+        "after": {
+          "bytes": 3483,
+          "sha256": "a45575b2187c338280cdc763c9cefa743d88f9c82baa1cfe1a34294b0def2e51"
+        }
+      },
+      {
+        "path": "scripts/ci/report.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 13171,
+          "sha256": "477c27194fa4377df3458ee0217563b29fb59b757951d46dab318727a1a15a03"
+        },
+        "after": {
+          "bytes": 14160,
+          "sha256": "7c4fe6205729896881a8a2f57e2370f81458cd58cfbfc00602db3e168643a65c"
+        }
+      },
+      {
+        "path": "scripts/ci/run.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 19742,
+          "sha256": "3f33fc6e1156efe8d5debef198cfada26724442d714ba9163888d8e859db5690"
+        },
+        "after": {
+          "bytes": 20585,
+          "sha256": "db03193508701efc7d95b47357d25ba48f25d08a4d1535f41f8e697e8c67de76"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member-live-postgres.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 1841,
+          "sha256": "c07e97cdeff6cb55664e7a497f15bed4fa22065fe1e522d3cedc48c6659aea6d"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member-live-results.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 4271,
+          "sha256": "a0e6be8b29fbc8b394bab829cc83d739c5de837761dd7632ae13752f9850434c"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member-postgres.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 1694,
+          "sha256": "200cbf648ac862ed312416b79fe2d81d6c5ac5c965d7e1eb4d3a9ca6f6244d21"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-member.test.mjs",
+        "category": "phase19-owned-executable",
+        "change": "newly-selected-or-added",
+        "before": null,
+        "after": {
+          "bytes": 15817,
+          "sha256": "c461b3f1e39cbae1ef419e19ab445f7aa5d994e94d1833a740735e5b02a225f5"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders-write.test.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 8460,
+          "sha256": "6f1d1c66a6b5ccc6fae338444a62a60b8afb5928bf6b9e703771daddd21e00f1"
+        },
+        "after": {
+          "bytes": 8460,
+          "sha256": "518b8c03cbe78926fd5e2016817fe1ed233afccfdcdcdfb8fdd88d6c46187389"
+        }
+      },
+      {
+        "path": "scripts/ci/work-orders.test.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 11838,
+          "sha256": "f2558e9d1dd5700edd601c756c97327734594802024820e4687d2b6da1305588"
+        },
+        "after": {
+          "bytes": 11838,
+          "sha256": "0646b8f5d2e2d3eaf8a264ea862ddbc85829a47e8b3f5304456ede2fc7dbcccd"
+        }
+      },
+      {
+        "path": "scripts/ci/workflow-policy.mjs",
+        "category": "shared-ci-or-registration",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 11437,
+          "sha256": "00321b071d7dc07b091a436b0daccf84a627429f8e6d953de6d3dddca5853c85"
+        },
+        "after": {
+          "bytes": 11754,
+          "sha256": "3057aaf96c34b24ecbc9b5b952e49c6b093e17b6ea7df17333a42a873a3bf250"
+        }
+      },
+      {
+        "path": "tests/ci-runner.mjs",
+        "category": "phase19-new-or-evolved-test-input",
+        "change": "changed-bytes",
+        "before": {
+          "bytes": 29489,
+          "sha256": "ca4b2c2096a67371b9c64231e19befd96df0ce4d20caeec0fd7cf0a1339ad4d0"
+        },
+        "after": {
+          "bytes": 29543,
+          "sha256": "9f93d217a2a9952c899136d7996160e6fbad1c7596237d31d0d4e82bc3b8f973"
+        }
+      }
+    ],
+    "candidateToCurrentHost": []
+  },
+  "nodeBackendCompatibilityInputs": [
+    {
+      "path": "business-apps/work-orders/backend/.dockerignore",
+      "phase18": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "observedStart": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "candidate": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "host": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "expected": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      },
+      "hostOnDisk": {
+        "bytes": 31,
+        "sha256": "c7d017fd847338f120bf57cce065ba97ffa979671d7298f80fb5a0070fd8ee3b"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/auth.mjs",
+      "phase18": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "observedStart": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "candidate": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "host": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "expected": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      },
+      "hostOnDisk": {
+        "bytes": 9968,
+        "sha256": "80830a46dd40b9504e74fe062e3c4cac1f277dca2b4c536cc024fa66cb17f2e3"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/config.mjs",
+      "phase18": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "observedStart": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "candidate": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "host": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "expected": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      },
+      "hostOnDisk": {
+        "bytes": 2654,
+        "sha256": "079a807f66d0720ac2b75ca8bbbcd6e11187af1121e409170a2be8f0392b0ffc"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/db.mjs",
+      "phase18": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "observedStart": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "candidate": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "host": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "expected": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      },
+      "hostOnDisk": {
+        "bytes": 1781,
+        "sha256": "8b3aab0addbf80946d85d6606fac9499edc34fd63d8e697f84ec7d6cf86740b3"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/Dockerfile",
+      "phase18": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "observedStart": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "candidate": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "host": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "expected": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      },
+      "hostOnDisk": {
+        "bytes": 597,
+        "sha256": "e132f776632c33ae7200351be171689ca17f128b8b775704e71f6cbf8a53cc27"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/errors.mjs",
+      "phase18": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "observedStart": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "candidate": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "host": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "expected": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      },
+      "hostOnDisk": {
+        "bytes": 432,
+        "sha256": "b9b6b8fb72f40f6e1393cc1abeaa5fb7e65be462ae3581e9e01a947cf2a8b558"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/index.mjs",
+      "phase18": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "observedStart": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "candidate": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "host": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "expected": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      },
+      "hostOnDisk": {
+        "bytes": 1158,
+        "sha256": "70785720d2889145fae8feae8da0545025e8e53fc0799a4eb48f19cc022a4c0e"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/observability.mjs",
+      "phase18": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "observedStart": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "candidate": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "host": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "expected": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      },
+      "hostOnDisk": {
+        "bytes": 4765,
+        "sha256": "d35b4589ca9da9a22b4bf62e6f521a855ddd8abdf493b74c68ef2e2e22c3f130"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/package-lock.json",
+      "phase18": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "observedStart": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "candidate": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "host": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "expected": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      },
+      "hostOnDisk": {
+        "bytes": 5860,
+        "sha256": "5d294d64a6274cb47629e95e75584df1265b5c78b7478b6104d84528aadcc880"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/package.json",
+      "phase18": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "observedStart": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "candidate": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "host": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "expected": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      },
+      "hostOnDisk": {
+        "bytes": 370,
+        "sha256": "195b6084a72071a0dd4cb7947650e6ced2f9dbeaddb6ac998325fef06ad62458"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/server.mjs",
+      "phase18": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "observedStart": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "candidate": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "host": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "expected": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      },
+      "hostOnDisk": {
+        "bytes": 23323,
+        "sha256": "b506f7733a8310035e9048f3d37f2b1a164937c2d934b570195e9754cab41fb1"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/api.test.mjs",
+      "phase18": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "observedStart": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "candidate": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "host": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "expected": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      },
+      "hostOnDisk": {
+        "bytes": 49850,
+        "sha256": "a1ac5a368bddb0d6bad454cbae70be95bcc19d2f03ce9909e3404c96521ef072"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/config.test.mjs",
+      "phase18": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "observedStart": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "candidate": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "host": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "expected": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      },
+      "hostOnDisk": {
+        "bytes": 3307,
+        "sha256": "7acb2055e5f3a93ab85fc4db59dd1cb77c93096efd8f02b09e912ed96d0bcb02"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/cors.test.mjs",
+      "phase18": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "observedStart": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "candidate": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "host": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "expected": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      },
+      "hostOnDisk": {
+        "bytes": 2543,
+        "sha256": "39dd613aa47d380abcc95f5aa1401722635c2cffe1977b4497610c79e3d02076"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/helpers.mjs",
+      "phase18": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "observedStart": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "candidate": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "host": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "expected": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      },
+      "hostOnDisk": {
+        "bytes": 17629,
+        "sha256": "2a2b1d018ee2d83197c9aa3f7ca41a9281da95672878e82a313b11e347498917"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/observability.test.mjs",
+      "phase18": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "observedStart": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "candidate": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "host": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "expected": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      },
+      "hostOnDisk": {
+        "bytes": 5349,
+        "sha256": "4745460097cdab51553539a87281d1cebc8bf94562edc6abdd0f535e7456a01f"
+      }
+    }
+  ],
+  "evolvedFixtureInputs": [
+    {
+      "path": "business-apps/work-orders/tests/platform-e2e.mjs",
+      "phase18": {
+        "bytes": 89908,
+        "sha256": "1980ad9d63969f3635fcc9146dfc7b265fef5b34efc59a14a05a34a59632e73a"
+      },
+      "observedStart": {
+        "bytes": 89908,
+        "sha256": "1980ad9d63969f3635fcc9146dfc7b265fef5b34efc59a14a05a34a59632e73a"
+      },
+      "candidate": {
+        "bytes": 91160,
+        "sha256": "ae932356aaa97adf7daa6eac49e11b1436d437e791b412f01c4fc11569025cd1"
+      },
+      "host": {
+        "bytes": 91160,
+        "sha256": "ae932356aaa97adf7daa6eac49e11b1436d437e791b412f01c4fc11569025cd1"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/tests/write_contracts.rs",
+      "phase18": {
+        "bytes": 47668,
+        "sha256": "a95573a3f31d8e92603b76e6d5ea8a3b510994b746d51929a0ec51b84c1ee2e8"
+      },
+      "observedStart": {
+        "bytes": 47668,
+        "sha256": "a95573a3f31d8e92603b76e6d5ea8a3b510994b746d51929a0ec51b84c1ee2e8"
+      },
+      "candidate": {
+        "bytes": 48375,
+        "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+      },
+      "host": {
+        "bytes": 48375,
+        "sha256": "2cd4e00b91db8ac7520277d2f2b5c5715e6ff287328b12702601a073294b9949"
+      }
+    },
+    {
+      "path": "backend/src/notification_tests.rs",
+      "phase18": {
+        "bytes": 81586,
+        "sha256": "d5c9cd3d3509efa23f9c6fa7cc5a9ca5da79b173c8c7ca28363366f201aec194"
+      },
+      "observedStart": {
+        "bytes": 81586,
+        "sha256": "d5c9cd3d3509efa23f9c6fa7cc5a9ca5da79b173c8c7ca28363366f201aec194"
+      },
+      "candidate": {
+        "bytes": 90556,
+        "sha256": "f12e2edac6bb3ac62d3a4610dc1be75c6309cdb2b037e00d595920fc53dbc69c"
+      },
+      "host": {
+        "bytes": 90556,
+        "sha256": "f12e2edac6bb3ac62d3a4610dc1be75c6309cdb2b037e00d595920fc53dbc69c"
+      }
+    },
+    {
+      "path": "backend/src/data_grant_tests.rs",
+      "phase18": {
+        "bytes": 56379,
+        "sha256": "03d574abf641e7d8d979f0bff9869b56223866ae91de1a785e42f448915955b8"
+      },
+      "observedStart": {
+        "bytes": 56379,
+        "sha256": "03d574abf641e7d8d979f0bff9869b56223866ae91de1a785e42f448915955b8"
+      },
+      "candidate": {
+        "bytes": 56490,
+        "sha256": "6be445dba3ee69e8192df6fe4965066d73af741b22954fba0fdc4983ffd96dd4"
+      },
+      "host": {
+        "bytes": 56490,
+        "sha256": "6be445dba3ee69e8192df6fe4965066d73af741b22954fba0fdc4983ffd96dd4"
+      }
+    },
+    {
+      "path": "backend/src/platform_admin_cli_tests.rs",
+      "phase18": {
+        "bytes": 50660,
+        "sha256": "d2472d46358b4d06a39cdc9ca1c2ec650777d468bf87d8dd60a11086a637cb16"
+      },
+      "observedStart": {
+        "bytes": 50660,
+        "sha256": "d2472d46358b4d06a39cdc9ca1c2ec650777d468bf87d8dd60a11086a637cb16"
+      },
+      "candidate": {
+        "bytes": 50767,
+        "sha256": "3facdcadf82aef1d600d240bd47f83edff0ea0060e9a8ebf1ac029cfce0a27ee"
+      },
+      "host": {
+        "bytes": 50767,
+        "sha256": "3facdcadf82aef1d600d240bd47f83edff0ea0060e9a8ebf1ac029cfce0a27ee"
+      }
+    },
+    {
+      "path": "backend/src/phase18_work_orders_tests.rs",
+      "phase18": {
+        "bytes": 42234,
+        "sha256": "0901dc527ecbd2bff2d06c14652d2ade149dd0d289b4c6d964959a248795c157"
+      },
+      "observedStart": {
+        "bytes": 42234,
+        "sha256": "0901dc527ecbd2bff2d06c14652d2ade149dd0d289b4c6d964959a248795c157"
+      },
+      "candidate": {
+        "bytes": 42234,
+        "sha256": "4bb795bd20835b3d5822a058d0b09742a0682e590d5e9ff4fbcafb78719620c4"
+      },
+      "host": {
+        "bytes": 42234,
+        "sha256": "4bb795bd20835b3d5822a058d0b09742a0682e590d5e9ff4fbcafb78719620c4"
+      }
+    },
+    {
+      "path": "tests/ci-runner.mjs",
+      "phase18": {
+        "bytes": 29489,
+        "sha256": "ca4b2c2096a67371b9c64231e19befd96df0ce4d20caeec0fd7cf0a1339ad4d0"
+      },
+      "observedStart": {
+        "bytes": 29489,
+        "sha256": "ca4b2c2096a67371b9c64231e19befd96df0ce4d20caeec0fd7cf0a1339ad4d0"
+      },
+      "candidate": {
+        "bytes": 29543,
+        "sha256": "9f93d217a2a9952c899136d7996160e6fbad1c7596237d31d0d4e82bc3b8f973"
+      },
+      "host": {
+        "bytes": 29543,
+        "sha256": "9f93d217a2a9952c899136d7996160e6fbad1c7596237d31d0d4e82bc3b8f973"
+      }
+    }
+  ],
+  "legacyMeaning": "The declared legacy Node backend compatibility set is checked separately. The platform-e2e Node fixture may add necessary memberLookups configuration; old Rust write/live and platform policy fixtures deliberately evolve for phase19. The registered CI runner mock count correction derives its expected count from the manifest and is a declared owned fixture change. No blanket assertion that all historical tests or the entire former legacy boundary remain unchanged is made.",
+  "migrationBytes": [
+    {
+      "path": "business-apps/work-orders/backend/migrations/0001_work_orders.sql",
+      "phase18": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "observedStart": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "candidate": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "host": {
+        "bytes": 2020,
+        "sha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+      },
+      "expectedSha256": "a2e4224febd195fdd663a8954c3be4b76a8a06338521056c6809ebaa57d04090"
+    },
+    {
+      "path": "business-apps/work-orders/backend/migrations/0002_create_idempotency.sql",
+      "phase18": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "observedStart": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "candidate": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "host": {
+        "bytes": 647,
+        "sha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+      },
+      "expectedSha256": "70700874ffd778b9c9c6921614fe54efcad1512b57b5a1fd8373ad56d8f4541c"
+    }
+  ],
+  "dependencyInputs": [
+    {
+      "path": "business-apps/work-orders/backend/Cargo.toml",
+      "phase18": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "observedStart": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "candidate": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      },
+      "host": {
+        "bytes": 1123,
+        "sha256": "25f98d83376dc696aaa2e110237e3a20a58d50f9e3ef896e20b843b7345392ed"
+      }
+    },
+    {
+      "path": "business-apps/work-orders/backend/Cargo.lock",
+      "phase18": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "observedStart": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "candidate": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      },
+      "host": {
+        "bytes": 62816,
+        "sha256": "b6e280f508f442ba903d84802368131c4c6fe3a2102cc0d15e5ed37b11d1f2f5"
+      }
+    }
+  ],
+  "dependencies": {
+    "unchangedFromPhase18": true,
+    "thirdPartyPackages": 253,
+    "added": 0,
+    "removed": 0,
+    "inventoryReference": {
+      "path": "target/phase-17/dependency-inventory.json",
+      "sha256": "8f2585e790021c9782e109105a16a936c6df04d964ff24d274cc18e562a22635"
+    },
+    "metadataRerun": false,
+    "limitation": "Byte-identical business Cargo inputs inherit prior package identities and recorded metadata. No fresh vulnerability, license or legal audit is claimed."
+  },
+  "auxiliaryDocumentationAndTemplate": [
+    {
+      "path": "README.md",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "README.md",
+        "bytes": 24875,
+        "sha256": "0a4582097c47fb7150a6a2d9aae02c76405175f4d52b8c7c0b96b5751a7b0ae9"
+      },
+      "candidatePhysicalCopy": null,
+      "candidateSelected": false,
+      "candidateSelectedFingerprint": null,
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    },
+    {
+      "path": "docs/architecture.md",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "docs/architecture.md",
+        "bytes": 121930,
+        "sha256": "7ec1c314a4a1ee1dd7017db74bdda3e1c51646be759465d0ce0f4ae3e5b09945"
+      },
+      "candidatePhysicalCopy": null,
+      "candidateSelected": false,
+      "candidateSelectedFingerprint": null,
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    },
+    {
+      "path": "docs/engineering-baseline.md",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "docs/engineering-baseline.md",
+        "bytes": 44695,
+        "sha256": "62db795dcb65f7a693fabb2ebbca77f70fdc27888e00dae49fe36d765b3f79a0"
+      },
+      "candidatePhysicalCopy": null,
+      "candidateSelected": false,
+      "candidateSelectedFingerprint": null,
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    },
+    {
+      "path": "business-apps/work-orders/README.md",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "business-apps/work-orders/README.md",
+        "bytes": 17998,
+        "sha256": "8198ba6aa7bace3fdac9b17b450e5b9fe478dac966a14a3ca10de5f5f93179c6"
+      },
+      "candidatePhysicalCopy": null,
+      "candidateSelected": false,
+      "candidateSelectedFingerprint": null,
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    },
+    {
+      "path": "business-apps/work-orders/backend/README.md",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "business-apps/work-orders/backend/README.md",
+        "bytes": 15061,
+        "sha256": "81beb80b98ecc5da0017d13b9f93a023ba568b5e20c6bf352bf39ebda508877f"
+      },
+      "candidatePhysicalCopy": {
+        "path": "business-apps/work-orders/backend/README.md",
+        "bytes": 15061,
+        "sha256": "81beb80b98ecc5da0017d13b9f93a023ba568b5e20c6bf352bf39ebda508877f"
+      },
+      "candidateSelected": true,
+      "candidateSelectedFingerprint": {
+        "bytes": 15061,
+        "sha256": "81beb80b98ecc5da0017d13b9f93a023ba568b5e20c6bf352bf39ebda508877f"
+      },
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    },
+    {
+      "path": "docs/work-orders-rust-baseline.md",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "docs/work-orders-rust-baseline.md",
+        "bytes": 22719,
+        "sha256": "8e957472c47c106938e590793b73422ac352caff874eb1436cb962c16f343253"
+      },
+      "candidatePhysicalCopy": null,
+      "candidateSelected": false,
+      "candidateSelectedFingerprint": null,
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    },
+    {
+      "path": "docs/data-grant-management.md",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "docs/data-grant-management.md",
+        "bytes": 26722,
+        "sha256": "95d54d3593d2c45e6cde4afadb7614a80868f7a394d4f5ceaf136a0bedb569d1"
+      },
+      "candidatePhysicalCopy": null,
+      "candidateSelected": false,
+      "candidateSelectedFingerprint": null,
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    },
+    {
+      "path": "business-apps/work-orders/backend/config.rust.env.example",
+      "ownership": "auxiliary-documentation-or-public-template",
+      "current": {
+        "path": "business-apps/work-orders/backend/config.rust.env.example",
+        "bytes": 1726,
+        "sha256": "a29c6178b714a8bba400f9fe7c18542838bd596fba1a974e860ee4e1fc63d9cf"
+      },
+      "candidatePhysicalCopy": null,
+      "candidateSelected": false,
+      "candidateSelectedFingerprint": null,
+      "meaning": "Auxiliary hashes do not prove executable behavior or certify changed current document bytes as tested."
+    }
+  ],
+  "auxiliaryCounts": {
+    "documents": 7,
+    "publicTemplates": 1
+  },
+  "testOnlyBoundary": {
+    "harness": "backend/src/phase19_work_orders_tests.rs",
+    "registration": "#[cfg(test)] mod phase19_work_orders_tests;",
+    "controlledFixture": "business-apps/work-orders/backend/tests/member_contracts.rs",
+    "productionRoutes": [
+      {
+        "path": "business-apps/work-orders/backend/src/http.rs",
+        "phase18": {
+          "bytes": 27326,
+          "sha256": "db573215809e69485c132b941896df14d5be2b91e4fc8e41a8e88bf075338f95"
+        },
+        "observedStart": {
+          "bytes": 27326,
+          "sha256": "db573215809e69485c132b941896df14d5be2b91e4fc8e41a8e88bf075338f95"
+        },
+        "candidate": {
+          "bytes": 27989,
+          "sha256": "fe5e372c7ae66d9075ae7718c7e924875eb25ab21e1439766e0ad9d0cc3dbc5b"
+        },
+        "host": {
+          "bytes": 27989,
+          "sha256": "fe5e372c7ae66d9075ae7718c7e924875eb25ab21e1439766e0ad9d0cc3dbc5b"
+        }
+      },
+      {
+        "path": "backend/src/routes/app_members.rs",
+        "phase18": {
+          "bytes": 7532,
+          "sha256": "217db6d48729dc78a9f0f0441aa4eccd0b0581fcdd58d8d6519e6c050a798066"
+        },
+        "observedStart": {
+          "bytes": 7532,
+          "sha256": "217db6d48729dc78a9f0f0441aa4eccd0b0581fcdd58d8d6519e6c050a798066"
+        },
+        "candidate": {
+          "bytes": 10071,
+          "sha256": "82c377d012cc7159a6e2542908aa5e77ba20d9fa64a1a9e06211f643a331bf5b"
+        },
+        "host": {
+          "bytes": 10071,
+          "sha256": "82c377d012cc7159a6e2542908aa5e77ba20d9fa64a1a9e06211f643a331bf5b"
+        }
+      }
+    ],
+    "limitation": "The cfg(test) harness, integration-test location and absence of these named fixture markers in production route sources are checked. This is a bounded source check, not an exhaustive arbitrary-route or production-build audit."
+  },
+  "hostChangesDuringCollection": [],
+  "hostSelectorAtEnd": {
+    "path": "scripts/ci/provenance.mjs",
+    "bytes": 4391,
+    "sha256": "c7620d698d1eca22a7efbad0bbb402952d97b75e9560282e7d710c7edd8c7fc8"
+  },
+  "externalWorkBoundary": "Phase23 notification, Phase25 admin and other concurrent work are preserved without adoption as phase19 implementation. Required policy/fixture edits listed by the shared definition are attributed narrowly. Shared CI/current documentation drift remains separately recorded.",
+  "completedAt": "2026-10-17T04:24:22.639Z"
+}

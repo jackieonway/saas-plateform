@@ -1,72 +1,358 @@
-name: Production build
+name: Managed CI and release candidate
 
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      extended_browsers:
+        description: Run optional Firefox and WebKit engine checks
+        type: boolean
+        required: false
+        default: false
+
+# No registry or deployment credentials enter this workflow, including forks.
+# It saves verified candidates; publication and target deployment require a
+# separately configured and explicitly authorized release operation.
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: 'true'
+  CARGO_TERM_COLOR: never
 
 jobs:
-  verify-and-build:
+  fast:
+    name: Contracts and current-manifest checks
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: isolated-ci-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: |
-            frontend/package-lock.json
-            mini-services/notification-ws/package-lock.json
-            business-apps/work-orders/backend/package-lock.json
-            business-apps/work-orders/frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.99.0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: backend
-
-      - name: Check backend and migration tests
-        working-directory: backend
-        run: |
-          cargo check --locked --tests
-          cargo test --locked --bin saas-platform-backend
-
-      - name: Check production authorization and platform settings against isolated PostgreSQL
-        working-directory: backend
-        env:
-          TEST_DATABASE_URL: postgres://postgres:isolated-ci-password@127.0.0.1:5432/postgres
-        run: |
-          cargo test --locked production_security_tests -- --ignored --test-threads=1
-          cargo test --locked platform_settings_tests -- --ignored --test-threads=1
-
-      - name: Check runtime policy and recovery tools
-        run: node --test tests/production-native-config.mjs deploy/monitoring/tests/monitor.mjs deploy/recovery/tests/envelope.test.mjs deploy/recovery/tests/schedule.test.mjs deploy/recovery/tests/systemd.test.mjs
-
-      - name: Build clean immutable release
-        run: node deploy/native/build.mjs --out-dir "$RUNNER_TEMP/platform-release" --cargo "$HOME/.cargo/bin/cargo"
-
-      - name: Upload build manifest and deployable artifacts
+          persist-credentials: false
+      - uses: ./.github/actions/ci-tools
+      - name: Run required fast checks
+        run: node scripts/ci/run.mjs --gate fast --out-dir "$RUNNER_TEMP/ci/fast"
+      - name: Save sanitized fast report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: platform-release-${{ github.sha }}
+          name: ci-fast-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/platform-release/build-result.json
-            ${{ runner.temp }}/platform-release/source-manifest.json
-            ${{ runner.temp }}/platform-release/artifacts/
+            ${{ runner.temp }}/ci/fast/summary.json
+            ${{ runner.temp }}/ci/fast/source-manifest.json
+            ${{ runner.temp }}/ci/fast/logs/
+          if-no-files-found: error
+          retention-days: 14
+
+  postgres:
+    name: Isolated PostgreSQL tests
+    needs: fast
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-tools
+      - name: Build isolated test tools and fetch approved PostgreSQL
+        run: |
+          docker build --target toolchain --build-arg TARGETARCH=amd64 -f deploy/ci/Dockerfile -t saas-ci:phase04-tools .
+          docker pull postgres@sha256:45cd22f8d32e189d245403954882f88e7a8714301fda80dab6da90f1265b25a3
+          docker tag postgres@sha256:45cd22f8d32e189d245403954882f88e7a8714301fda80dab6da90f1265b25a3 postgres:17.6-bookworm
+      # The Linux runner owns a unique Docker database/network/container and
+      # checks owner labels before removing its temporary resources.
+      - name: Run required database checks
+        run: node scripts/ci/linux-runner.mjs --gate postgres --image saas-ci:phase04-tools --out-dir "$RUNNER_TEMP/ci/postgres"
+      - name: Save sanitized PostgreSQL report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-postgres-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci/postgres/linux-runner-result.json
+            ${{ runner.temp }}/ci/postgres/snapshot-manifest.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/summary.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/source-manifest.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/logs/
+            ${{ runner.temp }}/ci/postgres/reports/postgres/postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-read-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-read-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-write-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-write-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-member-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-member-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-reminder-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-reminder-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-live-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-live-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-write-live-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-write-live-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-member-live-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-member-live-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-reminder-live-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/work-orders-reminder-live-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/stores-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/stores-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/stores-live-postgres/postgres-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/stores-live-postgres/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/notification/notification-result.json
+            ${{ runner.temp }}/ci/postgres/reports/postgres/notification/*.log
+            ${{ runner.temp }}/ci/postgres/reports/postgres/notification/service-logs/*.log
+          if-no-files-found: error
+          retention-days: 14
+
+  browser:
+    name: Required browser (${{ matrix.browser }})
+    needs: fast
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, chrome, msedge]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-tools
+      - name: Build isolated browser tools and fetch approved PostgreSQL
+        run: |
+          docker build --target browsers --build-arg TARGETARCH=amd64 -f deploy/ci/Dockerfile -t saas-ci:phase15-browser .
+          docker pull postgres@sha256:45cd22f8d32e189d245403954882f88e7a8714301fda80dab6da90f1265b25a3
+          docker tag postgres@sha256:45cd22f8d32e189d245403954882f88e7a8714301fda80dab6da90f1265b25a3 postgres:17.6-bookworm
+      - name: Run required browser checks
+        env:
+          CI_BROWSER: ${{ matrix.browser }}
+        run: node scripts/ci/linux-runner.mjs --gate browser --browser "$CI_BROWSER" --image saas-ci:phase15-browser --out-dir "$RUNNER_TEMP/ci/browser"
+      - name: Save sanitized browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-browser-${{ matrix.browser }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci/browser/linux-runner-result.json
+            ${{ runner.temp }}/ci/browser/snapshot-manifest.json
+            ${{ runner.temp }}/ci/browser/reports/browser/summary.json
+            ${{ runner.temp }}/ci/browser/reports/browser/source-manifest.json
+            ${{ runner.temp }}/ci/browser/reports/browser/logs/
+            ${{ runner.temp }}/ci/browser/reports/browser/browser-result.json
+            ${{ runner.temp }}/ci/browser/reports/browser/data-grant-ui/result.json
+            ${{ runner.temp }}/ci/browser/reports/browser/data-grant-ui/cargo.log
+            ${{ runner.temp }}/ci/browser/reports/browser/data-grant-ui/management-preview.png
+            ${{ runner.temp }}/ci/browser/reports/browser/work-orders/result.json
+            ${{ runner.temp }}/ci/browser/reports/browser/work-orders/logs/
+            ${{ runner.temp }}/ci/browser/reports/browser/work-orders/screenshots/*.png
+            ${{ runner.temp }}/ci/browser/reports/browser/stores/result.json
+            ${{ runner.temp }}/ci/browser/reports/browser/stores/logs/
+            ${{ runner.temp }}/ci/browser/reports/browser/stores/screenshots/*.png
+            ${{ runner.temp }}/ci/browser/reports/browser/notification/notification-result.json
+            ${{ runner.temp }}/ci/browser/reports/browser/notification/*.log
+            ${{ runner.temp }}/ci/browser/reports/browser/notification/service-logs/*.log
+            ${{ runner.temp }}/ci/browser/reports/browser/notification/browser-artifacts/phase23-notification-*.png
+          if-no-files-found: error
+          retention-days: 14
+
+  delivery:
+    name: Linux OCI images and real HTTPS recovery smoke
+    needs: [fast, postgres, browser]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-tools
+      - name: Install declared OCI-capable local Docker engine
+        uses: docker/setup-docker-action@v4
+        with:
+          version: v29.1.3
+      # linux/amd64 is this runner's isolated candidate architecture. A real
+      # production architecture remains an explicit deployment input.
+      - name: Build fixed Linux images and run mandatory container smoke
+        run: node scripts/ci/run.mjs --gate delivery --out-dir "$RUNNER_TEMP/ci/delivery"
+      - name: Save sanitized delivery report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci/delivery/summary.json
+            ${{ runner.temp }}/ci/delivery/source-manifest.json
+            ${{ runner.temp }}/ci/delivery/logs/
+            ${{ runner.temp }}/ci/delivery/release/release-result.json
+            ${{ runner.temp }}/ci/delivery/release/source-manifest.json
+            ${{ runner.temp }}/ci/delivery/zip-release/result.json
+            ${{ runner.temp }}/ci/delivery/zip-release/logs/
+            ${{ runner.temp }}/ci/delivery/notification-image/result.json
+            ${{ runner.temp }}/ci/delivery/notification-image/inputs.json
+            ${{ runner.temp }}/ci/delivery/notification-image/logs/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Save verified candidate images
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-amd64-candidate-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci/delivery/release/release-result.json
+            ${{ runner.temp }}/ci/delivery/release/source-manifest.json
+            ${{ runner.temp }}/ci/delivery/release/images/*.tar
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  business-delivery:
+    name: Business images, owned registry and versioned HTTPS routes
+    needs: [fast, postgres, browser]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-tools
+      - name: Install declared OCI-capable local Docker engine
+        uses: docker/setup-docker-action@v4
+        with:
+          version: v29.1.3
+      - name: Prepare isolated business browser tools and declared base images
+        run: |
+          docker build --target browsers --build-arg TARGETARCH=amd64 -f deploy/ci/Dockerfile -t saas-ci:phase28-business-browser .
+          docker pull registry:3.0.0
+          docker pull nginx:1.28.0-alpine
+          docker pull node:24.18.0-alpine
+          docker pull debian:bookworm-slim
+          docker pull postgres@sha256:45cd22f8d32e189d245403954882f88e7a8714301fda80dab6da90f1265b25a3
+          docker tag postgres@sha256:45cd22f8d32e189d245403954882f88e7a8714301fda80dab6da90f1265b25a3 postgres:17.6-bookworm
+      - name: Verify business candidates with owned registry and real versioned routes
+        env:
+          CI_TOOLCHAIN_IMAGE: saas-ci:phase28-business-browser
+        run: node scripts/ci/run.mjs --gate business-delivery --platform linux/amd64 --out-dir "$RUNNER_TEMP/ci/business-delivery"
+      - name: Save sanitized business delivery report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-business-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci/business-delivery/summary.json
+            ${{ runner.temp }}/ci/business-delivery/source-manifest.json
+            ${{ runner.temp }}/ci/business-delivery/logs/
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/result.json
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/source-manifest.json
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/logs/*.log
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/screenshots/*.png
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/browser-chromium/fixture-result.json
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/browser-chrome/fixture-result.json
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/browser-msedge/fixture-result.json
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/original-binaries/platform
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/original-binaries/stores
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/original-binaries/work-orders
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/original-binaries/admin
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/static/work-orders-v1/**
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/static/work-orders-v2/**
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/static/stores-v1/**
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/static/stores-v2/**
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/artifacts/artifact-inventory/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Save verified business candidate images
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-linux-amd64-candidate-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/candidate/candidate-result.json
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/candidate/source-manifest.json
+            ${{ runner.temp }}/ci/business-delivery/business-delivery/candidate/images/*.tar
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  pr-gate:
+    name: Required PR gate
+    if: always() && github.event_name == 'pull_request'
+    needs: [fast, postgres, browser]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Reject failed, cancelled or skipped required layers
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module -e 'const jobs=JSON.parse(process.env.REQUIRED_RESULTS); for (const [name,job] of Object.entries(jobs)) { if (job.result !== "success") { console.error(`${name}: ${job.result}`); process.exitCode=1; } }'
+
+  candidate-gate:
+    name: Required candidate gate
+    if: always() && github.event_name != 'pull_request'
+    needs: [fast, postgres, browser, delivery, business-delivery]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Reject failed, cancelled or skipped required layers
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module -e 'const jobs=JSON.parse(process.env.REQUIRED_RESULTS); for (const [name,job] of Object.entries(jobs)) { if (job.result !== "success") { console.error(`${name}: ${job.result}`); process.exitCode=1; } }'
+
+  extended-browser:
+    name: Optional engine (${{ matrix.browser }})
+    if: github.event_name == 'workflow_dispatch' && inputs.extended_browsers
+    needs: fast
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-tools
+        with:
+          rust: 'false'
+      - name: Install locked browser driver and optional engine
+        env:
+          CI_BROWSER: ${{ matrix.browser }}
+        run: |
+          npm ci --prefix tests/browser
+          node tests/browser/install.mjs --with-deps "$CI_BROWSER"
+      - name: Run optional engine suite
+        env:
+          CI_BROWSER: ${{ matrix.browser }}
+          WORK_ORDERS_ALLOWED_HOST_ORIGINS: https://platform.example.com
+          STORES_ALLOWED_HOST_ORIGINS: https://platform.example.com
+        run: |
+          npm ci
+          npm ci --prefix frontend
+          npm ci --prefix mini-services/micro-vue
+          npm ci --prefix mini-services/micro-jquery
+          npm ci --prefix examples/websocket
+          npm ci --prefix mini-services/oauth-playground/frontend
+          npm ci --prefix business-apps/work-orders/frontend
+          npm ci --prefix business-apps/stores/frontend
+          node scripts/sync-micro-sdk.mjs --check
+          npm run build:all
+          node tests/browser/run.mjs --browser "$CI_BROWSER" --report "$RUNNER_TEMP/ci/browser/browser-result.json"
+      - name: Save optional engine report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-optional-${{ matrix.browser }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci/browser/browser-result.json
           if-no-files-found: error
           retention-days: 14

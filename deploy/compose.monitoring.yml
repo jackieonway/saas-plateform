@@ -1,0 +1,20 @@
+# Explicit private operational profile. No published port or Docker socket.
+services:
+  monitor:
+    profiles: [monitoring]
+    image: ${MONITOR_IMAGE:?Set the reviewed monitor repository@sha256 digest}
+    user: "10004:10004"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    stop_grace_period: 10s
+    networks: [edge]
+    volumes:
+      - type: bind
+        source: ${MONITOR_CONFIG_FILE:?Set an explicit private config path}
+        target: /run/secrets/monitor-config.json
+        read_only: true
+        bind:
+          create_host_path: false

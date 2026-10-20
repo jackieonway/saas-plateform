@@ -32,7 +32,9 @@
 
   /* ===== 模块级挂载状态 ===== */
   var currentProps = null
+  var authorizationKey = null
   var contextController = null
+  var contextClient = null
   var hostSignal = null
   var hostAbort = null
   var requestEpoch = 0
@@ -61,6 +63,8 @@
 
   function stopContext() {
     requestEpoch += 1
+    if (contextClient) contextClient.dispose()
+    contextClient = null
     if (contextController) contextController.abort()
     contextController = null
     if (hostSignal && hostAbort) hostSignal.removeEventListener('abort', hostAbort)
@@ -73,14 +77,14 @@
     if (!props || props.contractVersion !== '2.0' || !props.signal || !props.tenant || !props.organization || !props.user) {
       throw new Error('微应用需要 MicroProps 2.0 完整上下文和 AbortSignal')
     }
-    var old = currentProps
-    var changed = !old || ['token', 'contextVersion', 'contextEpoch', 'expiresAt', 'tokenExpiresAt', 'signal', 'appCode'].some(function (key) {
-      return old[key] !== props[key]
-    }) || old.tenant.id !== props.tenant.id || old.organization.id !== props.organization.id || old.user.id !== props.user.id
+    var nextKey = window.MicroSdk && window.MicroSdk.authorizationContextSignature(props)
+    var changed = !contextUsable() || nextKey === null || nextKey !== authorizationKey || hostSignal !== props.signal
     if (changed) {
       stopContext()
       currentProps = props
       contextController = new AbortController()
+      if (!window.MicroSdk || window.MicroSdk.sdkVersion !== '1.0.0') throw new Error('Registered micro SDK 1.0.0 required')
+      contextClient = window.MicroSdk.createContextClient(Object.assign({}, props, { signal: contextController.signal }))
       hostSignal = props.signal
       hostAbort = function () {
         requestEpoch += 1
@@ -92,7 +96,9 @@
       if (hostSignal.aborted) hostAbort()
     } else {
       currentProps = props
+      contextClient.update(Object.assign({}, props, { signal: contextController.signal }))
     }
+    authorizationKey = nextKey
   }
 
   /* ===== mock 工单数据 (2018 年存档风格) ===== */
@@ -285,20 +291,8 @@
     var list = find('#mf-jq-menu-list')
     if (list) list.innerHTML = ''
     setStatus('#mf-jq-menu-status', '请求中…', null)
-    return fetch('/api/external/menus', {
-      signal: controller.signal,
-      headers: { Authorization: 'Bearer ' + (token || '') },
-    })
-      .then(function (res) {
-        return res
-          .json()
-          .catch(function () {
-            return {}
-          })
-          .then(function (body) {
-            return { ok: res.ok, status: res.status, body: body }
-          })
-      })
+    return contextClient.requestJson('/api/external/menus')
+      .then(function (body) { return { ok: true, status: 200, body: body } })
       .then(function (r) {
         if (!isCurrent()) return
         if (r.ok && r.body && r.body.menus) {
@@ -351,7 +345,7 @@
     var route = p.routePath || ''
     var token = typeof p.token === 'string' ? p.token : ''
     var tokenChip = token
-      ? '<code class="mf-jq-token">' + esc(token.slice(0, 8)) + '…</code>'
+      ? '<code class="mf-jq-token">' + '应用令牌已注入' + '</code>'
       : '<span class="mf-jq-badge">未携带令牌</span>'
 
     var statusOptions = ['', '待处理', '处理中', '已解决', '已关闭']
@@ -473,6 +467,7 @@
   /* ===== 生命周期契约 ===== */
   window.__MICRO_APP__ = {
     name: 'micro-jquery',
+    sdkVersion: window.MicroSdk && window.MicroSdk.sdkVersion,
     mount: function (container, props) {
       return new Promise(function (resolve, reject) {
         try {
@@ -490,6 +485,7 @@
           if (tickTimer) { window.clearInterval(tickTimer); tickTimer = null }
           if (mountContainer) mountContainer.innerHTML = ''
           applyContext(props)
+          if (container.setAttribute) container.setAttribute('data-sdk-version', contextClient.sdkVersion)
           // 沙箱清理探针: 刻意写在真实 window 上, 卸载时不由本应用删除
           window.__JQ_APP_MARKER = 'written-by-jq-subapp'
           mountContainer = container
@@ -583,7 +579,7 @@
           var tokenBox = mountContainer.querySelector('.mf-jq-tokenbox')
           if (tokenBox) {
             var chip = token
-              ? '<code class="mf-jq-token">' + esc(token.slice(0, 8)) + '…</code>'
+              ? '<code class="mf-jq-token">' + '应用令牌已注入' + '</code>'
               : '<span class="mf-jq-badge">未携带令牌</span>'
             tokenBox.innerHTML = '令牌: ' + chip
           }

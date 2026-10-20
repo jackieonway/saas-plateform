@@ -1,0 +1,15 @@
+{
+  "policy": {
+    "id": "static-a", "name": "受管静态节点 A", "publicOrigin": "https://platform.example.invalid",
+    "repositories": ["registry.example.invalid/team/stores-web"],
+    "templates": [{"id": "static-nginx", "applicationCode": "stores", "healthPath": "/healthz"}]
+  },
+  "platformOrigin": "https://platform.example.invalid",
+  "caFile": "/etc/saas-agent/platform-ca.pem",
+  "tokenFile": "/run/secrets/static-a-agent-token",
+  "network": "managed-static",
+  "gatewayContainer": "managed-gateway",
+  "routeDirectory": "/var/lib/saas-agent/routes",
+  "stateDirectory": "/var/lib/saas-agent/state",
+  "owner": "operator-managed-static-a"
+}

@@ -75,17 +75,20 @@ async fn decide_device(
         return Err(AppError::conflict("该设备授权请求已处理"));
     }
     if expires_at < Utc::now() {
-        sqlx::query("UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1")
+        let changed = sqlx::query("UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1")
             .bind(id)
             .execute(&mut *tx)
             .await?;
+        if changed.rows_affected() != 1 {
+            return Err(AppError::Server(anyhow::anyhow!("device expiry did not update one row")));
+        }
         tx.commit().await?;
         return Err(AppError::conflict("该设备授权请求已过期"));
     }
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     if body.approve {
-        sqlx::query(
+        let changed = sqlx::query(
             "UPDATE oauth_device_codes SET status = 'APPROVED', user_id = $2, tenant_id = $3, organization_id = $4 WHERE id = $1",
         )
         .bind(id)
@@ -94,6 +97,9 @@ async fn decide_device(
         .bind(user.org_id)
         .execute(&mut *tx)
         .await?;
+        if changed.rows_affected() != 1 {
+            return Err(AppError::Server(anyhow::anyhow!("device approval did not update one row")));
+        }
         system_in_tx(
             &mut tx,
             &[(user.user_id, user.tenant_id, user.org_id)],
@@ -106,41 +112,57 @@ async fn decide_device(
             "/system/oauth/tokens",
         )
         .await?;
-        tx.commit().await?;
-        audit::write(
-            &state.pool,
+        let detail = audit::change_detail(
+            "oauth_device_authorization",
+            id,
+            json!({"clientId": client_id, "status": status}),
+            json!({"clientId": client_id, "status": "APPROVED", "userId": user.user_id,
+                "tenantId": user.tenant_id, "organizationId": user.org_id}),
+        );
+        audit::write_in_tx(
+            &mut tx,
             audit::AuditInfo {
                 user_id: Some(user.user_id),
                 username: &user.username,
                 tenant_id: Some(user.tenant_id),
                 organization_id: Some(user.org_id),
                 action: "DEVICE_APPROVE",
-                detail: &format!("批准设备授权: 客户端 {} ({})", client_id, code),
+                detail: &detail,
                 ip: &ip,
                 user_agent: &ua,
             },
         )
-        .await;
+        .await?;
+        tx.commit().await?;
     } else {
-        sqlx::query("UPDATE oauth_device_codes SET status = 'DENIED' WHERE id = $1")
+        let changed = sqlx::query("UPDATE oauth_device_codes SET status = 'DENIED' WHERE id = $1")
             .bind(id)
             .execute(&mut *tx)
             .await?;
-        tx.commit().await?;
-        audit::write(
-            &state.pool,
+        if changed.rows_affected() != 1 {
+            return Err(AppError::Server(anyhow::anyhow!("device denial did not update one row")));
+        }
+        let detail = audit::change_detail(
+            "oauth_device_authorization",
+            id,
+            json!({"clientId": client_id, "status": status}),
+            json!({"clientId": client_id, "status": "DENIED"}),
+        );
+        audit::write_in_tx(
+            &mut tx,
             audit::AuditInfo {
                 user_id: Some(user.user_id),
                 username: &user.username,
                 tenant_id: Some(user.tenant_id),
                 organization_id: Some(user.org_id),
                 action: "DEVICE_DENY",
-                detail: &format!("拒绝设备授权: 客户端 {} ({})", client_id, code),
+                detail: &detail,
                 ip: &ip,
                 user_agent: &ua,
             },
         )
-        .await;
+        .await?;
+        tx.commit().await?;
     }
     Ok(Json(json!({"ok": true})))
 }

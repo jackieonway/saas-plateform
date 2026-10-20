@@ -52,6 +52,21 @@ fn menu_json(r: &MenuRowTuple) -> Value {
     })
 }
 
+fn menu_summary(row: &MenuRowTuple) -> Value {
+    json!({"id": row.0, "applicationId": row.1, "parentId": row.2,
+           "type": row.3, "name": row.4, "permission": row.8,
+           "sortOrder": row.9, "visible": row.10})
+}
+
+async fn lock_menu(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+) -> Result<MenuRowTuple, AppError> {
+    sqlx::query_as(&format!("{MENU_SELECT} FROM menus m WHERE m.id=$1 FOR UPDATE"))
+        .bind(id).fetch_optional(&mut **tx).await?
+        .ok_or_else(|| AppError::not_found("菜单不存在"))
+}
+
 /// 校验并归一外链地址: 空 = 非外链; 非空必须 http(s):// 开头且 ≤ 500 字符(与 VARCHAR(500) 同口径)
 fn normalize_link_url(raw: &str) -> Result<String, AppError> {
     let url = raw.trim();
@@ -183,6 +198,7 @@ async fn create(
     let mtype = parse_menu_type(&body.r#type)?;
     let link_url = normalize_link_url(&body.link_url)?;
     let link_target = normalize_link_target(Some(&body.link_target));
+    let mut tx = state.pool.begin().await?;
     let row: MenuRowTuple = sqlx::query_as(
         "INSERT INTO menus (application_id, parent_id, type, title, path, icon, component, permission, sort_order, visible, link_url, link_target) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
@@ -202,15 +218,17 @@ async fn create(
     .bind(body.visible)
     .bind(&link_url)
     .bind(&link_target)
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("menu", row.0, Value::Null, menu_summary(&row));
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "CREATE_MENU", detail: &format!("创建菜单: {} ({})", title, mtype), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "CREATE_MENU", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
     Ok(Json(menu_json(&row)))
 }
 
@@ -277,6 +295,8 @@ async fn update(
     };
     // 打开方式仅 BLANK/SELF/MICRO, 非法值回退 BLANK(不报错, 与创建口径一致)
     let link_target = body.link_target.as_deref().map(|t| normalize_link_target(Some(t)));
+    let mut tx = state.pool.begin().await?;
+    let before = lock_menu(&mut tx, id).await?;
     let row: MenuRowTuple = sqlx::query_as(
         "UPDATE menus SET parent_id = COALESCE($2, parent_id), type = COALESCE($3, type), \
          title = COALESCE($4, title), path = COALESCE($5, path), icon = COALESCE($6, icon), \
@@ -300,17 +320,31 @@ async fn update(
     .bind(body.visible)
     .bind(&link_url)
     .bind(&link_target)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("菜单不存在"))?;
-    state.invalidate_perm_cache();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_MENU", detail: &format!("更新菜单: {}", row.4), ip: &ip, user_agent: &ua,
-    }).await;
+    let changed_fields: Vec<&str> = [
+        ("parentId", before.2 != row.2), ("type", before.3 != row.3),
+        ("title", before.4 != row.4), ("path", before.5 != row.5),
+        ("icon", before.6 != row.6), ("component", before.7 != row.7),
+        ("permission", before.8 != row.8), ("sortOrder", before.9 != row.9),
+        ("visible", before.10 != row.10), ("linkUrl", before.11 != row.11),
+        ("linkTarget", before.12 != row.12),
+    ].into_iter().filter_map(|(field, changed)| changed.then_some(field)).collect();
+    if !changed_fields.is_empty() {
+        let mut after = menu_summary(&row);
+        after["changedFields"] = json!(changed_fields);
+        let detail = audit::change_detail("menu", id, menu_summary(&before), after);
+        audit::write_in_tx(&mut tx, audit::AuditInfo {
+            user_id: Some(user.user_id), username: &user.username,
+            tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
+            action: "UPDATE_MENU", detail: &detail, ip: &ip, user_agent: &ua,
+        }).await?;
+    }
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(menu_json(&row)))
 }
 
@@ -324,18 +358,21 @@ async fn delete(
     RequirePermission("system:menu").check(&state, &user).await?;
     state.require_platform(&user).await?;
     let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
-    let (title,): (String,) = sqlx::query_as("DELETE FROM menus WHERE id = $1 RETURNING title")
+    let mut tx = state.pool.begin().await?;
+    let before = lock_menu(&mut tx, id).await?;
+    sqlx::query("DELETE FROM menus WHERE id = $1")
         .bind(id)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(|| AppError::not_found("菜单不存在"))?;
-    state.invalidate_perm_cache();
+        .execute(&mut *tx)
+        .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write(&state.pool, audit::AuditInfo {
+    let detail = audit::change_detail("menu", id, menu_summary(&before), Value::Null);
+    audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id: Some(user.user_id), username: &user.username,
         tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "DELETE_MENU", detail: &format!("删除菜单(级联子菜单): {}", title), ip: &ip, user_agent: &ua,
-    }).await;
+        action: "DELETE_MENU", detail: &detail, ip: &ip, user_agent: &ua,
+    }).await?;
+    tx.commit().await?;
+    state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
 }

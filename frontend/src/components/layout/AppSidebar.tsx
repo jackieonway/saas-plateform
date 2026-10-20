@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useLocation } from "react-router-dom"
 import { AnimatePresence, motion } from "framer-motion"
 import { ChevronDown, ChevronRight, ExternalLink, FolderOpen, PanelLeftClose, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { AppIcon } from "@/lib/icons"
 import { EmptyState } from "@/components/states"
 import { openExternalLink } from "@/lib/external-link"
+import { useApplicationNavigation } from "@/hooks/use-application-navigation"
+import { invalidateApplicationSelection } from "@/lib/application-navigation"
+import { routeMenuAccess, type RouteAuthorizationInput } from "@/lib/route-policy"
 import { cn } from "@/lib/utils"
 import type { AppBrief, MenuNode } from "@/api/types"
 
@@ -37,6 +40,15 @@ function filterMenus(nodes: MenuNode[], keyword: string): MenuNode[] {
   return walk(nodes)
 }
 
+function authorizedMenus(nodes: MenuNode[], policy: RouteAuthorizationInput): MenuNode[] {
+  return nodes.flatMap((node) => {
+    if (node.visible === false || node.type === "BUTTON") return []
+    const children = authorizedMenus(node.children ?? [], policy)
+    if (children.length || routeMenuAccess(node, policy)) return [{ ...node, children }]
+    return []
+  })
+}
+
 /** 应用侧边栏(248px,深色):菜单树导航 */
 export function AppSidebar({
   app,
@@ -62,10 +74,13 @@ export function AppSidebar({
 }) {
   const [keyword, setKeyword] = React.useState("")
   const { pathname } = useLocation()
-  const navigate = useNavigate()
-  const filtered = React.useMemo(() => filterMenus(menus, keyword), [menus, keyword])
-
-  const go = (path: string) => navigate(path)
+  const { navigateTo: go, access, policyInput } = useApplicationNavigation()
+  const filtered = filterMenus(authorizedMenus(menus, policyInput), keyword)
+  const openMenu = (node: MenuNode) => {
+    if (!routeMenuAccess(node, policyInput)) return
+    invalidateApplicationSelection()
+    if (!openExternalLink(node, go) && node.path) go(node.path)
+  }
 
   return (
     <aside
@@ -142,7 +157,7 @@ export function AppSidebar({
             description={keyword ? undefined : "可先在「菜单管理」中为其配置菜单"}
             icon={<FolderOpen className="size-5" />}
             action={
-              !keyword && (
+              !keyword && access("/system/menus").status === "allowed" && (
                 <button
                   type="button"
                   onClick={() => go("/system/menus")}
@@ -154,7 +169,7 @@ export function AppSidebar({
             }
           />
         ) : (
-          <MenuList key={navigationScope ?? "unscoped"} nodes={filtered} pathname={pathname} onNavigate={go}
+          <MenuList key={navigationScope ?? "unscoped"} nodes={filtered} pathname={pathname} onNavigate={openMenu}
             forceExpanded={!!keyword.trim()} storageKey={navigationScope ? `platform-menu-folds:${navigationScope}` : null} />
         )}
       </nav>
@@ -181,7 +196,7 @@ function MenuList({
 }: {
   nodes: MenuNode[]
   pathname: string
-  onNavigate: (path: string) => void
+  onNavigate: (node: MenuNode) => void
   forceExpanded: boolean
   storageKey: string | null
 }) {
@@ -237,7 +252,7 @@ function MenuItem({
 }: {
   node: MenuNode
   pathname: string
-  onNavigate: (path: string) => void
+  onNavigate: (node: MenuNode) => void
   depth: number
   collapsed: Set<string>
   onToggle: (id: string) => void
@@ -305,9 +320,7 @@ function MenuItem({
           type="button"
           aria-current={active ? "page" : undefined}
           onClick={() => {
-            // 外链菜单: BLANK 新窗口 / SELF 内部嵌入(/embed); 非外链走常规路由
-            if (openExternalLink(node, onNavigate)) return
-            if (node.path) onNavigate(node.path)
+            onNavigate(node)
           }}
           className={cn(
             "relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors",

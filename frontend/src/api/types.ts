@@ -4,6 +4,10 @@
 
 import type { OrganizationType, TenantType } from "@/lib/entity-types"
 export type { OrganizationType, TenantType } from "@/lib/entity-types"
+import type { NotificationType, NotificationTarget,
+  NotificationPublication as NotificationPublishResponse } from "../../../examples/micro-app-sdk/generated/types"
+export type { NotificationType, NotificationTarget, NotificationRecord, NotificationSocketContext,
+  RealtimeNotification, NotificationPublication as NotificationPublishResponse } from "../../../examples/micro-app-sdk/generated/types"
 
 export type Status = "ENABLED" | "DISABLED"
 export type MenuType = "DIR" | "MENU" | "BUTTON"
@@ -309,6 +313,16 @@ export type ApplicationValidationStatus = "DRAFT" | "PASSED" | "FAILED"
 export interface ApplicationReleaseResource {
   url: string
   kind: ApplicationResourceKind
+}
+
+/** Register an already deployed HTML entry; deployment metadata stays with CI. */
+export interface ApplicationReleasePayload {
+  environment: ApplicationEnvironment
+  version: string
+  entryType: "HTML"
+  entryUrl: string
+  healthUrl: string | null
+  resources: ApplicationReleaseResource[]
 }
 
 export interface ApplicationReleaseCheck {
@@ -736,26 +750,6 @@ export interface OAuthDiscovery {
 
 /* ============ 通知中心 ============ */
 
-export type NotificationType = "INFO" | "SUCCESS" | "WARNING" | "SECURITY"
-
-export interface NotificationRecord {
-  id: string
-  userId: string
-  tenantId: string
-  organizationId: string
-  sourceKind: "APP" | "SYSTEM"
-  applicationId: string | null
-  publicationId: string | null
-  applicationName: string | null
-  type: NotificationType
-  title: string
-  content: string
-  link: string
-  isRead: boolean
-  readAt: string | null
-  createdAt: string
-}
-
 export interface NotificationSendBody {
   applicationId: string
   idempotencyKey: string
@@ -766,30 +760,4 @@ export interface NotificationSendBody {
   link?: string
 }
 
-export type NotificationTarget =
-  | { kind: "USER"; userId: string; organizationId: string }
-  | { kind: "ORGANIZATION"; organizationId: string }
-  | { kind: "TENANT" }
-
-export interface NotificationPublishResponse {
-  publicationId: string
-  recipientCount: number
-  deliveryCount: number
-  duplicate: boolean
-  createdAt: string
-}
-
 export interface NotificationSendResponse extends NotificationPublishResponse { sent: number }
-
-/** Public Socket.IO acknowledgment; sessionId is validated only inside the realtime service. */
-export interface NotificationSocketContext {
-  contractVersion: "1.0"
-  userId: string
-  tenantId: string
-  organizationId: string
-  expiresAt: string
-}
-
-export interface RealtimeNotification extends Pick<NotificationRecord,
-  "id" | "userId" | "tenantId" | "organizationId" | "applicationId" | "publicationId" |
-  "type" | "title" | "content" | "link" | "createdAt"> { contractVersion: "1.0" }

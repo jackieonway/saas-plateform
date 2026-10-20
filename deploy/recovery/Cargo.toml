@@ -1,0 +1,16 @@
+[package]
+name = "saas-recovery"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Offline coordinated PostgreSQL recovery to new databases"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ring = "0.17"
+base64 = "0.22"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+
+[profile.dev]
+debug = 1

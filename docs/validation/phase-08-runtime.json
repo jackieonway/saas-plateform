@@ -1,0 +1,3991 @@
+{
+  "schemaVersion": 1,
+  "phase": 8,
+  "status": "PASS",
+  "generatedAt": "2026-10-15T13:07:04.988Z",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "finalInputs": {
+    "path": "docs/validation/phase-08-inputs.json",
+    "sha256": "6904e0052d904c641ae696d35f979eb6b16c74e1a43297496061b6b6942d1b8d",
+    "inputsSha256": "b6e5edc5fd0642cdd4de241005dc125a7429396b3b0ae24a5f319e2841a20f4b",
+    "fileCount": 478
+  },
+  "baseline": {
+    "path": "target/phase-08/baseline-inputs.json",
+    "sha256": "2f1646b231018b9a49ba99a9fcf3e04b171a4cb7b86a43e25c92c030acb3d8b6",
+    "inputsSha256": "4a2f9ce6340c516fa5cee95e8a886c4c0a440febd3869b7b8cb434f03d3da611",
+    "fileCount": 473
+  },
+  "changedPaths": [
+    {
+      "path": "business-apps/work-orders/frontend/README.md",
+      "before": "4fb3251233b9c470244796d2b1b7a888265a2553fc93edb1a3aa7a3d5918f077",
+      "after": "b96c722cc2ad46ea803637ae5554f42f30ccd9204e31bad459a7dc34a1526d0d"
+    },
+    {
+      "path": "business-apps/work-orders/frontend/src/app.mjs",
+      "before": "4d46413c66a743adf44147e19668db2de6506c8903f58f407677a0c89f14f174",
+      "after": "ab8e1a2b2ac6cf3fdf5d981c71aa14bf0bdedb6bbf1636cf20cb557259eb4308"
+    },
+    {
+      "path": "business-apps/work-orders/frontend/src/client.mjs",
+      "before": "43a56ac93aedcb202c68c7e8930068e7e9ee5c0f15d70b9f1b6539af8785433f",
+      "after": "5bbde326f7282375d236907164ec49397cc9e633c89199584baa119c99e68f97"
+    },
+    {
+      "path": "business-apps/work-orders/frontend/tests/app.mjs",
+      "before": "388421f1e98dd470f6b39b375ba09c4573bfd1de95fdaa031e8fb0bc48c17d76",
+      "after": "2ccb6f6ecdcc77f38e3cfaf3d2474222cdc68fa3ae0675b521aa8c39d03a03c7"
+    },
+    {
+      "path": "business-apps/work-orders/frontend/tests/client.mjs",
+      "before": "f6ac1d3ac0b1a7342e556a930f363bd38090927e620fdf66ad8e8d1f80e618e8",
+      "after": "24f129f7d4689e7b847dabf434ca72d441a7414cfb2fc16eeed16b0b4b52d734"
+    },
+    {
+      "path": "business-apps/work-orders/frontend/vendor/iframe-bridge.js",
+      "before": "38a634dd748b3bd2f92b34dc99b9a43aede61fc0d0bf3f97dce60c5c5b4d471c",
+      "after": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+    },
+    {
+      "path": "business-apps/work-orders/frontend/vendor/micro-sdk.mjs",
+      "before": "291286ea5bbc43e29bef01c4531670cf7c3487e2bf2d812412f26c0d0742ac10",
+      "after": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837"
+    },
+    {
+      "path": "examples/micro-app-sdk/README.md",
+      "before": "a71f5fddcf76aa2764a1af649e405f8a22668ddb4300a66055cafbf03d7cdb33",
+      "after": "a7dd07901647b3bf24906a273213f06bad6d9849478d5b2ebb02dba5ed3ddf8c"
+    },
+    {
+      "path": "examples/micro-app-sdk/iframe-bridge.js",
+      "before": "38a634dd748b3bd2f92b34dc99b9a43aede61fc0d0bf3f97dce60c5c5b4d471c",
+      "after": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+    },
+    {
+      "path": "examples/micro-app-sdk/releases/1.0.0/artifact-manifest.json",
+      "before": "11d4e3a324e10242c4dd2116b138f2b0bb22efa8bc25ec63fa14082ed26e0e06",
+      "after": "d3137ecd7588e59df7151b5c533adfdc0a72eedf36138f038928538cf914b1dc"
+    },
+    {
+      "path": "examples/micro-app-sdk/releases/1.0.0/iframe-bridge.js",
+      "before": "38a634dd748b3bd2f92b34dc99b9a43aede61fc0d0bf3f97dce60c5c5b4d471c",
+      "after": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+    },
+    {
+      "path": "examples/micro-app-sdk/releases/1.0.0/index.d.mts",
+      "before": "010aa0c1b034d6f5713ecb3af53698d5a32e5e801b4235479b4eaf8f914565eb",
+      "after": "ae32b33ff83e9c03e86036eb431a55727497a9fc6aa4f18976df3069444120ca"
+    },
+    {
+      "path": "examples/micro-app-sdk/releases/1.0.0/index.d.ts",
+      "before": "010aa0c1b034d6f5713ecb3af53698d5a32e5e801b4235479b4eaf8f914565eb",
+      "after": "ae32b33ff83e9c03e86036eb431a55727497a9fc6aa4f18976df3069444120ca"
+    },
+    {
+      "path": "examples/micro-app-sdk/releases/1.0.0/index.mjs",
+      "before": "291286ea5bbc43e29bef01c4531670cf7c3487e2bf2d812412f26c0d0742ac10",
+      "after": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837"
+    },
+    {
+      "path": "examples/micro-app-sdk/releases/1.0.0/sdk.js",
+      "before": "38a634dd748b3bd2f92b34dc99b9a43aede61fc0d0bf3f97dce60c5c5b4d471c",
+      "after": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+    },
+    {
+      "path": "examples/micro-app-sdk/src/context-client.mjs",
+      "before": "fb4245c2bdeadadeb7dbf98c5bc823d88d02ccc19915d216ad54add9f2b100a3",
+      "after": "01ee48d7ac25ee33d232c5411e7aba15e7b34ae2ac86711720f482830adbae9c"
+    },
+    {
+      "path": "examples/micro-app-sdk/src/context-updates.d.mts",
+      "before": null,
+      "after": "c4d9a7d5ae27b178ddecb07870e1325d52cefc6011557e668b99975e47c63592"
+    },
+    {
+      "path": "examples/micro-app-sdk/src/context-updates.mjs",
+      "before": null,
+      "after": "5c07a9a4ecebec4179136a604b569f2933038b3665f79492491ec4d5cdadbc02"
+    },
+    {
+      "path": "examples/micro-app-sdk/src/iframe-bridge.js",
+      "before": "ac444d46d2db5c328a99e8b99e10089cabf85607322850691cd71d357269c862",
+      "after": "8a6d84a3eb4ed277c16a7e66ef8f277e537f78d027c36db28de8662e474c5ab8"
+    },
+    {
+      "path": "examples/micro-app-sdk/src/index.d.mts",
+      "before": "bb1bab448b55054e4ae17499add46502043e69970fbecd1b343075e90125f514",
+      "after": "fbdea0f3f87b07c57594a5b1b724aff24b7749b3b6fb5b0c28ebd4d8e511f6c9"
+    },
+    {
+      "path": "examples/micro-app-sdk/src/index.mjs",
+      "before": "b140ccb7121d0323e2ea2de23ec8877843d966a9adbc4b21fb1eb263c12264f2",
+      "after": "4b2d2d112c8cdac74108faa6cac39633534b57bc9f5cd53da916ae7a30facadf"
+    },
+    {
+      "path": "frontend/package.json",
+      "before": "8749cde33579fe89d7820efc5cc3a6b5bc12884c15a499014516d83f19c68b80",
+      "after": "5e0661dabd13464d8db285ba8c0a0071a7c45e8fe340cdc24eac5d5b4e6dc692"
+    },
+    {
+      "path": "frontend/src/components/micro/MicroAppContainer.tsx",
+      "before": "027e39dd2da082753f52915d289f486d19945be733e0d634178d6a3c5afdf209",
+      "after": "436c89ac1e35c910b8fa43f33f3bbd4b1ead884df24922a11fd7485d7e8a47a7"
+    },
+    {
+      "path": "frontend/src/components/micro/entry.ts",
+      "before": null,
+      "after": "1eb043c1217e33ba421a154a6687dc8998501ffa7e5d87c41ba2dda59e35ea6a"
+    },
+    {
+      "path": "frontend/src/components/micro/runtime.ts",
+      "before": "84191bc6b4d9addbbd7513c277b003c15536c131ba86bd1e413b11e7da12bfd7",
+      "after": "d300a0dd58171ae8b92509733b3789d2b106fa3f68f0fef5890b24013b9ed683"
+    },
+    {
+      "path": "mini-services/micro-jquery/README.md",
+      "before": "e35ec0d0ddde2d13752623d4f2afe564fc535ecb420715a80f85ca8b81e0d716",
+      "after": "970b5e19a31a5463bbb90908f920c7e9a3fe86d79b03a4e01f293b217ac26ced"
+    },
+    {
+      "path": "mini-services/micro-jquery/public/app.js",
+      "before": "654a382efaa8ba00eaa5db1bb84266947230511a37aa147fc4066fc546c2a8c2",
+      "after": "0d26b3e1804de0cc93b271b5b3545ef48f1639c70ec9c79d674b28889f31a0d4"
+    },
+    {
+      "path": "mini-services/micro-jquery/public/vendor/micro-sdk.js",
+      "before": "38a634dd748b3bd2f92b34dc99b9a43aede61fc0d0bf3f97dce60c5c5b4d471c",
+      "after": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+    },
+    {
+      "path": "mini-services/micro-jquery/smoke-test.cjs",
+      "before": "7a655e7826f5664231e7b061d2b1dd1375660e6a12f6e12845a783f1f86243e6",
+      "after": "27aa14f37a7e918b752c08e82d42a8631140b9a19e3524260cb00684f0ac4750"
+    },
+    {
+      "path": "mini-services/micro-vue/README.md",
+      "before": "b7a3600ec471e2f9cf18197e35d320b6208b95e7184a3ee1a912790c8cd65979",
+      "after": "0dca535ac6f22637adfb8794d451da8d1854954fd93e81c89d0e4467ee7bbcdc"
+    },
+    {
+      "path": "mini-services/micro-vue/public/app.js",
+      "before": "f57b5b086acae3b8574676f0747bec3cc93dfaac22bfa612f710bfb3d3570552",
+      "after": "4754229ca828fa2fadba6b5ab891bbf8f6e0d7fd38854d68d6d6b3cadce3e839"
+    },
+    {
+      "path": "mini-services/micro-vue/public/vendor/micro-sdk.js",
+      "before": "38a634dd748b3bd2f92b34dc99b9a43aede61fc0d0bf3f97dce60c5c5b4d471c",
+      "after": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+    },
+    {
+      "path": "mini-services/micro-vue/smoke-test.cjs",
+      "before": "947e3f206e81db81c75ca32837c96a424f3aae42d659b1555d3e40326bd460fb",
+      "after": "4cd8adb9d4e91e064ff7fdcc9d34cfaecd2fb287c7189b99bfdb793d7e8b6b87"
+    },
+    {
+      "path": "scripts/ci/README.md",
+      "before": "02350fc32fdd731868a6db734a13702436083a3db8ed1e2c791b3b808ee7f68d",
+      "after": "be6447a60779bc598a2307fd7eb5b875c827fcc14211309c043be1d717eac905"
+    },
+    {
+      "path": "scripts/ci/manifest.mjs",
+      "before": "5e53e8775dbac8e3668220cd1f357e593f006e90871be90b84d4a7cccf2bdb9d",
+      "after": "3744161cc177bd37acfa99c108846adf129524faff2752c34699926e523e19a0"
+    },
+    {
+      "path": "tests/browser/README.md",
+      "before": "95dbbb1bcdc857160ba939aedc3797552ffd0c7b02a66c3e690748b92d55a9b8",
+      "after": "cd0cb8dc876c9377b4b20e90049231934cf8b9b21f0054f0851fd5674fde5439"
+    },
+    {
+      "path": "tests/browser/manifest.mjs",
+      "before": "40e8acc365ca9ebadb3bb9e0e91409623d2f600fb24c39ee224f916434e7ca7b",
+      "after": "c9ff3799dfc5fc96c72b39f0b5fce7d7195c791c875ec974125a072f6fa49f00"
+    },
+    {
+      "path": "tests/ci-runner.mjs",
+      "before": "dd152caa0158637e94a09b5aec7deff1b4ee0401e27f16c681ca0c0e11461c17",
+      "after": "4c20199620f21693707513bfb497ac3133823fb893c580d8ab8a4372ecf91deb"
+    },
+    {
+      "path": "tests/micro-context-updates.mjs",
+      "before": null,
+      "after": "9a8d24be3330991b45cfefaaa4d2dbbbc5049417163b2ceb12c5db027b7ddbe1"
+    },
+    {
+      "path": "tests/micro-host-browser.mjs",
+      "before": "228e749688ebea370bd63f507462761046009a74119b620b30f06c72c31c3a89",
+      "after": "9ab76519fe573871abbd889ca79198728520ac89c219036cacec783d961c4d89"
+    },
+    {
+      "path": "tests/micro-iframe-protocol.mjs",
+      "before": "c8b5e8b56db8f3c742a3dca889d2cd6843a66898389d34c1521533176d601dad",
+      "after": "44c5ef7272a8be245a6d7b13ea761425ef7fdc5e2c097ebe2d3e1fba1383bda4"
+    },
+    {
+      "path": "tests/micro-sdk-client.mjs",
+      "before": "8dcb9eb4568ebfff999c65274b28caaea55cfd65aada88e6774a3757debff5cf",
+      "after": "d59def66f6790854416732f353df38aba6759d08836030a7d6b521b7d1ea7663"
+    },
+    {
+      "path": "tests/micro-sdk-generation.mjs",
+      "before": "e01a012b033163103a7f961505818f03aa7562d5130d75e9132870069a18c94b",
+      "after": "8ee7c89f94aa1b8c5e4e2d49a69048e3ae612fe2661ac5c30f5039a6d00d84e4"
+    },
+    {
+      "path": "tests/phase8-work-orders-browser.mjs",
+      "before": null,
+      "after": "53081b4e3dd308e751583be263b2a7019db68ca588662cac9c692ae93c87a1d4"
+    },
+    {
+      "path": "tests/route-permissions-browser.mjs",
+      "before": "3d1c17231e2b4720c8c68a56f02ad7dc9d2cf7b14c8605487e453c4f6c10fb33",
+      "after": "2dae8fb8cf641a82ab295c5746e25fe951d078668216070f2608acf3d07b056d"
+    }
+  ],
+  "unchangedBoundaries": {
+    "backendFiles": 78,
+    "backendAndLocksUnchanged": true,
+    "legacyUnchanged": true,
+    "wireContractsAndSdkRegistrationUnchanged": true,
+    "deploymentAndToolchainsUnchanged": true
+  },
+  "boundaryEvidence": {
+    "path": "target/phase-08/boundary-check.json",
+    "sha256": "fa9725a46ef3a297b342b3442429f15617f5acbab60a298615457d2cef91975e"
+  },
+  "specialized": {
+    "host": {
+      "status": "PASS",
+      "pass": 51,
+      "observedInputCount": 342,
+      "observedInputsSha256": "6d2bf62a62d88e96f0be834a57d48e9f6a76b7c535fc8a14f3d892117b592518",
+      "commands": [
+        {
+          "command": [
+            "D:\\Software\\Scoop\\apps\\nodejs\\current\\node.exe",
+            "--test",
+            "--test-reporter=tap",
+            "tests/micro-context-updates.mjs"
+          ],
+          "cwd": ".",
+          "startedAt": "2026-10-15T12:11:06.024Z",
+          "finishedAt": "2026-10-15T12:11:06.516Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "target/phase-08/host/context-updates-final.log",
+          "logSha256": "356fe67946ee90f92391362d67f09ac87e91398fb02bf7e9ce2c1374733dc211",
+          "counts": {
+            "tests": 17,
+            "pass": 17,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "expectedTests": 17,
+          "pass": true
+        },
+        {
+          "command": [
+            "D:\\Software\\Scoop\\apps\\nodejs\\current\\node.exe",
+            "--test",
+            "--test-reporter=tap",
+            "tests/micro-context-runtime.mjs"
+          ],
+          "cwd": ".",
+          "startedAt": "2026-10-15T12:11:06.052Z",
+          "finishedAt": "2026-10-15T12:11:06.579Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "target/phase-08/host/context-runtime-final.log",
+          "logSha256": "e070a017f8a874e5737913a98ad5bf72c680fc40f1de11edece7ed33b0e42b20",
+          "counts": {
+            "tests": 14,
+            "pass": 14,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "expectedTests": 14,
+          "pass": true
+        },
+        {
+          "command": [
+            "D:\\Software\\Scoop\\apps\\nodejs\\current\\node.exe",
+            "--test",
+            "--test-reporter=tap",
+            "tests/micro-runtime-faults.mjs"
+          ],
+          "cwd": ".",
+          "startedAt": "2026-10-15T12:11:06.079Z",
+          "finishedAt": "2026-10-15T12:11:07.241Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "target/phase-08/host/runtime-faults-final.log",
+          "logSha256": "e55cbc8757e977ef9d07761a6203743b65af42f7175d8f6ae4698746a6ccaaf9",
+          "counts": {
+            "tests": 20,
+            "pass": 20,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "expectedTests": 20,
+          "pass": true
+        },
+        {
+          "command": [
+            "D:\\Software\\Scoop\\apps\\nodejs\\current\\node.exe",
+            "frontend/node_modules/typescript/bin/tsc",
+            "--noEmit",
+            "-p",
+            "frontend/tsconfig.json"
+          ],
+          "cwd": ".",
+          "startedAt": "2026-10-15T12:11:06.108Z",
+          "finishedAt": "2026-10-15T12:11:20.677Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "target/phase-08/host/typecheck-final.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        {
+          "command": [
+            "D:\\Software\\Scoop\\apps\\nodejs\\current\\node.exe",
+            "node_modules/eslint/bin/eslint.js",
+            "--format",
+            "json",
+            "src/components/micro/runtime.ts",
+            "src/components/micro/entry.ts",
+            "src/components/micro/MicroAppContainer.tsx"
+          ],
+          "cwd": "frontend",
+          "startedAt": "2026-10-15T12:11:06.126Z",
+          "finishedAt": "2026-10-15T12:11:09.145Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "target/phase-08/host/eslint-final.log",
+          "logSha256": "7fa4daf18afec3a0ccdd7b708ab04989829e09b313d99d1ecde6063ca61357b7",
+          "errors": 0,
+          "warnings": 3,
+          "messages": [
+            {
+              "path": "frontend/src/components/micro/MicroAppContainer.tsx",
+              "ruleId": "@typescript-eslint/no-unused-vars",
+              "severity": 1,
+              "message": "'ErrorState' is defined but never used.",
+              "line": 59,
+              "column": 22,
+              "messageId": "unusedVar",
+              "endLine": 59,
+              "endColumn": 32,
+              "suggestions": [
+                {
+                  "messageId": "removeUnusedVar",
+                  "data": {
+                    "varName": "ErrorState"
+                  },
+                  "fix": {
+                    "range": [
+                      2094,
+                      2106
+                    ],
+                    "text": ""
+                  },
+                  "desc": "Remove unused variable \"ErrorState\"."
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/micro/MicroAppContainer.tsx",
+              "ruleId": "react-hooks/exhaustive-deps",
+              "severity": 1,
+              "message": "React Hook React.useEffect has a missing dependency: 'app'. Either include it or remove the dependency array.",
+              "line": 106,
+              "column": 6,
+              "endLine": 106,
+              "endColumn": 76,
+              "suggestions": [
+                {
+                  "desc": "Update the dependencies array to be: [activeRoute, app.id, contextEpoch, switching, setCurrentApplication, app]",
+                  "fix": {
+                    "range": [
+                      4064,
+                      4134
+                    ],
+                    "text": "[activeRoute, app.id, contextEpoch, switching, setCurrentApplication, app]"
+                  }
+                }
+              ]
+            },
+            {
+              "path": "frontend/src/components/micro/MicroAppContainer.tsx",
+              "ruleId": "react-hooks/exhaustive-deps",
+              "severity": 1,
+              "message": "The ref value 'seqRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'seqRef.current' to a variable inside the effect, and use that variable in the cleanup function.",
+              "line": 563,
+              "column": 14,
+              "endLine": 563,
+              "endColumn": 21
+            }
+          ],
+          "pass": true
+        },
+        {
+          "command": [
+            "git",
+            "-c",
+            "safe.directory=D:/WorkSpace/rust/saas/rust-saas",
+            "diff",
+            "--check",
+            "--",
+            "frontend/src/components/micro/runtime.ts",
+            "frontend/src/components/micro/entry.ts",
+            "frontend/src/components/micro/MicroAppContainer.tsx",
+            "tests/micro-context-updates.mjs"
+          ],
+          "cwd": ".",
+          "startedAt": "2026-10-15T12:11:06.145Z",
+          "finishedAt": "2026-10-15T12:11:06.334Z",
+          "exitCode": 0,
+          "error": null,
+          "log": "target/phase-08/host/diff-check-final.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        }
+      ],
+      "evidence": [
+        {
+          "path": "target/phase-08/host/result.json",
+          "sha256": "e6e8c77f8e84ecf6893d8fcb570bc2bb2a16a1cc34c6a97cee5d75ef76d56ed6"
+        },
+        {
+          "path": "target/phase-08/host/context-updates-final.log",
+          "sha256": "356fe67946ee90f92391362d67f09ac87e91398fb02bf7e9ce2c1374733dc211"
+        },
+        {
+          "path": "target/phase-08/host/context-runtime-final.log",
+          "sha256": "e070a017f8a874e5737913a98ad5bf72c680fc40f1de11edece7ed33b0e42b20"
+        },
+        {
+          "path": "target/phase-08/host/runtime-faults-final.log",
+          "sha256": "e55cbc8757e977ef9d07761a6203743b65af42f7175d8f6ae4698746a6ccaaf9"
+        },
+        {
+          "path": "target/phase-08/host/typecheck-final.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-08/host/eslint-final.log",
+          "sha256": "7fa4daf18afec3a0ccdd7b708ab04989829e09b313d99d1ecde6063ca61357b7"
+        },
+        {
+          "path": "target/phase-08/host/diff-check-final.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "target/phase-08/host/old-host-negative.log",
+          "bytes": 5582,
+          "sha256": "94a3f47afaf792319e356142405a5e6e4d832071c588264f8da9b8c621914d6e"
+        },
+        {
+          "path": "target/phase-08/host/old-host-negative-r2.log",
+          "bytes": 6752,
+          "sha256": "e719e68bc6f8d2fd77d36c13cd4550d097affb01c60d554900b38990bd12cd2e"
+        },
+        {
+          "path": "target/phase-08/host/old-host-negative-r2.json",
+          "bytes": 1304,
+          "sha256": "2c09c0b93dcdb6a63a5969ec2bca2faa984fff2ace54e3bebcc2b04279531df5"
+        },
+        {
+          "path": "target/phase-08/host/old-runtime-loader.mjs",
+          "bytes": 651,
+          "sha256": "5ac7a7fcc5be4e5a7150f6bde1b5017dba0bd42c739cdf7bc853a33014411e90"
+        },
+        {
+          "path": "target/phase-08/host/inputs-before.json",
+          "bytes": 58743,
+          "sha256": "6d2bf62a62d88e96f0be834a57d48e9f6a76b7c535fc8a14f3d892117b592518"
+        },
+        {
+          "path": "target/phase-08/host/inputs-after.json",
+          "bytes": 58743,
+          "sha256": "6d2bf62a62d88e96f0be834a57d48e9f6a76b7c535fc8a14f3d892117b592518"
+        }
+      ]
+    },
+    "consumers": {
+      "status": "PASS",
+      "pass": 97,
+      "observedInputCount": 250,
+      "observedInputsSha256": "29aad582b5571082daf2f4e22c863b8f77d48f46abb835b187466b0e0882db44",
+      "commands": [
+        {
+          "command": [
+            "D:\\Software\\Scoop\\apps\\nodejs\\current\\node.exe",
+            "scripts/sync-micro-sdk.mjs",
+            "--check"
+          ],
+          "exitCode": 0,
+          "error": null,
+          "counts": {
+            "tests": 0,
+            "pass": 0,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "log": "target/phase-08/consumers/sdk-check-final-r2.log",
+          "logSha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+        },
+        {
+          "command": [
+            "D:\\Software\\Scoop\\apps\\nodejs\\current\\node.exe",
+            "--test",
+            "--test-reporter=tap",
+            "tests/micro-sdk-generation.mjs",
+            "tests/micro-sdk-client.mjs",
+            "tests/micro-iframe-protocol.mjs",
+            "business-apps/work-orders/frontend/tests/client.mjs",
+            "business-apps/work-orders/frontend/tests/app.mjs",
+            "business-apps/work-orders/frontend/tests/build.mjs",
+            "mini-services/micro-vue/smoke-test.cjs",
+            "mini-services/micro-jquery/smoke-test.cjs",
+            "mini-services/micro-vue/static-delivery.test.cjs",
+            "mini-services/micro-jquery/static-delivery.test.cjs"
+          ],
+          "exitCode": 0,
+          "error": null,
+          "counts": {
+            "tests": 97,
+            "pass": 97,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "log": "target/phase-08/consumers/consumer-contracts-final-r2.log",
+          "logSha256": "b0785da41fbe20c0b91b9602c03f4e72d44c99abe21a176810485490ffd266bf"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "target/phase-08/consumers/result.json",
+          "sha256": "461d5eb809d65360b5525467c339cefae57592ad8c79eed35317afb4f1c4f3c2"
+        },
+        {
+          "path": "target/phase-08/consumers/sdk-check-final-r2.log",
+          "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+        },
+        {
+          "path": "target/phase-08/consumers/consumer-contracts-final-r2.log",
+          "sha256": "b0785da41fbe20c0b91b9602c03f4e72d44c99abe21a176810485490ffd266bf"
+        },
+        {
+          "path": "target/phase-08/consumers/before.log",
+          "sha256": "6b3dd7c05f4a28c221ced37f36aa9ecf86b1212b1e2c12b99df55290b307440c"
+        }
+      ]
+    }
+  },
+  "ciPolicy": {
+    "status": "PASS",
+    "pass": 49,
+    "evidence": [
+      {
+        "path": "target/phase-08/ci/policy-result-freeze3.json",
+        "sha256": "da2201f7d602456f1168b9434b93eb7f1ebfba3dd356c75284a938cdf120d7c0"
+      },
+      {
+        "path": "target/phase-08/ci/policy-tests-freeze3.log",
+        "sha256": "e310baef76b38d86f1ba9ba64acceaf5c98121d719056dd417772b75da4a9421"
+      },
+      {
+        "path": "target/phase-08/ci/supplemental-test-baseline.json",
+        "sha256": "6b4843e35eb38e5301045eaa17719965555ae5ca644236d764e7a9226187be09"
+      }
+    ]
+  },
+  "fast": {
+    "status": "PASS",
+    "run": "linux-fast-r2",
+    "owner": "ci-1792068274241-842eaeaa",
+    "tools": {
+      "node": "v24.18.0",
+      "platform": "linux",
+      "architecture": "x64",
+      "npm": "11.16.0",
+      "rust": "rustc 1.97.0 (2d8144b78 2026-07-07)"
+    },
+    "inputsSha256": "b6e5edc5fd0642cdd4de241005dc125a7429396b3b0ae24a5f319e2841a20f4b",
+    "stepCount": 23,
+    "steps": [
+      {
+        "id": "node-version",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--version"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/01-node-version.log"
+      },
+      {
+        "id": "npm-version",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--version"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/02-npm-version.log"
+      },
+      {
+        "id": "rust-version",
+        "mandatory": true,
+        "command": [
+          "rustc",
+          "--version"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/03-rust-version.log"
+      },
+      {
+        "id": "install-root",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/04-install-root.log"
+      },
+      {
+        "id": "install-frontend",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "frontend",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/05-install-frontend.log"
+      },
+      {
+        "id": "install-mini-services-micro-vue",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "mini-services/micro-vue",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/06-install-mini-services-micro-vue.log"
+      },
+      {
+        "id": "install-mini-services-micro-jquery",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "mini-services/micro-jquery",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/07-install-mini-services-micro-jquery.log"
+      },
+      {
+        "id": "install-examples-websocket",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "examples/websocket",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/08-install-examples-websocket.log"
+      },
+      {
+        "id": "install-scripts-ci",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "scripts/ci",
+          "ci",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/09-install-scripts-ci.log"
+      },
+      {
+        "id": "sdk-drift",
+        "mandatory": true,
+        "command": [
+          "node",
+          "scripts/sync-micro-sdk.mjs",
+          "--check"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/10-sdk-drift.log"
+      },
+      {
+        "id": "build-frontends",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "run",
+          "build:all"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/11-build-frontends.log"
+      },
+      {
+        "id": "lint",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "frontend",
+          "run",
+          "lint"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/12-lint.log"
+      },
+      {
+        "id": "typecheck",
+        "mandatory": true,
+        "command": [
+          "node",
+          "<selected-node-npm-cli>",
+          "--prefix",
+          "frontend",
+          "run",
+          "typecheck"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/13-typecheck.log"
+      },
+      {
+        "id": "contracts",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "tests/micro-context-runtime.mjs",
+          "tests/micro-context-updates.mjs",
+          "tests/micro-sandbox-lifecycle.mjs",
+          "tests/micro-runtime-faults.mjs",
+          "tests/micro-iframe-protocol.mjs",
+          "tests/micro-sdk-client.mjs",
+          "tests/micro-sdk-generation.mjs",
+          "tests/notification-context.mjs",
+          "tests/session-refresh.mjs",
+          "tests/map-location-regions.mjs",
+          "mini-services/micro-vue/smoke-test.cjs",
+          "mini-services/micro-jquery/smoke-test.cjs",
+          "business-apps/work-orders/frontend/tests/client.mjs",
+          "business-apps/work-orders/frontend/tests/app.mjs",
+          "business-apps/work-orders/backend/tests/cors.test.mjs",
+          "examples/app-backend/authorize.test.mjs",
+          "tests/package-microapp.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 221,
+          "pass": 221,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/14-contracts.log"
+      },
+      {
+        "id": "deployment-unit",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "tests/nginx-render-policy.mjs",
+          "deploy/static/tests/static-image-policy.mjs",
+          "deploy/native/tests/build.test.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 36,
+          "pass": 36,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/15-deployment-unit.log"
+      },
+      {
+        "id": "ci-policy",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "tests/ci-runner.mjs",
+          "tests/ci-workflow.mjs",
+          "scripts/ci/postgres.test.mjs",
+          "scripts/ci/linux-runner.test.mjs",
+          "scripts/ci/release.test.mjs",
+          "tests/browser/results.test.mjs",
+          "tests/browser/wait.test.mjs",
+          "tests/zip-release-e2e-policy.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 49,
+          "pass": 49,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/16-ci-policy.log"
+      },
+      {
+        "id": "dev-and-vite",
+        "mandatory": true,
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-concurrency=1",
+          "tests/dev-runner.mjs",
+          "tests/dev-vite-integration.mjs",
+          "tests/vite-example-delivery.mjs",
+          "tests/vite-host-static.mjs"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 19,
+          "pass": 19,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/17-dev-and-vite.log"
+      },
+      {
+        "id": "rust-check",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "check",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--all-targets",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 0,
+          "pass": 0,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/18-rust-check.log"
+      },
+      {
+        "id": "rust-config-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "config::tests",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 117
+        },
+        "log": "logs/19-rust-config-units.log"
+      },
+      {
+        "id": "rust-archive-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "release_archives::",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 104
+        },
+        "log": "logs/20-rust-archive-units.log"
+      },
+      {
+        "id": "rust-staging-maintenance-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "release_archive_maintenance::tests",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 117
+        },
+        "log": "logs/21-rust-staging-maintenance-units.log"
+      },
+      {
+        "id": "rust-public-contract-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "backend/Cargo.toml",
+          "--bin",
+          "saas-platform-backend",
+          "public_contract_tests",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 111
+        },
+        "log": "logs/22-rust-public-contract-units.log"
+      },
+      {
+        "id": "rust-transport-units",
+        "mandatory": true,
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "tests/fixtures/gateway-rust/Cargo.toml",
+          "-j",
+          "2"
+        ],
+        "exitCode": 0,
+        "timedOut": false,
+        "status": "PASS",
+        "counts": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        },
+        "log": "logs/23-rust-transport-units.log"
+      }
+    ],
+    "tests": [
+      {
+        "id": "contracts",
+        "counts": {
+          "tests": 221,
+          "pass": 221,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "deployment-unit",
+        "counts": {
+          "tests": 36,
+          "pass": 36,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "ci-policy",
+        "counts": {
+          "tests": 49,
+          "pass": 49,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "dev-and-vite",
+        "counts": {
+          "tests": 19,
+          "pass": 19,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      },
+      {
+        "id": "rust-config-units",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 117
+        }
+      },
+      {
+        "id": "rust-archive-units",
+        "counts": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 104
+        }
+      },
+      {
+        "id": "rust-staging-maintenance-units",
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 117
+        }
+      },
+      {
+        "id": "rust-public-contract-units",
+        "counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 111
+        }
+      },
+      {
+        "id": "rust-transport-units",
+        "counts": {
+          "tests": 8,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0,
+          "cancelled": 0,
+          "todo": 0,
+          "filtered": 0
+        }
+      }
+    ],
+    "wslLease": {
+      "mode": "owned WSL foreground stdin lease; no global configuration changes",
+      "ready": true,
+      "stopped": true,
+      "exitCode": 0
+    },
+    "cleanupVerification": {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "checkedAt": "2026-10-15T12:54:49.650Z",
+      "owner": "ci-1792068274241-842eaeaa",
+      "label": "saas.ci.owner",
+      "mode": "Read-only exact-owner inventory; no removal or prune",
+      "resources": {
+        "container": [],
+        "network": [],
+        "volume": []
+      },
+      "scratchCacheAbsent": true
+    },
+    "evidence": [
+      {
+        "path": "target/phase-08/linux-fast-r2/linux-runner-result.json",
+        "sha256": "05aebf0fc56ad1808d0dc7b0cb3bc1e5bfd3e233a21288871dd52d3bec6cfa33"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/summary.json",
+        "sha256": "abf37159299d2b6fa1033419d4495b8b0e522a94c75e0183996f4328b42066ff"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/source-verification.json",
+        "sha256": "755490ef4509a48723bff7d8833d9cf027bf8dbfc2eb450b40c5ba7494330554"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/resource-audit.json",
+        "sha256": "f8559e26291fab4bcfc60428ccd2d142287003599e590dcbc4fbb087d369fd68"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/verification-attestation.json",
+        "sha256": "0d5636e4632ad7e42c6c6bf9d26939015e1d194f4152495c7ff6c0237fde5ff1"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-install-diagnostics.json",
+        "sha256": "c6183fb3c997e7920b18a9682dfa12275f8fa04ea6f6815a403ced01aa9bb937"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_46_29_829Z-debug-0.log",
+        "sha256": "514f470b42745c3d406f84f09a0ed27ce7741528f012cb8c64d49b3ec40a4c2e"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_46_36_391Z-debug-0.log",
+        "sha256": "bba64cf8b035a772769c216df97cff42741a631c8ff0b96ebe4dab8a8236ea2a"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_10_880Z-debug-0.log",
+        "sha256": "4842e49857fcc3e9b38a29393f25715f0904a3c350c826fe2082df1cfaae3b26"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_11_054Z-debug-0.log",
+        "sha256": "ac02ab160456c0c3cd5e2bba2738a08a9965a70aeab84910d259f635e22c936b"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_11_227Z-debug-0.log",
+        "sha256": "199506328b83cd6733b3f9b16755b015220ab707931f5ee218e0fa5906e2cef0"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_11_779Z-debug-0.log",
+        "sha256": "2c4ec49355a6f7e93911335cc3259a3d3bcd9cbbdf3a938093a52dda89d75018"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_12_337Z-debug-0.log",
+        "sha256": "1ff99201eddf1232a89b51b092a6aa3d7f0c65c9bea70123b19f7f31a341ec66"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_12_534Z-debug-0.log",
+        "sha256": "408e76f751f502b4c72309a7eb27fa9ea0cf9c7e0199ab7c74ddd06c1640d4d7"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_15_303Z-debug-0.log",
+        "sha256": "7d3e513e107c47561d552d1e5f5504c25c98d1c9928c3fa08c44af29036bc991"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_15_600Z-debug-0.log",
+        "sha256": "e5161ef24916d393a9d241b37d385fe9f8ebb557b0861804b7eecab6d59549ea"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/npm-debug/2026-10-15T12_47_15_778Z-debug-0.log",
+        "sha256": "1625b436768f35a763e63bb16bca0b4a259763028a72092f45378934aeaf23ed"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/01-node-version.log",
+        "sha256": "8f9258d5e9da5443c42966a661aee09292b49d1c64e718dcc5f72976500bac48"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/02-npm-version.log",
+        "sha256": "041fb0a6f23ccf0102a18d4591e1bfa36eebc17d27d348727a5eee18806d1c3c"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/03-rust-version.log",
+        "sha256": "ac31499b5910ed7ddbf1a62e57e03c1d0ca49fa78efc075b291afa8d192a4d44"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/04-install-root.log",
+        "sha256": "a5167a3c98725273d348f8699f7c314021f7c56ee1c9add9d197db61c60d4ca9"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/05-install-frontend.log",
+        "sha256": "3aae325dc7ce9ccea6ec02e22e87d52c84169a9b0b0847d11c8b0b7c0d10389d"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/06-install-mini-services-micro-vue.log",
+        "sha256": "a7d96cf4ee49ce9343acb7cbce55c6735cf55851f73e50a2640565b32ef2f257"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/07-install-mini-services-micro-jquery.log",
+        "sha256": "54c784f34761564e36571dafb4d1a0f62f91ae53eda2bca5c78c9b076dc6724a"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/08-install-examples-websocket.log",
+        "sha256": "4863de8fad4a6440f80f45059ad615c15615638a020336af3bb47e0ad940c4ae"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/09-install-scripts-ci.log",
+        "sha256": "da13ab9d025b19c91553bc7d4c450975d3e4e36dd7c5fef6f223f8008ba39547"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/10-sdk-drift.log",
+        "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/11-build-frontends.log",
+        "sha256": "27b9edacc8a3d2f9d658312617a4626f31637effe91189b90ae0cb5c38dd7210"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/12-lint.log",
+        "sha256": "a76c1e6fc23daef3d79f97b02a46091d3e7ba5d0d0f0e30b6f2109733affa815"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/13-typecheck.log",
+        "sha256": "763e90b76b62e6c308e153dc0e982734104069f3384703603d3ab3778e580ab5"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/14-contracts.log",
+        "sha256": "84c808fc8f8dd3b1dc1dc1c8e7615e7557c62780ad025b310a6baac55cf33984"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/15-deployment-unit.log",
+        "sha256": "da79fa479b739353800f5de60e947186a0c5760aed721b6fef06ac2b2ab66bf3"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/16-ci-policy.log",
+        "sha256": "40643f3a8b29b25fb795e58f660d9f6271e7ab673aae0922b7969d1d0c74c1fe"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/17-dev-and-vite.log",
+        "sha256": "8a2853c7600920e3611f52f1ac5388f3cb8a9c334d40580c4f450abd045a29fc"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/18-rust-check.log",
+        "sha256": "52c07e4c225c641aa430f34b2081144ee38c8742f9e369af9ee3cdbc71f00328"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/19-rust-config-units.log",
+        "sha256": "8d26512d84dbedb70c1777cf4e9c3287ce7666b7ce8820e88b3684620105e618"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/20-rust-archive-units.log",
+        "sha256": "82236b845d7985a1d639de70afa1cf2bcd5a68069f2451e7df13be443d4455cf"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/21-rust-staging-maintenance-units.log",
+        "sha256": "c697d1aa662d0c3a6d76cb567cab55880caf6d5364ffe21942fb8376078f26c0"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/22-rust-public-contract-units.log",
+        "sha256": "118fa78c09c011c358b78d25f2785ef8d94af02602e4632e5fc6498e3e633a1f"
+      },
+      {
+        "path": "target/phase-08/linux-fast-r2/reports/fast/logs/23-rust-transport-units.log",
+        "sha256": "68d4e82f748236122a526aa56d963fdbb14cb4a8c9e747d352ee9d78c2888668"
+      }
+    ]
+  },
+  "browsers": {
+    "status": "PASS",
+    "expectedPerProduct": 169,
+    "totals": {
+      "pass": 507,
+      "fail": 0,
+      "skip": 0
+    },
+    "products": [
+      {
+        "product": "chromium",
+        "browserVersion": "156.0.8078.4",
+        "playwrightVersion": "1.64.1",
+        "owner": "ci-1792068561265-28770c2d",
+        "totals": {
+          "pass": 169,
+          "fail": 0,
+          "skip": 0
+        },
+        "suites": [
+          {
+            "id": "micro-host",
+            "pass": 47,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "notifications",
+            "pass": 10,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "platform-settings",
+            "pass": 11,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "regions",
+            "pass": 12,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "entities",
+            "pass": 13,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "route-permissions",
+            "pass": 64,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "departments",
+            "pass": 11,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "chat",
+            "pass": 1,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          }
+        ],
+        "updateSemantics": {
+          "entryInterleavings": [
+            {
+              "profileVersion": "v1",
+              "initialContextVersion": "v2",
+              "nextContextVersion": "v1",
+              "sameContextVersion": true,
+              "mounts": [
+                {
+                  "entryLabel": "v2",
+                  "deploymentVersion": "v2",
+                  "entryVersionId": "release-probe-v2"
+                },
+                {
+                  "entryLabel": "v1",
+                  "deploymentVersion": "v1",
+                  "entryVersionId": "release-probe-v1"
+                }
+              ]
+            },
+            {
+              "profileVersion": "v2",
+              "initialContextVersion": "v1",
+              "nextContextVersion": "v2",
+              "sameContextVersion": true,
+              "mounts": [
+                {
+                  "entryLabel": "v1",
+                  "deploymentVersion": "v1",
+                  "entryVersionId": "release-probe-v1"
+                },
+                {
+                  "entryLabel": "v2",
+                  "deploymentVersion": "v2",
+                  "entryVersionId": "release-probe-v2"
+                }
+              ]
+            }
+          ],
+          "authorizationRecovery": [
+            {
+              "scenario": "initial-issue-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068900200,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068900221,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068900735,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068900741,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 2,
+                "contextCalls": 1
+              },
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "initial-context-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068902494,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068902514,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068902526,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068903039,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068903045,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 2,
+                "contextCalls": 2
+              },
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "active-network",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068904784,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068904800,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068904810,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068904887,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068905403,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 3,
+                  "at": 1792068905549,
+                  "group": "A"
+                }
+              ],
+              "oldSignalAborted": true,
+              "oldCallbacksInert": true,
+              "oldViewRemovedBeforeRetryResponse": true,
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "active-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068907200,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068907221,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068907232,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068907336,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068907844,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 3,
+                  "at": 1792068907984,
+                  "group": "A"
+                }
+              ],
+              "oldSignalAborted": true,
+              "oldCallbacksInert": true,
+              "oldViewRemovedBeforeRetryResponse": true,
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "persistent-503-exhausted",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068909585,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068909602,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068910122,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 4,
+                  "at": 1792068911129,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 5,
+                  "at": 1792068913135,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 4,
+                "contextCalls": 0
+              },
+              "maximumRetries": 3,
+              "extraObservationMs": 2250,
+              "finalIssueAttempts": 5,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-contract",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068917109,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068917129,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068917146,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-identity",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068921093,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068921109,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068921124,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-entry",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068925076,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068925093,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068925106,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-mode",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068929023,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068929040,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068929055,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "recovery-cannot-reset-trusted-unmount-fault",
+              "productionDeadlineMs": 10000,
+              "elapsedMs": 11583,
+              "fault": {
+                "code": "TRUSTED_RUNTIME_FAULT",
+                "stage": "unmount",
+                "reason": "TIMEOUT"
+              },
+              "freshIssueCompleted": true,
+              "iframeIndependent": true,
+              "lateUnmountDidNotResetFault": true
+            }
+          ],
+          "legacyPresentation": [
+            {
+              "themeIssueDelta": 0,
+              "themeMountDelta": 0,
+              "themeSignalRetained": true,
+              "routeSerialRemount": true
+            },
+            {
+              "mode": "iframe",
+              "themeIssueDelta": 0,
+              "themeMountDelta": 0,
+              "themeSignalRetained": true,
+              "oldCallbackUsable": true,
+              "routeSerialRemount": true,
+              "frameRetained": true
+            }
+          ],
+          "actualWorkOrders": [
+            {
+              "scenario": "actual-build-inputs",
+              "baselineOverride": false,
+              "files": [
+                {
+                  "path": "business-apps/work-orders/frontend/src/app.mjs",
+                  "sha256": "ab8e1a2b2ac6cf3fdf5d981c71aa14bf0bdedb6bbf1636cf20cb557259eb4308"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/src/client.mjs",
+                  "sha256": "5bbde326f7282375d236907164ec49397cc9e633c89199584baa119c99e68f97"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/src/domain.mjs",
+                  "sha256": "4a9c5d591e1c71b8a087f9de04f39dd8667ee5083be6bff3d7831f3aef09fb76"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/vendor/iframe-bridge.js",
+                  "sha256": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/vendor/micro-sdk.mjs",
+                  "sha256": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837"
+                }
+              ]
+            },
+            {
+              "scenario": "theme-preserves-create-and-update",
+              "create": {
+                "id": 3,
+                "method": "POST",
+                "path": "/work-orders-api/tickets",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "update": {
+                "id": 6,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/created-ticket",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "readCount": 4
+            },
+            {
+              "scenario": "route-cancels-only-related-read",
+              "pendingWrite": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "retiredRead": {
+                "id": 4,
+                "method": "GET",
+                "path": "/work-orders-api/tickets/ticket-two",
+                "aborted": true,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": true,
+                "errorName": "AbortError"
+              }
+            },
+            {
+              "scenario": "renewal-rejects-real-late-http-response",
+              "late": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": true,
+                "nativeSignalDetached": true,
+                "completed": true,
+                "failed": false,
+                "completedAfterAbort": true,
+                "status": 200
+              },
+              "tokenIssueDelta": 1
+            },
+            {
+              "scenario": "grant-and-membership-revocation",
+              "retiredGrantHandlerWriteDelta": 0,
+              "memberWriteCount": 1,
+              "definitiveContextStatus": 403,
+              "retiredFrameRemoved": true,
+              "cancelledRequest": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": true,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": true,
+                "errorName": "TypeError"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "product": "chrome",
+        "browserVersion": "155.0.8059.79",
+        "playwrightVersion": "1.64.1",
+        "owner": "ci-1792068561365-5628fd7e",
+        "totals": {
+          "pass": 169,
+          "fail": 0,
+          "skip": 0
+        },
+        "suites": [
+          {
+            "id": "micro-host",
+            "pass": 47,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "notifications",
+            "pass": 10,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "platform-settings",
+            "pass": 11,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "regions",
+            "pass": 12,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "entities",
+            "pass": 13,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "route-permissions",
+            "pass": 64,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "departments",
+            "pass": 11,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "chat",
+            "pass": 1,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          }
+        ],
+        "updateSemantics": {
+          "entryInterleavings": [
+            {
+              "profileVersion": "v1",
+              "initialContextVersion": "v2",
+              "nextContextVersion": "v1",
+              "sameContextVersion": true,
+              "mounts": [
+                {
+                  "entryLabel": "v2",
+                  "deploymentVersion": "v2",
+                  "entryVersionId": "release-probe-v2"
+                },
+                {
+                  "entryLabel": "v1",
+                  "deploymentVersion": "v1",
+                  "entryVersionId": "release-probe-v1"
+                }
+              ]
+            },
+            {
+              "profileVersion": "v2",
+              "initialContextVersion": "v1",
+              "nextContextVersion": "v2",
+              "sameContextVersion": true,
+              "mounts": [
+                {
+                  "entryLabel": "v1",
+                  "deploymentVersion": "v1",
+                  "entryVersionId": "release-probe-v1"
+                },
+                {
+                  "entryLabel": "v2",
+                  "deploymentVersion": "v2",
+                  "entryVersionId": "release-probe-v2"
+                }
+              ]
+            }
+          ],
+          "authorizationRecovery": [
+            {
+              "scenario": "initial-issue-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068894390,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068894410,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068894923,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068894928,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 2,
+                "contextCalls": 1
+              },
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "initial-context-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068896916,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068896935,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068896947,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068897458,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068897463,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 2,
+                "contextCalls": 2
+              },
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "active-network",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068899497,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068899515,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068899526,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068899644,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068900151,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 3,
+                  "at": 1792068900276,
+                  "group": "A"
+                }
+              ],
+              "oldSignalAborted": true,
+              "oldCallbacksInert": true,
+              "oldViewRemovedBeforeRetryResponse": true,
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "active-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068902303,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068902325,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068902339,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068902443,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068902953,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 3,
+                  "at": 1792068903076,
+                  "group": "A"
+                }
+              ],
+              "oldSignalAborted": true,
+              "oldCallbacksInert": true,
+              "oldViewRemovedBeforeRetryResponse": true,
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "persistent-503-exhausted",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068905059,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068905080,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068905595,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 4,
+                  "at": 1792068906601,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 5,
+                  "at": 1792068908607,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 4,
+                "contextCalls": 0
+              },
+              "maximumRetries": 3,
+              "extraObservationMs": 2250,
+              "finalIssueAttempts": 5,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-contract",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068912863,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068912882,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068912897,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-identity",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068917216,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068917236,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068917254,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-entry",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068921482,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068921497,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068921509,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-mode",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068925704,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068925722,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068925737,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "recovery-cannot-reset-trusted-unmount-fault",
+              "productionDeadlineMs": 10000,
+              "elapsedMs": 11499,
+              "fault": {
+                "code": "TRUSTED_RUNTIME_FAULT",
+                "stage": "unmount",
+                "reason": "TIMEOUT"
+              },
+              "freshIssueCompleted": true,
+              "iframeIndependent": true,
+              "lateUnmountDidNotResetFault": true
+            }
+          ],
+          "legacyPresentation": [
+            {
+              "themeIssueDelta": 0,
+              "themeMountDelta": 0,
+              "themeSignalRetained": true,
+              "routeSerialRemount": true
+            },
+            {
+              "mode": "iframe",
+              "themeIssueDelta": 0,
+              "themeMountDelta": 0,
+              "themeSignalRetained": true,
+              "oldCallbackUsable": true,
+              "routeSerialRemount": true,
+              "frameRetained": true
+            }
+          ],
+          "actualWorkOrders": [
+            {
+              "scenario": "actual-build-inputs",
+              "baselineOverride": false,
+              "files": [
+                {
+                  "path": "business-apps/work-orders/frontend/src/app.mjs",
+                  "sha256": "ab8e1a2b2ac6cf3fdf5d981c71aa14bf0bdedb6bbf1636cf20cb557259eb4308"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/src/client.mjs",
+                  "sha256": "5bbde326f7282375d236907164ec49397cc9e633c89199584baa119c99e68f97"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/src/domain.mjs",
+                  "sha256": "4a9c5d591e1c71b8a087f9de04f39dd8667ee5083be6bff3d7831f3aef09fb76"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/vendor/iframe-bridge.js",
+                  "sha256": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/vendor/micro-sdk.mjs",
+                  "sha256": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837"
+                }
+              ]
+            },
+            {
+              "scenario": "theme-preserves-create-and-update",
+              "create": {
+                "id": 3,
+                "method": "POST",
+                "path": "/work-orders-api/tickets",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "update": {
+                "id": 6,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/created-ticket",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "readCount": 4
+            },
+            {
+              "scenario": "route-cancels-only-related-read",
+              "pendingWrite": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "retiredRead": {
+                "id": 4,
+                "method": "GET",
+                "path": "/work-orders-api/tickets/ticket-two",
+                "aborted": true,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": true,
+                "errorName": "AbortError"
+              }
+            },
+            {
+              "scenario": "renewal-rejects-real-late-http-response",
+              "late": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": true,
+                "nativeSignalDetached": true,
+                "completed": true,
+                "failed": false,
+                "completedAfterAbort": true,
+                "status": 200
+              },
+              "tokenIssueDelta": 1
+            },
+            {
+              "scenario": "grant-and-membership-revocation",
+              "retiredGrantHandlerWriteDelta": 0,
+              "memberWriteCount": 1,
+              "definitiveContextStatus": 403,
+              "retiredFrameRemoved": true,
+              "cancelledRequest": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": true,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": true,
+                "errorName": "AbortError"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "product": "msedge",
+        "browserVersion": "155.0.4283.45",
+        "playwrightVersion": "1.64.1",
+        "owner": "ci-1792068561398-f6eb683c",
+        "totals": {
+          "pass": 169,
+          "fail": 0,
+          "skip": 0
+        },
+        "suites": [
+          {
+            "id": "micro-host",
+            "pass": 47,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "notifications",
+            "pass": 10,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "platform-settings",
+            "pass": 11,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "regions",
+            "pass": 12,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "entities",
+            "pass": 13,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "route-permissions",
+            "pass": 64,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "departments",
+            "pass": 11,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          },
+          {
+            "id": "chat",
+            "pass": 1,
+            "fail": 0,
+            "skip": 0,
+            "exitCode": 0
+          }
+        ],
+        "updateSemantics": {
+          "entryInterleavings": [
+            {
+              "profileVersion": "v1",
+              "initialContextVersion": "v2",
+              "nextContextVersion": "v1",
+              "sameContextVersion": true,
+              "mounts": [
+                {
+                  "entryLabel": "v2",
+                  "deploymentVersion": "v2",
+                  "entryVersionId": "release-probe-v2"
+                },
+                {
+                  "entryLabel": "v1",
+                  "deploymentVersion": "v1",
+                  "entryVersionId": "release-probe-v1"
+                }
+              ]
+            },
+            {
+              "profileVersion": "v2",
+              "initialContextVersion": "v1",
+              "nextContextVersion": "v2",
+              "sameContextVersion": true,
+              "mounts": [
+                {
+                  "entryLabel": "v1",
+                  "deploymentVersion": "v1",
+                  "entryVersionId": "release-probe-v1"
+                },
+                {
+                  "entryLabel": "v2",
+                  "deploymentVersion": "v2",
+                  "entryVersionId": "release-probe-v2"
+                }
+              ]
+            }
+          ],
+          "authorizationRecovery": [
+            {
+              "scenario": "initial-issue-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068906929,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068906951,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068907467,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068907473,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 2,
+                "contextCalls": 1
+              },
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "initial-context-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068909519,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068909537,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068909549,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068910064,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068910069,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 2,
+                "contextCalls": 2
+              },
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "active-network",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068912178,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068912199,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068912213,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068912318,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068912826,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 3,
+                  "at": 1792068912964,
+                  "group": "A"
+                }
+              ],
+              "oldSignalAborted": true,
+              "oldCallbacksInert": true,
+              "oldViewRemovedBeforeRetryResponse": true,
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "active-503",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068914812,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068914831,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068914843,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 2,
+                  "at": 1792068914934,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068915444,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 3,
+                  "at": 1792068915565,
+                  "group": "A"
+                }
+              ],
+              "oldSignalAborted": true,
+              "oldCallbacksInert": true,
+              "oldViewRemovedBeforeRetryResponse": true,
+              "freshIssueAttempts": 3,
+              "recovered": true
+            },
+            {
+              "scenario": "persistent-503-exhausted",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068917641,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068917659,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 3,
+                  "at": 1792068918175,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 4,
+                  "at": 1792068919183,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 5,
+                  "at": 1792068921190,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 4,
+                "contextCalls": 0
+              },
+              "maximumRetries": 3,
+              "extraObservationMs": 2250,
+              "finalIssueAttempts": 5,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-contract",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068925491,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068925511,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068925525,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-identity",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068929817,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068929839,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068929855,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-entry",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068934225,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068934245,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068934262,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "permanent-mode",
+              "requests": [
+                {
+                  "stage": "issue",
+                  "attempt": 1,
+                  "at": 1792068938669,
+                  "group": "A"
+                },
+                {
+                  "stage": "issue",
+                  "attempt": 2,
+                  "at": 1792068938688,
+                  "group": "A"
+                },
+                {
+                  "stage": "context",
+                  "attempt": 1,
+                  "at": 1792068938706,
+                  "group": "A"
+                }
+              ],
+              "currentInstance": {
+                "instance": 2,
+                "issueCalls": 1,
+                "contextCalls": 1
+              },
+              "additionalRetries": 0,
+              "recovered": false
+            },
+            {
+              "scenario": "recovery-cannot-reset-trusted-unmount-fault",
+              "productionDeadlineMs": 10000,
+              "elapsedMs": 11695,
+              "fault": {
+                "code": "TRUSTED_RUNTIME_FAULT",
+                "stage": "unmount",
+                "reason": "TIMEOUT"
+              },
+              "freshIssueCompleted": true,
+              "iframeIndependent": true,
+              "lateUnmountDidNotResetFault": true
+            }
+          ],
+          "legacyPresentation": [
+            {
+              "themeIssueDelta": 0,
+              "themeMountDelta": 0,
+              "themeSignalRetained": true,
+              "routeSerialRemount": true
+            },
+            {
+              "mode": "iframe",
+              "themeIssueDelta": 0,
+              "themeMountDelta": 0,
+              "themeSignalRetained": true,
+              "oldCallbackUsable": true,
+              "routeSerialRemount": true,
+              "frameRetained": true
+            }
+          ],
+          "actualWorkOrders": [
+            {
+              "scenario": "actual-build-inputs",
+              "baselineOverride": false,
+              "files": [
+                {
+                  "path": "business-apps/work-orders/frontend/src/app.mjs",
+                  "sha256": "ab8e1a2b2ac6cf3fdf5d981c71aa14bf0bdedb6bbf1636cf20cb557259eb4308"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/src/client.mjs",
+                  "sha256": "5bbde326f7282375d236907164ec49397cc9e633c89199584baa119c99e68f97"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/src/domain.mjs",
+                  "sha256": "4a9c5d591e1c71b8a087f9de04f39dd8667ee5083be6bff3d7831f3aef09fb76"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/vendor/iframe-bridge.js",
+                  "sha256": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5"
+                },
+                {
+                  "path": "business-apps/work-orders/frontend/vendor/micro-sdk.mjs",
+                  "sha256": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837"
+                }
+              ]
+            },
+            {
+              "scenario": "theme-preserves-create-and-update",
+              "create": {
+                "id": 3,
+                "method": "POST",
+                "path": "/work-orders-api/tickets",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "update": {
+                "id": 6,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/created-ticket",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "readCount": 4
+            },
+            {
+              "scenario": "route-cancels-only-related-read",
+              "pendingWrite": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": false,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": false
+              },
+              "retiredRead": {
+                "id": 4,
+                "method": "GET",
+                "path": "/work-orders-api/tickets/ticket-two",
+                "aborted": true,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": true,
+                "errorName": "AbortError"
+              }
+            },
+            {
+              "scenario": "renewal-rejects-real-late-http-response",
+              "late": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": true,
+                "nativeSignalDetached": true,
+                "completed": true,
+                "failed": false,
+                "completedAfterAbort": true,
+                "status": 200
+              },
+              "tokenIssueDelta": 1
+            },
+            {
+              "scenario": "grant-and-membership-revocation",
+              "retiredGrantHandlerWriteDelta": 0,
+              "memberWriteCount": 1,
+              "definitiveContextStatus": 403,
+              "retiredFrameRemoved": true,
+              "cancelledRequest": {
+                "id": 3,
+                "method": "PATCH",
+                "path": "/work-orders-api/tickets/ticket-one",
+                "aborted": true,
+                "nativeSignalDetached": false,
+                "completed": false,
+                "failed": true,
+                "errorName": "AbortError"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "evidence": {
+      "path": "target/phase-08/browser-matrix-result.json",
+      "sha256": "75d6070c7610d466c440e6841825e556fc33052159f483dbf258eca6c93a25eb"
+    }
+  },
+  "windows": {
+    "status": "PASS",
+    "pass": 47,
+    "evidence": [
+      {
+        "path": "target/phase-08/browser/windows-result.json",
+        "sha256": "1bccf54b3a03604354fb462ff97b7a989ad65c472995b8455ef27503164b914d"
+      },
+      {
+        "path": "target/phase-08/browser/windows-full-r4.log",
+        "sha256": "33174ca33b34bc373efb3bcb1237901d42cf2f6d0b59cc4628a02c09af4a5c42"
+      }
+    ]
+  },
+  "resourceAudit": {
+    "schemaVersion": 1,
+    "status": "PASS",
+    "checkedAt": "2026-10-15T13:05:43.489Z",
+    "mode": "Read-only label inventory after all Phase 8 gates; no removals or prune",
+    "queries": [
+      {
+        "label": "saas.ci.owner",
+        "resource": "containers",
+        "command": [
+          "docker",
+          "ps",
+          "-aq",
+          "--filter",
+          "label=saas.ci.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.ci.owner",
+        "resource": "networks",
+        "command": [
+          "docker",
+          "network",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.ci.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.ci.owner",
+        "resource": "volumes",
+        "command": [
+          "docker",
+          "volume",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.ci.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.phase08.owner",
+        "resource": "containers",
+        "command": [
+          "docker",
+          "ps",
+          "-aq",
+          "--filter",
+          "label=saas.phase08.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.phase08.owner",
+        "resource": "networks",
+        "command": [
+          "docker",
+          "network",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.phase08.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      },
+      {
+        "label": "saas.phase08.owner",
+        "resource": "volumes",
+        "command": [
+          "docker",
+          "volume",
+          "ls",
+          "-q",
+          "--filter",
+          "label=saas.phase08.owner"
+        ],
+        "exitCode": 0,
+        "remainingIds": []
+      }
+    ],
+    "wslLease": {
+      "mode": "owned WSL foreground stdin lease; no global configuration changes",
+      "ready": true,
+      "stopped": true,
+      "exitCode": 0
+    },
+    "evidence": {
+      "path": "target/phase-08/final-resource-audit.json",
+      "sha256": "5e278a31951d59f5b6020374c9bbae542c2405bee1659540faf6a13724b2a5b1"
+    }
+  },
+  "preservedFormalFailures": [
+    {
+      "run": "linux-browser-chrome-r1",
+      "status": "FAIL",
+      "exitCode": 143,
+      "countedInFinal": false,
+      "classification": "EXPLICITLY_CANCELLED_PARTIAL",
+      "partialSummaryStatus": "RUNNING",
+      "completedPrerequisiteSteps": 10,
+      "evidence": [
+        {
+          "path": "target/phase-08/linux-browser-chrome-r1/linux-runner-result.json",
+          "sha256": "10d892f19d38aad4f0af1568909e73e236008054f0684773365441cf6709a740"
+        },
+        {
+          "path": "target/phase-08/linux-browser-chrome-r1/reports/browser/summary.json",
+          "sha256": "37f10680d61b6809f0e5d62fa07d8b4c1ee0a945cf413e8932806477445ec922"
+        }
+      ]
+    },
+    {
+      "run": "linux-browser-chromium-r1",
+      "status": "FAIL",
+      "exitCode": 143,
+      "countedInFinal": false,
+      "classification": "EXPLICITLY_CANCELLED_PARTIAL",
+      "partialSummaryStatus": "RUNNING",
+      "completedPrerequisiteSteps": 10,
+      "evidence": [
+        {
+          "path": "target/phase-08/linux-browser-chromium-r1/linux-runner-result.json",
+          "sha256": "7630ec540e600cfc79875e0795d71db9c12bc7b110ece9950b044df9ce8ccf6d"
+        },
+        {
+          "path": "target/phase-08/linux-browser-chromium-r1/reports/browser/summary.json",
+          "sha256": "4cd83331b412e0a07b831a1e4d0598845c538295cc5d59108557343512628028"
+        }
+      ]
+    },
+    {
+      "run": "linux-browser-msedge-r1",
+      "status": "FAIL",
+      "exitCode": 143,
+      "countedInFinal": false,
+      "classification": "EXPLICITLY_CANCELLED_PARTIAL",
+      "partialSummaryStatus": "RUNNING",
+      "completedPrerequisiteSteps": 10,
+      "evidence": [
+        {
+          "path": "target/phase-08/linux-browser-msedge-r1/linux-runner-result.json",
+          "sha256": "f650119faff5b0408e7a265cecdc222fd1a902b7c6068dfdd5a1903f9659a55c"
+        },
+        {
+          "path": "target/phase-08/linux-browser-msedge-r1/reports/browser/summary.json",
+          "sha256": "f60ef7fc5c057ab3501039cf43cd35182bc0593525832aa99cdfbec222ccc6b9"
+        }
+      ]
+    }
+  ],
+  "supersededFormalRuns": [
+    {
+      "run": "linux-fast-r1",
+      "status": "PASS",
+      "exitCode": 0,
+      "countedInFinal": false,
+      "reason": "Complete freeze2 run superseded by a fresh full freeze3 gate; no aggregation across snapshots",
+      "inputsSha256": "d5aeab6316eaf410ee808cfb992a460c37cc355878a943edafce38a3acaa60fe",
+      "stepCount": 23,
+      "contractPass": 221,
+      "wslLease": {
+        "mode": "owned WSL foreground stdin lease; no global configuration changes",
+        "ready": true,
+        "stopped": true,
+        "exitCode": 0
+      },
+      "evidence": [
+        {
+          "path": "target/phase-08/linux-fast-r1/linux-runner-result.json",
+          "sha256": "dac80eb0a8e2a8acb803666f6d08f8f8a5e974621c0f46511eb28f40b402349b"
+        },
+        {
+          "path": "target/phase-08/linux-fast-r1/reports/fast/summary.json",
+          "sha256": "2ef9f82425f9c5e0c5b0b64ebbf72aec4c58d7c1cf212ec8ed4f287e31218389"
+        },
+        {
+          "path": "target/phase-08/linux-fast-r1/reports/source-verification.json",
+          "sha256": "5529bcd2c38e1d06946b9b174ba443931a37a4eb5fe916a6c506aa89a814703d"
+        },
+        {
+          "path": "target/phase-08/linux-fast-r1/resource-audit.json",
+          "sha256": "e0d5fc178f92c12d45e549953ca9edabb0790b7869cad2b6407ce5735668ddf3"
+        },
+        {
+          "path": "target/phase-08/linux-fast-r1/verification-attestation.json",
+          "sha256": "fb7898787fd040dc70f6f73b5d75651d64df2695ace2ced32fdd25a7a1b730a8"
+        }
+      ]
+    }
+  ],
+  "diagnosticEvidence": [
+    {
+      "path": "target/phase-08/host/collector-setup-failure.json",
+      "sha256": "a8c6e5c0d1082048c9236e18b1a1cc9b0b4b64f91f2acc06be39d3e378cfd0ce"
+    },
+    {
+      "path": "target/phase-08/host/context-runtime-final.log",
+      "sha256": "e070a017f8a874e5737913a98ad5bf72c680fc40f1de11edece7ed33b0e42b20"
+    },
+    {
+      "path": "target/phase-08/host/context-updates-final.log",
+      "sha256": "356fe67946ee90f92391362d67f09ac87e91398fb02bf7e9ce2c1374733dc211"
+    },
+    {
+      "path": "target/phase-08/host/diff-check-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-08/host/eslint-final.log",
+      "sha256": "7fa4daf18afec3a0ccdd7b708ab04989829e09b313d99d1ecde6063ca61357b7"
+    },
+    {
+      "path": "target/phase-08/host/inputs-after.json",
+      "sha256": "6d2bf62a62d88e96f0be834a57d48e9f6a76b7c535fc8a14f3d892117b592518"
+    },
+    {
+      "path": "target/phase-08/host/inputs-before.json",
+      "sha256": "6d2bf62a62d88e96f0be834a57d48e9f6a76b7c535fc8a14f3d892117b592518"
+    },
+    {
+      "path": "target/phase-08/host/old-host-negative-r2.json",
+      "sha256": "2c09c0b93dcdb6a63a5969ec2bca2faa984fff2ace54e3bebcc2b04279531df5"
+    },
+    {
+      "path": "target/phase-08/host/old-host-negative-r2.log",
+      "sha256": "e719e68bc6f8d2fd77d36c13cd4550d097affb01c60d554900b38990bd12cd2e"
+    },
+    {
+      "path": "target/phase-08/host/old-host-negative.log",
+      "sha256": "94a3f47afaf792319e356142405a5e6e4d832071c588264f8da9b8c621914d6e"
+    },
+    {
+      "path": "target/phase-08/host/result.json",
+      "sha256": "e6e8c77f8e84ecf6893d8fcb570bc2bb2a16a1cc34c6a97cee5d75ef76d56ed6"
+    },
+    {
+      "path": "target/phase-08/host/runtime-faults-final.log",
+      "sha256": "e55cbc8757e977ef9d07761a6203743b65af42f7175d8f6ae4698746a6ccaaf9"
+    },
+    {
+      "path": "target/phase-08/host/typecheck-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-08/consumers/before.log",
+      "sha256": "6b3dd7c05f4a28c221ced37f36aa9ecf86b1212b1e2c12b99df55290b307440c"
+    },
+    {
+      "path": "target/phase-08/consumers/consumer-contracts-final-r2.log",
+      "sha256": "b0785da41fbe20c0b91b9602c03f4e72d44c99abe21a176810485490ffd266bf"
+    },
+    {
+      "path": "target/phase-08/consumers/consumer-contracts-final.log",
+      "sha256": "b46d1319c624f6a1b6056fd0027ae9db70c732d5a1cf1b5a51d36fc7f581fa27"
+    },
+    {
+      "path": "target/phase-08/consumers/iteration-1.log",
+      "sha256": "378abdd783e8be19d5099c2cdd88930e3ca4627719530cd75d018ee1bd09f5d7"
+    },
+    {
+      "path": "target/phase-08/consumers/iteration-2.log",
+      "sha256": "8c7a63df766bdae0d7e862a3bc943700ea57aca2d1e35611520e0014dc4b92e7"
+    },
+    {
+      "path": "target/phase-08/consumers/iteration-3.log",
+      "sha256": "c548d15e8e5e92b472f055a9d79850000f2d0e01b9238bcd48ae296989e641a6"
+    },
+    {
+      "path": "target/phase-08/consumers/iteration-4.log",
+      "sha256": "4f7710fc1e696a62fd586ffbe4e198929383f90ca8f8bfbe290f0191d9e285cc"
+    },
+    {
+      "path": "target/phase-08/consumers/iteration-5.log",
+      "sha256": "0013862d3bf129d8cd7016ed415c56ee83f04f276d33a32b485988537afad386"
+    },
+    {
+      "path": "target/phase-08/consumers/no-update.log",
+      "sha256": "2f64c12c685c65512cde12c3ddd5c9ec69c944eed0236d741e5f7cb8cf7e8db9"
+    },
+    {
+      "path": "target/phase-08/consumers/result-r1.json",
+      "sha256": "d79d2d7816386287961b1ca8120b057151ec3a7a9c1438bd3dfc70d994766075"
+    },
+    {
+      "path": "target/phase-08/consumers/result.json",
+      "sha256": "461d5eb809d65360b5525467c339cefae57592ad8c79eed35317afb4f1c4f3c2"
+    },
+    {
+      "path": "target/phase-08/consumers/sdk-check-final-r2.log",
+      "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+    },
+    {
+      "path": "target/phase-08/consumers/sdk-check-final.log",
+      "sha256": "f120428d063e0e8c1387734940c15c42085df9b2f9cc486158b7e8ab6f990179"
+    },
+    {
+      "path": "target/phase-08/browser/chrome-r1-driver.log",
+      "sha256": "9300053b876c311ee59d20094d48d2c8a6c4fdad156dda25734d49c9152f9408"
+    },
+    {
+      "path": "target/phase-08/browser/chrome-r2-driver.log",
+      "sha256": "efc748ca947e8c4d7ae8eb24ce3a9a6e104e024355ee375df510c9228f254a06"
+    },
+    {
+      "path": "target/phase-08/browser/chromium-r1-driver.log",
+      "sha256": "fd9008132f0290ec0649a59c9dcf99de22ea8ad9d1451d3c5df9863b7c88b7cf"
+    },
+    {
+      "path": "target/phase-08/browser/chromium-r2-driver.log",
+      "sha256": "a7c8f4394aa620337aedc120b22694b0fa9a6cc779ddc6267729e6a3dac0d916"
+    },
+    {
+      "path": "target/phase-08/browser/msedge-r1-driver.log",
+      "sha256": "6fe641bb89efdcbb3d37f2f93dc9f2479927aa1e263f780425cfcbefeff4fbaf"
+    },
+    {
+      "path": "target/phase-08/browser/msedge-r2-driver.log",
+      "sha256": "ef09ff4b074cc2e096e47670ef64eaae38d8b0d10cc9a455aaafb5bd17460986"
+    },
+    {
+      "path": "target/phase-08/browser/negative-inputs-r2.json",
+      "sha256": "1dcf6e2d9166c9f47879edf51f195c880db0d16ac3ba98506ab4e59dbb68ff96"
+    },
+    {
+      "path": "target/phase-08/browser/negative-inputs-r3.json",
+      "sha256": "b43a46f64e82968cd187b416bf6d124d018815505f085ea16cfca7017191a02d"
+    },
+    {
+      "path": "target/phase-08/browser/negative-inputs-r4.json",
+      "sha256": "ff5c07bd393060e87181f285c8c7d99e083d18d6681e7fbc2b33d285ccb1b954"
+    },
+    {
+      "path": "target/phase-08/browser/negative-inputs-r5.json",
+      "sha256": "9124c3f8b3b561630562463859c71d098116420bbaee8915d02f8ae50aaf6ba9"
+    },
+    {
+      "path": "target/phase-08/browser/negative-inputs.json",
+      "sha256": "8a4e9809b34c61a277c9cdcc86018bcfd40008571bd56046e3b4bb3456112af2"
+    },
+    {
+      "path": "target/phase-08/browser/negative-vite-observed-r2.jsonl",
+      "sha256": "2f5585036ba910ce2f6c5be3d901c5b9943df32ac85e04a96eacf5b24e1d1211"
+    },
+    {
+      "path": "target/phase-08/browser/negative-vite-observed-r3.jsonl",
+      "sha256": "d53e3749e08eecb3bee8a6b2a11877ac011f07fc17664320270b51d2b222a27f"
+    },
+    {
+      "path": "target/phase-08/browser/negative-vite-observed-r4.jsonl",
+      "sha256": "d53e3749e08eecb3bee8a6b2a11877ac011f07fc17664320270b51d2b222a27f"
+    },
+    {
+      "path": "target/phase-08/browser/negative-vite-observed-r5.jsonl",
+      "sha256": "d53e3749e08eecb3bee8a6b2a11877ac011f07fc17664320270b51d2b222a27f"
+    },
+    {
+      "path": "target/phase-08/browser/negative-vite-observed.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "target/phase-08/browser/old-host-entry-negative-r1.log",
+      "sha256": "22f1e21010151ee4e38c127e242cd262de33b5276c4b35584de7fed14cad4eaa"
+    },
+    {
+      "path": "target/phase-08/browser/old-host-entry-negative-r2.log",
+      "sha256": "190a1e949d8372bbf8c2e34b09e492ce77d1c73e96258b3bb55d9a36f15faa49"
+    },
+    {
+      "path": "target/phase-08/browser/old-host-recovery-negative-r4.log",
+      "sha256": "c6d37573b92bb05dc322acc5d2c0bc3358b3be8c4d0f6030d774c0bdd79d1c12"
+    },
+    {
+      "path": "target/phase-08/browser/old-host-recovery-negative-r5.log",
+      "sha256": "fc9698c379b929b250952323a86e4f6d6e4ed0cd1d0606a6f402ef347713aaa5"
+    },
+    {
+      "path": "target/phase-08/browser/old-sdk-work-orders-negative-r1.log",
+      "sha256": "22f1e21010151ee4e38c127e242cd262de33b5276c4b35584de7fed14cad4eaa"
+    },
+    {
+      "path": "target/phase-08/browser/old-sdk-work-orders-negative-r2.log",
+      "sha256": "673e2a0e4b552a0ede8b4f8e91384b7ce0d47d00ed82f2fad955211580619c94"
+    },
+    {
+      "path": "target/phase-08/browser/old-sdk-work-orders-negative-r3.log",
+      "sha256": "96061861e956624674b6aacc35786139b7e5d41eb2215bac88c445747ce31c96"
+    },
+    {
+      "path": "target/phase-08/browser/r1-owner-pre-stop-audit.json",
+      "sha256": "5c56e0bf1c2b39a914d73aaa6ac9f3d47f7eaac984e3b398617d20ba0ce995a9"
+    },
+    {
+      "path": "target/phase-08/browser/r1-stop-audit-from-chrome.json",
+      "sha256": "8360b0490011adc77bfc0288c55d5c65f03c55815db5c2ab03d3ac5b2c5c2b0e"
+    },
+    {
+      "path": "target/phase-08/browser/r1-stop-audit.json",
+      "sha256": "e68f9f7c7ecda6d8f0f9c7cd8f5c4013103312b84e9fa619c3690e7d481a1b8c"
+    },
+    {
+      "path": "target/phase-08/browser/r1-stop-driver.log",
+      "sha256": "0792295267b434a76697209d3fab41451b8300766d325df5c366ae120d086fe0"
+    },
+    {
+      "path": "target/phase-08/browser/r1-stop-rest-driver.log",
+      "sha256": "21a0e4f3d1fb4622bb826365b0047e596741f1bc3d49ad86aa3f049d0a12c50c"
+    },
+    {
+      "path": "target/phase-08/browser/route-and-r1-cleanup-result.json",
+      "sha256": "c26ea0f81de029aa6b1179fa0fa8eeb94f5c5f884d245f4f8a0468631897e03f"
+    },
+    {
+      "path": "target/phase-08/browser/windows-assets-r1.json",
+      "sha256": "0835781832b8c774d815fac1ce518fa71c3224c0171e525faacf425ca55825a9"
+    },
+    {
+      "path": "target/phase-08/browser/windows-assets-r2.json",
+      "sha256": "7cc2e9a62804728996e3f8eb89fe9d70ae81fe489c68dfbb403065652fe8674b"
+    },
+    {
+      "path": "target/phase-08/browser/windows-assets-r3.json",
+      "sha256": "c8c6d295b28b551c870b08dfe2f0e10339f0b3d122584dafc584cd210830ae95"
+    },
+    {
+      "path": "target/phase-08/browser/windows-build-all-r1.log",
+      "sha256": "651b831a44d94524e5b6d12fcbeab1f0158d5490f607847f5a5de8dc266e6de6"
+    },
+    {
+      "path": "target/phase-08/browser/windows-build-all-r2.log",
+      "sha256": "fe33a9030074f3cf49db4c62914530f105806c4706549d8ab22c1321902d1f96"
+    },
+    {
+      "path": "target/phase-08/browser/windows-build-all-r3.log",
+      "sha256": "a8c9b9127ed5a5e2bb20fa047eea0f2ac95c20543b2ec1b8f981f2bc6f5f182c"
+    },
+    {
+      "path": "target/phase-08/browser/windows-entry-r1.log",
+      "sha256": "63b84dfcd3d792976b57d8c79568caa49bdbd01e5944609b12bbae547501f2b0"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r1-after.json",
+      "sha256": "eba0bfa043910757324bb08c56d5e79cef803058370f59bec3fb83edc938fbdb"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r1-before.json",
+      "sha256": "eba0bfa043910757324bb08c56d5e79cef803058370f59bec3fb83edc938fbdb"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r1-driver.log",
+      "sha256": "edf76ae3c3503ac400b841b406cf537cbb7b94c8dd22223080f9857faa995d2d"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r1.log",
+      "sha256": "954d5dc750b1ab6ac3bfa42586de3aa312816d534057d8ac523b7d157a2ab6bd"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r2-after.json",
+      "sha256": "eba0bfa043910757324bb08c56d5e79cef803058370f59bec3fb83edc938fbdb"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r2-before.json",
+      "sha256": "eba0bfa043910757324bb08c56d5e79cef803058370f59bec3fb83edc938fbdb"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r2-driver.log",
+      "sha256": "bda1aa0f005297b0e8a765577c4a9dfbcdf07391ceb9ac3a4fcad411ab651fa4"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r2.log",
+      "sha256": "7f89e5cad0f3be558bb615350dbed5b16c653650e5bc0682d076eefdf0510415"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r3-after.json",
+      "sha256": "34a856759c1fd2817577485199db2c0d898ddbb24c9356bec3786821a1139c2f"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r3-before.json",
+      "sha256": "34a856759c1fd2817577485199db2c0d898ddbb24c9356bec3786821a1139c2f"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r3-driver.log",
+      "sha256": "bc7a5a07240aa3f63137e44552ef7ab1e2ebb2d6d71cdd44f8fb7537888505ea"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r3.log",
+      "sha256": "9369f3c5f4839d51d5769e1c0ba795d59f2e0b736c865d1623db18d63357c35b"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r4-after.json",
+      "sha256": "6904e0052d904c641ae696d35f979eb6b16c74e1a43297496061b6b6942d1b8d"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r4-before.json",
+      "sha256": "6904e0052d904c641ae696d35f979eb6b16c74e1a43297496061b6b6942d1b8d"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r4-driver.log",
+      "sha256": "7316b2880fd53528f5761e9936cad76d3665c9b4b13ecf8cfbde81a5fa4bc24e"
+    },
+    {
+      "path": "target/phase-08/browser/windows-full-r4.log",
+      "sha256": "33174ca33b34bc373efb3bcb1237901d42cf2f6d0b59cc4628a02c09af4a5c42"
+    },
+    {
+      "path": "target/phase-08/browser/windows-iframe-legacy-r1.log",
+      "sha256": "3d21736681d8af90eac11797474e4e37f8b90f37477ac79622623bc127da2aab"
+    },
+    {
+      "path": "target/phase-08/browser/windows-iframe-legacy-r2.log",
+      "sha256": "b8fd4236372aeb89458e6606c230734f5921648e29181e1f3e19222351e4e305"
+    },
+    {
+      "path": "target/phase-08/browser/windows-legacy-r1.log",
+      "sha256": "0fe7ef1b2a4f37c371a63dc51784753d25844fa8ec783e093deddbebd774553e"
+    },
+    {
+      "path": "target/phase-08/browser/windows-recovery-fault-r1.log",
+      "sha256": "e7985553843f3b09fe810cde46b3a365bc82fd93272317c729dfe59f2735dbea"
+    },
+    {
+      "path": "target/phase-08/browser/windows-recovery-fault-r2.log",
+      "sha256": "703dda67bec788027e98da4ff348be9f873107bc67893f4f7f796dd80f7d38f7"
+    },
+    {
+      "path": "target/phase-08/browser/windows-recovery-r1.log",
+      "sha256": "a7b79dbfebccff0f79f1c3e47dcee625c34cf08d8ae1b37d3c92ad660e92804d"
+    },
+    {
+      "path": "target/phase-08/browser/windows-recovery-r2.log",
+      "sha256": "af62c3fada738e29a17c8bf33b8b9c2ae4752970ea377409cf2041b8ceb31a48"
+    },
+    {
+      "path": "target/phase-08/browser/windows-refusal-r1.log",
+      "sha256": "3440b79c9a3a11676dd64aac619efa94d97535159e87ae896fbc9523de2bfc2d"
+    },
+    {
+      "path": "target/phase-08/browser/windows-result-r1.json",
+      "sha256": "af9230e8a0648a9a33583ed53857afebb29fc3311e4b07c83ebe649aeab5b258"
+    },
+    {
+      "path": "target/phase-08/browser/windows-result-r2.json",
+      "sha256": "3d859451472ede4647663900ca33c4ee442249ae6e3cbdfae1be50a63a9ccf8a"
+    },
+    {
+      "path": "target/phase-08/browser/windows-result-r3.json",
+      "sha256": "03f6f32a5de181363bacfb0959149225177bc88abed54fbb973007b7c7497941"
+    },
+    {
+      "path": "target/phase-08/browser/windows-result-r4.json",
+      "sha256": "730c1bd4e866bc3544be2739da7c0bb5fa8858e1dca30d55dd85840583a0b107"
+    },
+    {
+      "path": "target/phase-08/browser/windows-result-superseded-r3.json",
+      "sha256": "e7f46f143c3d73410b92be03208abe9236982ba904d0102024df0a613dcff236"
+    },
+    {
+      "path": "target/phase-08/browser/windows-result.json",
+      "sha256": "1bccf54b3a03604354fb462ff97b7a989ad65c472995b8455ef27503164b914d"
+    },
+    {
+      "path": "target/phase-08/browser/windows-route-permissions-contract-r1.log",
+      "sha256": "6fc26e0574f778e578bfad96dbf2646bacb0a57e6b408dbdccfae38287138e32"
+    },
+    {
+      "path": "target/phase-08/browser/windows-route-permissions-contract-r2.log",
+      "sha256": "a1108b1a9ae19a2e456d759f65c2650bd0a1e41818c1e2f5f24904173817611a"
+    },
+    {
+      "path": "target/phase-08/browser/windows-work-orders-r1.log",
+      "sha256": "02661b023c7b86b411ccb63c734b8830140b894350999364215db9163d605867"
+    },
+    {
+      "path": "target/phase-08/reviewer/client-display-abort-r1.json",
+      "sha256": "6b4ef474f331a7240f00d0f5345d2b9736b51fba71f16c6ba586b6872fcca607"
+    },
+    {
+      "path": "target/phase-08/reviewer/client-signal-mutation-r1.json",
+      "sha256": "1446f68e9db34f182bbe23dbdf816dc54796e614dfa7eda5a2228fbbd3734bcb"
+    },
+    {
+      "path": "target/phase-08/reviewer/final-collector-format-failure.json",
+      "sha256": "1766880d03d18fdca95a1d46d73ca0e56fd36a2dd125822c3ad41d6a12ae9358"
+    },
+    {
+      "path": "target/phase-08/reviewer/recheck-r2.json",
+      "sha256": "4fa0ef4ce9244c868f14f38bb71b2d3eb859346bc83084ad9972081b72a5b947"
+    },
+    {
+      "path": "target/phase-08/reviewer/signature-types-r1.json",
+      "sha256": "68cfe49304c583071ebeeebd95f4fcbdb5e6caaeea97898df9522483d7e7d73e"
+    },
+    {
+      "path": "target/phase-08/reviewer/trusted-signal-baseline.json",
+      "sha256": "8a2749900cc9e8046d2a224ae8ad4e42971f8737b4169437539e8cae9a97f956"
+    }
+  ],
+  "supersededFreezeEvidence": [
+    {
+      "path": "target/phase-08/freeze-1-inputs.json",
+      "sha256": "eba0bfa043910757324bb08c56d5e79cef803058370f59bec3fb83edc938fbdb"
+    },
+    {
+      "path": "target/phase-08/freeze-2-inputs.json",
+      "sha256": "34a856759c1fd2817577485199db2c0d898ddbb24c9356bec3786821a1139c2f"
+    },
+    {
+      "path": "target/phase-08/ci/policy-result-final.json",
+      "sha256": "39e4df0f8ebb3072118e94d20e51961b36f1a54c5a11f36181470ffe60d0fd1f"
+    },
+    {
+      "path": "target/phase-08/ci/policy-result-freeze2.json",
+      "sha256": "7915877d5b99d4bae0c60834946d3be27508cd2afd2dffd8d43b2b88e5a66a32"
+    }
+  ],
+  "validationDrivers": [
+    {
+      "path": "target/phase-08/collect-final.mjs",
+      "sha256": "dc93ca467f941eeb895e29c1be290bf0c14b7a4aea8e5771ea31906d36700e9d"
+    },
+    {
+      "path": "target/phase-08/verify-final.mjs",
+      "sha256": "f9cf3824a1485146e409fbb60caa53b805793ec30c73363564d3af9e5ddc8e8c"
+    },
+    {
+      "path": "target/phase-08/finalize-docs.mjs",
+      "sha256": "8b0d5b076d82782fffe36930d7e0c3021004af3594a3b22314bc2094ec4983d8"
+    },
+    {
+      "path": "target/phase-08/check-boundaries.mjs",
+      "sha256": "4d2e3242da6445b917b17628fe73f105594f9780616546ab9c1169125a265c05"
+    },
+    {
+      "path": "target/phase-08/audit-resources.mjs",
+      "sha256": "e293e48310486239735418be5dc6b9abbdf4007687a8669c2ac4581bf35ca9cc"
+    },
+    {
+      "path": "target/phase-08/run-fast-linux-r1.mjs",
+      "sha256": "9c364cfa6ab439ac6a1eed270132ec06fd8d46adb1eade25d484afc080f1f366"
+    },
+    {
+      "path": "target/phase-08/run-fast-linux-r2.mjs",
+      "sha256": "98e4402a6e66bfc4a4229f5a691b2868404302e1b1f3061e6206085a48ead972"
+    },
+    {
+      "path": "target/phase-08/run-browser-linux.mjs",
+      "sha256": "fbbba12ac51f41de2ddfa932e7a65560ae730ea1dc3e15eecd9fd6d9cbfb1760"
+    },
+    {
+      "path": "target/phase-08/browser-wrapper.mjs",
+      "sha256": "0ed2728bfe68d1f4a0d88a298548adb7ca3ebafbde42cf9507ab71a4b481571e"
+    },
+    {
+      "path": "target/phase-08/browser-ua-probe.mjs",
+      "sha256": "4b85612e30737c552aaee764cc1a1dad20155d0c41becac6bc06c788da8d22d9"
+    },
+    {
+      "path": "target/phase-08/validate-browser-traces.mjs",
+      "sha256": "972ed78fb66056d23bf28075d428b0e4b5f73e8f0001650c7d06b60617d6fa04"
+    },
+    {
+      "path": "target/phase-08/run-windows-browser.mjs",
+      "sha256": "c9ba5f67d562aac4548eb06e68d916a51b94066e9038888c06d9b4c08d28d275"
+    },
+    {
+      "path": "target/phase-08/collect-browser-matrix.mjs",
+      "sha256": "0e0cc8982c450cdca69aedef75ffd2d13ae1f78fb7f8317a9b725c453ac3873f"
+    },
+    {
+      "path": "target/phase-08/host/collect-final.mjs",
+      "sha256": "cf04f46687f2fd01b20298f465e62522837d2ea4278ce2b4f8a665622973dd8b"
+    },
+    {
+      "path": "target/phase-08/consumers/collect.mjs",
+      "sha256": "ab3b47bd04753579cf3ac49dd553938f3f692dc56caea46a7ca7fba3c9b398d4"
+    }
+  ],
+  "limitations": [
+    "A controller only cancels host-owned work and result delivery; it cannot retract issued tokens or already accepted writes.",
+    "Retry budgets are scheduled deadlines, not hard real-time guarantees. Trusted page-domain faults require a complete host reload.",
+    "Legacy applications without update preserve the active instance on theme changes and defer theme application; route/auth fallback still remounts serially.",
+    "SDK 1.0.0 is an unpublished repository candidate. Captured legacy bytes and wire versions are unchanged; old deployed static copies require a new frontend release.",
+    "Actual UI and micro application bytes use controlled API/Socket.IO fixtures. No new PostgreSQL, OCI/static-image, production HTTPS, external release or production deployment validation is claimed.",
+    "Phase7 interrupted local npm scratch remains untouched; this phase audits its own live resources and does not retry a policy-rejected deletion."
+  ]
+}

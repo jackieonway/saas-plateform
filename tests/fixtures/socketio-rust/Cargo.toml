@@ -1,0 +1,17 @@
+[package]
+name = "phase22-socketio-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Loopback-only Socket.IO protocol selection fixture, not a notification service"
+
+[dependencies]
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+socketioxide = { version = "=0.18.7", default-features = false }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "io-std", "io-util", "sync", "time"] }
+
+[dev-dependencies]
+tower = { version = "0.5", default-features = false, features = ["util"] }

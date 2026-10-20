@@ -1,4 +1,5 @@
 import * as React from "react"
+import { Link } from "react-router-dom"
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -6,6 +7,7 @@ import { zResolver } from "@/lib/form"
 import {
   Check,
   Copy,
+  Database,
   Eye,
   KeyRound,
   Loader2,
@@ -70,6 +72,7 @@ import { useSyncedKeyword } from "@/hooks/use-synced-keyword"
 import { useTableDensity, DENSITY_BODY_CLASS } from "@/hooks/use-table-density"
 import { useColumnVisibility, type ColumnDef } from "@/hooks/use-column-visibility"
 import { useAuthStore } from "@/stores/auth"
+import { useAuthorizedPaths } from "@/hooks/use-authorized-paths"
 import { usersApi } from "@/api/users"
 import { rolesApi } from "@/api/roles"
 import { tenantsApi } from "@/api/tenants"
@@ -110,6 +113,8 @@ const USER_COLUMNS: ColumnDef[] = [
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
+  const grantAccess = useAuthorizedPaths()
+  const canReadDataGrants = grantAccess.access("/system/data-grants").status === "allowed"
   const [page, setPage] = React.useState(1)
   const [size, setSize] = React.useState(10)
   // 关键字与 URL ?q= 双向同步(命令面板实体跳转预填)
@@ -595,6 +600,18 @@ export default function UsersPage() {
                   )}
                   <TableCell className="pr-5">
                     <div className="flex items-center justify-end gap-0.5">
+                      {canReadDataGrants && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button asChild variant="ghost" size="icon" className="size-8">
+                              <Link to={`/system/data-grants?userId=${encodeURIComponent(u.id)}`} aria-label={`数据授权 ${u.username}`}>
+                                <Database className="size-4" />
+                              </Link>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>直接成员数据授权</TooltipContent>
+                        </Tooltip>
+                      )}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button

@@ -10,12 +10,21 @@ pub enum AppError {
     Unauthorized(String),
     #[error("{0}")]
     Forbidden(String),
+    #[error("当前用户没有该操作权限")]
+    OperationDenied,
     #[error("{0}")]
     NotFound(String),
     #[error("{0}")]
     BadRequest(String),
     #[error("{0}")]
     Conflict(String),
+    /// Keep the existing HTTP 409/CONFLICT wire contract while conservatively
+    /// retaining an operation lease until an unknown release result is reconciled.
+    #[error("{0}")]
+    ReleaseResultUnknown(String),
+    /// Bounded authorization or dependency work could not prove a fresh result.
+    #[error("授权服务暂不可用，请稍后重试")]
+    Unavailable,
     /// 429 限流, 携带 Retry-After 秒数
     #[error("请求过于频繁，请稍后再试")]
     RateLimited(u64),
@@ -43,7 +52,13 @@ impl AppError {
 
 impl From<sqlx::Error> for AppError {
     fn from(e: sqlx::Error) -> Self {
+        if matches!(e, sqlx::Error::PoolTimedOut) {
+            return AppError::Unavailable;
+        }
         if let sqlx::Error::Database(ref db) = e {
+            if matches!(db.code().as_deref(), Some("57014" | "55P03")) {
+                return AppError::Unavailable;
+            }
             if db.code().as_deref() == Some("23505") {
                 return AppError::Conflict("数据已存在, 请检查编码/名称等唯一性字段".into());
             }
@@ -69,9 +84,12 @@ impl IntoResponse for AppError {
         let (status, code) = match &self {
             AppError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED"),
             AppError::Forbidden(_) => (StatusCode::FORBIDDEN, "FORBIDDEN"),
+            AppError::OperationDenied => (StatusCode::FORBIDDEN, "OPERATION_DENIED"),
             AppError::NotFound(_) => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
+            AppError::ReleaseResultUnknown(_) => (StatusCode::CONFLICT, "CONFLICT"),
+            AppError::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE"),
             AppError::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS"),
             AppError::Server(_) => (StatusCode::INTERNAL_SERVER_ERROR, "SERVER_ERROR"),
         };

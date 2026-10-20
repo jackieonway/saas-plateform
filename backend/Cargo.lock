@@ -345,36 +345,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "saas-platform-backend"
-version = "1.0.0"
+name = "deployment-contract"
+version = "0.1.0"
 dependencies = [
- "anyhow",
- "argon2",
- "axum",
  "base64 0.22.1",
- "chrono",
- "dotenvy",
- "flate2",
- "hex",
- "jsonwebtoken",
- "password-hash",
- "percent-encoding",
- "rand 0.8.8",
- "reqwest",
- "scraper",
  "serde",
  "serde_json",
  "sha2",
- "sqlx",
- "tar",
- "thiserror",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "zip",
+ "url",
 ]
 
 [[package]]
@@ -1324,10 +1302,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "oauth-playground-api"
+version = "1.0.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "rand 0.8.8",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "operational-telemetry"
+version = "0.1.0"
 
 [[package]]
 name = "parking"
@@ -1832,6 +1830,43 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+
+[[package]]
+name = "saas-platform-backend"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "deployment-contract",
+ "dotenvy",
+ "flate2",
+ "hex",
+ "jsonwebtoken",
+ "oauth-playground-api",
+ "operational-telemetry",
+ "password-hash",
+ "percent-encoding",
+ "rand 0.8.8",
+ "reqwest",
+ "rustix",
+ "scraper",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tar",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zip",
+]
 
 [[package]]
 name = "scopeguard"

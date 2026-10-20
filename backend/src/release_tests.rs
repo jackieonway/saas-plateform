@@ -28,6 +28,9 @@ use crate::state::AppState;
 use crate::util::hash;
 use crate::util::jwt::{self, Claims};
 
+mod zip_registration;
+mod phase31;
+
 const ENVIRONMENT: &str = "development";
 const JWT_SECRET: &str = "isolated-release-tests-only";
 
@@ -69,6 +72,10 @@ fn database_error(stage: &str, error: &sqlx::Error) -> anyhow::Error {
 
 impl TestDatabase {
     async fn create() -> Result<Self> {
+        Self::create_through(i64::MAX).await
+    }
+
+    async fn create_through(version: i64) -> Result<Self> {
         let options = test_database_options()?;
         let admin = PgPoolOptions::new()
             .max_connections(1)
@@ -99,7 +106,11 @@ impl TestDatabase {
             }
         };
         let database = Self { pool, admin, name };
-        if sqlx::migrate!("./migrations")
+        let migrations = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(sqlx::migrate!("./migrations").iter().filter(|m| m.version <= version).cloned().collect()),
+            ..sqlx::migrate::Migrator::DEFAULT
+        };
+        if migrations
             .run(&database.pool)
             .await
             .is_err()

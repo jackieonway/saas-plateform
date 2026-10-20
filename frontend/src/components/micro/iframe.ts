@@ -1,6 +1,11 @@
 import type { MicroLifecycle, MicroNotifyVariant, MicroProps, MicroMenuItem } from "./types"
+import { SDK_VERSION, MICRO_PROPS_CONTRACT_VERSION, IFRAME_PROTOCOL_VERSION,
+  assertSupportedSdkVersion } from "../../../../examples/micro-app-sdk/generated/protocol.mjs"
+import { assertBrowserCapabilities } from "../../../../examples/micro-app-sdk/src/capabilities.mjs"
 
 interface IframeOptions {
+  /** Trusted host telemetry callback; never sourced from a child message. */
+  timing?: (stage: "entry" | "ready" | "mount", durationMs: number) => void
   entryUrl: string
   appCode: string
   /** 整个挂载实例的 lifetime；组织切换或移除挂载节点前必须 abort。 */
@@ -26,6 +31,7 @@ function menuDTO(item: MicroMenuItem): MicroMenuItem {
 /** 明确字段边界，禁止附带平台会话、client secret 或函数进入子 frame。 */
 function propsDTO(props: MicroProps): PropsDTO {
   return { contractVersion: props.contractVersion, contextVersion: props.contextVersion,
+    ...(props.sdkVersion === undefined ? {} : { sdkVersion: props.sdkVersion }),
     contextEpoch: props.contextEpoch, expiresAt: props.expiresAt, tokenExpiresAt: props.tokenExpiresAt,
     appCode: props.appCode, basePath: props.basePath, routePath: props.routePath, token: props.token,
     ...(props.deploymentVersion === undefined ? {} : { deploymentVersion: props.deploymentVersion }),
@@ -117,7 +123,9 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
 
   const activate = (props: MicroProps) => {
     if (stopped || props.signal.aborted) throw abortError()
-    if (props.contractVersion !== "2.0" || props.appCode !== appCode || props.basePath !== `/micro/${appCode}` ||
+    try { if (Object.hasOwn(props, "sdkVersion")) assertSupportedSdkVersion(props.sdkVersion) }
+    catch { throw new Error("Iframe application SDK version is unsupported") }
+    if (props.contractVersion !== MICRO_PROPS_CONTRACT_VERSION || props.appCode !== appCode || props.basePath !== `/micro/${appCode}` ||
         !Number.isSafeInteger(props.contextEpoch) || props.contextEpoch <= 0 || !props.contextVersion || !props.token ||
         !Number.isFinite(deadline(props)) || deadline(props) <= Date.now() ||
         (current && props.contextEpoch < current.contextEpoch)) throw new Error("Iframe application authorization context is invalid or expired")
@@ -190,7 +198,19 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
   const receive = (event: MessageEvent) => {
     const data = event.data
     if (!data || typeof data !== "object" || data.nonce !== nonce || !usable(data.contextEpoch)) return
-    if (data.kind === "MICRO_READY" && !ready && handshake && data.appCode === appCode && data.contractVersion === "2.0") {
+    if (data.kind === "MICRO_ERROR" && !ready && handshake && data.code === "UNSUPPORTED_SDK_VERSION") {
+      dispose(new Error("Iframe application SDK version is unsupported"))
+      return
+    }
+    if (data.kind === "MICRO_READY" && !ready && handshake && data.appCode === appCode) {
+      if (data.contractVersion !== IFRAME_PROTOCOL_VERSION) {
+        dispose(new Error("Iframe application protocol version is unsupported"))
+        return
+      }
+      // Only the recorded, exact 2.0 legacy bridge omits sdkVersion. A declared
+      // SDK version must be registered; an unknown version cannot use that path.
+      try { if (Object.hasOwn(data, "sdkVersion")) assertSupportedSdkVersion(data.sdkVersion) }
+      catch { dispose(new Error("Iframe application SDK version is unsupported")); return }
       ready = true
       clearTimeout(handshake.timer)
       handshake.resolve()
@@ -230,7 +250,13 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
   return {
     name: appCode,
     mount: (target, props) => serialized(async () => {
+      const started = performance.now()
+      const timing = (stage: "entry" | "ready" | "mount", start: number) => {
+        const duration = Math.max(0, Math.min(60000, Math.round(performance.now() - start)))
+        try { options.timing?.(stage, duration) } catch { /* diagnostics cannot affect lifecycle */ }
+      }
       if (frame || mounted) throw new Error("Iframe application is already mounted")
+      assertBrowserCapabilities("host")
       activate(props)
       let url: URL
       try { url = new URL(options.entryUrl, window.location.href) }
@@ -267,9 +293,11 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
         if (transferred) { dispose(new Error("Iframe application navigated away from its connected document")); return }
         if (!usable(props.contextEpoch)) { dispose(); return }
         transferred = true
+        timing("entry", started)
         try {
           frame!.contentWindow!.postMessage({ kind: "MICRO_CONNECT", nonce, appCode,
-            contractVersion: "2.0", contextEpoch: props.contextEpoch }, "*", [channel.port2])
+            sdkVersion: SDK_VERSION, contractVersion: IFRAME_PROTOCOL_VERSION,
+            contextEpoch: props.contextEpoch }, "*", [channel.port2])
         } catch { channel.port2.close(); dispose(new Error("Iframe application handshake could not be delivered")) }
       }
       frame.onerror = () => dispose(new Error("Iframe application entry could not be loaded"))
@@ -279,7 +307,10 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
       target.replaceChildren(frame)
       try {
         await connected
+        timing("ready", started)
+        const mounting = performance.now()
         await request("MICRO_MOUNT", props)
+        timing("mount", mounting)
         mounted = true
       } catch (error) {
         if (!transferred) channel.port2.close()

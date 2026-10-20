@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>micro-vue · 微前端子应用</title>
+  <meta name="micro-app-entry" content="micro-vue">
+  <!-- Vite 构建入口。classic 脚本相对于本版本 HTML 加载，生命周期由宿主挂载。 -->
+  <script>
+    (function () {
+      // HTML 入口在主应用沙箱执行时保持主应用标题，仅独立页面读取品牌。
+      var marker = document.head.querySelector('meta[name="micro-app-entry"]');
+      if (!marker || marker.content !== 'micro-vue') return;
+      var initialTitle = document.title;
+      var controller = new AbortController();
+      var timer = window.setTimeout(function () { controller.abort(); }, 1500);
+      fetch('/api/platform/branding', { credentials: 'omit', signal: controller.signal, headers: { Accept: 'application/json' } })
+        .then(function (response) {
+          if (!response.ok) throw new Error('Branding unavailable');
+          return response.json();
+        })
+        .then(function (branding) {
+          if (branding && typeof branding.platformName === 'string' && branding.platformName.trim() && document.title === initialTitle) {
+            document.title = 'micro-vue · ' + branding.platformName.trim() + ' 微前端子应用';
+          }
+        })
+        .catch(function () {})
+        .finally(function () { window.clearTimeout(timer); });
+    })();
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="vendor/vue.global.prod.js"></script>
+  <script src="vendor/micro-sdk.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

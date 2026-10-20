@@ -1,4 +1,8 @@
-/** 业务后端专用；clientSecret 只能来自服务端配置。 */
+/**
+ * @deprecated Phase 17 已退役的 Node 后台参考，仅保留历史兼容测试行为。
+ * 新接入参考 Rust 工单授权实现；范围和迁移说明见本目录 README.md。
+ * clientSecret 只能来自服务端配置。
+ */
 export class AuthorizationError extends Error {
   constructor(status, code) {
     super(code);

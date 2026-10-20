@@ -38,7 +38,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { EmptyState, ErrorState } from "@/components/states"
-import { useAuthStore } from "@/stores/auth"
+import { captureSessionFence, useAuthStore } from "@/stores/auth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
 import { authApi } from "@/api/auth"
 import { formatDateTime, formatRelative, GENDER_LABELS } from "@/lib/format"
@@ -67,7 +67,6 @@ const LOGIN_HISTORY_PAGE_SIZE = 10
 export default function ProfilePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const logout = useAuthStore((s) => s.logout)
   const profile = useAuthStore((s) => s.profile)
   const user = profile?.user
   const displayName = user?.realName || user?.username || "用户"
@@ -81,11 +80,15 @@ export default function ProfilePage() {
   })
 
   const changeMutation = useMutation({
-    mutationFn: (v: PasswordForm) => authApi.changePassword(v.oldPassword, v.newPassword),
-    onSuccess: () => {
+    mutationFn: async (v: PasswordForm) => {
+      const sessionFence = captureSessionFence()
+      await authApi.changePassword(v.oldPassword, v.newPassword, sessionFence)
+      return sessionFence
+    },
+    onSuccess: async (sessionFence) => {
+      if (!await useAuthStore.getState().logout(sessionFence)) return
       toast.success("密码修改成功，请重新登录")
       form.reset({ oldPassword: "", newPassword: "", confirmPassword: "" })
-      logout()
       queryClient.clear()
       navigate("/login", { replace: true })
     },

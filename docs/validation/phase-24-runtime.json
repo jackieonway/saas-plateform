@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "linuxRun": "linux-r6",
+  "deliveryRun": "delivery-r5",
+  "selectedInputsSha256": "03a5eea5e0628d0a7135fcb23f656fb64594e76341faaaaafd2530bbd01db9f7",
+  "componentInputsSha256": "2efc48b954ad0815b0f3aae4aec03ef1426778ddceff681f987d4b0b17718d85",
+  "linuxInputsSha256": "890ab23d313e21b71d38d63b0481638ea3b833225d06ef91032dc7e6007b1888",
+  "liveBrowser": {
+    "schemaVersion": 1,
+    "product": "chromium",
+    "browserVersion": "156.0.8078.4",
+    "playwrightVersion": "1.64.1",
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "checks": [
+      {
+        "id": "built-dist-no-private-material",
+        "status": "PASS"
+      },
+      {
+        "id": "pkce-real-consent-callback",
+        "status": "PASS"
+      },
+      {
+        "id": "state-wrong-session-replay",
+        "status": "PASS"
+      },
+      {
+        "id": "authorization-userinfo-introspection-refresh-revoke",
+        "status": "PASS"
+      },
+      {
+        "id": "device-real-approval-and-poll",
+        "status": "PASS"
+      },
+      {
+        "id": "public-device-introspection-explicitly-unsupported",
+        "status": "PASS"
+      },
+      {
+        "id": "client-credentials-controlled-service",
+        "status": "PASS"
+      },
+      {
+        "id": "legacy-password-explicitly-enabled",
+        "status": "PASS"
+      },
+      {
+        "id": "ordinary-oauth-external-default-deny",
+        "status": "PASS"
+      },
+      {
+        "id": "app-bound-external-current-user-positive-negative",
+        "status": "PASS"
+      },
+      {
+        "id": "origin-and-verifier-endpoint-rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "browser-storage-url-response-no-private-material",
+        "status": "PASS"
+      }
+    ],
+    "approvalMode": "authenticated-platform-consent-and-device-APIs",
+    "frontendMode": "actual-built-vite-dist",
+    "externalMatrix": {
+      "ordinaryOAuth": 403,
+      "appBoundMenus": 200,
+      "appBoundRoles": 200,
+      "wrongAudience": 403
+    },
+    "screenshot": {
+      "path": "/reports/browser/live/oauth-playground.png",
+      "sha256": "b2287d2825d76012448a2faba6822c3c245c16040010570b77029b36b2268adc"
+    }
+  },
+  "liveDatabase": {
+    "consentApprovals": 1,
+    "deviceApprovals": 1,
+    "issuedClientCount": 4,
+    "rawTokensPersisted": 0,
+    "retainedPairsRevoked": true
+  },
+  "liveCleanup": {
+    "assertionsOk": true,
+    "databaseRemoved": true,
+    "poolClosed": true
+  },
+  "linuxCleanupErrors": [],
+  "linuxWslLease": {
+    "mode": "owned WSL foreground stdin lease; no global configuration changes",
+    "ready": true,
+    "stopped": true,
+    "exitCode": 0
+  },
+  "deliveryChecks": [
+    "clean-source-frontend-and-Rust-image-builds",
+    "actual-HTTPS-private-API-health",
+    "real-index-callback-and-hashed-assets",
+    "strict-404-no-store",
+    "secure-HttpOnly-host-cookie-password-disabled",
+    "wrong-Origin-rejected",
+    "auth-start-fixed-callback-S256-no-secret-or-verifier",
+    "UID10001-API-UID101-static-and-edge-no-Node-runtime",
+    "Compose-only-edge-publishes-ports",
+    "runtime-logs-no-private-secret-or-verifier"
+  ],
+  "deliveryImages": [
+    {
+      "name": "frontend",
+      "role": "candidate",
+      "tag": "phase24-1792162522323-082d787209-frontend:candidate",
+      "imageId": "sha256:2dca7dfdc9bdbf940ab139fcf15e0924945edfd3b738f433b886b9879808925d",
+      "os": "linux",
+      "architecture": "amd64",
+      "labels": {
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+        "org.opencontainers.image.created": "2026-01-26T01:42:19.722Z",
+        "org.opencontainers.image.description": "Unprivileged NGINX Dockerfiles",
+        "org.opencontainers.image.licenses": "Apache-2.0",
+        "org.opencontainers.image.revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+        "org.opencontainers.image.source": "https://github.com/nginx/docker-nginx-unprivileged",
+        "org.opencontainers.image.title": "OAuth rehearsal static frontend",
+        "org.opencontainers.image.url": "https://github.com/nginx/docker-nginx-unprivileged",
+        "org.opencontainers.image.version": "1.28.0-alpine",
+        "saas.ci.inputs-sha256": "2efc48b954ad0815b0f3aae4aec03ef1426778ddceff681f987d4b0b17718d85",
+        "saas.phase24.owner": "phase24-1792162522323-082d787209"
+      },
+      "identityMeaning": "local image ID; no registry publication"
+    },
+    {
+      "name": "api",
+      "role": "candidate",
+      "tag": "phase24-1792162522323-082d787209-api:candidate",
+      "imageId": "sha256:3d66d8f3347556bf855d6bd2e15ba14a2693bf6d74c0ae3810c48647c6de5241",
+      "os": "linux",
+      "architecture": "amd64",
+      "labels": {
+        "org.opencontainers.image.revision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+        "org.opencontainers.image.title": "OAuth rehearsal Rust flow API",
+        "saas.ci.inputs-sha256": "2efc48b954ad0815b0f3aae4aec03ef1426778ddceff681f987d4b0b17718d85",
+        "saas.phase24.owner": "phase24-1792162522323-082d787209"
+      },
+      "identityMeaning": "local image ID; no registry publication"
+    }
+  ],
+  "deliveryCleanupErrors": [],
+  "deliveryWslLease": {
+    "mode": "owned WSL foreground stdin lease; no global configuration changes",
+    "ready": true,
+    "stopped": true,
+    "exitCode": 0
+  },
+  "migrations": [
+    {
+      "path": "backend/migrations/0001_init.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0002_release_artifacts.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0003_oauth_issuance.sql",
+      "unchanged": true
+    }
+  ],
+  "componentEqualsBothValidatedSnapshots": true,
+  "phase24CoreEqualsLiveSnapshot": true,
+  "resources": {
+    "status": "PASS",
+    "resourceAudits": [
+      {
+        "run": "linux-r1",
+        "owner": "ci-1792160873054-9f10faee",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "linux-r2",
+        "owner": "ci-1792161088964-4f4e5f3d",
+        "removedVerifiedResidue": {
+          "containers": [
+            "31e49e22e3b3",
+            "600ececd3dad"
+          ],
+          "networks": [
+            "6fe907ce3230"
+          ]
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "linux-r3",
+        "owner": "ci-1792161139335-23c322e9",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "linux-r4",
+        "owner": "ci-1792161808593-0f56c003",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "linux-r5",
+        "owner": "ci-1792162183278-893db287",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "linux-r6",
+        "owner": "ci-1792162534577-153b5b50",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "delivery-r1",
+        "owner": "phase24-1792161183130-6fb92dd777",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "delivery-r2",
+        "owner": "phase24-1792161585860-ec7175a78d",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "delivery-r3",
+        "owner": "phase24-1792161660608-bc0088dd02",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "delivery-r4",
+        "owner": "phase24-1792161737067-071fcf7f61",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      },
+      {
+        "run": "delivery-r5",
+        "owner": "phase24-1792162522323-082d787209",
+        "removedVerifiedResidue": {
+          "containers": [],
+          "networks": []
+        },
+        "containers": [],
+        "networks": []
+      }
+    ],
+    "images": "Local candidate images retained as reviewed artifacts",
+    "compilerCacheVolumeRemoved": true,
+    "wslLease": {
+      "mode": "owned WSL foreground stdin lease; no global configuration changes",
+      "ready": true,
+      "stopped": true,
+      "exitCode": 0
+    }
+  },
+  "ledger": {
+    "status": "PASS",
+    "phase": 24,
+    "statusWritten": "COMPLETED",
+    "pointerUnchanged": true,
+    "pointerSha256": "f4ec98318f1de87648e631e94e0f56b59b4298fa8aaa41e8cad636315d90de4f"
+  },
+  "visualReview": {
+    "reviewed": true,
+    "artifact": "target/phase-24/linux-r6/reports/browser/live/oauth-playground.png",
+    "note": "Actual final protocol page reviewed; public fixture username only, password empty, no token or verifier displayed."
+  }
+}

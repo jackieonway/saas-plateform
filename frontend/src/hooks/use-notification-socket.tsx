@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import type { NotificationSocketContext, NotificationType } from "@/api/types"
 import { notificationsApi, type NotificationPrefs } from "@/api/notifications"
 import { cn } from "@/lib/utils"
-import { notificationRequestOptions, useNotificationContext, type NotificationContext } from "./use-notification-context"
+import { getNotificationContext, notificationRequestOptions, useNotificationContext, type NotificationContext } from "./use-notification-context"
 import { isNotificationSocketContext, isRealtimeNotification, notificationLink } from "@/lib/notification-protocol"
 export type { RealtimeNotification } from "@/api/types"
 
@@ -119,7 +119,14 @@ export function useNotificationSocket(): {
       socket.disconnect()
       for (const id of toastIds) toast.dismiss(id)
       toastIds.clear(); seenIds.clear()
-      void queryClient.cancelQueries({ queryKey: captured.key })
+      // Rejected/expired socket authentication keeps the current HTTP inbox
+      // fallback. Only a retired identity owns cancellation of its old queries.
+      if (!captured.current()) {
+        const replacement = getNotificationContext()
+        if (!replacement || captured.key.some((part, index) => replacement.key[index] !== part)) {
+          void queryClient.cancelQueries({ queryKey: captured.key })
+        }
+      }
       disconnected()
     }
     captured.signal.addEventListener("abort", stop, { once: true })

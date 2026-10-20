@@ -56,6 +56,8 @@ UNION ALL SELECT o.id, o.parent_id FROM organizations o JOIN anc ON o.id = anc.p
 pub struct AppState {
     pub pool: sqlx::PgPool,
     pub config: Arc<crate::config::Config>,
+    pub passwords: crate::util::password::PasswordService,
+    pub login_limits: Arc<crate::login_limits::LoginLimits>,
     pub map_client: reqwest::Client,
     /// 进程启动时刻 (GET /api/monitor/system 的 startedAt/uptimeSeconds 数据源)
     pub started_at: chrono::DateTime<chrono::Utc>,
@@ -65,12 +67,31 @@ pub struct AppState {
     introspection_failures: RateMap,
     introspection_attempts: RateMap,
     pub introspection_auth_slots: Arc<tokio::sync::Semaphore>,
+    pub app_authorization_slots: Arc<tokio::sync::Semaphore>,
 }
 
 impl AppState {
     pub fn new(pool: sqlx::PgPool, config: Arc<crate::config::Config>) -> Self {
+        let app_authorization_slots = Arc::new(tokio::sync::Semaphore::new(
+            config.app_authorization_max_concurrent,
+        ));
         Self {
+            app_authorization_slots,
             pool,
+            passwords: crate::util::password::PasswordService::new(
+                config.password_concurrency,
+                config.password_queue_capacity,
+                Duration::from_millis(config.password_queue_timeout_ms),
+                Duration::from_millis(config.password_execution_timeout_ms),
+            ),
+            login_limits: Arc::new(crate::login_limits::LoginLimits::new(
+                crate::login_limits::LoginLimitOptions {
+                    max_entries: config.login_max_entries,
+                    ttl: Duration::from_secs(config.login_window_seconds),
+                    source_limit: config.login_source_requests,
+                    user_failure_limit: config.login_user_failures,
+                },
+            )),
             config,
             map_client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
@@ -119,7 +140,17 @@ impl AppState {
     pub async fn require(&self, user: &CurrentUser, perm: &'static str) -> Result<(), AppError> {
         // These catalogs are global platform resources; a tenant or child
         // organization menu grant cannot turn them into scoped resources.
-        if matches!(perm, "system:oauth" | "system:settings" | "system:application" | "system:menu") {
+        if matches!(
+            perm,
+            "system:oauth"
+                | "system:settings"
+                | "system:application"
+                | "system:menu"
+                | "system:deployment:read"
+                | "system:deployment:write"
+                | "system:distribution:read"
+                | "system:distribution:write"
+        ) {
             self.require_platform(user).await?;
         }
         let perms = self.context_permissions(user).await?;
@@ -141,10 +172,18 @@ impl AppState {
             authorization::granted_menu_rows(&self.pool, user.tenant_id, user.org_id, None).await?
         } else {
             authorization::effective_menu_rows(
-                &self.pool, user.user_id, user.tenant_id, user.org_id, None,
-            ).await?
+                &self.pool,
+                user.user_id,
+                user.tenant_id,
+                user.org_id,
+                None,
+            )
+            .await?
         };
-        if rows.iter().any(|menu| menu["type"] == "MENU" && menu["path"] == path) {
+        if rows
+            .iter()
+            .any(|menu| menu["type"] == "MENU" && menu["path"] == path)
+        {
             Ok(())
         } else {
             Err(AppError::forbidden(format!("当前组织未授权菜单: {path}")))
@@ -224,11 +263,14 @@ impl AppState {
     }
 
     /// The selected context bounds global administrator permissions as well as menus.
-    pub async fn context_permissions(&self, user: &CurrentUser) -> Result<HashSet<String>, AppError> {
+    pub async fn context_permissions(
+        &self,
+        user: &CurrentUser,
+    ) -> Result<HashSet<String>, AppError> {
         if user.is_super_admin {
-            let rows = authorization::granted_menu_rows(
-                &self.pool, user.tenant_id, user.org_id, None,
-            ).await?;
+            let rows =
+                authorization::granted_menu_rows(&self.pool, user.tenant_id, user.org_id, None)
+                    .await?;
             return Ok(authorization::permissions_of(&rows));
         }
         self.permissions_of(user.user_id, user.org_id).await

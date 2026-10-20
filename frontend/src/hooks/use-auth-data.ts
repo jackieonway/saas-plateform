@@ -1,72 +1,46 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { useAuthStore } from "@/stores/auth"
-import { authApi } from "@/api/auth"
-import { asArray } from "@/lib/api"
-import { sortMenuTree } from "@/lib/tree"
-import type { MenuNode, PermissionsResp } from "@/api/types"
+import { switchPlatformContext } from "@/lib/api"
+import { authMenusQueryOptions, authPermissionsQueryOptions, authProfileQueryOptions, captureAuthSession } from "@/lib/auth-queries"
+import type { AuthQueryOptions } from "@/lib/auth-queries"
 
-export function useProfileQuery() {
-  const token = useAuthStore((s) => s.token)
-  const epoch = useAuthStore((s) => s.contextEpoch)
-  const switching = useAuthStore((s) => s.contextSwitching)
-  return useQuery({
-    queryKey: ["profile", epoch],
-    queryFn: ({ signal }) => authApi.profile(undefined, signal),
-    enabled: !!token && !switching,
-    staleTime: 20_000,
-    refetchInterval: 20_000,
-    retry: 1,
-  })
+function useAuthQuerySession() {
+  useAuthStore((s) => s.token)
+  useAuthStore((s) => s.contextEpoch)
+  useAuthStore((s) => s.contextSwitching)
+  useAuthStore((s) => s.profile)
+  return captureAuthSession()
 }
 
-export function useMenusQuery(applicationId: string | null | undefined) {
-  const token = useAuthStore((s) => s.token)
-  const epoch = useAuthStore((s) => s.contextEpoch)
-  const switching = useAuthStore((s) => s.contextSwitching)
-  return useQuery({
-    queryKey: ["auth-menus", applicationId, epoch],
-    queryFn: async ({ signal }) =>
-      sortMenuTree(asArray<MenuNode>(await authApi.menus(applicationId!, undefined, signal), "menus")),
-    enabled: !!token && !!applicationId && !switching,
-    staleTime: 20_000,
-    refetchInterval: 20_000,
-    retry: 1,
-  })
+export function useProfileQuery(options: AuthQueryOptions = {}) {
+  return useQuery(authProfileQueryOptions(useAuthQuerySession(), options))
 }
 
-export function usePermissionsQuery() {
-  const token = useAuthStore((s) => s.token)
-  const epoch = useAuthStore((s) => s.contextEpoch)
-  const switching = useAuthStore((s) => s.contextSwitching)
-  return useQuery({
-    queryKey: ["permissions", epoch],
-    queryFn: ({ signal }): Promise<PermissionsResp> => authApi.permissions(undefined, signal),
-    enabled: !!token && !switching,
-    staleTime: 20_000,
-    refetchInterval: 20_000,
-    retry: 1,
-  })
+export function useMenusQuery(applicationId: string | null | undefined, options: AuthQueryOptions = {}) {
+  return useQuery(authMenusQueryOptions(applicationId, useAuthQuerySession(), options))
 }
 
-/** 组织上下文切换:POST context(旧 session token)→ 更新 token → 全量刷新 */
-export function useSwitchContext() {
-  const queryClient = useQueryClient()
-  return async (organizationId: string) => {
-    const state = useAuthStore.getState()
-    if (state.contextSwitching) throw new Error("组织切换进行中，请稍候")
-    const token = state.token
-    if (!token) throw new Error("会话已失效，请重新登录")
-    state.beginContextSwitch()
-    const switchEpoch = useAuthStore.getState().contextEpoch
-    try {
-      await queryClient.cancelQueries()
-      queryClient.clear()
-      const resp = await authApi.switchContext(organizationId, token)
-      if (useAuthStore.getState().contextEpoch !== switchEpoch) throw new Error("会话已变化，请重试")
-      useAuthStore.getState().setSession(resp.accessToken, resp.refreshToken)
-      return resp
-    } finally {
-      if (useAuthStore.getState().contextEpoch === switchEpoch) useAuthStore.getState().endContextSwitch()
-    }
+export function usePermissionsQuery(options: AuthQueryOptions = {}) {
+  return useQuery(authPermissionsQueryOptions(useAuthQuerySession(), options))
+}
+
+/** Observers and imperative navigation consume exactly the same menu options. */
+export function useApplicationMenusQueries(options: AuthQueryOptions & { applicationIds?: readonly string[] } = {}) {
+  const session = useAuthQuerySession()
+  const profile = useAuthStore((s) => s.profile)
+  const apps = (profile?.applications ?? []).filter(app => !options.applicationIds || options.applicationIds.includes(app.id))
+  const queries = useQueries({
+    queries: apps.map(app => authMenusQueryOptions(app.id, session, options)),
+  })
+  return {
+    profile,
+    epoch: session.epoch,
+    switching: session.switching,
+    queries: queries.map((query, index) => ({ ...query, applicationId: apps[index].id })),
   }
+}
+
+/** Refresh, old-view retirement and context replacement share one cross-page transaction. */
+export function useSwitchContext() {
+  return (organizationId: string) => switchPlatformContext(organizationId)
 }

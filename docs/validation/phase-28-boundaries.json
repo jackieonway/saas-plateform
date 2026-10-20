@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "phase": 28,
+  "status": "PASS",
+  "checkedAt": "2026-10-18T23:43:36.989Z",
+  "source": {
+    "candidateFile": "target/phase-28/inputs-candidate-r1.json",
+    "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+    "inputsSha256": "f77df330f956da2d9bcb5ec96a5ae6fe617dc752f15267be565c3033d3be05c5",
+    "fileCount": 839
+  },
+  "approvalFile": "target/phase-28/approved-source-paths-r1.json",
+  "changedFromStart": [
+    ".github/README.md",
+    ".github/workflows/business-publish.yml",
+    ".github/workflows/production-build.yml",
+    "business-apps/stores/backend/Dockerfile",
+    "business-apps/work-orders/backend/Dockerfile",
+    "deploy/README.md",
+    "deploy/compose.business-ca.yml",
+    "deploy/compose.business.env.example",
+    "deploy/compose.business.yml",
+    "deploy/microapps/Dockerfile",
+    "deploy/microapps/Dockerfile.api-runtime",
+    "deploy/microapps/README.md",
+    "deploy/microapps/build-static.mjs",
+    "deploy/microapps/gateway.example.json",
+    "deploy/microapps/pull-start.sh",
+    "deploy/microapps/render-static.mjs",
+    "deploy/microapps/tests/static-config.mjs",
+    "frontend/src/api/applications.ts",
+    "frontend/src/api/types.ts",
+    "frontend/src/pages/system/applications/ApplicationReleasesPanel.tsx",
+    "frontend/src/pages/system/applications/ExternalReleaseForm.tsx",
+    "frontend/src/pages/system/applications/external-release-policy.ts",
+    "scripts/ci/README.md",
+    "scripts/ci/business-delivery-results.mjs",
+    "scripts/ci/business-delivery-results.test.mjs",
+    "scripts/ci/business-delivery.mjs",
+    "scripts/ci/business-images-publish.mjs",
+    "scripts/ci/business-images.mjs",
+    "scripts/ci/manifest.mjs",
+    "scripts/ci/provenance.mjs",
+    "scripts/ci/report.mjs",
+    "scripts/ci/run.mjs",
+    "scripts/ci/workflow-policy.mjs",
+    "tests/application-release-policy.mjs",
+    "tests/business-images-policy.mjs",
+    "tests/helpers/phase28-delivery-services.mjs",
+    "tests/micro-host-browser.mjs",
+    "tests/phase28-ci-policy.mjs",
+    "tests/phase28-delivery-browser.mjs",
+    "tests/phase28-delivery-fixture-contract.mjs",
+    "tests/platform-admin-contract.mjs",
+    "tools/platform-admin/README.md",
+    "tools/platform-admin/manifests/artifact.manifest.example.json",
+    "tools/platform-admin/schemas/artifact.schema.json",
+    "tools/platform-admin/schemas/release.schema.json",
+    "tools/platform-admin/src/artifact.rs",
+    "tools/platform-admin/src/lib.rs",
+    "tools/platform-admin/src/options.rs",
+    "tools/platform-admin/src/release.rs",
+    "tools/platform-admin/tests/artifacts.rs"
+  ],
+  "checks": [
+    {
+      "id": "same-source-host-and-frozen-physical-selector",
+      "result": "PASS"
+    },
+    {
+      "id": "explicit-reviewed-phase28-change-list",
+      "result": "PASS"
+    },
+    {
+      "id": "119-historical-formal-files-preserved",
+      "result": "PASS"
+    },
+    {
+      "id": "in-progress-ledger-preserved",
+      "result": "PASS"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "target/phase-28/start.json",
+      "bytes": 21332,
+      "sha256": "936c06022b77fcdfd3139a2cf6f5ab93e9214eac228730731037a373d6bd9473"
+    },
+    {
+      "path": "target/phase-28/observed-start-inputs.json",
+      "bytes": 141442,
+      "sha256": "da1a882c3750e3a94f0a53b95d86ac114d4b2dca3ef7d15b192365c7e978b5fa"
+    },
+    {
+      "path": "target/phase-28/ledger-before.md",
+      "bytes": 216709,
+      "sha256": "19e490afdb0f0604a7c1e4bae8c458e40d2b0cb6bde5e9e77f1f0bb4fe7daac8"
+    },
+    {
+      "path": "target/phase-28/capture-source.mjs",
+      "bytes": 7298,
+      "sha256": "10e5aab87aad01bbfbc06ff74e890ff324ebd435aa9605eee261374008e9730a"
+    },
+    {
+      "path": "target/phase-28/approved-source-paths-r1.json",
+      "bytes": 4018,
+      "sha256": "7b4dfb9419f70b93779b15b5e82e251de1cd391c69feec241fcb7b17241c78b1"
+    },
+    {
+      "path": "target/phase-28/inputs-candidate-r1.json",
+      "bytes": 147142,
+      "sha256": "1cc5151b143a8a2b0c6d2dc6e23fd3b1b943b474111ceda589a31ba944be1035"
+    }
+  ],
+  "artifactsSha256": "fcf97c0369ba2819ed7d70712f13d00f18b6df0375f7cbccf6c27e5f439e47e4"
+}

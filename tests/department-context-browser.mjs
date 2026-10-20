@@ -1,38 +1,23 @@
 /**
  * Department management context regression through the production React page.
- * Vite and an existing Chromium/Edge run real selectors/forms; HTTP fixtures
- * isolate persistence. Run with Node 24. No backend or browser install is needed.
+ * Vite and the project-managed browser runner exercise real selectors/forms;
+ * HTTP fixtures isolate persistence. Install tests/browser prerequisites first.
  */
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
-import { createRequire } from "node:module"
 import net from "node:net"
-import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { launchBrowser } from "./browser/runtime.mjs"
+import { waitState } from "./browser/wait.mjs"
 
-const require = createRequire(import.meta.url)
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const bundledNode = path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node")
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || path.join(bundledNode, "node_modules/playwright"))
-assert(Number(process.versions.node.split(".")[0]) >= 20, "Run this script with Node 24.")
-const browserExecutable = process.env.BROWSER_EXECUTABLE || [chromium.executablePath(),
-  path.join(process.env["ProgramFiles(x86)"] || "C:/Program Files (x86)", "Microsoft/Edge/Application/msedge.exe"),
-  path.join(process.env.ProgramFiles || "C:/Program Files", "Microsoft/Edge/Application/msedge.exe"),
-].find(existsSync)
-assert(browserExecutable, "Existing Chromium or Edge is required; this test does not install browsers.")
-const bindHost = process.env.DEPARTMENT_CONTEXT_BROWSER_BIND || "::1"
+const bindHost = process.env.DEPARTMENT_CONTEXT_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const deferred = () => {
   let release
   const promise = new Promise((resolve) => { release = resolve })
   return { promise, release }
-}
-async function waitState(predicate, message, timeout = 12_000) {
-  const deadline = Date.now() + timeout
-  while (!(await predicate()) && Date.now() < deadline) await pause(25)
-  assert(await predicate(), message)
 }
 const freePort = () => new Promise((resolve, reject) => {
   const server = net.createServer().on("error", reject)
@@ -108,7 +93,7 @@ async function fixture(options = {}) {
   Object.assign(state.departments.get(currentA.id), options.departments)
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript((token) => {
-    localStorage.setItem("platform-token", token)
+    if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: token, refreshToken: null }))
     localStorage.setItem("platform-theme", "light")
   }, sessions[0].token)
   await context.routeWebSocket(() => true, () => {})
@@ -119,11 +104,12 @@ async function fixture(options = {}) {
     assert.match(body, appImport, "Mount the production department page from the real Vite entry.")
     body = body.replace(appImport, 'import App from "/src/pages/system/departments/DepartmentsPage.tsx"')
     body = body.replace("ReactDOM.createRoot", `import { authStore } from "/src/stores/auth.ts";
-      authStore.setState({ profile: ${JSON.stringify(options.noProfile ? null : sessions[0].profile)} });
+      await authStore.getState().initializeSessionCoordination();
+      authStore.getState().setProfile(${JSON.stringify(options.noProfile ? null : sessions[0].profile)});
       window.__departmentFixture = {
         refreshProfile: (profile) => authStore.getState().setProfile(profile),
         beginSwitch: () => authStore.getState().beginContextSwitch(),
-        finishSwitch: (profile, token) => authStore.setState({ profile, token, contextSwitching: false }),
+        finishSwitch: async (profile, token) => { await authStore.getState().setSession(token); authStore.getState().setProfile(profile); },
         invalidateOrganizations: () => queryClient.invalidateQueries({ queryKey: ["department-organizations"] }),
         invalidateDepartments: () => queryClient.invalidateQueries({ queryKey: ["dept-tree"] }),
       };
@@ -255,7 +241,7 @@ async function settleBrowser(f) {
 
 try {
   await startServer()
-  browser = await chromium.launch({ headless: true, executablePath: browserExecutable, args: ["--no-proxy-server"] })
+  browser = await launchBrowser()
 
   await withFixture("nested login organization defaults immediately; only descendants are selectable", {}, async (f) => {
     await selected(f, currentA)
@@ -390,8 +376,11 @@ try {
     await selected(f, currentA)
     await f.page.getByText("下级组织加载失败，当前登录组织的部门仍可管理。", { exact: true }).waitFor()
     assert(departmentRequests(f).every((request) => request.params.organizationId === currentA.id))
+    const retried = f.page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/departments/organizations' && response.request().method() === 'GET' && response.status() === 200)
     delete f.state.organizations.get(sessions[0].token).error
     await f.page.getByRole("button", { name: /重试/ }).click()
+    await retried
     await waitState(async () => !(await picker(f).isDisabled()), "Organization retry should restore available choices.")
     await selectOrganization(f, childA)
   })

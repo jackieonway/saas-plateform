@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "applicationCode": "work-orders",
+  "publicOrigin": "https://platform.example.com",
+  "source": {
+    "kind": "OCI_IMAGE",
+    "identity": "REPLACE_WITH_VERIFIED_REGISTRY_REPOSITORY_AND_MANIFEST_DIGEST",
+    "targetPlatform": "linux/amd64"
+  },
+  "digest": "REPLACE_WITH_VERIFIED_DISTRIBUTION_MANIFEST_DIGEST",
+  "commit": "REPLACE_WITH_FULL_SOURCE_COMMIT",
+  "buildId": "REPLACE_WITH_BUILD_ID",
+  "inputsSha256": "REPLACE_WITH_ACTUAL_SOURCE_INPUTS_SHA256"
+}

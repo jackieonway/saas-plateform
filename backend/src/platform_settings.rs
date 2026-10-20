@@ -1,7 +1,7 @@
 //! Persisted public branding and platform administration settings.
 
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::error::AppError;
 
@@ -221,18 +221,29 @@ impl SettingsUpdate {
 }
 
 pub(crate) async fn update_settings(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     body: SettingsUpdate,
-) -> Result<PlatformSettings, AppError> {
+) -> Result<(PlatformSettings, PlatformSettings), AppError> {
     let body = body.normalize()?;
-    let mut tx = pool.begin().await?;
     // Keep the real tenant name and branding in one transaction. Lock the tenant
     // first to serialize settings saves with ordinary tenant edits.
+    sqlx::query("SELECT id FROM tenants WHERE is_platform FOR UPDATE")
+        .execute(&mut **tx)
+        .await?;
+    let before: SettingsRow = sqlx::query_as(
+        "SELECT s.platform_name, s.platform_description, s.logo_url, s.login_title, \
+         s.login_description, s.footer_text, s.primary_color, t.name AS platform_tenant_name, \
+         t.code AS platform_tenant_code FROM platform_settings s \
+         JOIN tenants t ON t.is_platform WHERE s.singleton = true FOR UPDATE OF s",
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| AppError::not_found("平台设置或平台租户不存在"))?;
     let (platform_tenant_name, platform_tenant_code): (String, String) = sqlx::query_as(
         "UPDATE tenants SET name = $1, updated_at = now() WHERE is_platform RETURNING name, code",
     )
     .bind(body.platform_tenant_name)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| AppError::not_found("平台租户不存在"))?;
     let branding = sqlx::query_as(
@@ -248,14 +259,16 @@ pub(crate) async fn update_settings(
     .bind(body.login_description)
     .bind(body.footer_text)
     .bind(body.primary_color)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await?;
-    tx.commit().await?;
-    Ok(PlatformSettings {
-        branding,
-        platform_tenant_name,
-        platform_tenant_code,
-    })
+    Ok((
+        before.into(),
+        PlatformSettings {
+            branding,
+            platform_tenant_name,
+            platform_tenant_code,
+        },
+    ))
 }
 
 #[cfg(test)]

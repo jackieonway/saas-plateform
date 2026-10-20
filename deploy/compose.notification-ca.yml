@@ -1,0 +1,14 @@
+# Optional private-CA overlay, only when the public platform certificate is
+# issued by an operator-controlled CA. Standard hostname and chain verification
+# remain enabled. Never supply a TLS private key or disable verification.
+# Merge after compose.notification.yml and use --profile notification.
+services:
+  notification-ws:
+    environment:
+      NOTIFICATION_PLATFORM_CA_FILE: /etc/rust-saas/platform-ca.pem
+    volumes:
+      - type: bind
+        source: ${NOTIFICATION_PLATFORM_CA_FILE:?Set the existing absolute CA certificate PEM path}
+        target: /etc/rust-saas/platform-ca.pem
+        read_only: true
+        bind: {create_host_path: false}

@@ -1,0 +1,3 @@
+# Retired Node work-orders deployment. This compatibility filename adds no services.
+# Use deploy/compose.business.yml and the verified Rust images.
+services: {}

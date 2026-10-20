@@ -1,4 +1,6 @@
-import { api, qs } from "@/lib/api"
+import { api, logoutPlatformSession, qs, switchPlatformContext } from "@/lib/api"
+import { capturePlatformSessionFence } from "@/stores/auth"
+import type { SessionFence } from "@/stores/auth"
 import type {
   ContextResp,
   LoginHistoryPage,
@@ -18,20 +20,28 @@ export const authApi = {
     api.post<ContextResp>("/api/auth/context", { organizationId, userId }, { bearer: ticket, suppress401: true }),
 
   /** 已登录会话中切换组织 */
-  switchContext: (organizationId: string, token: string) =>
-    api.post<ContextResp>("/api/auth/context", { organizationId }, { bearer: token, suppress401: true }),
+  switchContext: (organizationId: string, token: string) => {
+    const sessionFence = capturePlatformSessionFence(token)
+    return switchPlatformContext(organizationId, sessionFence)
+  },
 
-  profile: (bearer?: string, signal?: AbortSignal) => api.get<ProfileResp>("/api/auth/profile", { bearer, signal }),
+  profile: (bearer?: string, signal?: AbortSignal) => api.get<ProfileResp>("/api/auth/profile", {
+    bearer, signal, sessionFence: bearer === undefined ? undefined : capturePlatformSessionFence(bearer),
+  }),
 
   menus: (applicationId: string, bearer?: string, signal?: AbortSignal) =>
-    api.get<unknown>(`/api/auth/menus?applicationId=${encodeURIComponent(applicationId)}`, { bearer, signal }),
+    api.get<unknown>(`/api/auth/menus?applicationId=${encodeURIComponent(applicationId)}`, {
+      bearer, signal, sessionFence: bearer === undefined ? undefined : capturePlatformSessionFence(bearer),
+    }),
 
-  permissions: (bearer?: string, signal?: AbortSignal) => api.get<PermissionsResp>("/api/auth/permissions", { bearer, signal }),
+  permissions: (bearer?: string, signal?: AbortSignal) => api.get<PermissionsResp>("/api/auth/permissions", {
+    bearer, signal, sessionFence: bearer === undefined ? undefined : capturePlatformSessionFence(bearer),
+  }),
 
-  logout: () => api.post<{ ok: boolean }>("/api/auth/logout"),
+  logout: async () => ({ ok: await logoutPlatformSession() }),
 
-  changePassword: (oldPassword: string, newPassword: string) =>
-    api.put<{ ok: boolean }>("/api/auth/password", { oldPassword, newPassword }),
+  changePassword: (oldPassword: string, newPassword: string, sessionFence?: SessionFence) =>
+    api.put<{ ok: boolean }>("/api/auth/password", { oldPassword, newPassword }, { sessionFence }),
 
   /** 本人登录历史(安全中心时间线, 含 LOGIN / LOGIN_FAILED) */
   loginHistory: (params: { page?: number; size?: number } = {}) =>

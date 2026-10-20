@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::util::{hash, jwt::Claims};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct AppTokenInfo {
     pub user_id: Uuid,
     pub client_id: String,

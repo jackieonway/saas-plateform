@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "sourceRevision": "32956c4532bbd6eff53584fd0f5e9bb6e188437c",
+  "before": {
+    "files": 505,
+    "inputsSha256": "9b016ace67d06993c31f31de8f622db1b52ed21548b9c0f9a84951bc5821684c"
+  },
+  "after": {
+    "files": 506,
+    "inputsSha256": "582d2759e38c06f62ea609bb9b0debfe634e3415cde6617cb604f401bccec9ab"
+  },
+  "changed": [
+    {
+      "path": "backend/src/main.rs",
+      "kind": "modified",
+      "before": "f7f2cd9b6aa32347d6d59cc946d4a146229059dd0088013e9efe891c464e9484",
+      "after": "41ec07fc6739f121f36c709efc23ca6a0fafa525e525e0f62468c95be16ad6fe"
+    },
+    {
+      "path": "backend/src/management_audit_tests.rs",
+      "kind": "added",
+      "before": null,
+      "after": "68834869c365f06ad2dea3b1c09b726b53db63eec2c3bd4ca07e522604db6199"
+    },
+    {
+      "path": "backend/src/notifications.rs",
+      "kind": "modified",
+      "before": "e68ce81262f2182476e83e2cd7da00127061be4b61c6382d9a914e720956c6ad",
+      "after": "b4df9dd5e6b05303ecb5c51b7c92d021690081d2c5a21e99b8648111de246917"
+    },
+    {
+      "path": "backend/src/observability.rs",
+      "kind": "modified",
+      "before": "ea330b1ec5813cf5862e3652a4143aee455f4d72b49e8d64144c0065450f80ec",
+      "after": "cd7a2890843de9fe03a30a89962ff3630c09ed1c6c4fe1676513b65a1f93e8d7"
+    },
+    {
+      "path": "backend/src/platform_settings.rs",
+      "kind": "modified",
+      "before": "f5d4356ff0cd8369ca7d2524698abda3b51a8963843461d22c0c431242c5b5ef",
+      "after": "73e9fcdd50a8ba5c72419c9a315cb425bdd1f75f07d557ba8965175d795605e1"
+    },
+    {
+      "path": "backend/src/routes/application_releases.rs",
+      "kind": "modified",
+      "before": "913dde572975d4559bf85b35ad8eb54e6aa10713cff05cda915aa3e2ae8dfb91",
+      "after": "b89e91f0655c41c4ebe9346dba97692201c2e3a857ecc80fcd9dc88387625101"
+    },
+    {
+      "path": "backend/src/routes/applications.rs",
+      "kind": "modified",
+      "before": "15ae089ed37c5eba408c02ca25b6865394882d30d34710f282a39f7747a4f5da",
+      "after": "a375e69ae32d2949923ccc590959c3ab1efba06bea626b4ebf491bbe8f00c909"
+    },
+    {
+      "path": "backend/src/routes/auth.rs",
+      "kind": "modified",
+      "before": "17653126129a15fdeda573d01c0876024054051d17d2b78820416a9a93e4fa64",
+      "after": "841ae220bdef7c3014613bdac4f2e5a0f62eabdaf164689a52a197eec2d48d36"
+    },
+    {
+      "path": "backend/src/routes/departments.rs",
+      "kind": "modified",
+      "before": "f217d29eea6709d537c26b9a8e3ee9d72f9b03cfcbbd248fd1c9d1574491dd08",
+      "after": "a94ef881af667b32f61c0f372ef39ae249daa533063cd5fb8a6dde62303185d6"
+    },
+    {
+      "path": "backend/src/routes/device.rs",
+      "kind": "modified",
+      "before": "68009f5db312419827f7f4992f368e3526867b7355caf3676cc85c5fae0e4e9b",
+      "after": "8acdf3698049c0adaa77b3e46a46ebcf62c5dd6920797e1747991818fbe6e555"
+    },
+    {
+      "path": "backend/src/routes/menus.rs",
+      "kind": "modified",
+      "before": "8b9cc2aa669669ed83774b9d9ab066585e09e4d59b8a08dc6f1232788991f1a8",
+      "after": "0c04cab0278ffd5d05657e55b625e878880681f8a964031d720437e4764e64ed"
+    },
+    {
+      "path": "backend/src/routes/oauth_admin.rs",
+      "kind": "modified",
+      "before": "619bf5bf9782b93750651f66543d0bf7959ddc67a1f64376e1e1992d0359670d",
+      "after": "95e2c3c68a20706d47044f179760f8e2a5383b14fcc9e90f8daf41f931bf84f5"
+    },
+    {
+      "path": "backend/src/routes/oauth2.rs",
+      "kind": "modified",
+      "before": "18f1a86fa0f29137785a703de9cb13baf6bc017b03df14f2c689d1669daf0495",
+      "after": "fdb908b56ecaed8e44c48ba284b79e500938d4dfced0a2eb8fbab7fa40aa7672"
+    },
+    {
+      "path": "backend/src/routes/onboarding.rs",
+      "kind": "modified",
+      "before": "1bbf3d4ee09c0075bf37a8d5a937b0432bde384c55c1d035766a6fcb26beeda0",
+      "after": "e80c9e4696a1fdad19ab87297a9563f91a70b062406ae2ed7fc34237293047fa"
+    },
+    {
+      "path": "backend/src/routes/organizations.rs",
+      "kind": "modified",
+      "before": "5407b39b6edcd156f9d2ada036a07acb09d6d97c83bd1f7bbb79b488107f2688",
+      "after": "51cdcec63648519382e9261a1f731b5a32f826adb2cfdd47e54dcb609357bb9c"
+    },
+    {
+      "path": "backend/src/routes/platform_settings.rs",
+      "kind": "modified",
+      "before": "a7af45d91df8014f408bd8af5add7ba81c0cb553999682dd6f9901b81196c3a4",
+      "after": "c381d91b907d770fdf0b1159af7a02bdbcf0956f433fd4e39648f01e5acbeeb9"
+    },
+    {
+      "path": "backend/src/routes/roles.rs",
+      "kind": "modified",
+      "before": "daa1511175425a5feb74879dc033cdf096ecd73cae63e2303a88455e56efb280",
+      "after": "adf79191fb9f15fcf068a0d6aa81c3f395e057750a426e22a652bff4adb2cbb2"
+    },
+    {
+      "path": "backend/src/routes/tenants.rs",
+      "kind": "modified",
+      "before": "4f4e332e17c0e65bbb75abe4e6cb77f777143371c3d9c05ce70b090f40fb308a",
+      "after": "1bd46c7e2bddf1f1e9f23e400ba4aeb77124cd8b2ed3402b12ec0e44885b49da"
+    },
+    {
+      "path": "backend/src/routes/users.rs",
+      "kind": "modified",
+      "before": "2ab37ac656711e2fe29f70d3f8778c75c23706e75882036d60b45082b6d531d9",
+      "after": "06fbb716f5d7283537947e72b8c473506a20e79940535ec474fb3ae53b1bb7fb"
+    },
+    {
+      "path": "backend/src/session.rs",
+      "kind": "modified",
+      "before": "77a6e3e332facd60eddde5f0914ce08ba1882fdd3d519e0345bb0f6bd8200303",
+      "after": "709b016f3af872579b9d07a183071609515c6b59b0a036110f669554f85e5653"
+    },
+    {
+      "path": "backend/src/util/audit.rs",
+      "kind": "modified",
+      "before": "f069a22af77fe609d5b5703b56fe865e9fb4fcee231ba1367a5245ac07fe819c",
+      "after": "53555061963a2e53f5c7ca2c2385d920126d6a9b058ec9d4983d9835850f1382"
+    },
+    {
+      "path": "deploy/ci/README.md",
+      "kind": "modified",
+      "before": "c32be45c427a81667247abdbef731a76bf15e475afe22115505327d27c84b25c",
+      "after": "159f75987df0bd32e08a7d6e51874617620562698411ef4f520ea05c0171615a"
+    },
+    {
+      "path": "scripts/ci/manifest.mjs",
+      "kind": "modified",
+      "before": "5a63ae5191560f8b09680c71bd9196f335d84737369cb622e98110049c157117",
+      "after": "2c57ef7b7cc1762c0b4158b0bc7b6ad893499e91d8063e718b8127b3ea7347e7"
+    },
+    {
+      "path": "scripts/ci/postgres.test.mjs",
+      "kind": "modified",
+      "before": "0d7e6de941ef76134cde897a7f462ccfe453e0c99883aa38b2a4b84dea0c3a97",
+      "after": "6545a18f60a562c5ec3d66b94279fba17bc5a77ad47190354e6d70762913bc33"
+    },
+    {
+      "path": "scripts/ci/README.md",
+      "kind": "modified",
+      "before": "251d56acf0a1fd921bd3c799e267c513b00f67b58925bd477e46f2f70dc0b016",
+      "after": "caaa03b787fbc319042a8cbc584eec91221f55eb95cd4d0b1514a0787f91e850"
+    },
+    {
+      "path": "tests/ci-runner.mjs",
+      "kind": "modified",
+      "before": "f77bf00d75346ca78ba03faa0a4fb1846046c4de680866bf6031dee000904cf7",
+      "after": "e907219e47833d6ea0903866b36d9938e64720884e4ece353da9eb59a0bc2935"
+    }
+  ],
+  "removed": [],
+  "protected": [
+    "Executed migrations 0001/0002/0003",
+    "Cargo dependencies and locks",
+    "ordinary OAuth issuer storage/consumption module",
+    "app token protocol module",
+    "psr implementation apart from removing unused autocommit revoke_one wrapper",
+    "Phase12 password/limiter/proxy configuration and services",
+    "source snapshot allowlist",
+    "frontend/SDK/business consumer inputs"
+  ],
+  "history": [
+    {
+      "path": "docs/validation/phase-12.md",
+      "sha256": "e4dc6940843e24de166cb354c1b181bf142ba30a274cce3fecf6af465456af0d",
+      "meaning": "Historical Phase12 execution-time evidence preserved; its references to subsequently edited current files are not recursively revalidated as Phase13 evidence."
+    },
+    {
+      "path": "docs/validation/phase-12-inputs.json",
+      "sha256": "4ec7b534b52872aca9e28abc462b828d9a44f7a8515070c2e733674750aec6ff",
+      "meaning": "Historical Phase12 execution-time evidence preserved; its references to subsequently edited current files are not recursively revalidated as Phase13 evidence."
+    },
+    {
+      "path": "docs/validation/phase-12-runtime.json",
+      "sha256": "13522399f14e9880a3ed344fa0e10d651992a93d23b53c932bf37f30a132184f",
+      "meaning": "Historical Phase12 execution-time evidence preserved; its references to subsequently edited current files are not recursively revalidated as Phase13 evidence."
+    },
+    {
+      "path": "docs/validation/phase-12-boundaries.json",
+      "sha256": "bcf4344018f614378f72ca5ae1e787d3d2ecd492d4b42a4d2a09a7c9701f6f0a",
+      "meaning": "Historical Phase12 execution-time evidence preserved; its references to subsequently edited current files are not recursively revalidated as Phase13 evidence."
+    },
+    {
+      "path": "docs/validation/phase-12-ledger-update.md",
+      "sha256": "72635e838da471fb795130a1c2307451dafcc46f9412f2743c9c9b5fe052fb0b",
+      "meaning": "Historical Phase12 execution-time evidence preserved; its references to subsequently edited current files are not recursively revalidated as Phase13 evidence."
+    }
+  ],
+  "ledgerUpdateAuthorized": true,
+  "ledgerBeforeExecution": {
+    "path": "target/phase-13/ledger-before-execution.md",
+    "sha256": "9ab9be52116926281689c9ab05ca42e749c6b926be76112f5768ceb019435f8d"
+  },
+  "scopeExpansion": "Existing management/security call-chain audit integration only, including menu/department/application/settings, consent/device/revoke/app-token persistence and onboarding lock compatibility. No new grants API, token policy, dependency or migration."
+}

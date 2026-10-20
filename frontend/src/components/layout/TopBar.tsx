@@ -44,7 +44,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuthStore } from "@/stores/auth"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
-import { useMenusQuery, usePermissionsQuery, useSwitchContext } from "@/hooks/use-auth-data"
+import { useMenusQuery, useSwitchContext } from "@/hooks/use-auth-data"
+import { useApplicationNavigation } from "@/hooks/use-application-navigation"
 import { useNotificationSocket } from "@/hooks/use-notification-socket"
 import {
   notificationRequestOptions,
@@ -52,7 +53,7 @@ import {
   type NotificationContext,
 } from "@/hooks/use-notification-context"
 import { notificationsApi } from "@/api/notifications"
-import { authApi } from "@/api/auth"
+import { logoutPlatformSession } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { formatRelative } from "@/lib/format"
 import { routeTitle } from "@/lib/routes"
@@ -234,7 +235,7 @@ function NotificationBell({
   /** 免打扰开启时的偏好数据 (undefined = 未开启或未加载) */
   dndPrefs?: { dndStart: string; dndEnd: string }
 }) {
-  const navigate = useNavigate()
+  const { navigateTo: navigate, access } = useApplicationNavigation()
   const queryClient = useQueryClient()
   const countQuery = useQuery({
     queryKey: [...(scope?.key ?? ["notifications", "inactive"]), "unread-count"],
@@ -300,10 +301,7 @@ function NotificationBell({
         })
         .catch(() => undefined)
     }
-    if (n.link) {
-      setOpen(false)
-      navigate(n.link)
-    }
+    if (n.link && navigate(n.link)) setOpen(false)
   }
 
   return (
@@ -458,7 +456,7 @@ function NotificationBell({
           onClick={() => {
             if (!scope?.current()) return
             setOpen(false)
-            navigate("/system/notifications")
+            if (access("/system/notifications").status === "allowed") navigate("/system/notifications")
           }}
         >
           查看全部通知
@@ -525,8 +523,7 @@ export function auditActionTone(action: string): string {
 function OrgContextChip() {
   const profile = useAuthStore((s) => s.profile)
   const switchContext = useSwitchContext()
-  const navigate = useNavigate()
-  const permissionsQuery = usePermissionsQuery()
+  const { navigateTo: navigate, access } = useApplicationNavigation()
   const mutation = useMutation({
     mutationFn: (orgId: string) => switchContext(orgId),
     onSuccess: () => toast.success("已切换组织上下文"),
@@ -537,9 +534,7 @@ function OrgContextChip() {
 
   /* 「管理组织」入口按权限显隐: 所有账号均按组织有效权限判断; 权限未就绪按无权限处理(防按钮闪现),
      其余需 system:organization(与 Task 15 permsReady 门控模式同款) */
-  const permissions = new Set(permissionsQuery.data?.permissions ?? [])
-  const permsReady = permissionsQuery.isSuccess || permissionsQuery.isError
-  const canManageOrgs = permsReady && permissions.has("system:organization")
+  const canManageOrgs = access("/system/organizations").status === "allowed"
 
   return (
     <Popover>
@@ -636,25 +631,22 @@ function OrgContextChip() {
 
 function UserMenu() {
   const profile = useAuthStore((s) => s.profile)
-  const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
+  const { navigateTo } = useApplicationNavigation()
   const queryClient = useQueryClient()
 
   const user = profile?.user
   const displayName = user?.realName || user?.username || "用户"
 
   const handleLogout = async () => {
-    let serverRevoked = true
     try {
-      await authApi.logout()
-    } catch {
-      serverRevoked = false
+      if (!await logoutPlatformSession()) return
+      queryClient.clear()
+      toast.success("已退出登录")
+      navigate("/login", { replace: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "退出结果尚未确认，请重新登录")
     }
-    logout()
-    queryClient.clear()
-    if (serverRevoked) toast.success("已退出登录")
-    else toast.warning("本机已退出，服务端会话撤销未确认")
-    navigate("/login", { replace: true })
   }
 
   return (
@@ -685,11 +677,11 @@ function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate("/profile")}>
+        <DropdownMenuItem onClick={() => navigateTo("/profile")}>
           <UserCog className="size-4" />
           个人中心
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/profile#password")}>
+        <DropdownMenuItem onClick={() => navigateTo("/profile#password")}>
           <KeyRound className="size-4" />
           修改密码
         </DropdownMenuItem>

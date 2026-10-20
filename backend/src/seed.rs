@@ -253,6 +253,35 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
             grant_tenant_menu(&mut tx, tenant, button).await?;
             grant_org_menu(&mut tx, root, button).await?;
         }
+        if permission == "system:application" {
+            for (title, code, order) in [
+                ("查看镜像部署", "system:deployment:read", 20),
+                ("管理镜像部署", "system:deployment:write", 21),
+                ("查看ZIP分发", "system:distribution:read", 22),
+                ("管理ZIP分发", "system:distribution:write", 23),
+            ] {
+                let button = insert_menu(
+                    &mut tx,
+                    system,
+                    Some(menu),
+                    "BUTTON",
+                    title,
+                    "",
+                    "",
+                    "",
+                    code,
+                    order,
+                    false,
+                )
+                .await?;
+                grant_role_menu(&mut tx, role, button).await?;
+                grant_tenant_menu(&mut tx, tenant, button).await?;
+                grant_org_menu(&mut tx, root, button).await?;
+            }
+        }
+        if permission == "system:authorization" {
+            initialize_data_grant_permissions(&mut tx, system, menu, tenant, root, role).await?;
+        }
     }
     tx.commit().await?;
     tracing::info!(
@@ -288,36 +317,404 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let hermes = insert_app(&mut tx, "hermes", "消息中心", "MessageSquare", "/hermes", 3).await?;
 
     // ===== system 菜单树 =====
-    let dashboard = insert_menu(&mut tx, sys, None, "MENU", "仪表盘", "/dashboard", "Gauge", "", "dashboard:view", 1, true).await?;
-    let org_dir = insert_menu(&mut tx, sys, None, "DIR", "组织机构", "", "Building2", "", "", 2, true).await?;
-    let tenant_mgmt = insert_menu(&mut tx, sys, Some(org_dir), "MENU", "租户管理", "/system/tenants", "Building", "", "system:tenant", 1, true).await?;
-    let tenant_auth_btn = insert_menu(&mut tx, sys, Some(tenant_mgmt), "BUTTON", "授权", "", "", "", "system:tenant:auth", 1, false).await?;
-    let org_mgmt = insert_menu(&mut tx, sys, Some(org_dir), "MENU", "组织管理", "/system/organizations", "Network", "", "system:organization", 2, true).await?;
-    let dept_mgmt = insert_menu(&mut tx, sys, Some(org_dir), "MENU", "部门管理", "/system/departments", "FolderTree", "", "system:department", 3, true).await?;
-    let authz_mgmt = insert_menu(&mut tx, sys, Some(org_dir), "MENU", "授权管理", "/system/authorizations", "ShieldCheck", "", "system:authorization", 4, true).await?;
-    let ur_dir = insert_menu(&mut tx, sys, None, "DIR", "用户与角色", "", "Users", "", "", 3, true).await?;
-    let user_mgmt = insert_menu(&mut tx, sys, Some(ur_dir), "MENU", "用户管理", "/system/users", "User", "", "system:user", 1, true).await?;
-    let role_mgmt = insert_menu(&mut tx, sys, Some(ur_dir), "MENU", "角色管理", "/system/roles", "Shield", "", "system:role", 2, true).await?;
-    let cfg_dir = insert_menu(&mut tx, sys, None, "DIR", "平台配置", "", "Settings", "", "", 4, true).await?;
-    let app_mgmt = insert_menu(&mut tx, sys, Some(cfg_dir), "MENU", "应用管理", "/system/applications", "Grid3x3", "", "system:application", 1, true).await?;
-    let menu_mgmt = insert_menu(&mut tx, sys, Some(cfg_dir), "MENU", "菜单管理", "/system/menus", "ListTree", "", "system:menu", 2, true).await?;
-    let platform_settings = insert_menu(&mut tx, sys, Some(cfg_dir), "MENU", "平台设置", "/system/settings", "Settings", "", "system:settings", 3, true).await?;
-    let open_dir = insert_menu(&mut tx, sys, None, "DIR", "开放平台", "", "KeyRound", "", "", 5, true).await?;
-    let oauth_clients_menu = insert_menu(&mut tx, sys, Some(open_dir), "MENU", "OAuth 客户端", "/system/oauth/clients", "Key", "", "system:oauth", 1, true).await?;
-    let device_session_menu = insert_menu(&mut tx, sys, Some(open_dir), "MENU", "设备与会话", "/system/oauth/tokens", "MonitorSmartphone", "", "system:oauth", 2, true).await?;
-    let audit_menu = insert_menu(&mut tx, sys, Some(open_dir), "MENU", "审计日志", "/system/audit-logs", "ScrollText", "", "system:audit", 3, true).await?;
-    let monitor_menu = insert_menu(&mut tx, sys, Some(open_dir), "MENU", "平台监控", "/system/monitor", "Activity", "", "system:monitor", 4, true).await?;
+    let dashboard = insert_menu(
+        &mut tx,
+        sys,
+        None,
+        "MENU",
+        "仪表盘",
+        "/dashboard",
+        "Gauge",
+        "",
+        "dashboard:view",
+        1,
+        true,
+    )
+    .await?;
+    let org_dir = insert_menu(
+        &mut tx,
+        sys,
+        None,
+        "DIR",
+        "组织机构",
+        "",
+        "Building2",
+        "",
+        "",
+        2,
+        true,
+    )
+    .await?;
+    let tenant_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(org_dir),
+        "MENU",
+        "租户管理",
+        "/system/tenants",
+        "Building",
+        "",
+        "system:tenant",
+        1,
+        true,
+    )
+    .await?;
+    let tenant_auth_btn = insert_menu(
+        &mut tx,
+        sys,
+        Some(tenant_mgmt),
+        "BUTTON",
+        "授权",
+        "",
+        "",
+        "",
+        "system:tenant:auth",
+        1,
+        false,
+    )
+    .await?;
+    let org_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(org_dir),
+        "MENU",
+        "组织管理",
+        "/system/organizations",
+        "Network",
+        "",
+        "system:organization",
+        2,
+        true,
+    )
+    .await?;
+    let dept_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(org_dir),
+        "MENU",
+        "部门管理",
+        "/system/departments",
+        "FolderTree",
+        "",
+        "system:department",
+        3,
+        true,
+    )
+    .await?;
+    let authz_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(org_dir),
+        "MENU",
+        "授权管理",
+        "/system/authorizations",
+        "ShieldCheck",
+        "",
+        "system:authorization",
+        4,
+        true,
+    )
+    .await?;
+    let ur_dir = insert_menu(
+        &mut tx,
+        sys,
+        None,
+        "DIR",
+        "用户与角色",
+        "",
+        "Users",
+        "",
+        "",
+        3,
+        true,
+    )
+    .await?;
+    let user_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(ur_dir),
+        "MENU",
+        "用户管理",
+        "/system/users",
+        "User",
+        "",
+        "system:user",
+        1,
+        true,
+    )
+    .await?;
+    let role_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(ur_dir),
+        "MENU",
+        "角色管理",
+        "/system/roles",
+        "Shield",
+        "",
+        "system:role",
+        2,
+        true,
+    )
+    .await?;
+    let cfg_dir = insert_menu(
+        &mut tx,
+        sys,
+        None,
+        "DIR",
+        "平台配置",
+        "",
+        "Settings",
+        "",
+        "",
+        4,
+        true,
+    )
+    .await?;
+    let app_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(cfg_dir),
+        "MENU",
+        "应用管理",
+        "/system/applications",
+        "Grid3x3",
+        "",
+        "system:application",
+        1,
+        true,
+    )
+    .await?;
+    let deployment_read = insert_menu(
+        &mut tx,
+        sys,
+        Some(app_mgmt),
+        "BUTTON",
+        "查看镜像部署",
+        "",
+        "",
+        "",
+        "system:deployment:read",
+        20,
+        false,
+    )
+    .await?;
+    let deployment_write = insert_menu(
+        &mut tx,
+        sys,
+        Some(app_mgmt),
+        "BUTTON",
+        "管理镜像部署",
+        "",
+        "",
+        "",
+        "system:deployment:write",
+        21,
+        false,
+    )
+    .await?;
+    let distribution_read = insert_menu(&mut tx, sys, Some(app_mgmt), "BUTTON", "查看ZIP分发", "", "", "", "system:distribution:read", 22, false).await?;
+    let distribution_write = insert_menu(&mut tx, sys, Some(app_mgmt), "BUTTON", "管理ZIP分发", "", "", "", "system:distribution:write", 23, false).await?;
+    let menu_mgmt = insert_menu(
+        &mut tx,
+        sys,
+        Some(cfg_dir),
+        "MENU",
+        "菜单管理",
+        "/system/menus",
+        "ListTree",
+        "",
+        "system:menu",
+        2,
+        true,
+    )
+    .await?;
+    let platform_settings = insert_menu(
+        &mut tx,
+        sys,
+        Some(cfg_dir),
+        "MENU",
+        "平台设置",
+        "/system/settings",
+        "Settings",
+        "",
+        "system:settings",
+        3,
+        true,
+    )
+    .await?;
+    let open_dir = insert_menu(
+        &mut tx,
+        sys,
+        None,
+        "DIR",
+        "开放平台",
+        "",
+        "KeyRound",
+        "",
+        "",
+        5,
+        true,
+    )
+    .await?;
+    let oauth_clients_menu = insert_menu(
+        &mut tx,
+        sys,
+        Some(open_dir),
+        "MENU",
+        "OAuth 客户端",
+        "/system/oauth/clients",
+        "Key",
+        "",
+        "system:oauth",
+        1,
+        true,
+    )
+    .await?;
+    let device_session_menu = insert_menu(
+        &mut tx,
+        sys,
+        Some(open_dir),
+        "MENU",
+        "设备与会话",
+        "/system/oauth/tokens",
+        "MonitorSmartphone",
+        "",
+        "system:oauth",
+        2,
+        true,
+    )
+    .await?;
+    let audit_menu = insert_menu(
+        &mut tx,
+        sys,
+        Some(open_dir),
+        "MENU",
+        "审计日志",
+        "/system/audit-logs",
+        "ScrollText",
+        "",
+        "system:audit",
+        3,
+        true,
+    )
+    .await?;
+    let monitor_menu = insert_menu(
+        &mut tx,
+        sys,
+        Some(open_dir),
+        "MENU",
+        "平台监控",
+        "/system/monitor",
+        "Activity",
+        "",
+        "system:monitor",
+        4,
+        true,
+    )
+    .await?;
 
     // ===== athena 菜单树 =====
-    let a_overview = insert_menu(&mut tx, athena, None, "MENU", "数据概览", "/athena/overview", "PieChart", "", "athena:overview", 1, true).await?;
-    let a_reports_dir = insert_menu(&mut tx, athena, None, "DIR", "报表中心", "", "FileBarChart", "", "", 2, true).await?;
-    let a_sales = insert_menu(&mut tx, athena, Some(a_reports_dir), "MENU", "销售报表", "/athena/reports/sales", "TrendingUp", "", "athena:report:sales", 1, true).await?;
-    let a_ops = insert_menu(&mut tx, athena, Some(a_reports_dir), "MENU", "运营报表", "/athena/reports/operations", "LineChart", "", "athena:report:operations", 2, true).await?;
-    let a_sources = insert_menu(&mut tx, athena, None, "MENU", "数据源管理", "/athena/sources", "Database", "", "athena:source", 3, true).await?;
+    let a_overview = insert_menu(
+        &mut tx,
+        athena,
+        None,
+        "MENU",
+        "数据概览",
+        "/athena/overview",
+        "PieChart",
+        "",
+        "athena:overview",
+        1,
+        true,
+    )
+    .await?;
+    let a_reports_dir = insert_menu(
+        &mut tx,
+        athena,
+        None,
+        "DIR",
+        "报表中心",
+        "",
+        "FileBarChart",
+        "",
+        "",
+        2,
+        true,
+    )
+    .await?;
+    let a_sales = insert_menu(
+        &mut tx,
+        athena,
+        Some(a_reports_dir),
+        "MENU",
+        "销售报表",
+        "/athena/reports/sales",
+        "TrendingUp",
+        "",
+        "athena:report:sales",
+        1,
+        true,
+    )
+    .await?;
+    let a_ops = insert_menu(
+        &mut tx,
+        athena,
+        Some(a_reports_dir),
+        "MENU",
+        "运营报表",
+        "/athena/reports/operations",
+        "LineChart",
+        "",
+        "athena:report:operations",
+        2,
+        true,
+    )
+    .await?;
+    let a_sources = insert_menu(
+        &mut tx,
+        athena,
+        None,
+        "MENU",
+        "数据源管理",
+        "/athena/sources",
+        "Database",
+        "",
+        "athena:source",
+        3,
+        true,
+    )
+    .await?;
 
     // ===== hermes 菜单树 =====
-    let h_inbox = insert_menu(&mut tx, hermes, None, "MENU", "收件箱", "/hermes/inbox", "Inbox", "", "hermes:inbox", 1, true).await?;
-    let h_notify = insert_menu(&mut tx, hermes, None, "MENU", "通知设置", "/hermes/notifications", "Bell", "", "hermes:notification", 2, true).await?;
+    let h_inbox = insert_menu(
+        &mut tx,
+        hermes,
+        None,
+        "MENU",
+        "收件箱",
+        "/hermes/inbox",
+        "Inbox",
+        "",
+        "hermes:inbox",
+        1,
+        true,
+    )
+    .await?;
+    let h_notify = insert_menu(
+        &mut tx,
+        hermes,
+        None,
+        "MENU",
+        "通知设置",
+        "/hermes/notifications",
+        "Bell",
+        "",
+        "hermes:notification",
+        2,
+        true,
+    )
+    .await?;
 
     // ===== 组织树 =====
     let root = insert_org(&mut tx, tenant, None, "总公司", "HQ", 1, "平台总部组织").await?;
@@ -336,11 +733,61 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let _delivery1 = insert_dept(&mut tx, east, None, "交付一组", "DLV1", 1).await?;
 
     // ===== 用户 (密码 Argon2 现算) =====
-    let admin = insert_user(&mut tx, "admin", "admin123", "超级管理员", "admin@example.test", "", "UNKNOWN", true).await?;
-    let zhangsan = insert_user(&mut tx, "zhangsan", "Zs@12345", "张三", "zhangsan@example.test", "13800000001", "MALE", false).await?;
-    let lisi = insert_user(&mut tx, "lisi", "Ls@12345", "李四", "lisi@example.test", "13800000002", "FEMALE", false).await?;
-    let wangwu = insert_user(&mut tx, "wangwu", "Ww@12345", "王五", "wangwu@example.test", "13800000003", "MALE", false).await?;
-    let tianqi = insert_user(&mut tx, "tianqi", "Tq@12345", "田七", "tianqi@example.test", "13800000004", "MALE", false).await?;
+    let admin = insert_user(
+        &mut tx,
+        "admin",
+        "admin123",
+        "超级管理员",
+        "admin@example.test",
+        "",
+        "UNKNOWN",
+        true,
+    )
+    .await?;
+    let zhangsan = insert_user(
+        &mut tx,
+        "zhangsan",
+        "Zs@12345",
+        "张三",
+        "zhangsan@example.test",
+        "13800000001",
+        "MALE",
+        false,
+    )
+    .await?;
+    let lisi = insert_user(
+        &mut tx,
+        "lisi",
+        "Ls@12345",
+        "李四",
+        "lisi@example.test",
+        "13800000002",
+        "FEMALE",
+        false,
+    )
+    .await?;
+    let wangwu = insert_user(
+        &mut tx,
+        "wangwu",
+        "Ww@12345",
+        "王五",
+        "wangwu@example.test",
+        "13800000003",
+        "MALE",
+        false,
+    )
+    .await?;
+    let tianqi = insert_user(
+        &mut tx,
+        "tianqi",
+        "Tq@12345",
+        "田七",
+        "tianqi@example.test",
+        "13800000004",
+        "MALE",
+        false,
+    )
+    .await?;
 
     // ===== 成员关系 =====
     insert_membership(&mut tx, admin, root, Some(rd_dept), "超级管理员").await?;
@@ -351,23 +798,88 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     insert_membership(&mut tx, tianqi, shanghai, None, "职员").await?;
 
     // ===== 角色 =====
-    let super_role = insert_role(&mut tx, tenant, root, "超级管理员", "super_admin", "平台内置超管角色, 拥有全部菜单", true).await?;
-    let org_admin_role = insert_role(&mut tx, tenant, east, "超级管理员", "org_admin", "华东区分公司超级管理员", false).await?;
-    let common_role = insert_role(&mut tx, tenant, root, "普通用户", "common_user", "普通用户基础菜单", false).await?;
+    let super_role = insert_role(
+        &mut tx,
+        tenant,
+        root,
+        "超级管理员",
+        "super_admin",
+        "平台内置超管角色, 拥有全部菜单",
+        true,
+    )
+    .await?;
+    let org_admin_role = insert_role(
+        &mut tx,
+        tenant,
+        east,
+        "超级管理员",
+        "org_admin",
+        "华东区分公司超级管理员",
+        false,
+    )
+    .await?;
+    let common_role = insert_role(
+        &mut tx,
+        tenant,
+        root,
+        "普通用户",
+        "common_user",
+        "普通用户基础菜单",
+        false,
+    )
+    .await?;
+    initialize_data_grant_permissions(&mut tx, sys, authz_mgmt, tenant, root, super_role).await?;
 
     // ===== 角色菜单 =====
     for m in [
-        dashboard, org_dir, tenant_mgmt, tenant_auth_btn, org_mgmt, dept_mgmt, authz_mgmt,
-        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, platform_settings, open_dir,
-        oauth_clients_menu, device_session_menu, audit_menu, monitor_menu,
-        a_overview, a_reports_dir, a_sales, a_ops, a_sources, h_inbox, h_notify,
+        dashboard,
+        org_dir,
+        tenant_mgmt,
+        tenant_auth_btn,
+        org_mgmt,
+        dept_mgmt,
+        authz_mgmt,
+        ur_dir,
+        user_mgmt,
+        role_mgmt,
+        cfg_dir,
+        app_mgmt,
+        deployment_read,
+        deployment_write,
+        distribution_read,
+        distribution_write,
+        menu_mgmt,
+        platform_settings,
+        open_dir,
+        oauth_clients_menu,
+        device_session_menu,
+        audit_menu,
+        monitor_menu,
+        a_overview,
+        a_reports_dir,
+        a_sales,
+        a_ops,
+        a_sources,
+        h_inbox,
+        h_notify,
     ] {
         grant_role_menu(&mut tx, super_role, m).await?;
     }
-    for m in [dashboard, org_dir, org_mgmt, dept_mgmt, authz_mgmt, ur_dir, user_mgmt, role_mgmt] {
+    for m in [
+        dashboard, org_dir, org_mgmt, dept_mgmt, authz_mgmt, ur_dir, user_mgmt, role_mgmt,
+    ] {
         grant_role_menu(&mut tx, org_admin_role, m).await?;
     }
-    for m in [dashboard, a_overview, a_reports_dir, a_sales, a_ops, a_sources, h_inbox, h_notify] {
+    for m in [
+        dashboard,
+        a_overview,
+        a_reports_dir,
+        a_sales,
+        a_ops,
+        a_sources,
+        h_inbox,
+        h_notify,
+    ] {
         grant_role_menu(&mut tx, common_role, m).await?;
     }
 
@@ -383,10 +895,36 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         grant_tenant_app(&mut tx, tenant, a).await?;
     }
     for m in [
-        dashboard, org_dir, tenant_mgmt, tenant_auth_btn, org_mgmt, dept_mgmt, authz_mgmt,
-        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, platform_settings, open_dir,
-        oauth_clients_menu, device_session_menu, audit_menu, monitor_menu,
-        a_overview, a_reports_dir, a_sales, a_ops, a_sources, h_inbox, h_notify,
+        dashboard,
+        org_dir,
+        tenant_mgmt,
+        tenant_auth_btn,
+        org_mgmt,
+        dept_mgmt,
+        authz_mgmt,
+        ur_dir,
+        user_mgmt,
+        role_mgmt,
+        cfg_dir,
+        app_mgmt,
+        deployment_read,
+        deployment_write,
+        distribution_read,
+        distribution_write,
+        menu_mgmt,
+        platform_settings,
+        open_dir,
+        oauth_clients_menu,
+        device_session_menu,
+        audit_menu,
+        monitor_menu,
+        a_overview,
+        a_reports_dir,
+        a_sales,
+        a_ops,
+        a_sources,
+        h_inbox,
+        h_notify,
     ] {
         grant_tenant_menu(&mut tx, tenant, m).await?;
     }
@@ -397,10 +935,36 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         grant_org_app(&mut tx, root, a).await?;
     }
     for m in [
-        dashboard, org_dir, tenant_mgmt, tenant_auth_btn, org_mgmt, dept_mgmt, authz_mgmt,
-        ur_dir, user_mgmt, role_mgmt, cfg_dir, app_mgmt, menu_mgmt, platform_settings, open_dir,
-        oauth_clients_menu, device_session_menu, audit_menu, monitor_menu,
-        a_overview, a_reports_dir, a_sales, a_ops, a_sources, h_inbox, h_notify,
+        dashboard,
+        org_dir,
+        tenant_mgmt,
+        tenant_auth_btn,
+        org_mgmt,
+        dept_mgmt,
+        authz_mgmt,
+        ur_dir,
+        user_mgmt,
+        role_mgmt,
+        cfg_dir,
+        app_mgmt,
+        deployment_read,
+        deployment_write,
+        distribution_read,
+        distribution_write,
+        menu_mgmt,
+        platform_settings,
+        open_dir,
+        oauth_clients_menu,
+        device_session_menu,
+        audit_menu,
+        monitor_menu,
+        a_overview,
+        a_reports_dir,
+        a_sales,
+        a_ops,
+        a_sources,
+        h_inbox,
+        h_notify,
     ] {
         grant_org_menu(&mut tx, root, m).await?;
     }
@@ -408,7 +972,9 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     for a in [sys, athena, hermes] {
         grant_org_app(&mut tx, east, a).await?;
     }
-    for m in [dashboard, org_dir, org_mgmt, dept_mgmt, authz_mgmt, ur_dir, user_mgmt, role_mgmt] {
+    for m in [
+        dashboard, org_dir, org_mgmt, dept_mgmt, authz_mgmt, ur_dir, user_mgmt, role_mgmt,
+    ] {
         grant_org_menu(&mut tx, east, m).await?;
     }
     for m in [a_overview, a_reports_dir, a_sales, a_ops, a_sources] {
@@ -447,14 +1013,33 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     )
     .await?;
     let star_root = insert_org(&mut tx, star, None, "星辰集团", "STAR", 1, "星辰制造总部").await?;
-    let chenjiu = insert_user(&mut tx, "chenjiu", "Cj@12345", "陈九", "chenjiu@star-mfg.example", "13900000009", "MALE", false).await?;
+    let chenjiu = insert_user(
+        &mut tx,
+        "chenjiu",
+        "Cj@12345",
+        "陈九",
+        "chenjiu@star-mfg.example",
+        "13900000009",
+        "MALE",
+        false,
+    )
+    .await?;
     insert_membership(&mut tx, chenjiu, star_root, None, "超级管理员").await?;
     let star_admin = insert_role(
-        &mut tx, star, star_root, "超级管理员", "star_admin",
-        "星辰制造超级管理员: 本租户内组织/用户/角色管理", false,
-    ).await?;
+        &mut tx,
+        star,
+        star_root,
+        "超级管理员",
+        "star_admin",
+        "星辰制造超级管理员: 本租户内组织/用户/角色管理",
+        false,
+    )
+    .await?;
     // 角色菜单/租户授权/组织授权三网同口径: system 管理子集 + 消息中心
-    let star_menus = [dashboard, org_dir, org_mgmt, dept_mgmt, authz_mgmt, ur_dir, user_mgmt, role_mgmt, h_inbox, h_notify];
+    let star_menus = [
+        dashboard, org_dir, org_mgmt, dept_mgmt, authz_mgmt, ur_dir, user_mgmt, role_mgmt, h_inbox,
+        h_notify,
+    ];
     for m in star_menus {
         grant_role_menu(&mut tx, star_admin, m).await?;
     }
@@ -469,23 +1054,66 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     }
 
     // ===== OAuth 客户端 (secret 存 SHA-256) =====
-    insert_client(&mut tx, "platform-web", Some("platform-web-secret"), "Web 控制台",
-        "Web 应用演示客户端 (授权码 + PKCE)", "CONFIDENTIAL",
+    insert_client(
+        &mut tx,
+        "platform-web",
+        Some("platform-web-secret"),
+        "Web 控制台",
+        "Web 应用演示客户端 (授权码 + PKCE)",
+        "CONFIDENTIAL",
         "https://oauthdebugger.com/callback,http://localhost:9000/callback",
-        "authorization_code,refresh_token", "profile,email", 7200, 604800).await?;
-    insert_client(&mut tx, "smart-tv", None, "智能电视",
-        "设备码流程演示客户端 (RFC 8628)", "PUBLIC",
-        "", "urn:ietf:params:oauth:grant-type:device_code,refresh_token", "profile", 7200, 604800).await?;
-    insert_client(&mut tx, "api-service", Some("api-service-secret"), "API 服务",
-        "服务间调用客户端 (client_credentials)", "CONFIDENTIAL",
-        "", "client_credentials", "profile", 7200, 604800).await?;
-    insert_client(&mut tx, "resource-portal", Some("resource-portal-secret"), "资源门户",
-        "资源密码模式演示客户端 (password)", "CONFIDENTIAL",
-        "http://localhost:9000/callback", "authorization_code,password,refresh_token", "profile,email", 7200, 604800).await?;
+        "authorization_code,refresh_token",
+        "profile,email",
+        7200,
+        604800,
+    )
+    .await?;
+    insert_client(
+        &mut tx,
+        "smart-tv",
+        None,
+        "智能电视",
+        "设备码流程演示客户端 (RFC 8628)",
+        "PUBLIC",
+        "",
+        "urn:ietf:params:oauth:grant-type:device_code,refresh_token",
+        "profile",
+        7200,
+        604800,
+    )
+    .await?;
+    insert_client(
+        &mut tx,
+        "api-service",
+        Some("api-service-secret"),
+        "API 服务",
+        "服务间调用客户端 (client_credentials)",
+        "CONFIDENTIAL",
+        "",
+        "client_credentials",
+        "profile",
+        7200,
+        604800,
+    )
+    .await?;
+    insert_client(
+        &mut tx,
+        "resource-portal",
+        Some("resource-portal-secret"),
+        "资源门户",
+        "资源密码模式演示客户端 (password)",
+        "CONFIDENTIAL",
+        "http://localhost:9000/callback",
+        "authorization_code,password,refresh_token",
+        "profile,email",
+        7200,
+        604800,
+    )
+    .await?;
 
     tx.commit().await?;
     tracing::info!(
-        "种子数据写入完成: 2 租户(含 1 平台租户) / 3 应用 / 26 菜单 / 7 组织 / 6 部门 / 6 用户 / 4 角色 / 4 OAuth 客户端"
+        "种子数据写入完成: 2 租户(含 1 平台租户) / 3 应用 / 29 菜单 / 7 组织 / 6 部门 / 6 用户 / 4 角色 / 4 OAuth 客户端"
     );
     Ok(())
 }
@@ -494,8 +1122,71 @@ async fn scalar_uuid(tx: &mut Transaction<'_, Postgres>, sql: &str) -> anyhow::R
     Ok(sqlx::query_scalar(sql).fetch_one(&mut **tx).await?)
 }
 
+/// Called only by fresh bootstrap. Existing installations must register and
+/// authorize these independent permissions through explicit management actions.
+async fn initialize_data_grant_permissions(
+    tx: &mut Transaction<'_, Postgres>,
+    system: Uuid,
+    parent: Uuid,
+    tenant: Uuid,
+    root: Uuid,
+    administrator_role: Uuid,
+) -> anyhow::Result<()> {
+    for (sort, (title, permission)) in [
+        ("查询数据授权", "system:data-grant:read"),
+        ("维护数据授权", "system:data-grant:write"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let button = insert_menu(
+            tx,
+            system,
+            Some(parent),
+            "BUTTON",
+            title,
+            "",
+            "",
+            "",
+            permission,
+            sort as i32 + 1,
+            false,
+        )
+        .await?;
+        grant_role_menu(tx, administrator_role, button).await?;
+        grant_tenant_menu(tx, tenant, button).await?;
+        grant_org_menu(tx, root, button).await?;
+    }
+    // A separate root MENU lets grant readers reach the page without acquiring
+    // broad user/application/authorization management permissions. The existing
+    // two independent BUTTON registrations remain unchanged.
+    let page = insert_menu(
+        tx,
+        system,
+        None,
+        "MENU",
+        "数据授权",
+        "/system/data-grants",
+        "ShieldCheck",
+        "",
+        "system:data-grant:read",
+        20,
+        true,
+    )
+    .await?;
+    grant_role_menu(tx, administrator_role, page).await?;
+    grant_tenant_menu(tx, tenant, page).await?;
+    grant_org_menu(tx, root, page).await?;
+    Ok(())
+}
+
 async fn insert_app(
-    tx: &mut Transaction<'_, Postgres>, code: &str, name: &str, icon: &str, base_path: &str, sort: i32,
+    tx: &mut Transaction<'_, Postgres>,
+    code: &str,
+    name: &str,
+    icon: &str,
+    base_path: &str,
+    sort: i32,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
         "INSERT INTO applications (code, name, icon, base_path, sort_order) VALUES ($1, $2, $3, $4, $5) RETURNING id",
@@ -511,8 +1202,17 @@ async fn insert_app(
 
 #[allow(clippy::too_many_arguments)]
 async fn insert_menu(
-    tx: &mut Transaction<'_, Postgres>, app: Uuid, parent: Option<Uuid>, mtype: &str, title: &str,
-    path: &str, icon: &str, component: &str, permission: &str, sort: i32, visible: bool,
+    tx: &mut Transaction<'_, Postgres>,
+    app: Uuid,
+    parent: Option<Uuid>,
+    mtype: &str,
+    title: &str,
+    path: &str,
+    icon: &str,
+    component: &str,
+    permission: &str,
+    sort: i32,
+    visible: bool,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
         "INSERT INTO menus (application_id, parent_id, type, title, path, component, icon, permission, sort_order, visible) \
@@ -533,7 +1233,13 @@ async fn insert_menu(
 }
 
 async fn insert_org(
-    tx: &mut Transaction<'_, Postgres>, tenant: Uuid, parent: Option<Uuid>, name: &str, code: &str, sort: i32, desc: &str,
+    tx: &mut Transaction<'_, Postgres>,
+    tenant: Uuid,
+    parent: Option<Uuid>,
+    name: &str,
+    code: &str,
+    sort: i32,
+    desc: &str,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
         "INSERT INTO organizations (tenant_id, parent_id, name, code, sort_order, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
@@ -549,7 +1255,12 @@ async fn insert_org(
 }
 
 async fn insert_dept(
-    tx: &mut Transaction<'_, Postgres>, org: Uuid, parent: Option<Uuid>, name: &str, code: &str, sort: i32,
+    tx: &mut Transaction<'_, Postgres>,
+    org: Uuid,
+    parent: Option<Uuid>,
+    name: &str,
+    code: &str,
+    sort: i32,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
         "INSERT INTO departments (organization_id, parent_id, name, code, sort_order) VALUES ($1, $2, $3, $4, $5) RETURNING id",
@@ -565,8 +1276,14 @@ async fn insert_dept(
 
 #[allow(clippy::too_many_arguments)]
 async fn insert_user(
-    tx: &mut Transaction<'_, Postgres>, username: &str, password: &str, real_name: &str,
-    email: &str, phone: &str, gender: &str, is_super: bool,
+    tx: &mut Transaction<'_, Postgres>,
+    username: &str,
+    password: &str,
+    real_name: &str,
+    email: &str,
+    phone: &str,
+    gender: &str,
+    is_super: bool,
 ) -> anyhow::Result<Uuid> {
     let hash = password::hash_password(password)?;
     Ok(sqlx::query_scalar(
@@ -585,7 +1302,11 @@ async fn insert_user(
 }
 
 async fn insert_membership(
-    tx: &mut Transaction<'_, Postgres>, user: Uuid, org: Uuid, dept: Option<Uuid>, position: &str,
+    tx: &mut Transaction<'_, Postgres>,
+    user: Uuid,
+    org: Uuid,
+    dept: Option<Uuid>,
+    position: &str,
 ) -> anyhow::Result<()> {
     sqlx::query("INSERT INTO memberships (user_id, organization_id, department_id, position) VALUES ($1, $2, $3, $4)")
         .bind(user)
@@ -598,7 +1319,13 @@ async fn insert_membership(
 }
 
 async fn insert_role(
-    tx: &mut Transaction<'_, Postgres>, tenant: Uuid, org: Uuid, name: &str, code: &str, desc: &str, built_in: bool,
+    tx: &mut Transaction<'_, Postgres>,
+    tenant: Uuid,
+    org: Uuid,
+    name: &str,
+    code: &str,
+    desc: &str,
+    built_in: bool,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
         "INSERT INTO roles (tenant_id, organization_id, name, code, description, built_in) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
@@ -613,7 +1340,11 @@ async fn insert_role(
     .await?)
 }
 
-async fn grant_role_menu(tx: &mut Transaction<'_, Postgres>, role: Uuid, menu: Uuid) -> anyhow::Result<()> {
+async fn grant_role_menu(
+    tx: &mut Transaction<'_, Postgres>,
+    role: Uuid,
+    menu: Uuid,
+) -> anyhow::Result<()> {
     sqlx::query("INSERT INTO role_menus (role_id, menu_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(role)
         .bind(menu)
@@ -622,7 +1353,12 @@ async fn grant_role_menu(tx: &mut Transaction<'_, Postgres>, role: Uuid, menu: U
     Ok(())
 }
 
-async fn grant_user_role(tx: &mut Transaction<'_, Postgres>, user: Uuid, role: Uuid, org: Uuid) -> anyhow::Result<()> {
+async fn grant_user_role(
+    tx: &mut Transaction<'_, Postgres>,
+    user: Uuid,
+    role: Uuid,
+    org: Uuid,
+) -> anyhow::Result<()> {
     sqlx::query("INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING")
         .bind(user)
         .bind(role)
@@ -632,7 +1368,11 @@ async fn grant_user_role(tx: &mut Transaction<'_, Postgres>, user: Uuid, role: U
     Ok(())
 }
 
-async fn grant_tenant_app(tx: &mut Transaction<'_, Postgres>, tenant: Uuid, app: Uuid) -> anyhow::Result<()> {
+async fn grant_tenant_app(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant: Uuid,
+    app: Uuid,
+) -> anyhow::Result<()> {
     sqlx::query("INSERT INTO tenant_applications (tenant_id, application_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(tenant)
         .bind(app)
@@ -641,16 +1381,26 @@ async fn grant_tenant_app(tx: &mut Transaction<'_, Postgres>, tenant: Uuid, app:
     Ok(())
 }
 
-async fn grant_tenant_menu(tx: &mut Transaction<'_, Postgres>, tenant: Uuid, menu: Uuid) -> anyhow::Result<()> {
-    sqlx::query("INSERT INTO tenant_menus (tenant_id, menu_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
-        .bind(tenant)
-        .bind(menu)
-        .execute(&mut **tx)
-        .await?;
+async fn grant_tenant_menu(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant: Uuid,
+    menu: Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO tenant_menus (tenant_id, menu_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(tenant)
+    .bind(menu)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
-async fn grant_org_app(tx: &mut Transaction<'_, Postgres>, org: Uuid, app: Uuid) -> anyhow::Result<()> {
+async fn grant_org_app(
+    tx: &mut Transaction<'_, Postgres>,
+    org: Uuid,
+    app: Uuid,
+) -> anyhow::Result<()> {
     sqlx::query("INSERT INTO organization_applications (organization_id, application_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(org)
         .bind(app)
@@ -659,7 +1409,11 @@ async fn grant_org_app(tx: &mut Transaction<'_, Postgres>, org: Uuid, app: Uuid)
     Ok(())
 }
 
-async fn grant_org_menu(tx: &mut Transaction<'_, Postgres>, org: Uuid, menu: Uuid) -> anyhow::Result<()> {
+async fn grant_org_menu(
+    tx: &mut Transaction<'_, Postgres>,
+    org: Uuid,
+    menu: Uuid,
+) -> anyhow::Result<()> {
     sqlx::query("INSERT INTO organization_menus (organization_id, menu_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(org)
         .bind(menu)
@@ -670,9 +1424,17 @@ async fn grant_org_menu(tx: &mut Transaction<'_, Postgres>, org: Uuid, menu: Uui
 
 #[allow(clippy::too_many_arguments)]
 async fn insert_client(
-    tx: &mut Transaction<'_, Postgres>, client_id: &str, secret: Option<&str>, name: &str, desc: &str,
-    client_type: &str, redirect_uris: &str, grant_types: &str, scopes: &str,
-    access_validity: i32, refresh_validity: i32,
+    tx: &mut Transaction<'_, Postgres>,
+    client_id: &str,
+    secret: Option<&str>,
+    name: &str,
+    desc: &str,
+    client_type: &str,
+    redirect_uris: &str,
+    grant_types: &str,
+    scopes: &str,
+    access_validity: i32,
+    refresh_validity: i32,
 ) -> anyhow::Result<()> {
     let secret_hash = secret.map(hash::sha256_hex);
     sqlx::query(

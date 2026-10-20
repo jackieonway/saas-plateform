@@ -37,6 +37,8 @@ pub struct ReleaseRow {
     pub runtime_mode: String,
     pub health_url: Option<String>,
     pub resources: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_digest: Option<String>,
     pub validation_status: String,
     pub validation_result: Value,
     pub checked_at: Option<DateTime<Utc>>,
@@ -46,7 +48,7 @@ pub struct ReleaseRow {
 
 pub const RELEASE_SELECT: &str = "SELECT r.id, r.application_id, r.environment, r.version, \
     r.entry_type, r.entry_url, (SELECT a.runtime_mode FROM applications a WHERE a.id=r.application_id) AS runtime_mode, \
-    r.health_url, r.resources, r.validation_status, \
+    r.health_url, r.resources, r.artifact_digest, r.validation_status, \
     r.validation_result, r.checked_at, r.created_at, \
     EXISTS (SELECT 1 FROM application_deployments d WHERE d.application_id = r.application_id \
       AND d.environment = r.environment AND d.active_release_id = r.id) AS active ";

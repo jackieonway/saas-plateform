@@ -1,0 +1,17 @@
+**/node_modules
+**/target
+**/dist
+**/.env*
+**/*.env
+**/*.pem
+**/*.key
+**/*.log
+tests
+deploy
+README.md
+package.json
+package-lock.json
+!deploy/
+deploy/*
+!deploy/static.nginx.conf
+

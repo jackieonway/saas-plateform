@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 1,
+  "phase": 35,
+  "inputsSha256": "9e81138c1e72311325acb86c2c2cb56ea27495bf0ebe7dd1dd73a99eaede8f10",
+  "priorEvidenceFiles": 174,
+  "changedPriorEvidence": [],
+  "oldMigrations": [
+    {
+      "path": "backend/migrations/0001_init.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0002_release_artifacts.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0003_oauth_issuance.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0004_release_operation_protection.sql",
+      "unchanged": true
+    },
+    {
+      "path": "backend/migrations/0005_managed_image_deployments.sql",
+      "unchanged": true
+    }
+  ],
+  "untouchedPhaseBodies": [
+    {
+      "phase": 1,
+      "unchanged": true
+    },
+    {
+      "phase": 2,
+      "unchanged": true
+    },
+    {
+      "phase": 3,
+      "unchanged": true
+    },
+    {
+      "phase": 4,
+      "unchanged": true
+    },
+    {
+      "phase": 5,
+      "unchanged": true
+    },
+    {
+      "phase": 6,
+      "unchanged": true
+    },
+    {
+      "phase": 7,
+      "unchanged": true
+    },
+    {
+      "phase": 8,
+      "unchanged": true
+    },
+    {
+      "phase": 9,
+      "unchanged": true
+    },
+    {
+      "phase": 10,
+      "unchanged": true
+    },
+    {
+      "phase": 11,
+      "unchanged": true
+    },
+    {
+      "phase": 12,
+      "unchanged": true
+    },
+    {
+      "phase": 13,
+      "unchanged": true
+    },
+    {
+      "phase": 14,
+      "unchanged": true
+    },
+    {
+      "phase": 15,
+      "unchanged": true
+    },
+    {
+      "phase": 16,
+      "unchanged": true
+    },
+    {
+      "phase": 17,
+      "unchanged": true
+    },
+    {
+      "phase": 18,
+      "unchanged": true
+    },
+    {
+      "phase": 19,
+      "unchanged": true
+    },
+    {
+      "phase": 20,
+      "unchanged": true
+    },
+    {
+      "phase": 21,
+      "unchanged": true
+    },
+    {
+      "phase": 22,
+      "unchanged": true
+    },
+    {
+      "phase": 23,
+      "unchanged": true
+    },
+    {
+      "phase": 24,
+      "unchanged": true
+    },
+    {
+      "phase": 25,
+      "unchanged": true
+    },
+    {
+      "phase": 26,
+      "unchanged": true
+    },
+    {
+      "phase": 27,
+      "unchanged": true
+    },
+    {
+      "phase": 28,
+      "unchanged": true
+    },
+    {
+      "phase": 29,
+      "unchanged": true
+    },
+    {
+      "phase": 30,
+      "unchanged": true
+    },
+    {
+      "phase": 31,
+      "unchanged": true
+    },
+    {
+      "phase": 32,
+      "unchanged": true
+    },
+    {
+      "phase": 33,
+      "unchanged": true
+    },
+    {
+      "phase": 34,
+      "unchanged": true
+    },
+    {
+      "phase": 36,
+      "unchanged": true
+    },
+    {
+      "phase": 37,
+      "unchanged": true
+    }
+  ],
+  "changedSourceFiles": [
+    "backend/Cargo.lock",
+    "backend/src/main.rs",
+    "backend/src/managed_deployments/mod.rs",
+    "backend/src/release_archives.rs",
+    "backend/src/routes/application_releases.rs",
+    "backend/src/routes/mod.rs",
+    "backend/src/seed.rs",
+    "backend/src/state.rs",
+    "crates/deployment-contract/Cargo.lock",
+    "crates/deployment-contract/Cargo.toml",
+    "crates/deployment-contract/src/lib.rs",
+    "frontend/src/pages/system/applications/ApplicationReleasesPanel.tsx",
+    "scripts/ci/manifest.mjs",
+    "scripts/ci/provenance.mjs",
+    "scripts/ci/run.mjs",
+    "tools/deployment-agent/Cargo.lock"
+  ],
+  "addedSourceFiles": [
+    "backend/migrations/0006_zip_distribution.sql",
+    "backend/src/artifact_distribution/config.rs",
+    "backend/src/artifact_distribution/gates.rs",
+    "backend/src/artifact_distribution/mod.rs",
+    "backend/src/artifact_distribution/routes.rs",
+    "backend/src/artifact_distribution/transport.rs",
+    "backend/src/artifact_distribution/worker.rs",
+    "crates/deployment-contract/src/zip.rs",
+    "deploy/gateway/zip-distribution.conf.example",
+    "frontend/src/api/zip-distributions.ts",
+    "frontend/src/pages/system/applications/ZipDistributionPanel.tsx",
+    "scripts/ci/zip-distribution-results.mjs",
+    "scripts/ci/zip-distribution-results.test.mjs",
+    "scripts/ci/zip-distribution.mjs",
+    "tests/phase35-zip-browser.mjs",
+    "tests/phase35-zip-cases.mjs",
+    "tests/phase35-zip-distribution.mjs",
+    "tools/artifact-agent/Cargo.lock",
+    "tools/artifact-agent/Cargo.toml",
+    "tools/artifact-agent/README.md",
+    "tools/artifact-agent/src/config.rs",
+    "tools/artifact-agent/src/lib.rs",
+    "tools/artifact-agent/src/main.rs",
+    "tools/artifact-agent/src/server.rs",
+    "tools/artifact-agent/src/storage.rs"
+  ],
+  "dependencyChanges": {
+    "changedPackages": [
+      "deployment-contract 0.1.0"
+    ],
+    "addedPackages": []
+  }
+}
