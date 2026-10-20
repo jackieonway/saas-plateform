@@ -26,6 +26,8 @@ docker build -f business-apps/stores/backend/Dockerfile -t stores-api:candidate 
 
 公开 Nginx 拒绝这些 metrics 路径，包括携带 Bearer 的请求。运维 token 不能复用应用 token、JWT 签名密钥或机密客户端密码。`prometheus.example.yml` 使用私有凭据文件；只提供采集与告警规则样例，不默认安装 Prometheus、Alertmanager 或外部 receiver。`saas-alerts.yml` 是候选阈值，正式 SLO/资源预算与渠道需另外确定。
 
+监控配置中的 `metrics_token` 和 `event_token` 必须各为 16–1024 字节的可见 ASCII 字符串（不含空格或控制字符），且两个值不同，以保证能够用于 HTTP Bearer 鉴权。
+
 指标只使用闭合的 service/stage/outcome 枚举、静态路由和状态码。新增直方图 `saas_stage_duration_seconds` 包含完成数、累计桶、耗时和在途数；取消计为 cancelled，不能当作成功。业务 authorization 包括当前平台授权验证，platform_http 包括网络和响应处理；business_sql 是业务读用例耗时，包含池等待、事务和解码，不能当作 PostgreSQL 服务端纯执行耗时。pool_acquire 包含获取连接及 BEGIN。DB lock gauge 只计当前数据库 Lock 等待者，查询失败以 observation/database up 表示；零等待者不等于数据库可用。
 
 平台 context_work_orders/context_stores 分别记录应用授权上下文；password_queue 包括准入和等待工作槽，password_execution 记录真实 Argon 工作。超时 HTTP 可以先结束，已启动阻塞工作的 CPU 仍可能继续消耗，两者不应合并计算。连接池 size/idle、密码 running/queued 为瞬时观测。

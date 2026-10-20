@@ -59,6 +59,7 @@ ciUnitTests.push('scripts/ci/recovery-results.test.mjs')
 ciUnitTests.push('scripts/ci/standalone-release.test.mjs')
 ciUnitTests.push('tests/runtime-entrypoints.mjs')
 ciUnitTests.push('scripts/ci/managed-deployment-results.test.mjs')
+ciUnitTests.push('scripts/ci/rehearsal-images.test.mjs')
 export const declaredLimits = [
   'Phase32 monitoring reports candidate load and real fault observations separately from production SLO; its owned PostgreSQL capacity gate starts at 100 active sessions and 100000 business records. No external receiver is configured. Phase33 separately implements the Rust pilot recovery executor; physical production PITR remains unaccepted.',
   'Business delivery builds immutable work-orders/stores candidate archives and separately verifies an owned registry, digest-pinned Compose and real versioned browser routes. Registry rehearsal is isolated; external publication requires the protected manual workflow.',

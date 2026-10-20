@@ -280,6 +280,41 @@ impl Harness {
     }
 }
 
+#[tokio::test]
+#[ignore = "requires explicitly configured disposable PostgreSQL server"]
+async fn legacy_null_client_scopes_issue_and_refresh_an_empty_scope() -> Result<()> {
+    let db = database().await?;
+    let assertions = async {
+        let h = Harness::create(&db.pool).await?;
+        sqlx::query("UPDATE oauth_clients SET scopes=NULL WHERE client_id=$1")
+            .bind(&h.client)
+            .execute(&db.pool)
+            .await?;
+        let (status, pair) = h
+            .post("/oauth/token", &[("grant_type", "client_credentials")])
+            .await?;
+        ensure!(
+            status == StatusCode::OK,
+            "legacy NULL scopes prevented issuance"
+        );
+        ensure!(
+            pair["scope"] == "",
+            "NULL client scopes were not normalized to empty"
+        );
+        let access = field(&pair, "access_token")?;
+        ensure!(jwt::verify(access, SECRET)?.scope.as_deref() == Some(""));
+        let (status, refreshed) = h.refresh(field(&pair, "refresh_token")?).await?;
+        ensure!(
+            status == StatusCode::OK,
+            "legacy NULL scopes prevented rotation"
+        );
+        ensure!(refreshed["scope"] == "", "rotation widened an empty scope");
+        Ok(())
+    }
+    .await;
+    db.finish(assertions).await
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires explicitly configured disposable PostgreSQL server"]
 async fn twenty_refreshes_have_one_winner_and_replay_is_invalid_grant() -> Result<()> {

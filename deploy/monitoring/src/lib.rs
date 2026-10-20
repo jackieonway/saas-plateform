@@ -146,7 +146,10 @@ impl Config {
         }
         Machine::new(config.failures, config.recoveries)?;
         for token in [&config.metrics_token, &config.event_token] {
-            if token.len() < 16 || token.len() > 1024 || token.chars().any(char::is_whitespace) {
+            if token.len() < 16
+                || token.len() > 1024
+                || !token.bytes().all(|byte| byte.is_ascii_graphic())
+            {
                 return Err("INVALID_CREDENTIAL");
             }
         }
@@ -444,6 +447,32 @@ mod tests {
     fn config_rejects_credentials_in_targets() {
         let bytes=br#"{"bind":"127.0.0.1:0","interval_ms":100,"timeout_ms":50,"failures":2,"recoveries":2,"metrics_token":"private-metrics-canary","event_token":"private-events-canary","targets":[{"component":"platform","url":"http://CANARY:SECRET@localhost/api/health"}]}"#;
         assert_eq!(Config::parse(bytes).err(), Some("INVALID_TARGET"));
+    }
+    #[test]
+    fn credentials_must_be_usable_in_authorization_headers() {
+        let example: serde_json::Value =
+            serde_json::from_slice(include_bytes!("../config.example.json")).unwrap();
+        for field in ["metrics_token", "event_token"] {
+            for invalid in ["密", "\0", "\x01", "\x7f", " ", "\t", "\r", "\n"] {
+                let mut value = example.clone();
+                value[field] = format!("private-token-prefix-{invalid}").into();
+                assert_eq!(
+                    Config::parse(value.to_string().as_bytes()).err(),
+                    Some("INVALID_CREDENTIAL"),
+                    "{field} must reject non-visible ASCII credentials"
+                );
+            }
+            let mut value = example.clone();
+            let token = "private-token-._~+/=";
+            value[field] = token.into();
+            assert!(Config::parse(value.to_string().as_bytes()).is_ok());
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::AUTHORIZATION,
+                format!("Bearer {token}").parse().unwrap(),
+            );
+            assert!(authenticated(&headers, token));
+        }
     }
     #[test]
     fn example_is_valid_and_credentials_and_target_vocabulary_are_closed() {

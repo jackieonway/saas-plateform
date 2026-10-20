@@ -100,7 +100,7 @@ export async function acceptance(c){
  const release2=await newRelease('2.0.0'),second=await api(jobsPath,intent(release2,good2),adminToken)
  await privateFile('routes/zz-invalid.conf','this_is_not_a_valid_nginx_directive;\n','644')
  assert.equal((await agent()).errorCode,'ROUTE_FAILED');assert.equal((await job(second.id)).state,'FAILED');assert.equal((await current())[0].activeReleaseId,release1.id)
- const route=await linux(['test','-e',privateRoot+'/routes/local-static-stores-2.0.0.conf'],{allowFailure:true});assert.notEqual(route.exitCode,0)
+ const route=await linux(['test','-e',privateRoot+'/routes/route-'+sha(policy.id+'\nstores\n2.0.0')+'.conf'],{allowFailure:true});assert.notEqual(route.exitCode,0)
  const secondContainer=(await docker(['ps','--all','--filter','label=saas.deployment.owner='+owner,'--filter','label=saas.deployment.version=2.0.0','--format','{{.ID}}'])).trim();assert(secondContainer)
  await linux(['rm','--',privateRoot+'/routes/zz-invalid.conf'])
  assert.equal((await request('/sub-apps/stores/versions/1.0.0/app.js')).text,oldChunk)

@@ -10,14 +10,13 @@ import https from 'node:https'
 import { createSnapshot, validateOutputLocation } from './linux-runner.mjs'
 import { createSourceManifest } from './provenance.mjs'
 import { managedDeploymentChecks, validateManagedDeploymentReport } from './managed-deployment-results.mjs'
+import { resolveRehearsalImages } from './rehearsal-images.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const sha = b => createHash('sha256').update(b).digest('hex')
 const json = (p,v) => writeFileSync(p,JSON.stringify(v,null,2)+'\n')
 const slash = p => p.replaceAll('\\','/')
 const linuxPath = p => process.platform === 'win32' ? slash(p).replace(/^([A-Za-z]):/, (_,d) => '/mnt/'+d.toLowerCase()) : p
-const toolsImage = 'sha256:1912f7302185ed2c1af4df155d0d2784886c87984266ed981325575e415d71dc'
-const postgresImage = 'sha256:8745eeb23be1055bd80c88e509a5247110cce0f2496c7492d165f3d0fc1975cd'
 
 export async function runManagedDeployment(options) {
   const sourceRoot = path.resolve(options.sourceRoot || root), hostRoot=path.resolve(options.hostSourceRoot || sourceRoot), out=path.resolve(options.outDir)
@@ -74,6 +73,8 @@ export async function runManagedDeployment(options) {
     report.hostBefore=createSourceManifest(hostRoot,{sourceRevision:report.sourceRevision}).inputsSha256
     createSnapshot(snapshot,sourceRoot);json(path.join(out,'source-manifest.json'),input)
     report.driverSha256=sha(readFileSync(fileURLToPath(import.meta.url)))
+    const { toolsImage, postgresImage, evidence } = await resolveRehearsalImages(docker, options)
+    report.inputImages = evidence
     await linux(['bash','-c','set -eu; test ! -e "$1"; mkdir -m 700 "$1"; printf "%s" "$2" > "$1/owner"','phase36-root',privateRoot,owner]);privateCreated=true
     await docker(['network','create','--label','saas.deployment.owner='+owner,'--label','saas.ci.owner='+owner,network]);networkCreated=true
     if(options.cacheName){const v=await inspect('volume',cacheName);assert.equal(v.Labels?.['saas.phase36.cache'],'true')}else{await docker(['volume','create','--label','saas.ci.owner='+owner,'--label','saas.phase36.cache=true',cacheName]);cacheCreated=true}

@@ -576,7 +576,7 @@ async fn begin_issuance<'a>(
     oauth_issuance::lock_user(&mut tx, user_id).await?;
     let current: Option<IssuanceClientConfig> =
         sqlx::query_as(
-            "SELECT status, client_secret_hash, client_type, grant_types, scopes, \
+            "SELECT status, client_secret_hash, client_type, COALESCE(grant_types,''), COALESCE(scopes,''), \
              access_token_validity, refresh_token_validity FROM oauth_clients \
              WHERE id=$1 AND client_id=$2 FOR UPDATE",
         )

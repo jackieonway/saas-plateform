@@ -47,8 +47,14 @@ Docker CLI 每次操作有截止时间。worker 的失败回执只含固定错�
 ## 隔离验收
 
 ```sh
+docker build --target browsers --build-arg TARGETARCH=amd64 -f deploy/ci/Dockerfile -t saas-ci:phase04 .
+docker pull postgres@sha256:45cd22f8d32e189d245403954882f88e7a8714301fda80dab6da90f1265b25a3
+docker pull nginxinc/nginx-unprivileged:1.28.0-alpine
+docker pull registry:3.0.0
 node scripts/ci/managed-deployment.mjs --out-dir /absolute/new/report
 ```
+
+受管部署和 ZIP 分发演练均默认使用上述工具标签与 PostgreSQL 固定 digest；可通过 `CI_TOOLCHAIN_IMAGE` 和 `CI_POSTGRES_IMAGE` 选择已准备的镜像。启动前检查 Linux amd64 平台并解析实际不可变 image ID，随后只按该 ID 创建容器，报告的 `inputImages` 保存请求引用及解析身份。无需复用某台开发机的本地镜像 ID。
 
 该门禁需要 Linux Docker 或 Windows/WSL Ubuntu、本地固定 CI 工具镜像、PostgreSQL17、Nginx 和 registry:3。它创建独立数据库/本地 TLS registry/短期 CA/固定目标，只监听 loopback。Windows 仅为唯一 registry 端点临时配置 Docker CA，按 owner 核对后删除；不改系统全局 CA、不重启 daemon。平台/浏览器工具不挂 Docker socket，agent 在受控本机 Linux 进程执行。
 
