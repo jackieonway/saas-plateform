@@ -1,5 +1,5 @@
 import type { NotificationRecord, NotificationSocketContext, RealtimeNotification } from "../api/types"
-import { NOTIFICATION_CONTRACT_VERSION } from "../../../examples/micro-app-sdk/generated/protocol.mjs"
+import { NOTIFICATION_CONTRACT_VERSION } from "../../vendor/micro-app-sdk/generated/protocol.mjs"
 
 export interface NotificationIdentity { userId: string; tenantId: string; organizationId: string }
 const types = new Set(["INFO", "SUCCESS", "WARNING", "SECURITY"])

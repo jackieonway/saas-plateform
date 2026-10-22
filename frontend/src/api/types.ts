@@ -1,13 +1,13 @@
 /**
- * SaaS Platform API 强类型定义；接口入口与边界见 docs/architecture.md#api-catalog。
+ * SaaS Platform API 强类型定义；接口入口与边界见 backend/docs/architecture.md#api-catalog。
  */
 
 import type { OrganizationType, TenantType } from "@/lib/entity-types"
 export type { OrganizationType, TenantType } from "@/lib/entity-types"
 import type { NotificationType, NotificationTarget,
-  NotificationPublication as NotificationPublishResponse } from "../../../examples/micro-app-sdk/generated/types"
+  NotificationPublication as NotificationPublishResponse } from "../../vendor/micro-app-sdk/generated/types"
 export type { NotificationType, NotificationTarget, NotificationRecord, NotificationSocketContext,
-  RealtimeNotification, NotificationPublication as NotificationPublishResponse } from "../../../examples/micro-app-sdk/generated/types"
+  RealtimeNotification, NotificationPublication as NotificationPublishResponse } from "../../vendor/micro-app-sdk/generated/types"
 
 export type Status = "ENABLED" | "DISABLED"
 export type MenuType = "DIR" | "MENU" | "BUTTON"

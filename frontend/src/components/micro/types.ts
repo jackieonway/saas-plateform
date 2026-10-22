@@ -14,9 +14,9 @@ export type {
   MicroProps,
   MicroLifecycle,
   MicroEsmModule,
-} from "../../../../examples/micro-app-sdk/generated/types"
+} from "../../../vendor/micro-app-sdk/generated/types"
 
-import type { MicroEntryType, MicroRuntimeMode } from "../../../../examples/micro-app-sdk/generated/types"
+import type { MicroEntryType, MicroRuntimeMode } from "../../../vendor/micro-app-sdk/generated/types"
 
 /** 子应用全局生命周期挂载键。 */
 export const MICRO_APP_GLOBAL = "__MICRO_APP__" as const

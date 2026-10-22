@@ -1,6 +1,6 @@
 //! Tenant and organization creation regressions on an owned PostgreSQL database.
 //! Run with `cargo test entity_creation_tests -- --ignored --nocapture`.
-//! Credentials come from TEST_DATABASE_URL or ignored root .env.test, never logs.
+//! Credentials come from TEST_DATABASE_URL or ignored root backend/.env.test, never logs.
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -35,9 +35,10 @@ fn database_options() -> Result<PgConnectOptions> {
     let url = match std::env::var("TEST_DATABASE_URL") {
         Ok(url) if !url.trim().is_empty() => url,
         _ => {
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env.test");
-            let entries = dotenvy::from_path_iter(path)
-                .map_err(|_| anyhow!("configure TEST_DATABASE_URL or ignored root .env.test"))?;
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env.test");
+            let entries = dotenvy::from_path_iter(path).map_err(|_| {
+                anyhow!("configure TEST_DATABASE_URL or ignored root backend/.env.test")
+            })?;
             let mut url = None;
             for entry in entries {
                 let (key, value) = entry.map_err(|_| anyhow!("invalid test environment file"))?;
@@ -267,8 +268,18 @@ impl Harness {
         .bind(application)
         .fetch_one(pool)
         .await?;
-        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)").bind(platform).bind(application).execute(pool).await?;
-        sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)").bind(org).bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+            .bind(platform)
+            .bind(application)
+            .execute(pool)
+            .await?;
+        sqlx::query(
+            "INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)",
+        )
+        .bind(org)
+        .bind(application)
+        .execute(pool)
+        .await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT $1,id FROM menus WHERE application_id=$2").bind(platform).bind(application).execute(pool).await?;
         sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) SELECT $1,id FROM menus WHERE application_id=$2").bind(org).bind(application).execute(pool).await?;
         let config = Config::from_values(&HashMap::from([

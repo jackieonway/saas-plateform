@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "repository": "saas-micro-app-sdk",
+  "revision": "4b493f88ff542882a91714b0e153b3169c141c08",
+  "files": {
+    "compat/legacy-iframe-2.0.js": "fb041923bbcff457b4d8b559f42637c5ee74ebc9c34824a901ba87d60e74b42a",
+    "context-client.mjs": "bb573ab5da74c3d21ed289f60ea14809263a7468d6851f3040da42c57434d716",
+    "contracts/fixtures/public-wire.json": "a799dba87967584ed3b89957ccfce58d62d11a9495d72401e459b52d97e21f79",
+    "contracts/README.md": "540045a370da0c5d4da9c3ab0d7e16cfd358454cdc5c9f467f8b44cfedf2f947",
+    "contracts/schema.json": "3a77db882c778b19cd297721bf0bbccd4f325112061b70792264befa181b8e1b",
+    "generated/protocol.d.mts": "85f87934f36befa22c2fea6e3bf96ef42ccf21c85b9e6a033d369ca271a4a9d0",
+    "generated/protocol.mjs": "c443ef249b04a7d7bcabd5836b37c912d09d50813407f16bf6d73d5b56d61cee",
+    "generated/protocol.rs": "dc2ac00abb27f0eb34d3f820805e02afb7cc7e5ca9c10c6493f4c8991b38f8ed",
+    "generated/schema.json": "bdf10675d95fa3a2a6f90c7011215e6e615b5220012791217f42ac43142e7b15",
+    "generated/types.d.ts": "0890a172af89c233ee78ee6ba3e1b44c93525306e84e543946fa3f5907b9b5b7",
+    "iframe-bridge.js": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5",
+    "index.d.mts": "47ae08b2e5963f011a364fc2556d2d7c899591b1927460fc882c9f6a304ad257",
+    "index.mjs": "a528e11789371f8a134301ed44d6731bce0538c71ef98f070e6e8ba706d3ef95",
+    "notification-publisher.mjs": "620be6789f92e6f3f07ff01217c1a43179b48d0c323958ee8ba30892c685ce39",
+    "release.json": "29480fa5955e796fa4a2d124f14a6a9ef35155c518ea996d9dbf6d2c6a8af77a",
+    "releases/1.0.0/artifact-manifest.json": "d3137ecd7588e59df7151b5c533adfdc0a72eedf36138f038928538cf914b1dc",
+    "releases/1.0.0/capabilities.d.mts": "6521a488a47c4dc5bc345e76afe6a16cbdfa0a9b4764af662b7b0b5220a14c75",
+    "releases/1.0.0/http.d.mts": "82c41e76d47c873dd1209b831d482b8521ace0586167083b5e7eef0b96b36c3f",
+    "releases/1.0.0/iframe-bridge.js": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5",
+    "releases/1.0.0/index.d.mts": "ae32b33ff83e9c03e86036eb431a55727497a9fc6aa4f18976df3069444120ca",
+    "releases/1.0.0/index.d.ts": "ae32b33ff83e9c03e86036eb431a55727497a9fc6aa4f18976df3069444120ca",
+    "releases/1.0.0/index.mjs": "2365b2c6cf6be201d930ae6ca1010bd59ce3f7fa4ab6a0df965189529f43c837",
+    "releases/1.0.0/package.json": "8c0092e0cdc946d224c2f3eeacb9cf85c3b09430cf2bdb388df030a237d212af",
+    "releases/1.0.0/protocol.d.mts": "85f87934f36befa22c2fea6e3bf96ef42ccf21c85b9e6a033d369ca271a4a9d0",
+    "releases/1.0.0/protocol.mjs": "c443ef249b04a7d7bcabd5836b37c912d09d50813407f16bf6d73d5b56d61cee",
+    "releases/1.0.0/protocol.rs": "dc2ac00abb27f0eb34d3f820805e02afb7cc7e5ca9c10c6493f4c8991b38f8ed",
+    "releases/1.0.0/schema.json": "bdf10675d95fa3a2a6f90c7011215e6e615b5220012791217f42ac43142e7b15",
+    "releases/1.0.0/sdk.js": "16434ed209846c1e41f3d74f22654027289e44caf26e4d77fe1aeb0146b03ee5",
+    "releases/1.0.0/types.d.ts": "0890a172af89c233ee78ee6ba3e1b44c93525306e84e543946fa3f5907b9b5b7"
+  },
+  "documentationOverrides": {
+    "contracts/README.md": {
+      "sourceSha256": "6ae0ef257f155e8fd062d89980c2d2cd8c0f9d7c45c25ada0cdaba1c4cc77dd3",
+      "sha256": "540045a370da0c5d4da9c3ab0d7e16cfd358454cdc5c9f467f8b44cfedf2f947",
+      "reason": "按现有架构重写中文协议说明；协议及可执行产物未变更"
+    }
+  }
+}

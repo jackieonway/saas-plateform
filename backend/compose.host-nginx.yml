@@ -1,0 +1,93 @@
+# Existing host Nginx provides public HTTPS. No gateway container.
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?Set the approved PostgreSQL image digest}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-platform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a dedicated PostgreSQL password}
+      POSTGRES_DB: ${POSTGRES_DB:-saas_platform}
+      TZ: Asia/Shanghai
+    volumes:
+    - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+    networks:
+    - database
+  backend:
+    image: ${PLATFORM_IMAGE:?Set the Rust platform image digest}
+    environment:
+      APP_ENV: production
+      APPLICATION_ENVIRONMENT: production
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?Set the platform database URL}
+      AUTO_CREATE_DATABASE: 'false'
+      DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
+      DB_ACQUIRE_TIMEOUT_MS: ${DB_ACQUIRE_TIMEOUT_MS:-5000}
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-5000}
+      DB_LOCK_TIMEOUT_MS: ${DB_LOCK_TIMEOUT_MS:-5000}
+      APP_AUTHORIZATION_TIMEOUT_MS: ${APP_AUTHORIZATION_TIMEOUT_MS:-5000}
+      APP_AUTHORIZATION_MAX_CONCURRENT: ${APP_AUTHORIZATION_MAX_CONCURRENT:-32}
+      BIND_ADDR: 0.0.0.0:3001
+      JWT_SECRET: ${JWT_SECRET:?Set a fresh random signing key}
+      METRICS_TOKEN: ${PLATFORM_METRICS_TOKEN:?Set an independent metrics token}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:?Set the initial administrator name}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set the initial administrator password}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?Set the exact public HTTPS origin}
+      MICRO_GATEWAY_ORIGIN: ${PUBLIC_APP_URL}
+      MICRO_ALLOWED_ORIGINS: ${MICRO_ALLOWED_ORIGINS:-${PUBLIC_APP_URL}}
+      MICRO_APPS_DIR: ''
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_APP_URL}
+      TRUSTED_PROXY_IPS: ${HOST_NGINX_PROXY_IP:?Set the actual peer IP used by host Nginx to reach the API}
+      DATA_GRANT_POLICY: ${DATA_GRANT_POLICY-{"applications":[],"managementScopes":[]}}
+      OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE: ${OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE:-600}
+      OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE: ${OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE:-30}
+      OAUTH_AUTO_PURGE: 'false'
+      RUST_LOG: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+    - '3001'
+    read_only: true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+    - edge
+    - database
+    ports:
+    - 127.0.0.1:${HOST_BACKEND_PORT:-13001}:3001
+  frontend-web:
+    image: ${FRONTEND_IMAGE:?Set the host static image digest}
+    expose:
+    - '8080'
+    user: 101:101
+    read_only: true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+    - edge
+    ports:
+    - 127.0.0.1:${HOST_FRONTEND_PORT:-18080}:8080
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK_NAME:?Create and select the controlled private bridge first}
+  database:
+    internal: true
+volumes:
+  pgdata: null

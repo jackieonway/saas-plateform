@@ -5,19 +5,16 @@ WORKDIR /app/backend
 ARG CARGO_BUILD_JOBS=2
 
 # 依赖缓存层
-COPY backend/Cargo.toml backend/Cargo.lock ./
-COPY crates/operational-telemetry /app/crates/operational-telemetry
-COPY crates/deployment-contract /app/crates/deployment-contract
-# Cargo resolves path dev-dependencies even for the production binary build.
-COPY mini-services/oauth-playground/backend/Cargo.toml mini-services/oauth-playground/backend/Cargo.lock /app/mini-services/oauth-playground/backend/
-COPY mini-services/oauth-playground/backend/src /app/mini-services/oauth-playground/backend/src
+COPY Cargo.toml Cargo.lock ./
+COPY crates/operational-telemetry ./crates/operational-telemetry
+COPY crates/deployment-contract ./crates/deployment-contract
 RUN mkdir -p src && echo 'fn main() { println!("cache"); }' > src/main.rs \
     && cargo build --release --locked && rm -rf src target/release/saas-platform-backend*
 
 # 实际源码
-COPY backend/src ./src
-COPY backend/assets ./assets
-COPY backend/migrations ./migrations
+COPY src ./src
+COPY assets ./assets
+COPY migrations ./migrations
 RUN touch src/main.rs && cargo build --release --locked
 
 # ===== 运行阶段 =====

@@ -1,0 +1,93 @@
+# 放入宿主机 /etc/nginx/conf.d/saas.conf，由 nginx.conf 的 http 块包含。
+# 全局替换 saas.example.com 和证书路径。上游端口与 Compose 保持一致。
+# 工单、门店、通知均为可选；未部署时将对应 location 改为 return 404。
+
+map $http_upgrade $saas_connection_upgrade {
+    default upgrade;
+    ''      '';
+}
+
+upstream saas_platform_api {
+    server 127.0.0.1:13001;
+    keepalive 16;
+}
+upstream saas_platform_web {
+    server 127.0.0.1:18080;
+    keepalive 16;
+}
+upstream saas_work_orders_api { server 127.0.0.1:3004; }
+upstream saas_work_orders_web { server 127.0.0.1:3013; }
+upstream saas_stores_api { server 127.0.0.1:3031; }
+upstream saas_stores_web { server 127.0.0.1:3014; }
+upstream saas_notification { server 127.0.0.1:13003; }
+
+server {
+    listen 80;
+    server_name saas.example.com;
+    return 308 https://saas.example.com$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name saas.example.com;
+    ssl_certificate /etc/letsencrypt/live/saas.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/saas.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SaaSTLS:10m;
+    ssl_session_tickets off;
+
+    # 平台 ZIP 上传入口需要此容量；业务 API 仍执行自己的更小正文限制。
+    client_max_body_size 20m;
+    if ($host != saas.example.com) { return 421; }
+
+    proxy_http_version 1.1;
+    proxy_set_header Host saas.example.com;
+    proxy_set_header X-Forwarded-Host saas.example.com;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Real-IP $remote_addr;
+    # 入口直接面向客户端，覆盖外来代理头，不信任客户端自报地址。
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header Forwarded "";
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $saas_connection_upgrade;
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 65s;
+    proxy_read_timeout 65s;
+
+    # 私有指标和内部事件不得通过公共入口开放。
+    location ~ ^/(?:internal|metrics|api/internal|work-orders-api/(?:internal|metrics)|stores-api/(?:internal|metrics)|socket\.io/metrics|notification-api/metrics)(?:/|$) {
+        return 404;
+    }
+
+    # 不带结尾 / 的 proxy_pass 保留完整 /api、/oauth 路径。
+    location = /api { proxy_pass http://saas_platform_api; }
+    location /api/ { proxy_pass http://saas_platform_api; }
+    location = /oauth { proxy_pass http://saas_platform_api; }
+    location /oauth/ { proxy_pass http://saas_platform_api; }
+
+    # 可选业务 API：保持原请求前缀，不改写为根路径。
+    location = /work-orders-api { proxy_pass http://saas_work_orders_api; }
+    location /work-orders-api/ { proxy_pass http://saas_work_orders_api; }
+    location = /stores-api { proxy_pass http://saas_stores_api; }
+    location /stores-api/ { proxy_pass http://saas_stores_api; }
+
+    # 可选 Socket.IO，同时支持 polling 和 WebSocket。
+    location /socket.io/ {
+        proxy_pass http://saas_notification;
+        proxy_buffering off;
+        proxy_read_timeout 75s;
+    }
+
+    # 可选微应用静态版本。结尾 / 会剥离公开版本前缀再转发给静态镜像。
+    location ^~ /sub-apps/work-orders/versions/1.0.0/ {
+        proxy_pass http://saas_work_orders_web/;
+    }
+    location ^~ /sub-apps/stores/versions/1.0.0/ {
+        proxy_pass http://saas_stores_web/;
+    }
+    location = /sub-apps { return 404; }
+    location /sub-apps/ { return 404; }
+
+    # SPA 导航与静态 404 由前端镜像内的静态服务处理。
+    location / { proxy_pass http://saas_platform_web; }
+}

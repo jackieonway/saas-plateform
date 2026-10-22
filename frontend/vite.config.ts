@@ -162,6 +162,6 @@ export default defineConfig({
   },
   // Let Rollup derive shared chunks from the actual module graph. Splitting
   // React, its UI consumers and their helpers by package-name substrings made
-  // circular vendor chunks: Sonner accessed React before its wrapper initialized.
+  // circular frontend/vendor chunks: Sonner accessed React before its wrapper initialized.
   // Route-level dynamic imports still keep business pages loaded on demand.
 });

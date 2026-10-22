@@ -20,7 +20,10 @@ pub fn routes() -> Router<AppState> {
         .route("/api/monitor/overview", get(overview))
         .route("/api/monitor/system", get(system))
         .route("/api/monitor/tenant-insights", get(tenant_insights))
-        .route("/api/monitor/tenant-insights/export", get(export_tenant_insights_csv))
+        .route(
+            "/api/monitor/tenant-insights/export",
+            get(export_tenant_insights_csv),
+        )
 }
 
 type RecentLoginRow = (String, String, String, DateTime<Utc>);
@@ -111,19 +114,31 @@ async fn load_tenant_insights(
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, code, status, users, organizations, roles, logins7d, active_tokens)| {
-            let logins_trend: Vec<i64> = (0..7)
-                .rev()
-                .map(|i| {
-                    let key = (Utc::now() - Duration::days(i)).format("%Y-%m-%d").to_string();
-                    trend_map.get(&(id, key)).copied().unwrap_or(0)
-                })
-                .collect();
-            TenantInsightData {
-                id, name, code, status, users, organizations, roles,
-                logins7d, active_tokens, logins_trend,
-            }
-        })
+        .map(
+            |(id, name, code, status, users, organizations, roles, logins7d, active_tokens)| {
+                let logins_trend: Vec<i64> = (0..7)
+                    .rev()
+                    .map(|i| {
+                        let key = (Utc::now() - Duration::days(i))
+                            .format("%Y-%m-%d")
+                            .to_string();
+                        trend_map.get(&(id, key)).copied().unwrap_or(0)
+                    })
+                    .collect();
+                TenantInsightData {
+                    id,
+                    name,
+                    code,
+                    status,
+                    users,
+                    organizations,
+                    roles,
+                    logins7d,
+                    active_tokens,
+                    logins_trend,
+                }
+            },
+        )
         .collect())
 }
 
@@ -133,10 +148,17 @@ async fn tenant_insights(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:monitor").check(&state, &user).await?;
-    let tenant_scope = if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) };
+    RequirePermission("system:monitor")
+        .check(&state, &user)
+        .await?;
+    let tenant_scope = if state.is_platform_context(&user).await? {
+        None
+    } else {
+        Some(user.tenant_id)
+    };
     let organization_scope = state.scoped_org_ids(&user).await?;
-    let rows = load_tenant_insights(&state.pool, tenant_scope, organization_scope.as_deref()).await?;
+    let rows =
+        load_tenant_insights(&state.pool, tenant_scope, organization_scope.as_deref()).await?;
     let insights: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -158,10 +180,17 @@ async fn export_tenant_insights_csv(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> Result<Response, AppError> {
-    RequirePermission("system:monitor").check(&state, &user).await?;
-    let tenant_scope = if state.is_platform_context(&user).await? { None } else { Some(user.tenant_id) };
+    RequirePermission("system:monitor")
+        .check(&state, &user)
+        .await?;
+    let tenant_scope = if state.is_platform_context(&user).await? {
+        None
+    } else {
+        Some(user.tenant_id)
+    };
     let organization_scope = state.scoped_org_ids(&user).await?;
-    let rows = load_tenant_insights(&state.pool, tenant_scope, organization_scope.as_deref()).await?;
+    let rows =
+        load_tenant_insights(&state.pool, tenant_scope, organization_scope.as_deref()).await?;
     let mut csv = String::from(
         "\u{FEFF}租户名称,租户编码,状态,用户数,组织数,角色数,近7天登录,活跃令牌,近7天登录趋势\n",
     );
@@ -193,10 +222,13 @@ async fn export_tenant_insights_csv(
     }
     let filename = format!("tenant-insights-{}.csv", Utc::now().format("%Y%m%d"));
     let mut resp = csv.into_response();
-    resp.headers_mut().insert(CONTENT_TYPE, "text/csv; charset=utf-8".parse().unwrap());
+    resp.headers_mut()
+        .insert(CONTENT_TYPE, "text/csv; charset=utf-8".parse().unwrap());
     resp.headers_mut().insert(
         CONTENT_DISPOSITION,
-        format!("attachment; filename=\"{filename}\"").parse().unwrap(),
+        format!("attachment; filename=\"{filename}\"")
+            .parse()
+            .unwrap(),
     );
     Ok(resp)
 }
@@ -226,7 +258,9 @@ fn read_rss_mb() -> f64 {
 /// database 段来自 PG 系统视图 (pg_stat_activity / pg_class);
 /// tables 的 rows 为 pg_class.reltuples 优化器统计估计值 (非实时精确计数, 负值归 0)。
 async fn system(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:monitor").check(&state, &user).await?;
+    RequirePermission("system:monitor")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
 
     let uptime_seconds = (Utc::now() - state.started_at).num_seconds().max(0);
@@ -285,8 +319,13 @@ async fn system(State(state): State<AppState>, user: CurrentUser) -> Result<Json
 }
 
 /// GET /api/monitor/overview — 平台总览
-async fn overview(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:monitor").check(&state, &user).await?;
+async fn overview(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
+    RequirePermission("system:monitor")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
 
     let stats = sqlx::query_as::<_, (
@@ -305,7 +344,17 @@ async fn overview(State(state): State<AppState>, user: CurrentUser) -> Result<Js
     )
     .fetch_one(&state.pool)
     .await?;
-    let (tenant_count, organization_count, user_count, role_count, application_count, menu_count, oauth_client_count, active_token_count, today_login_count) = stats;
+    let (
+        tenant_count,
+        organization_count,
+        user_count,
+        role_count,
+        application_count,
+        menu_count,
+        oauth_client_count,
+        active_token_count,
+        today_login_count,
+    ) = stats;
 
     let recent: Vec<RecentLoginRow> = sqlx::query_as(
         "SELECT COALESCE(username,''), COALESCE(organization_name,''), COALESCE(ip,''), created_at \

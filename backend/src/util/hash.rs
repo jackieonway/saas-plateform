@@ -16,13 +16,17 @@ pub fn b64url_sha256(input: &str) -> String {
 pub fn random_token(len: usize) -> String {
     const CS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let mut rng = rand::thread_rng();
-    (0..len).map(|_| CS[rng.gen_range(0..CS.len())] as char).collect()
+    (0..len)
+        .map(|_| CS[rng.gen_range(0..CS.len())] as char)
+        .collect()
 }
 
 /// 设备码用户码: XXXX-XXXX (去除易混字符 0O1I)
 pub fn random_user_code() -> String {
     const CS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let mut rng = rand::thread_rng();
-    let raw: String = (0..8).map(|_| CS[rng.gen_range(0..CS.len())] as char).collect();
+    let raw: String = (0..8)
+        .map(|_| CS[rng.gen_range(0..CS.len())] as char)
+        .collect();
     format!("{}-{}", &raw[0..4], &raw[4..8])
 }

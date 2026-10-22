@@ -9,7 +9,11 @@ use uuid::Uuid;
 
 /// Public policies let sibling delivery configuration refuse overlapping authority.
 pub(crate) fn public_targets() -> Result<Vec<deployment_contract::Target>, AppError> {
-    Ok(config::load()?.targets.into_iter().map(|t| t.policy).collect())
+    Ok(config::load()?
+        .targets
+        .into_iter()
+        .map(|t| t.policy)
+        .collect())
 }
 
 /// Classify the path as Nginx sees it; stored URLs and HTTP requests stay unchanged.

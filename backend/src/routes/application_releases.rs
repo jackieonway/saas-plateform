@@ -442,9 +442,14 @@ async fn register_definition(
     // The application lock serializes this check with cleanup submission.
     let managed_state: Option<String> = sqlx::query_scalar(
         "SELECT state FROM managed_image_artifacts WHERE public_url=$1 FOR SHARE",
-    ).bind(crate::managed_deployments::canonical_entry(&entry)).fetch_optional(&mut *tx).await?;
+    )
+    .bind(crate::managed_deployments::canonical_entry(&entry))
+    .fetch_optional(&mut *tx)
+    .await?;
     if managed_state.as_deref() == Some("CLEANING") {
-        return Err(AppError::conflict("该版本资源正在清理，不能创建或采用发布引用"));
+        return Err(AppError::conflict(
+            "该版本资源正在清理，不能创建或采用发布引用",
+        ));
     }
     if artifact.is_none() && sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM application_release_artifacts WHERE application_id=$1 AND version=$2)"

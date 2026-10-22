@@ -2,11 +2,11 @@
 //! Run explicitly with `cargo test release_tests -- --ignored`; TEST_DATABASE_URL may also
 //! be read from the repository's .env.test. Its account must be allowed to create databases.
 use std::collections::{BTreeMap, HashSet};
+use std::io::{Cursor, Write};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::io::{Cursor, Write};
 
 use anyhow::{anyhow, ensure, Result};
 use axum::body::{to_bytes, Body};
@@ -28,8 +28,8 @@ use crate::state::AppState;
 use crate::util::hash;
 use crate::util::jwt::{self, Claims};
 
-mod zip_registration;
 mod phase31;
+mod zip_registration;
 
 const ENVIRONMENT: &str = "development";
 const JWT_SECRET: &str = "isolated-release-tests-only";
@@ -44,17 +44,19 @@ fn test_database_options() -> Result<PgConnectOptions> {
     let url = match std::env::var("TEST_DATABASE_URL") {
         Ok(value) if !value.trim().is_empty() => value,
         _ => {
-            let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env.test");
-            let vars = dotenvy::from_path_iter(file)
-                .map_err(|_| anyhow!("set TEST_DATABASE_URL or add it to the root .env.test"))?;
+            let file = Path::new(env!("CARGO_MANIFEST_DIR")).join(".env.test");
+            let vars = dotenvy::from_path_iter(file).map_err(|_| {
+                anyhow!("set TEST_DATABASE_URL or add it to the root backend/.env.test")
+            })?;
             let mut url = None;
             for entry in vars {
-                let (key, value) = entry.map_err(|_| anyhow!("root .env.test cannot be parsed"))?;
+                let (key, value) =
+                    entry.map_err(|_| anyhow!("root backend/.env.test cannot be parsed"))?;
                 if key == "TEST_DATABASE_URL" && !value.trim().is_empty() {
                     url = Some(value);
                 }
             }
-            url.ok_or_else(|| anyhow!("root .env.test does not define TEST_DATABASE_URL"))?
+            url.ok_or_else(|| anyhow!("root backend/.env.test does not define TEST_DATABASE_URL"))?
         }
     };
     PgConnectOptions::from_str(&url)
@@ -107,14 +109,16 @@ impl TestDatabase {
         };
         let database = Self { pool, admin, name };
         let migrations = sqlx::migrate::Migrator {
-            migrations: std::borrow::Cow::Owned(sqlx::migrate!("./migrations").iter().filter(|m| m.version <= version).cloned().collect()),
+            migrations: std::borrow::Cow::Owned(
+                sqlx::migrate!("./migrations")
+                    .iter()
+                    .filter(|m| m.version <= version)
+                    .cloned()
+                    .collect(),
+            ),
             ..sqlx::migrate::Migrator::DEFAULT
         };
-        if migrations
-            .run(&database.pool)
-            .await
-            .is_err()
-        {
+        if migrations.run(&database.pool).await.is_err() {
             let _ = database.finish(Ok(())).await;
             return Err(anyhow!("isolated release test database migrations failed"));
         }
@@ -1699,7 +1703,7 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
                 && requests
                     .iter()
                     .any(|(path, _)| path.ends_with("/trusted-gateway-cors/styles.css")),
-            "cross-origin HTML scripts and styles were not checked"
+            "cross-origin HTML backend/scripts and styles were not checked"
         );
         ensure!(
             requests

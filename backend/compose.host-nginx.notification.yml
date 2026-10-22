@@ -1,0 +1,6 @@
+# Merge after compose.host-nginx.yml and compose.notification.yml.
+# Host Nginx reaches the notification service through a loopback-only port.
+services:
+  notification-ws:
+    ports:
+      - "127.0.0.1:${HOST_NOTIFICATION_PORT:-13003}:3003"

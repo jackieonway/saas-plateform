@@ -1302,22 +1302,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oauth-playground-api"
-version = "1.0.0"
-dependencies = [
- "axum",
- "base64 0.22.1",
- "rand 0.8.8",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "tokio",
- "url",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1845,7 +1829,6 @@ dependencies = [
  "flate2",
  "hex",
  "jsonwebtoken",
- "oauth-playground-api",
  "operational-telemetry",
  "password-hash",
  "percent-encoding",

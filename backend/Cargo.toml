@@ -5,8 +5,8 @@ edition = "2021"
 description = "SaaS Platform 多租户多组织权限平台 Rust 后端 (Axum + SQLx + PostgreSQL)"
 
 [dependencies]
-operational-telemetry = { path = "../crates/operational-telemetry" }
-deployment-contract = { path = "../crates/deployment-contract" }
+operational-telemetry = { path = "./crates/operational-telemetry" }
+deployment-contract = { path = "./crates/deployment-contract" }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono", "migrate", "macros", "derive"] }
@@ -41,7 +41,7 @@ rustix = { version = "1.1.5", features = ["fs"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
-oauth-playground-api = { path = "../mini-services/oauth-playground/backend" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [profile.dev]
 opt-level = 0

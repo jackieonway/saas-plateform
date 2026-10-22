@@ -1,6 +1,6 @@
 //! Public wire consumers only: no database, platform authorization, or future business API.
 
-#[path = "../../examples/micro-app-sdk/generated/protocol.rs"]
+#[path = "../tests/fixtures/micro-app-protocol/protocol.rs"]
 mod independent_consumer;
 
 use crate::public_contract::{self as protocol, OptionalNullable};
@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 fn fixtures() -> Value {
     serde_json::from_str(include_str!(
-        "../../examples/micro-app-sdk/contracts/fixtures/public-wire.json"
+        "../tests/fixtures/micro-app-protocol/public-wire.json"
     ))
     .expect("valid public fixtures")
 }
@@ -35,16 +35,48 @@ fn bytes(value: &Value) -> Vec<u8> {
 }
 
 #[test]
-fn public_contract_sources_and_vendored_rust_are_exact() {
+fn public_contract_sources_and_pinned_rust_are_exact() {
+    use sha2::{Digest, Sha256};
+
+    let source: Value = serde_json::from_str(include_str!(
+        "../tests/fixtures/micro-app-protocol/SOURCE.json"
+    ))
+    .expect("pinned protocol provenance");
+    assert_eq!(source["sdkVersion"], protocol::SDK_VERSION);
+    for (name, contents) in [
+        (
+            "protocol.rs",
+            include_bytes!("../tests/fixtures/micro-app-protocol/protocol.rs").as_slice(),
+        ),
+        (
+            "schema.json",
+            include_bytes!("../tests/fixtures/micro-app-protocol/schema.json").as_slice(),
+        ),
+        (
+            "public-wire.json",
+            include_bytes!("../tests/fixtures/micro-app-protocol/public-wire.json").as_slice(),
+        ),
+        (
+            "release.json",
+            include_bytes!("../tests/fixtures/micro-app-protocol/release.json").as_slice(),
+        ),
+    ] {
+        assert_eq!(
+            source["files"][name],
+            format!("{:x}", Sha256::digest(contents)),
+            "pinned protocol drift: {name}"
+        );
+    }
     assert_eq!(
         include_str!("public_contract.rs"),
-        include_str!("../../examples/micro-app-sdk/generated/protocol.rs")
+        include_str!("../tests/fixtures/micro-app-protocol/protocol.rs")
     );
-    let release: Value =
-        serde_json::from_str(include_str!("../../examples/micro-app-sdk/release.json"))
-            .expect("registered release");
+    let release: Value = serde_json::from_str(include_str!(
+        "../tests/fixtures/micro-app-protocol/release.json"
+    ))
+    .expect("registered release");
     let schema: Value = serde_json::from_str(include_str!(
-        "../../examples/micro-app-sdk/generated/schema.json"
+        "../tests/fixtures/micro-app-protocol/schema.json"
     ))
     .expect("generated schema");
     assert_eq!(release["sdkVersion"], protocol::SDK_VERSION);

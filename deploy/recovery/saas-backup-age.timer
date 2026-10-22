@@ -1,8 +1,0 @@
-[Unit]
-Description=Hourly remote recovery point authentication and age check (template only)
-[Timer]
-OnBootSec=10min
-OnUnitActiveSec=1h
-Unit=saas-backup-age.service
-[Install]
-WantedBy=timers.target

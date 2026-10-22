@@ -291,7 +291,7 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
     Ok(())
 }
 
-/// 幂等种子: 仅当 users 表为空时执行 (docs/architecture.md#data 种子计划)
+/// 幂等种子: 仅当 users 表为空时执行 (backend/docs/architecture.md#data 种子计划)
 pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let existing: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(pool)
@@ -513,8 +513,34 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         false,
     )
     .await?;
-    let distribution_read = insert_menu(&mut tx, sys, Some(app_mgmt), "BUTTON", "查看ZIP分发", "", "", "", "system:distribution:read", 22, false).await?;
-    let distribution_write = insert_menu(&mut tx, sys, Some(app_mgmt), "BUTTON", "管理ZIP分发", "", "", "", "system:distribution:write", 23, false).await?;
+    let distribution_read = insert_menu(
+        &mut tx,
+        sys,
+        Some(app_mgmt),
+        "BUTTON",
+        "查看ZIP分发",
+        "",
+        "",
+        "",
+        "system:distribution:read",
+        22,
+        false,
+    )
+    .await?;
+    let distribution_write = insert_menu(
+        &mut tx,
+        sys,
+        Some(app_mgmt),
+        "BUTTON",
+        "管理ZIP分发",
+        "",
+        "",
+        "",
+        "system:distribution:write",
+        23,
+        false,
+    )
+    .await?;
     let menu_mgmt = insert_menu(
         &mut tx,
         sys,

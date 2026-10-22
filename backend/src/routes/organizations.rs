@@ -11,10 +11,10 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
-use crate::state::AppState;
-use crate::routes::onboarding;
 use crate::routes::contact::{Contact, ContactUpdate};
+use crate::routes::onboarding;
 use crate::routes::tenants::validate_coordinates;
+use crate::state::AppState;
 use crate::util::{audit, tree};
 
 pub fn routes() -> Router<AppState> {
@@ -23,8 +23,14 @@ pub fn routes() -> Router<AppState> {
         .route("/api/organizations", post(create))
         .route("/api/organizations/{id}", put(update).delete(delete))
         .route("/api/organizations/{id}/status", put(update_status))
-        .route("/api/organizations/{id}/initialize-administrator", post(initialize_administrator))
-        .route("/api/organizations/{id}/authorizations", get(get_authorizations).put(put_authorizations))
+        .route(
+            "/api/organizations/{id}/initialize-administrator",
+            post(initialize_administrator),
+        )
+        .route(
+            "/api/organizations/{id}/authorizations",
+            get(get_authorizations).put(put_authorizations),
+        )
 }
 
 #[derive(sqlx::FromRow)]
@@ -61,21 +67,34 @@ async fn org_configuration_snapshot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: Uuid,
 ) -> Result<(Uuid, Value), AppError> {
-    let (tenant_id, parent_id, name, code, organization_type, status, expires_at):
-        (Uuid, Option<Uuid>, String, String, String, String, Option<DateTime<Utc>>) = sqlx::query_as(
+    let (tenant_id, parent_id, name, code, organization_type, status, expires_at): (
+        Uuid,
+        Option<Uuid>,
+        String,
+        String,
+        String,
+        String,
+        Option<DateTime<Utc>>,
+    ) = sqlx::query_as(
         "SELECT tenant_id,parent_id,name,COALESCE(code,''),organization_type,status,expires_at \
          FROM organizations WHERE id=$1 FOR NO KEY UPDATE",
-    ).bind(id).fetch_optional(&mut **tx).await?
-        .ok_or_else(|| AppError::not_found("组织不存在"))?;
+    )
+    .bind(id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| AppError::not_found("组织不存在"))?;
     let configuration: String = sqlx::query_scalar(
         "SELECT jsonb_build_array(name,code,organization_type,status,expires_at,sort_order,contact_name,contact_phone,contact_email, \
          description,province,city,district,township,village,address,longitude,latitude)::text FROM organizations WHERE id=$1",
     ).bind(id).fetch_one(&mut **tx).await?;
-    Ok((tenant_id, json!({
-        "id": id, "tenantId": tenant_id, "parentId": parent_id, "name": name, "code": code,
-        "organizationType": organization_type, "status": status, "expiresAt": expires_at,
-        "configurationHash": crate::util::hash::sha256_hex(&configuration),
-    })))
+    Ok((
+        tenant_id,
+        json!({
+            "id": id, "tenantId": tenant_id, "parentId": parent_id, "name": name, "code": code,
+            "organizationType": organization_type, "status": status, "expiresAt": expires_at,
+            "configurationHash": crate::util::hash::sha256_hex(&configuration),
+        }),
+    ))
 }
 
 /// Subtree totals preserve the extent of cascading creation/deletion in audits.
@@ -84,8 +103,16 @@ async fn org_audit_snapshot(
     id: Uuid,
 ) -> Result<(Uuid, Value), AppError> {
     let (tenant_id, mut snapshot) = org_configuration_snapshot(tx, id).await?;
-    let (members, roles, assignments, applications, menus, subtree_orgs, subtree_members, subtree_roles):
-        (i64, i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
+    let (
+        members,
+        roles,
+        assignments,
+        applications,
+        menus,
+        subtree_orgs,
+        subtree_members,
+        subtree_roles,
+    ): (i64, i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
         "WITH RECURSIVE subtree(id) AS (SELECT id FROM organizations WHERE id=$1 \
          UNION ALL SELECT o.id FROM organizations o JOIN subtree s ON o.parent_id=s.id) \
          SELECT (SELECT count(*) FROM memberships WHERE organization_id=$1), \
@@ -96,7 +123,10 @@ async fn org_audit_snapshot(
          (SELECT count(*) FROM subtree), \
          (SELECT count(*) FROM memberships WHERE organization_id IN (SELECT id FROM subtree)), \
          (SELECT count(*) FROM roles WHERE organization_id IN (SELECT id FROM subtree))",
-    ).bind(id).fetch_one(&mut **tx).await?;
+    )
+    .bind(id)
+    .fetch_one(&mut **tx)
+    .await?;
     let authorization: String = sqlx::query_scalar(
         "SELECT jsonb_build_array( \
          (SELECT COALESCE(jsonb_agg(application_id ORDER BY application_id),'[]'::jsonb) FROM organization_applications WHERE organization_id=$1), \
@@ -149,7 +179,9 @@ where
 /// DB 层兜底: 根组织唯一索引 uq_org_root_per_tenant 冲突 → 友好 409 (并发窗口下 check-then-insert 竞态由唯一索引封死)
 fn map_root_unique_violation(e: sqlx::Error) -> AppError {
     if let sqlx::Error::Database(ref db) = e {
-        if db.code().as_deref() == Some("23505") && db.constraint() == Some("uq_org_root_per_tenant") {
+        if db.code().as_deref() == Some("23505")
+            && db.constraint() == Some("uq_org_root_per_tenant")
+        {
             return AppError::conflict("该租户已存在根组织, 每个租户只能有一个根组织");
         }
     }
@@ -163,10 +195,16 @@ async fn tree_handler(
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:organization").check(&state, &user).await?;
+    RequirePermission("system:organization")
+        .check(&state, &user)
+        .await?;
     let tenant_id: Uuid = match params.get("tenantId") {
-        Some(value) => value.parse().map_err(|_| AppError::bad_request("tenantId 格式错误"))?,
-        None if state.is_platform_context(&user).await? => return Err(AppError::bad_request("缺少 tenantId 参数")),
+        Some(value) => value
+            .parse()
+            .map_err(|_| AppError::bad_request("tenantId 格式错误"))?,
+        None if state.is_platform_context(&user).await? => {
+            return Err(AppError::bad_request("缺少 tenantId 参数"))
+        }
         None => user.tenant_id,
     };
     state.ensure_tenant_scope(&user, tenant_id, "租户").await?;
@@ -257,10 +295,21 @@ fn default_organization_type() -> String {
 }
 
 fn validate_organization_type(organization_type: &str) -> Result<(), AppError> {
-    if ["COMPANY", "SUBSIDIARY", "BRANCH", "PUBLIC_INSTITUTION", "GOVERNMENT", "OTHER"].contains(&organization_type) {
+    if [
+        "COMPANY",
+        "SUBSIDIARY",
+        "BRANCH",
+        "PUBLIC_INSTITUTION",
+        "GOVERNMENT",
+        "OTHER",
+    ]
+    .contains(&organization_type)
+    {
         Ok(())
     } else {
-        Err(AppError::bad_request("组织类型仅支持公司、子公司、分公司、事业单位、政府或其他"))
+        Err(AppError::bad_request(
+            "组织类型仅支持公司、子公司、分公司、事业单位、政府或其他",
+        ))
     }
 }
 
@@ -273,7 +322,9 @@ async fn parse_parent(
         None => Ok(None),
         Some(p) if p.trim().is_empty() => Ok(None),
         Some(p) => {
-            let pid: Uuid = p.parse().map_err(|_| AppError::bad_request("parentId 格式错误"))?;
+            let pid: Uuid = p
+                .parse()
+                .map_err(|_| AppError::bad_request("parentId 格式错误"))?;
             let (parent_tenant,): (Uuid,) =
                 sqlx::query_as("SELECT tenant_id FROM organizations WHERE id = $1")
                     .bind(pid)
@@ -295,7 +346,9 @@ async fn create(
     user: CurrentUser,
     ApiJson(body): ApiJson<OrgBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:organization").check(&state, &user).await?;
+    RequirePermission("system:organization")
+        .check(&state, &user)
+        .await?;
     validate_organization_type(&body.organization_type)?;
     let contact = body.contact.normalized();
     contact.validate(true)?;
@@ -307,10 +360,11 @@ async fn create(
         .map_err(|_| AppError::bad_request("tenantId 格式错误"))?;
     // 非平台租户只能在本租户下建组织
     state.ensure_tenant_scope(&user, tenant_id, "租户").await?;
-    let tenant_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)")
-        .bind(tenant_id)
-        .fetch_one(&state.pool)
-        .await?;
+    let tenant_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)")
+            .bind(tenant_id)
+            .fetch_one(&state.pool)
+            .await?;
     if !tenant_exists {
         return Err(AppError::bad_request("所属租户不存在"));
     }
@@ -334,7 +388,9 @@ async fn create(
         .fetch_one(&state.pool)
         .await?;
         if root_exists {
-            return Err(AppError::conflict("该租户已存在根组织, 每个租户只能有一个根组织"));
+            return Err(AppError::conflict(
+                "该租户已存在根组织, 每个租户只能有一个根组织",
+            ));
         }
     }
     let name = body.name.trim().to_string();
@@ -373,10 +429,21 @@ async fn create(
     .await
     .map_err(map_root_unique_violation)?;
     onboarding::initialize_organization(&mut tx, tenant_id, row.id, parent_id).await?;
-    let role_code = if parent_id.is_none() { "tenant_admin" } else { "org_admin" };
+    let role_code = if parent_id.is_none() {
+        "tenant_admin"
+    } else {
+        "org_admin"
+    };
     let administrator = onboarding::provision_contact_administrator(
-        &mut tx, (&state.config, &state.passwords), tenant_id, row.id, &contact, role_code, existing_org_scope.as_deref(),
-    ).await?;
+        &mut tx,
+        (&state.config, &state.passwords),
+        tenant_id,
+        row.id,
+        &contact,
+        role_code,
+        existing_org_scope.as_deref(),
+    )
+    .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let (_, mut after) = org_audit_snapshot(&mut tx, row.id).await?;
@@ -385,16 +452,26 @@ async fn create(
         after["administratorCreated"] = json!(administrator.created);
     }
     let detail = audit::change_detail("organization", row.id, Value::Null, after);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(row.id),
-        action: "CREATE_ORGANIZATION", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(tenant_id),
+            organization_id: Some(row.id),
+            action: "CREATE_ORGANIZATION",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     let mut response = org_json(&row);
     if let Some(administrator) = administrator {
-        response["administrator"] = serde_json::to_value(administrator).map_err(anyhow::Error::from)?;
+        response["administrator"] =
+            serde_json::to_value(administrator).map_err(anyhow::Error::from)?;
     }
     Ok(Json(response))
 }
@@ -449,7 +526,10 @@ mod location_contract_tests {
         });
         let legacy: OrgBody = serde_json::from_value(payload.clone()).unwrap();
         assert_eq!(legacy.organization_type, "COMPANY");
-        assert_eq!((legacy.township.as_str(), legacy.village.as_str()), ("", ""));
+        assert_eq!(
+            (legacy.township.as_str(), legacy.village.as_str()),
+            ("", "")
+        );
 
         payload["township"] = json!("转塘街道");
         payload["village"] = json!("龙王沙社区");
@@ -460,11 +540,19 @@ mod location_contract_tests {
 
     #[test]
     fn organization_types_follow_the_contract() {
-        for organization_type in ["COMPANY", "SUBSIDIARY", "BRANCH", "PUBLIC_INSTITUTION", "GOVERNMENT", "OTHER"] {
+        for organization_type in [
+            "COMPANY",
+            "SUBSIDIARY",
+            "BRANCH",
+            "PUBLIC_INSTITUTION",
+            "GOVERNMENT",
+            "OTHER",
+        ] {
             assert!(validate_organization_type(organization_type).is_ok());
             let body: OrgBody = serde_json::from_value(json!({
                 "tenantId": "tenant-id", "name": "业务组织", "organizationType": organization_type,
-            })).unwrap();
+            }))
+            .unwrap();
             assert_eq!(body.organization_type, organization_type);
         }
         for invalid in ["", "branch", "PERSONAL", "UNKNOWN"] {
@@ -472,7 +560,8 @@ mod location_contract_tests {
         }
         let omitted: OrgUpdate = serde_json::from_value(json!({"name": "新名称"})).unwrap();
         assert_eq!(omitted.organization_type, None);
-        let update: OrgUpdate = serde_json::from_value(json!({"organizationType": "BRANCH"})).unwrap();
+        let update: OrgUpdate =
+            serde_json::from_value(json!({"organizationType": "BRANCH"})).unwrap();
         assert_eq!(update.organization_type.as_deref(), Some("BRANCH"));
     }
 
@@ -483,10 +572,12 @@ mod location_contract_tests {
         assert_eq!(omitted.village, None);
         let selected: OrgUpdate = serde_json::from_value(json!({
             "township": "转塘街道", "village": "龙王沙社区",
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(selected.township.as_deref(), Some("转塘街道"));
         assert_eq!(selected.village.as_deref(), Some("龙王沙社区"));
-        let cleared: OrgUpdate = serde_json::from_value(json!({"township": "", "village": ""})).unwrap();
+        let cleared: OrgUpdate =
+            serde_json::from_value(json!({"township": "", "village": ""})).unwrap();
         assert_eq!(cleared.township.as_deref(), Some(""));
         assert_eq!(cleared.village.as_deref(), Some(""));
     }
@@ -500,8 +591,12 @@ async fn update(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<OrgUpdate>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:organization").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:organization")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, id).await?;
     if let Some(name) = &body.name {
         if name.trim().is_empty() {
@@ -514,9 +609,11 @@ async fn update(
     let contact = body.contact.normalized()?;
     let mut tx = state.pool.begin().await?;
     let (_, before) = org_configuration_snapshot(&mut tx, id).await?;
-    let current_coordinates: (Option<f64>, Option<f64>) = sqlx::query_as(
-        "SELECT longitude, latitude FROM organizations WHERE id = $1",
-    ).bind(id).fetch_one(&mut *tx).await?;
+    let current_coordinates: (Option<f64>, Option<f64>) =
+        sqlx::query_as("SELECT longitude, latitude FROM organizations WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
     validate_coordinates(
         body.longitude.unwrap_or(current_coordinates.0),
         body.latitude.unwrap_or(current_coordinates.1),
@@ -564,11 +661,20 @@ async fn update(
     let (_, after) = org_configuration_snapshot(&mut tx, id).await?;
     if before != after {
         let detail = audit::change_detail("organization", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(row.tenant_id), organization_id: Some(id),
-            action: "UPDATE_ORGANIZATION", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(row.tenant_id),
+                organization_id: Some(id),
+                action: "UPDATE_ORGANIZATION",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -582,27 +688,45 @@ async fn delete(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:organization").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:organization")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, id).await?;
     let mut tx = state.pool.begin().await?;
     sqlx::query("SELECT id FROM organizations WHERE id=$1 FOR UPDATE")
-        .bind(id).execute(&mut *tx).await?;
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     let (target_tenant, before) = org_audit_snapshot(&mut tx, id).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let detail = audit::change_detail("organization", id, before, Value::Null);
     // The insert must see the target to preserve organization_name on deletion.
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(target_tenant), organization_id: Some(id),
-        action: "DELETE_ORGANIZATION", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(target_tenant),
+            organization_id: Some(id),
+            action: "DELETE_ORGANIZATION",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     // These composite NO ACTION checks must see the completed graph cascade,
     // after the paired single-column CASCADE FKs remove children and roles.
     sqlx::query("SET CONSTRAINTS fk_organizations_parent_same_tenant, fk_roles_organization_same_tenant DEFERRED")
         .execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM organizations WHERE id=$1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM organizations WHERE id=$1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("SET CONSTRAINTS fk_organizations_parent_same_tenant, fk_roles_organization_same_tenant IMMEDIATE")
         .execute(&mut *tx).await?;
     tx.commit().await?;
@@ -623,31 +747,42 @@ async fn update_status(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<StatusBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:organization").check(&state, &user).await?;
+    RequirePermission("system:organization")
+        .check(&state, &user)
+        .await?;
     if !["ENABLED", "DISABLED"].contains(&body.status.as_str()) {
         return Err(AppError::bad_request("状态仅支持 ENABLED / DISABLED"));
     }
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, id).await?;
     let mut tx = state.pool.begin().await?;
     let (target_tenant, before) = org_configuration_snapshot(&mut tx, id).await?;
-    sqlx::query(
-        "UPDATE organizations SET status = $2, updated_at = now() WHERE id = $1",
-    )
-    .bind(id)
-    .bind(&body.status)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("UPDATE organizations SET status = $2, updated_at = now() WHERE id = $1")
+        .bind(id)
+        .bind(&body.status)
+        .execute(&mut *tx)
+        .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let (_, after) = org_configuration_snapshot(&mut tx, id).await?;
     if before != after {
         let detail = audit::change_detail("organization", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(target_tenant), organization_id: Some(id),
-            action: "UPDATE_ORGANIZATION", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(target_tenant),
+                organization_id: Some(id),
+                action: "UPDATE_ORGANIZATION",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -689,11 +824,16 @@ async fn load_org_tenant(pool: &sqlx::PgPool, org_id: Uuid) -> Result<Uuid, AppE
         .bind(org_id)
         .fetch_optional(pool)
         .await?;
-    row.map(|(t,)| t).ok_or_else(|| AppError::not_found("组织不存在"))
+    row.map(|(t,)| t)
+        .ok_or_else(|| AppError::not_found("组织不存在"))
 }
 
 /// 当前组织子树的目标组织隔离校验。
-async fn ensure_org_in_scope(state: &AppState, user: &CurrentUser, org_id: Uuid) -> Result<(), AppError> {
+async fn ensure_org_in_scope(
+    state: &AppState,
+    user: &CurrentUser,
+    org_id: Uuid,
+) -> Result<(), AppError> {
     state.ensure_org_scope(user, org_id, "组织").await
 }
 
@@ -703,8 +843,12 @@ async fn get_authorizations(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:authorization").check(&state, &user).await?;
-    let org_id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:authorization")
+        .check(&state, &user)
+        .await?;
+    let org_id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, org_id).await?;
     let tenant_id = load_org_tenant(&state.pool, org_id).await?;
 
@@ -800,8 +944,12 @@ async fn put_authorizations(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<AuthzBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:authorization").check(&state, &user).await?;
-    let org_id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:authorization")
+        .check(&state, &user)
+        .await?;
+    let org_id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, org_id).await?;
     let tenant_id = load_org_tenant(&state.pool, org_id).await?;
 
@@ -822,7 +970,9 @@ async fn put_authorizations(
     // Tenant revocation and this grant edit take the same parent-then-child
     // locks; recheck the parent's allowed sets only after acquiring them.
     sqlx::query("SELECT id FROM tenants WHERE id=$1 FOR NO KEY UPDATE")
-        .bind(tenant_id).execute(&mut *tx).await?;
+        .bind(tenant_id)
+        .execute(&mut *tx)
+        .await?;
     let (_, before) = org_audit_snapshot(&mut tx, org_id).await?;
     let before = org_authorization_summary(before);
 
@@ -900,11 +1050,13 @@ async fn put_authorizations(
             .bind(menu)
             .execute(&mut *tx)
             .await?;
-            sqlx::query("DELETE FROM organization_menus WHERE organization_id = $1 AND menu_id = $2")
-                .bind(org_id)
-                .bind(menu)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "DELETE FROM organization_menus WHERE organization_id = $1 AND menu_id = $2",
+            )
+            .bind(org_id)
+            .bind(menu)
+            .execute(&mut *tx)
+            .await?;
         }
     }
     // 兜底对账: 组织菜单 ⊆ 组织应用 ∩ 租户菜单; 角色菜单 ⊆ 组织菜单 (仅本组织角色)
@@ -930,13 +1082,20 @@ async fn put_authorizations(
     let after = org_authorization_summary(after);
     if before != after {
         let detail = audit::change_detail("organization", org_id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(tenant_id), organization_id: Some(org_id),
-            action: "ORG_AUTH",
-            detail: &detail,
-            ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(tenant_id),
+                organization_id: Some(org_id),
+                action: "ORG_AUTH",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -944,12 +1103,23 @@ async fn put_authorizations(
 }
 
 async fn initialize_administrator(
-    State(state): State<AppState>, headers: HeaderMap, user: CurrentUser, Path(id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+    Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:organization").check(&state, &user).await?;
-    RequirePermission("system:user").check(&state, &user).await?;
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:organization")
+        .check(&state, &user)
+        .await?;
+    RequirePermission("system:user")
+        .check(&state, &user)
+        .await?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_org_in_scope(&state, &user, id).await?;
     let existing_org_scope = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
@@ -958,11 +1128,27 @@ async fn initialize_administrator(
         "SELECT tenant_id,parent_id,contact_name,contact_phone,contact_email FROM organizations WHERE id=$1 FOR NO KEY UPDATE",
     ).bind(id).fetch_optional(&mut *tx).await?.ok_or_else(|| AppError::not_found("组织不存在"))?;
     let org_id = id;
-    let role_code = if parent_id.is_none() { "tenant_admin" } else { "org_admin" };
-    let contact = Contact { contact_name, contact_phone, contact_email }.normalized();
+    let role_code = if parent_id.is_none() {
+        "tenant_admin"
+    } else {
+        "org_admin"
+    };
+    let contact = Contact {
+        contact_name,
+        contact_phone,
+        contact_email,
+    }
+    .normalized();
     let administrator = onboarding::initialize_existing_administrator(
-        &mut tx, (&state.config, &state.passwords), tenant_id, org_id, &contact, role_code, existing_org_scope.as_deref(),
-    ).await?;
+        &mut tx,
+        (&state.config, &state.passwords),
+        tenant_id,
+        org_id,
+        &contact,
+        role_code,
+        existing_org_scope.as_deref(),
+    )
+    .await?;
     if !administrator.already_initialized {
         let ip = audit::client_ip(&headers);
         let ua = audit::ua_of(&headers);
@@ -970,12 +1156,20 @@ async fn initialize_administrator(
         after["administratorUserId"] = json!(administrator.user_id);
         after["administratorCreated"] = json!(administrator.created);
         let detail = audit::change_detail("organization", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(tenant_id), organization_id: Some(org_id),
-            action: "INITIALIZE_ADMINISTRATOR", detail: &detail,
-            ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(tenant_id),
+                organization_id: Some(org_id),
+                action: "INITIALIZE_ADMINISTRATOR",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();

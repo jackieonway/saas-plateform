@@ -1,6 +1,6 @@
 //! Platform branding and tenant identity regressions on an owned PostgreSQL database.
 //! Run with `cargo test platform_settings_tests -- --ignored --nocapture`.
-//! Test credentials come from TEST_DATABASE_URL or ignored root .env.test, never logs.
+//! Test credentials come from TEST_DATABASE_URL or ignored root backend/.env.test, never logs.
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -27,9 +27,10 @@ fn database_options() -> Result<PgConnectOptions> {
     let url = match std::env::var("TEST_DATABASE_URL") {
         Ok(url) if !url.trim().is_empty() => url,
         _ => {
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env.test");
-            let entries = dotenvy::from_path_iter(path)
-                .map_err(|_| anyhow!("configure TEST_DATABASE_URL or ignored root .env.test"))?;
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env.test");
+            let entries = dotenvy::from_path_iter(path).map_err(|_| {
+                anyhow!("configure TEST_DATABASE_URL or ignored root backend/.env.test")
+            })?;
             let mut url = None;
             for entry in entries {
                 let (key, value) = entry.map_err(|_| anyhow!("invalid test environment file"))?;
@@ -129,7 +130,6 @@ impl Database {
         Ok(())
     }
 }
-
 
 async fn call(
     app: &Router,
@@ -650,7 +650,6 @@ async fn settings_require_platform_permission_and_reject_partial_invalid_updates
     .await;
     database.finish(result).await
 }
-
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]

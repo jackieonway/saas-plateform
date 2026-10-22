@@ -414,13 +414,18 @@ pub async fn publish(
             tenant_id: Some(actor.tenant_id),
             organization_id: Some(actor.organization_id),
             action: "PUBLISH_NOTIFICATION",
-            detail: &audit::change_detail("notificationPublication", publication_id,
-                Value::Null, json!({"recipientCount": recipient_count, "deliveryCount": delivery_count})),
+            detail: &audit::change_detail(
+                "notificationPublication",
+                publication_id,
+                Value::Null,
+                json!({"recipientCount": recipient_count, "deliveryCount": delivery_count}),
+            ),
             ip,
             user_agent: ua,
         },
         actor.application_id,
-    ).await?;
+    )
+    .await?;
     tx.commit().await?;
     Ok(Publication {
         publication_id,

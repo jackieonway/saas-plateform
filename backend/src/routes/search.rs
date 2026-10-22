@@ -35,7 +35,12 @@ async fn search(
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let q = params.get("q").cloned().unwrap_or_default().trim().to_string();
+    let q = params
+        .get("q")
+        .cloned()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     if q.is_empty() {
         return Err(AppError::bad_request("搜索关键词不能为空"));
     }

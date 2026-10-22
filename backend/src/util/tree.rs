@@ -48,6 +48,11 @@ pub fn build_tree(items: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
 
     children
         .get(&None)
-        .map(|roots| roots.iter().map(|r| render(*r, &nodes, &children, 0)).collect())
+        .map(|roots| {
+            roots
+                .iter()
+                .map(|r| render(*r, &nodes, &children, 0))
+                .collect()
+        })
         .unwrap_or_default()
 }

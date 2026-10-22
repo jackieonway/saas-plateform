@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "repository": "saas-micro-app-sdk",
+  "revision": "4b493f88ff542882a91714b0e153b3169c141c08",
+  "sdkVersion": "1.0.0",
+  "files": {
+    "protocol.rs": "dc2ac00abb27f0eb34d3f820805e02afb7cc7e5ca9c10c6493f4c8991b38f8ed",
+    "schema.json": "bdf10675d95fa3a2a6f90c7011215e6e615b5220012791217f42ac43142e7b15",
+    "public-wire.json": "a799dba87967584ed3b89957ccfce58d62d11a9495d72401e459b52d97e21f79",
+    "release.json": "29480fa5955e796fa4a2d124f14a6a9ef35155c518ea996d9dbf6d2c6a8af77a"
+  },
+  "sourcePaths": {
+    "protocol.rs": "generated/protocol.rs",
+    "schema.json": "generated/schema.json",
+    "public-wire.json": "contracts/fixtures/public-wire.json",
+    "release.json": "release.json"
+  }
+}

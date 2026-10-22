@@ -36,7 +36,10 @@ pub fn bearer_token(headers: &HeaderMap) -> Result<String, AppError> {
 impl FromRequestParts<AppState> for CurrentUser {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let token = bearer_token(&parts.headers)?;
         let claims = jwt::verify(&token, &state.config.jwt_secret)
             .map_err(|_| AppError::unauthorized("凭证无效或已过期"))?;
@@ -57,13 +60,17 @@ impl FromRequestParts<AppState> for CurrentUser {
             .as_deref()
             .and_then(|o| Uuid::parse_str(o).ok())
             .ok_or_else(|| AppError::unauthorized("凭证缺少组织上下文"))?;
-        let session_id: Uuid = claims.sid.as_deref()
+        let session_id: Uuid = claims
+            .sid
+            .as_deref()
             .and_then(|sid| Uuid::parse_str(sid).ok())
             .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
-        let version = claims.ver.ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
-        let (username, real_name, is_super_admin) = session::active_user(
-            &state.pool, user_id, tenant_id, org_id, session_id, version,
-        ).await?;
+        let version = claims
+            .ver
+            .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
+        let (username, real_name, is_super_admin) =
+            session::active_user(&state.pool, user_id, tenant_id, org_id, session_id, version)
+                .await?;
         Ok(Self {
             user_id,
             username,

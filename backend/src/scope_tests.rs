@@ -14,9 +14,9 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::routes;
 use crate::state::AppState;
+use crate::util::hash;
 use crate::util::jwt::{self, Claims};
 use crate::util::password;
-use crate::util::hash;
 
 async fn call(
     app: &Router,
@@ -46,15 +46,26 @@ async fn call(
     Ok((status, value))
 }
 
-async fn call_form(app: &Router, path: &str, client_id: &str, secret: &str, extra: &str) -> Result<(StatusCode, Value)> {
+async fn call_form(
+    app: &Router,
+    path: &str,
+    client_id: &str,
+    secret: &str,
+    extra: &str,
+) -> Result<(StatusCode, Value)> {
     let body = format!("client_id={client_id}&client_secret={secret}&{extra}");
-    let request = Request::builder().method(Method::POST).uri(path)
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri(path)
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from(body))?;
     let response = app.clone().oneshot(request).await?;
     let status = response.status();
     let bytes = to_bytes(response.into_body(), 1024 * 1024).await?;
-    Ok((status, serde_json::from_slice(&bytes).unwrap_or_else(|_| json!(String::from_utf8_lossy(&bytes)))))
+    Ok((
+        status,
+        serde_json::from_slice(&bytes).unwrap_or_else(|_| json!(String::from_utf8_lossy(&bytes))),
+    ))
 }
 
 async fn session(
@@ -117,16 +128,26 @@ async fn tenant(pool: &PgPool, suffix: &str, label: &str) -> Result<(Uuid, Uuid)
 
 async fn test_application(pool: &PgPool, suffix: &str) -> Result<(Uuid, String, String, String)> {
     let code = format!("scope-app-{suffix}");
-    let app_id: Uuid = sqlx::query_scalar("INSERT INTO applications (code, name) VALUES ($1, $2) RETURNING id")
-        .bind(&code).bind(&code).fetch_one(pool).await?;
+    let app_id: Uuid =
+        sqlx::query_scalar("INSERT INTO applications (code, name) VALUES ($1, $2) RETURNING id")
+            .bind(&code)
+            .bind(&code)
+            .fetch_one(pool)
+            .await?;
     let client_id = format!("scope-client-{suffix}");
     let secret = format!("s{}", Uuid::new_v4().simple());
-    sqlx::query("INSERT INTO oauth_clients \
+    sqlx::query(
+        "INSERT INTO oauth_clients \
         (client_id, client_secret_hash, client_name, client_type, grant_types, scopes, \
          access_token_validity, refresh_token_validity, application_id) \
-         VALUES ($1, $2, $3, 'CONFIDENTIAL', 'client_credentials', 'profile', 7200, 604800, $4)")
-        .bind(&client_id).bind(hash::sha256_hex(&secret)).bind(&client_id).bind(app_id)
-        .execute(pool).await?;
+         VALUES ($1, $2, $3, 'CONFIDENTIAL', 'client_credentials', 'profile', 7200, 604800, $4)",
+    )
+    .bind(&client_id)
+    .bind(hash::sha256_hex(&secret))
+    .bind(&client_id)
+    .bind(app_id)
+    .execute(pool)
+    .await?;
     Ok((app_id, code, client_id, secret))
 }
 
@@ -968,17 +989,25 @@ async fn platform_session_lifecycle() -> Result<()> {
 #[ignore = "requires TEST_DATABASE_URL pointing at an isolated PostgreSQL test database"]
 async fn application_token_audience_and_revocation() -> Result<()> {
     let url = std::env::var("TEST_DATABASE_URL")?;
-    let pool = PgPoolOptions::new().max_connections(5).connect(&url).await?;
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await?;
     let suffix = Uuid::new_v4().simple().to_string();
     let (tenant_a, org_a) = tenant(&pool, &format!("app-a-{suffix}"), "App tenant A").await?;
     let (tenant_b, org_b) = tenant(&pool, &format!("app-b-{suffix}"), "App tenant B").await?;
     let user_a = test_user(&pool, &format!("app-a-{suffix}"), &[org_a]).await?;
     let user_b = test_user(&pool, &format!("app-b-{suffix}"), &[org_b]).await?;
-    let (app_a, code_a, client_a, secret_a) = test_application(&pool, &format!("a-{suffix}")).await?;
-    let (app_b, code_b, client_b, secret_b) = test_application(&pool, &format!("b-{suffix}")).await?;
+    let (app_a, code_a, client_a, secret_a) =
+        test_application(&pool, &format!("a-{suffix}")).await?;
+    let (app_b, code_b, client_b, secret_b) =
+        test_application(&pool, &format!("b-{suffix}")).await?;
     for (tenant, org, app_id) in [(tenant_a, org_a, app_a), (tenant_b, org_b, app_b)] {
         sqlx::query("INSERT INTO tenant_applications (tenant_id, application_id) VALUES ($1, $2)")
-            .bind(tenant).bind(app_id).execute(&pool).await?;
+            .bind(tenant)
+            .bind(app_id)
+            .execute(&pool)
+            .await?;
         sqlx::query("INSERT INTO organization_applications (organization_id, application_id) VALUES ($1, $2)")
             .bind(org).bind(app_id).execute(&pool).await?;
     }
@@ -987,10 +1016,12 @@ async fn application_token_audience_and_revocation() -> Result<()> {
     config.database_url = url;
     config.jwt_secret = secret.into();
     let config = Arc::new(config);
-    let app = Router::new().merge(routes::api_router())
+    let app = Router::new()
+        .merge(routes::api_router())
         .nest("/oauth", routes::oauth2::oauth_router())
         .with_state(AppState::new(pool.clone(), config.clone()));
-    let peer = Router::new().merge(routes::api_router())
+    let peer = Router::new()
+        .merge(routes::api_router())
         .nest("/oauth", routes::oauth2::oauth_router())
         .with_state(AppState::new(pool.clone(), config));
     let (session_a, _) = session(&pool, user_a, tenant_a, org_a, secret).await?;
@@ -1363,18 +1394,33 @@ async fn application_token_audience_and_revocation() -> Result<()> {
     }.await;
 
     sqlx::query("DELETE FROM oauth_tokens WHERE client_id = ANY($1)")
-        .bind(&[&client_a, &client_b]).execute(&pool).await?;
-    sqlx::query("DELETE FROM audit_logs WHERE tenant_id = ANY($1) OR user_id = ANY($2) \
-                 OR username = ANY($3)")
-        .bind(&[tenant_a, tenant_b]).bind(&[user_a, user_b])
-        .bind(&[&client_a, &client_b]).execute(&pool).await?;
+        .bind(&[&client_a, &client_b])
+        .execute(&pool)
+        .await?;
+    sqlx::query(
+        "DELETE FROM audit_logs WHERE tenant_id = ANY($1) OR user_id = ANY($2) \
+                 OR username = ANY($3)",
+    )
+    .bind(&[tenant_a, tenant_b])
+    .bind(&[user_a, user_b])
+    .bind(&[&client_a, &client_b])
+    .execute(&pool)
+    .await?;
     sqlx::query("DELETE FROM oauth_clients WHERE client_id = ANY($1)")
-        .bind(&[&client_a, &client_b]).execute(&pool).await?;
+        .bind(&[&client_a, &client_b])
+        .execute(&pool)
+        .await?;
     sqlx::query("DELETE FROM applications WHERE id = ANY($1)")
-        .bind(&[app_a, app_b]).execute(&pool).await?;
+        .bind(&[app_a, app_b])
+        .execute(&pool)
+        .await?;
     sqlx::query("DELETE FROM tenants WHERE id = ANY($1)")
-        .bind(&[tenant_a, tenant_b]).execute(&pool).await?;
+        .bind(&[tenant_a, tenant_b])
+        .execute(&pool)
+        .await?;
     sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-        .bind(&[user_a, user_b]).execute(&pool).await?;
+        .bind(&[user_a, user_b])
+        .execute(&pool)
+        .await?;
     result
 }

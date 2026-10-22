@@ -1,6 +1,6 @@
 //! Phase 10 notifications and Phase 11 scoped app-member regressions on isolated PostgreSQL.
 //! Run explicitly with `cargo test notification_tests -- --ignored --nocapture`.
-//! TEST_DATABASE_URL is read from the environment or ignored root .env.test; never printed.
+//! TEST_DATABASE_URL is read from the environment or ignored root backend/.env.test; never printed.
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,9 +34,9 @@ fn database_options() -> Result<PgConnectOptions> {
     let url = match std::env::var("TEST_DATABASE_URL") {
         Ok(url) if !url.trim().is_empty() => url,
         _ => {
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env.test");
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env.test");
             let entries = dotenvy::from_path_iter(path).map_err(|_| {
-                anyhow!("set TEST_DATABASE_URL or configure ignored root .env.test")
+                anyhow!("set TEST_DATABASE_URL or configure ignored root backend/.env.test")
             })?;
             let mut value = None;
             for entry in entries {

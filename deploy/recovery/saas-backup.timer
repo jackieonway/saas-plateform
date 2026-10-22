@@ -1,8 +1,0 @@
-[Unit]
-Description=Daily pilot dump schedule (template only)
-[Timer]
-OnCalendar=*-*-* 02:15:00
-Persistent=true
-Unit=saas-backup.service
-[Install]
-WantedBy=timers.target

@@ -1,6 +1,6 @@
 import type { AppAuthorizationContext, MicroLifecycle, MicroProps } from "./types"
-import { CONTEXT_CONTRACT_VERSION } from "../../../../examples/micro-app-sdk/generated/protocol.mjs"
-import { authorizationContextSignature } from "../../../../examples/micro-app-sdk/src/context-updates.mjs"
+import { CONTEXT_CONTRACT_VERSION } from "../../../vendor/micro-app-sdk/generated/protocol.mjs"
+import { authorizationContextSignature } from "../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs"
 
 export interface MicroContextSnapshot {
   token: string

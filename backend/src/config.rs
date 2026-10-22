@@ -181,6 +181,7 @@ pub fn load_environment() -> anyhow::Result<()> {
 
 impl Config {
     /// Existing in-process tests use development defaults and replace fixture values.
+    #[cfg(test)]
     pub fn from_env() -> Self {
         Self::try_from_env().expect("invalid runtime configuration")
     }

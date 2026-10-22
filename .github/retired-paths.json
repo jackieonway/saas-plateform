@@ -1,0 +1,425 @@
+{
+  "purpose": "Retired cross-repository orchestration, snapshots and native deployment only; monitoring/recovery implementations are retained in backend/ops.",
+  "entries": [
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/business-images-policy.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/ci-runner.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/ci-workflow.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/dev-runner.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/dev-vite-integration.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/example-consumers.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/fixtures"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/micro-host-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/micro-iframe-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/micro-release-gateways.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/notification"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/notification-ci-policy.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/notification-e2e-launch-policy.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/package-microapp.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase10-session-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase15-data-grants-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase15-data-grants-races.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase15-work-orders-fixture.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase21-ci-policy.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase21-work-orders-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase22-socketio.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase23-notification-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase24-oauth-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase27-ci-policy.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase27-stores-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase28-ci-policy.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase28-delivery-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase28-delivery-fixture-contract.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-browser-gate.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-build.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-compare.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-evidence.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-host-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-linux-validation.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-nginx.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase29-performance.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase31"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase32-monitoring-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase33-native-restore.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase33-recovery-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase35-zip-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase35-zip-cases.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase35-zip-distribution.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase36-managed-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase36-managed-deployment-cases.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase36-managed-deployment-remaining.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase36-managed-deployment.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase36-platform.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase36-release-regression.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/phase8-work-orders-browser.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/platform-admin-contract.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/platform-admin-tls.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/production-native-config.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/production-native-e2e.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/production-native-support.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/repository-split.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/runtime-entrypoints.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/tenant-isolation-api.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/tenant-isolation-policy-fixture.sql"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/tenant-relationship-constraints.sql"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/vite-example-delivery.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/work-orders-platform-e2e.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/zip-release-e2e-policy.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/zip-release-e2e.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/helpers/phase21-work-orders-services.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/helpers/phase22-fixtures.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/helpers/phase27-stores-services.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/helpers/phase28-delivery-services.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/helpers/phase33-remote-store.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/browser/manifest.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/browser/phase29-server.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/browser/results.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/browser/results.test.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/browser/run.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/browser/wait.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/acceptance/browser/wait.test.mjs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/oauth_playground_ui_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/data_grant_ui_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase17_work_orders_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase18_work_orders_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase19_work_orders_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase20_work_orders_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase26_stores_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase30_authorization_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase31_old_clients.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/src/phase32_monitoring_tests.rs"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/.integration"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/scripts"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/deploy"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/business-repositories.lock.json"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/integration-repositories.lock.json"
+    },
+    {
+      "project": "rust-saas",
+      "path": ".github/actions"
+    },
+    {
+      "project": "rust-saas",
+      "path": ".github/workflows/production-build.yml"
+    },
+    {
+      "project": "rust-saas",
+      "path": ".github/workflows/business-publish.yml"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/ops/recovery/backup-window.sh"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/ops/recovery/saas-backup.service"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/ops/recovery/saas-backup.timer"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/ops/recovery/saas-backup-age.service"
+    },
+    {
+      "project": "rust-saas",
+      "path": "backend/ops/recovery/saas-backup-age.timer"
+    },
+    {
+      "project": "saas-work-orders",
+      "path": "backend/scripts"
+    },
+    {
+      "project": "saas-work-orders",
+      "path": "backend/acceptance"
+    },
+    {
+      "project": "saas-work-orders",
+      "path": "backend/deploy"
+    },
+    {
+      "project": "saas-stores",
+      "path": "backend/scripts"
+    },
+    {
+      "project": "saas-stores",
+      "path": "backend/acceptance"
+    },
+    {
+      "project": "saas-stores",
+      "path": "backend/deploy"
+    }
+  ]
+}

@@ -62,8 +62,8 @@ import type { MicroSandboxStats } from "./sandbox"
 import { loadHtmlEntry, markEntryFailed } from "./loader"
 import { createIframeLifecycle } from "./iframe"
 import { resolveMicroEntry, microEntrySignature, assertMicroEntrySnapshot } from "./entry"
-import { SDK_VERSION, MICRO_PROPS_CONTRACT_VERSION } from "../../../../examples/micro-app-sdk/generated/protocol.mjs"
-import { assertBrowserCapabilities } from "../../../../examples/micro-app-sdk/src/capabilities.mjs"
+import { SDK_VERSION, MICRO_PROPS_CONTRACT_VERSION } from "../../../vendor/micro-app-sdk/generated/protocol.mjs"
+import { assertBrowserCapabilities } from "../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs"
 import { MICRO_APP_GLOBAL } from "./types"
 import type {
   ApplicationEntryInfo,

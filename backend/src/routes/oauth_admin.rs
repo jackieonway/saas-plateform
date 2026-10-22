@@ -12,22 +12,31 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser};
-use crate::state::AppState;
 use crate::session;
+use crate::state::AppState;
 use crate::util::{audit, hash};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/oauth/clients", get(list_clients).post(create_client))
-        .route("/api/oauth/clients/{id}", put(update_client).delete(delete_client))
-        .route("/api/oauth/clients/{id}/regenerate-secret", post(regenerate_secret))
+        .route(
+            "/api/oauth/clients/{id}",
+            put(update_client).delete(delete_client),
+        )
+        .route(
+            "/api/oauth/clients/{id}/regenerate-secret",
+            post(regenerate_secret),
+        )
         .route("/api/oauth/tokens", get(list_tokens))
         .route("/api/oauth/tokens/purge", post(purge_tokens))
         .route("/api/oauth/tokens/kick", post(kick_sessions))
         .route("/api/oauth/tokens/sessions", get(list_sessions))
         .route("/api/oauth/tokens/{id}", delete(revoke_token))
         .route("/api/oauth/device-codes", get(list_device_codes))
-        .route("/api/oauth/device-codes/{id}/revoke", put(revoke_device_code))
+        .route(
+            "/api/oauth/device-codes/{id}/revoke",
+            put(revoke_device_code),
+        )
 }
 
 const CLIENT_MENU: &str = "/system/oauth/clients";
@@ -90,7 +99,10 @@ pub fn split_csv(s: &str) -> Vec<String> {
         .collect()
 }
 
-pub async fn fetch_client(pool: &sqlx::PgPool, client_id: &str) -> Result<Option<ClientFull>, AppError> {
+pub async fn fetch_client(
+    pool: &sqlx::PgPool,
+    client_id: &str,
+) -> Result<Option<ClientFull>, AppError> {
     let row = sqlx::query_as::<_, ClientFull>(
         "SELECT id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
@@ -105,7 +117,8 @@ pub async fn fetch_client(pool: &sqlx::PgPool, client_id: &str) -> Result<Option
 
 /// Safe metadata only: credential values and redirect bodies never enter audit.
 async fn client_audit_snapshot(
-    tx: &mut Transaction<'_, Postgres>, id: Uuid,
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
 ) -> Result<Value, AppError> {
     sqlx::query_scalar(
         "SELECT jsonb_build_object('id',id,'name',client_name,'clientId',client_id, \
@@ -121,24 +134,35 @@ async fn client_audit_snapshot(
 /// App deletion locks app -> client through ON DELETE SET NULL. Take the same
 /// order before a client update can need an application's foreign-key lock.
 async fn lock_client_applications(
-    tx: &mut Transaction<'_, Postgres>, id: Uuid, requested: Option<Option<Uuid>>,
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    requested: Option<Option<Uuid>>,
 ) -> Result<(), AppError> {
-    let observed: Option<Uuid> = sqlx::query_scalar("SELECT application_id FROM oauth_clients WHERE id=$1")
-        .bind(id).fetch_optional(&mut **tx).await?
-        .ok_or_else(|| AppError::not_found("客户端不存在"))?;
+    let observed: Option<Uuid> =
+        sqlx::query_scalar("SELECT application_id FROM oauth_clients WHERE id=$1")
+            .bind(id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .ok_or_else(|| AppError::not_found("客户端不存在"))?;
     let target = requested.unwrap_or(observed);
     let mut applications: Vec<Uuid> = observed.into_iter().chain(target).collect();
     applications.sort_unstable();
     applications.dedup();
     let locked: Vec<Uuid> = sqlx::query_scalar(
         "SELECT id FROM applications WHERE id=ANY($1) ORDER BY id FOR KEY SHARE",
-    ).bind(&applications).fetch_all(&mut **tx).await?;
+    )
+    .bind(&applications)
+    .fetch_all(&mut **tx)
+    .await?;
     if target.is_some_and(|app| !locked.contains(&app)) {
         return Err(AppError::not_found("关联应用不存在"));
     }
-    let current: Option<Uuid> = sqlx::query_scalar("SELECT application_id FROM oauth_clients WHERE id=$1 FOR UPDATE")
-        .bind(id).fetch_optional(&mut **tx).await?
-        .ok_or_else(|| AppError::not_found("客户端不存在"))?;
+    let current: Option<Uuid> =
+        sqlx::query_scalar("SELECT application_id FROM oauth_clients WHERE id=$1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .ok_or_else(|| AppError::not_found("客户端不存在"))?;
     if current != observed {
         return Err(AppError::conflict("客户端关联应用已变化，请重新请求"));
     }
@@ -146,7 +170,10 @@ async fn lock_client_applications(
 }
 
 /// GET /api/oauth/clients — 不返回 secret
-async fn list_clients(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+async fn list_clients(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     // (id, created_at, application_id, application_name): LEFT JOIN applications 取关联应用名
     let times: Vec<(Uuid, DateTime<Utc>, Option<Uuid>, Option<String>)> = sqlx::query_as(
@@ -172,10 +199,11 @@ async fn list_clients(State(state): State<AppState>, user: CurrentUser) -> Resul
         .iter()
         .map(|c| {
             let mut v = c.to_public_json();
-            let (created, app_id, app_name) = time_map
-                .get(&c.id)
-                .cloned()
-                .unwrap_or((Utc::now(), c.application_id, None));
+            let (created, app_id, app_name) =
+                time_map
+                    .get(&c.id)
+                    .cloned()
+                    .unwrap_or((Utc::now(), c.application_id, None));
             v["createdAt"] = json!(created);
             v["applicationId"] = json!(app_id);
             v["applicationName"] = json!(app_name);
@@ -222,7 +250,9 @@ fn validate_client_body(body: &ClientBody) -> Result<(), AppError> {
         return Err(AppError::bad_request("客户端名称不能为空"));
     }
     if !["CONFIDENTIAL", "PUBLIC"].contains(&body.client_type.as_str()) {
-        return Err(AppError::bad_request("客户端类型仅支持 CONFIDENTIAL / PUBLIC"));
+        return Err(AppError::bad_request(
+            "客户端类型仅支持 CONFIDENTIAL / PUBLIC",
+        ));
     }
     if body.grant_types.is_empty() {
         return Err(AppError::bad_request("至少配置一种授权模式"));
@@ -244,7 +274,11 @@ async fn generate_client_id(pool: &sqlx::PgPool, name: &str) -> Result<String, A
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
     let slug = slug.trim_matches('-').to_string();
-    let base = if slug.is_empty() { "client".to_string() } else { slug };
+    let base = if slug.is_empty() {
+        "client".to_string()
+    } else {
+        slug
+    };
     for _ in 0..8 {
         let suffix = hash::random_token(6).to_lowercase();
         let candidate = format!("{}-{}", base, suffix);
@@ -296,12 +330,26 @@ async fn create_client(
     .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    let detail = audit::change_detail("oauth_client", id, Value::Null, client_audit_snapshot(&mut tx, id).await?);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "CREATE_CLIENT", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    let detail = audit::change_detail(
+        "oauth_client",
+        id,
+        Value::Null,
+        client_audit_snapshot(&mut tx, id).await?,
+    );
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(user.tenant_id),
+            organization_id: Some(user.org_id),
+            action: "CREATE_CLIENT",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({
         "id": id, "clientId": client_id, "clientName": body.client_name,
@@ -355,10 +403,14 @@ async fn update_client(
     ApiJson(body): ApiJson<ClientUpdate>,
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(t) = &body.client_type {
         if !["CONFIDENTIAL", "PUBLIC"].contains(&t.as_str()) {
-            return Err(AppError::bad_request("客户端类型仅支持 CONFIDENTIAL / PUBLIC"));
+            return Err(AppError::bad_request(
+                "客户端类型仅支持 CONFIDENTIAL / PUBLIC",
+            ));
         }
     }
     if let Some(name) = &body.client_name {
@@ -375,8 +427,9 @@ async fn update_client(
             if raw.is_empty() {
                 Some(None)
             } else {
-                let app: Uuid =
-                    raw.parse().map_err(|_| AppError::bad_request("applicationId 格式错误"))?;
+                let app: Uuid = raw
+                    .parse()
+                    .map_err(|_| AppError::bad_request("applicationId 格式错误"))?;
                 let exists: bool =
                     sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM applications WHERE id = $1)")
                         .bind(app)
@@ -396,9 +449,13 @@ async fn update_client(
         "SELECT redirect_uris IS DISTINCT FROM COALESCE($2,redirect_uris), \
          scopes IS DISTINCT FROM COALESCE($3,scopes), \
          description IS DISTINCT FROM COALESCE($4,description) FROM oauth_clients WHERE id=$1",
-    ).bind(id).bind(body.redirect_uris.as_ref().map(|values| values.join(",")))
-        .bind(body.scopes.as_ref().map(|values| values.join(",")))
-        .bind(&body.description).fetch_one(&mut *tx).await?;
+    )
+    .bind(id)
+    .bind(body.redirect_uris.as_ref().map(|values| values.join(",")))
+    .bind(body.scopes.as_ref().map(|values| values.join(",")))
+    .bind(&body.description)
+    .fetch_one(&mut *tx)
+    .await?;
     let row = sqlx::query_as::<_, ClientFull>(
         "UPDATE oauth_clients SET client_name = COALESCE($2, client_name), client_type = COALESCE($3, client_type), \
          redirect_uris = COALESCE($4, redirect_uris), grant_types = COALESCE($5, grant_types), \
@@ -427,16 +484,31 @@ async fn update_client(
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let mut after = client_audit_snapshot(&mut tx, id).await?;
-    for (field, changed) in [("redirectUrisChanged",private_changes.0),("scopesChanged",private_changes.1),("descriptionChanged",private_changes.2)] {
-        if changed { after[field] = json!(true); }
+    for (field, changed) in [
+        ("redirectUrisChanged", private_changes.0),
+        ("scopesChanged", private_changes.1),
+        ("descriptionChanged", private_changes.2),
+    ] {
+        if changed {
+            after[field] = json!(true);
+        }
     }
     if before != after {
         let detail = audit::change_detail("oauth_client", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_CLIENT", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "UPDATE_CLIENT",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     let mut v = row.to_public_json();
     // update 响应补关联应用名 (UPDATE ... RETURNING 无法 JOIN 目标表, 单查一次)
@@ -462,7 +534,9 @@ async fn delete_client(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before = client_audit_snapshot(&mut tx, id).await?;
     let (_client_id,): (String,) =
@@ -474,11 +548,20 @@ async fn delete_client(
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let detail = audit::change_detail("oauth_client", id, before, Value::Null);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "DELETE_CLIENT", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(user.tenant_id),
+            organization_id: Some(user.org_id),
+            action: "DELETE_CLIENT",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }
@@ -491,7 +574,9 @@ async fn regenerate_secret(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let secret = hash::random_token(32);
     let secret_hash = hash::sha256_hex(&secret);
     let mut tx = state.pool.begin().await?;
@@ -510,16 +595,34 @@ async fn regenerate_secret(
     let mut after = client_audit_snapshot(&mut tx, id).await?;
     after["credentialRotated"] = json!(true);
     let detail = audit::change_detail("oauth_client", id, before, after);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_CLIENT", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(user.tenant_id),
+            organization_id: Some(user.org_id),
+            action: "UPDATE_CLIENT",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({"clientSecret": secret})))
 }
 
-type TokenRowTuple = (Uuid, String, String, String, String, DateTime<Utc>, DateTime<Utc>, bool);
+type TokenRowTuple = (
+    Uuid,
+    String,
+    String,
+    String,
+    String,
+    DateTime<Utc>,
+    DateTime<Utc>,
+    bool,
+);
 
 /// 清理过期的 OAuth 历史数据 (手动 purge 端点与每小时定时任务共用)
 ///
@@ -535,11 +638,14 @@ pub(crate) async fn purge_stale_oauth_data(pool: &sqlx::PgPool) -> Result<(u64, 
     Ok(counts)
 }
 
-async fn purge_stale_oauth_data_in_tx(tx: &mut Transaction<'_, Postgres>) -> Result<(u64, u64), AppError> {
-    let tokens = sqlx::query("DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'")
-        .execute(&mut **tx)
-        .await?
-        .rows_affected();
+async fn purge_stale_oauth_data_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<(u64, u64), AppError> {
+    let tokens =
+        sqlx::query("DELETE FROM oauth_tokens WHERE expires_at < now() - interval '7 days'")
+            .execute(&mut **tx)
+            .await?
+            .rows_affected();
     let devices = sqlx::query(
         "DELETE FROM oauth_device_codes WHERE status = 'DENIED' OR expires_at < now() - interval '7 days'",
     )
@@ -561,17 +667,31 @@ async fn purge_tokens(
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     if tokens_deleted != 0 || devices_deleted != 0 {
-        let detail = audit::change_detail("oauth_history", Uuid::nil(),
-        json!({"eligibleTokenCount":tokens_deleted,"eligibleDeviceCount":devices_deleted}),
-        json!({"eligibleTokenCount":0,"eligibleDeviceCount":0}));
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "OAUTH_PURGE", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        let detail = audit::change_detail(
+            "oauth_history",
+            Uuid::nil(),
+            json!({"eligibleTokenCount":tokens_deleted,"eligibleDeviceCount":devices_deleted}),
+            json!({"eligibleTokenCount":0,"eligibleDeviceCount":0}),
+        );
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "OAUTH_PURGE",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
-    Ok(Json(json!({ "tokensDeleted": tokens_deleted, "devicesDeleted": devices_deleted })))
+    Ok(Json(
+        json!({ "tokensDeleted": tokens_deleted, "devicesDeleted": devices_deleted }),
+    ))
 }
 
 /// GET /api/oauth/tokens?resourceOwner=
@@ -622,7 +742,10 @@ type SessionRowTuple = (
 /// clients 为全历史客户端 (含已吊销); activeAccess/activeRefresh 仅计
 /// revoked=false AND expires_at > now() 的行; lastExpiresAt 无活跃令牌时为 null。
 /// 静态段 sessions 与参数段 {id} 同层, matchit 静态优先, 路由共存不冲突。
-async fn list_sessions(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+async fn list_sessions(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let rows: Vec<SessionRowTuple> = sqlx::query_as(
         "SELECT t.user_id, u.username, COALESCE(u.real_name, '') AS real_name, \
@@ -651,10 +774,11 @@ async fn list_sessions(State(state): State<AppState>, user: CurrentUser) -> Resu
             },
         )
         .collect();
-    let platform_sessions = session::device_sessions(
-        &state.pool, None, user.user_id, user.session_id,
-    ).await?;
-    Ok(Json(json!({ "sessions": sessions, "platformSessions": platform_sessions })))
+    let platform_sessions =
+        session::device_sessions(&state.pool, None, user.user_id, user.session_id).await?;
+    Ok(Json(
+        json!({ "sessions": sessions, "platformSessions": platform_sessions }),
+    ))
 }
 
 /// DELETE /api/oauth/tokens/{id} — 吊销
@@ -665,31 +789,44 @@ async fn revoke_token(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, TOKEN_MENU).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before: Value = sqlx::query_scalar(
         "SELECT jsonb_build_object('id',id,'name',client_id,'clientId',client_id, \
          'tokenType',token_type,'revoked',revoked) FROM oauth_tokens WHERE id=$1 FOR UPDATE",
-    ).bind(id).fetch_optional(&mut *tx).await?
-        .ok_or_else(|| AppError::not_found("令牌不存在"))?;
-    let (_client_id,): (String,) = sqlx::query_as(
-        "UPDATE oauth_tokens SET revoked = true WHERE id = $1 RETURNING client_id",
     )
     .bind(id)
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("令牌不存在"))?;
+    let (_client_id,): (String,) =
+        sqlx::query_as("UPDATE oauth_tokens SET revoked = true WHERE id = $1 RETURNING client_id")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| AppError::not_found("令牌不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let mut after = before.clone();
     after["revoked"] = json!(true);
     if before != after {
         let detail = audit::change_detail("oauth_credential", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "TOKEN_REVOKED", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "TOKEN_REVOKED",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))
@@ -732,7 +869,12 @@ async fn kick_sessions(
     .rows_affected();
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    let detail = audit::change_detail("user_sessions", target, before, session_audit_snapshot(&mut tx, target).await?);
+    let detail = audit::change_detail(
+        "user_sessions",
+        target,
+        before,
+        session_audit_snapshot(&mut tx, target).await?,
+    );
     audit::write_in_tx(
         &mut tx,
         audit::AuditInfo {
@@ -742,19 +884,27 @@ async fn kick_sessions(
             organization_id: Some(user.org_id),
             action: "KICK_SESSIONS",
             detail: &detail,
-            ip: &ip, user_agent: &ua,
+            ip: &ip,
+            user_agent: &ua,
         },
     )
     .await?;
     tx.commit().await?;
-    Ok(Json(json!({ "revoked": revoked, "platformSessionsRevoked": platform_revoked })))
+    Ok(Json(
+        json!({ "revoked": revoked, "platformSessionsRevoked": platform_revoked }),
+    ))
 }
 
-async fn session_audit_snapshot(tx: &mut Transaction<'_, Postgres>, target: Uuid) -> Result<Value, AppError> {
+async fn session_audit_snapshot(
+    tx: &mut Transaction<'_, Postgres>,
+    target: Uuid,
+) -> Result<Value, AppError> {
     // Counts need a fresh READ COMMITTED statement after waiting for issuance's
     // user lock, otherwise a just-committed rotation can be absent from before.
     sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE id=$1 FOR UPDATE")
-        .bind(target).fetch_optional(&mut **tx).await?
+        .bind(target)
+        .fetch_optional(&mut **tx)
+        .await?
         .ok_or_else(|| AppError::not_found("目标用户不存在"))?;
     sqlx::query_scalar(
         "SELECT jsonb_build_object('id',u.id,'name',u.username,'sessionVersion',u.session_version, \
@@ -765,10 +915,23 @@ async fn session_audit_snapshot(tx: &mut Transaction<'_, Postgres>, target: Uuid
         .ok_or_else(|| AppError::not_found("目标用户不存在"))
 }
 
-type DeviceRowTuple = (Uuid, String, String, String, String, String, String, DateTime<Utc>, DateTime<Utc>);
+type DeviceRowTuple = (
+    Uuid,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    DateTime<Utc>,
+    DateTime<Utc>,
+);
 
 /// GET /api/oauth/device-codes
-async fn list_device_codes(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+async fn list_device_codes(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let rows: Vec<DeviceRowTuple> = sqlx::query_as(
         "SELECT d.id, d.user_code, d.client_id, COALESCE(c.client_name, '') AS client_name, \
@@ -803,13 +966,18 @@ async fn revoke_device_code(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, TOKEN_MENU).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before: Value = sqlx::query_scalar(
         "SELECT jsonb_build_object('id',id,'name',client_id,'clientId',client_id,'status',status) \
          FROM oauth_device_codes WHERE id=$1 FOR UPDATE",
-    ).bind(id).fetch_optional(&mut *tx).await?
-        .ok_or_else(|| AppError::not_found("设备码不存在"))?;
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::not_found("设备码不存在"))?;
     let (_id,): (Uuid,) = sqlx::query_as(
         "UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE id = $1 RETURNING id",
     )
@@ -823,11 +991,20 @@ async fn revoke_device_code(
     after["status"] = json!("EXPIRED");
     if before != after {
         let detail = audit::change_detail("oauth_device_authorization", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "DEVICE_DENY", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(user.tenant_id),
+                organization_id: Some(user.org_id),
+                action: "DEVICE_DENY",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))

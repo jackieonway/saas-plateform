@@ -22,7 +22,9 @@ async fn user_context(state: &AppState, headers: &HeaderMap) -> Result<Value, Ap
     let token = bearer_token(headers)?;
     let claims = jwt::verify(&token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
-    let audience = claims.aud.as_deref()
+    let audience = claims
+        .aud
+        .as_deref()
         .ok_or_else(|| AppError::forbidden("旧服务令牌不可读取用户授权视图"))?;
     app_context::current_context(state, audience, headers).await
 }

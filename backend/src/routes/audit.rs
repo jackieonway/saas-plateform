@@ -35,7 +35,8 @@ type AuditRowTuple = (
     Option<Uuid>,
 );
 
-const AUDIT_WHERE: &str = "($1 = '' OR username ILIKE '%' || $1 || '%' OR detail ILIKE '%' || $1 || '%' \
+const AUDIT_WHERE: &str =
+    "($1 = '' OR username ILIKE '%' || $1 || '%' OR detail ILIKE '%' || $1 || '%' \
      OR tenant_name ILIKE '%' || $1 || '%' OR organization_name ILIKE '%' || $1 || '%' \
      OR request_id::text ILIKE '%' || $1 || '%' OR application_id::text ILIKE '%' || $1 || '%') \
      AND ($2 = '' OR action = $2) \
@@ -66,9 +67,15 @@ async fn organization_scope(
     Ok((ids, include_unassigned))
 }
 
-fn correlation_filter(params: &HashMap<String, String>, key: &str) -> Result<Option<Uuid>, AppError> {
+fn correlation_filter(
+    params: &HashMap<String, String>,
+    key: &str,
+) -> Result<Option<Uuid>, AppError> {
     match params.get(key).filter(|value| !value.is_empty()) {
-        Some(value) => value.parse().map(Some).map_err(|_| AppError::bad_request(format!("{key} 参数非法"))),
+        Some(value) => value
+            .parse()
+            .map(Some)
+            .map_err(|_| AppError::bad_request(format!("{key} 参数非法"))),
         None => Ok(None),
     }
 }
@@ -101,7 +108,9 @@ async fn export_csv(
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Response, AppError> {
-    RequirePermission("system:audit").check(&state, &user).await?;
+    RequirePermission("system:audit")
+        .check(&state, &user)
+        .await?;
     let kw = params.get("keyword").cloned().unwrap_or_default();
     let action = params.get("action").cloned().unwrap_or_default();
     // 非平台租户仅能导出本租户审计行 (平台级 NULL 租户行也仅平台可见)
@@ -132,7 +141,21 @@ async fn export_csv(
     .await?;
 
     let mut csv = String::from("\u{FEFF}时间,用户,租户,组织,动作,详情,IP,UA,请求编号,应用ID\n");
-    for (_, username, _tenant_id, tenant_name, organization_name, act, detail, ip, created_at, user_agent, request_id, application_id) in rows {
+    for (
+        _,
+        username,
+        _tenant_id,
+        tenant_name,
+        organization_name,
+        act,
+        detail,
+        ip,
+        created_at,
+        user_agent,
+        request_id,
+        application_id,
+    ) in rows
+    {
         csv.push_str(&format!(
             "{},{},{},{},{},{},{},{},{},{}\n",
             created_at.format("%Y-%m-%d %H:%M:%S"),
@@ -143,16 +166,23 @@ async fn export_csv(
             csv_escape(&detail),
             csv_escape(&ip),
             csv_escape(&user_agent),
-            request_id.map(|value| value.to_string()).unwrap_or_default(),
-            application_id.map(|value| value.to_string()).unwrap_or_default(),
+            request_id
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+            application_id
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
         ));
     }
     let filename = format!("audit-logs-{}.csv", Utc::now().format("%Y%m%d-%H%M%S"));
     let mut resp = csv.into_response();
-    resp.headers_mut().insert(CONTENT_TYPE, "text/csv; charset=utf-8".parse().unwrap());
+    resp.headers_mut()
+        .insert(CONTENT_TYPE, "text/csv; charset=utf-8".parse().unwrap());
     resp.headers_mut().insert(
         CONTENT_DISPOSITION,
-        format!("attachment; filename=\"{filename}\"").parse().unwrap(),
+        format!("attachment; filename=\"{filename}\"")
+            .parse()
+            .unwrap(),
     );
     Ok(resp)
 }
@@ -163,7 +193,9 @@ async fn list(
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:audit").check(&state, &user).await?;
+    RequirePermission("system:audit")
+        .check(&state, &user)
+        .await?;
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
     let action = params.get("action").cloned().unwrap_or_default();
@@ -195,17 +227,19 @@ async fn list(
     .bind(offset)
     .fetch_all(&state.pool)
     .await?;
-    let total: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM audit_logs WHERE {where_clause}"))
-        .bind(&kw)
-        .bind(&action)
-        .bind(scope)
-        .bind(tf_val)
-        .bind(request_id)
-        .bind(application_id)
-        .bind(&org_scope)
-        .bind(include_unassigned)
-        .fetch_one(&state.pool)
-        .await?;
+    let total: i64 = sqlx::query_scalar(&format!(
+        "SELECT count(*) FROM audit_logs WHERE {where_clause}"
+    ))
+    .bind(&kw)
+    .bind(&action)
+    .bind(scope)
+    .bind(tf_val)
+    .bind(request_id)
+    .bind(application_id)
+    .bind(&org_scope)
+    .bind(include_unassigned)
+    .fetch_one(&state.pool)
+    .await?;
     let records: Vec<Value> = rows
         .into_iter()
         .map(|(id, username, tenant_id, tenant_name, organization_name, act, detail, ip, created_at, user_agent, request_id, application_id)| {

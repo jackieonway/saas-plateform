@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::error::AppError;
 use crate::authorization;
+use crate::error::AppError;
 use crate::extractors::{bearer_token, ApiJson, CurrentUser};
 use crate::routes::page_json;
 use crate::session;
@@ -28,7 +28,10 @@ pub fn routes() -> Router<AppState> {
         .route("/api/auth/password", put(change_password))
         .route("/api/auth/login-history", get(login_history))
         .route("/api/auth/my-sessions", get(my_sessions))
-        .route("/api/auth/sessions/{id}", axum::routing::delete(revoke_my_session))
+        .route(
+            "/api/auth/sessions/{id}",
+            axum::routing::delete(revoke_my_session),
+        )
 }
 
 #[derive(sqlx::FromRow)]
@@ -42,7 +45,10 @@ struct MembershipRow {
     department_name: Option<String>,
 }
 
-async fn fetch_memberships(pool: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<MembershipRow>, AppError> {
+async fn fetch_memberships(
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+) -> Result<Vec<MembershipRow>, AppError> {
     let rows = sqlx::query_as::<_, MembershipRow>(
         "SELECT m.organization_id, o.name AS organization_name, org_path(o.id) AS organization_path, \
          o.tenant_id, t.name AS tenant_name, m.department_id, d.name AS department_name \
@@ -119,13 +125,24 @@ async fn login(
         return Err(AppError::bad_request("登录账号与密码不能为空"));
     }
     let phone = crate::routes::contact::phone_identifier(&identifier);
-    let email = if identifier.contains('@') { identifier.to_lowercase() } else { String::new() };
+    let email = if identifier.contains('@') {
+        identifier.to_lowercase()
+    } else {
+        String::new()
+    };
     if let Some(retry) = state.login_limits.admit_source(&ip) {
         return Err(AppError::RateLimited(retry));
     }
-    let input_key = format!("input:{}", crate::util::hash::sha256_hex(
-        if !phone.is_empty() { &phone } else if !email.is_empty() { &email } else { &identifier },
-    ));
+    let input_key = format!(
+        "input:{}",
+        crate::util::hash::sha256_hex(if !phone.is_empty() {
+            &phone
+        } else if !email.is_empty() {
+            &email
+        } else {
+            &identifier
+        },)
+    );
     if let Some(retry) = state.login_limits.check_account(&input_key) {
         return Err(AppError::RateLimited(retry));
     }
@@ -135,14 +152,26 @@ async fn login(
          OR ($3<>'' AND lower(email)=$3) ORDER BY id LIMIT 65",
     ).bind(&identifier).bind(phone).bind(email).fetch_all(&state.pool).await?;
     if rows.len() > 64 {
-        return Err(AppError::bad_request("该电话或 Email 关联账号过多，请使用其他登录账号"));
+        return Err(AppError::bad_request(
+            "该电话或 Email 关联账号过多，请使用其他登录账号",
+        ));
     }
     if rows.is_empty() {
         state.login_limits.record_failure(&input_key);
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: None, username: &identifier, tenant_id: None, organization_id: None,
-            action: "LOGIN_FAILED", detail: "用户不存在", ip: &ip, user_agent: &ua,
-        }).await;
+        audit::write(
+            &state.pool,
+            audit::AuditInfo {
+                user_id: None,
+                username: &identifier,
+                tenant_id: None,
+                organization_id: None,
+                action: "LOGIN_FAILED",
+                detail: "用户不存在",
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await;
         return Err(AppError::unauthorized("用户名或密码错误"));
     }
     let mut accounts = Vec::new();
@@ -157,18 +186,29 @@ async fn login(
             return Err(AppError::RateLimited(1));
         }
         let account_key = format!("user:{}", row.id);
-        if let Some(retry) = state.login_limits.check_account(&account_key) { locked = Some(retry); continue; }
-        if row.status != "ENABLED" { continue; }
+        if let Some(retry) = state.login_limits.check_account(&account_key) {
+            locked = Some(retry);
+            continue;
+        }
+        if row.status != "ENABLED" {
+            continue;
+        }
         let valid = tokio::time::timeout_at(
-            verify_deadline, state.passwords.verify(&row.password_hash, &body.password),
-        ).await.map_err(|_| AppError::RateLimited(1))??;
+            verify_deadline,
+            state.passwords.verify(&row.password_hash, &body.password),
+        )
+        .await
+        .map_err(|_| AppError::RateLimited(1))??;
         if !valid {
             failures.push((row.id, row.username));
             continue;
         }
         state.login_limits.clear_account(&account_key);
         let memberships = fetch_memberships(&state.pool, row.id).await?;
-        if memberships.is_empty() { authenticated_without_membership = true; continue; }
+        if memberships.is_empty() {
+            authenticated_without_membership = true;
+            continue;
+        }
         for membership in &memberships {
             let mut choice = membership_json(membership);
             choice["userId"] = json!(row.id);
@@ -177,13 +217,28 @@ async fn login(
             choices.push(choice);
         }
         sqlx::query("UPDATE users SET last_login_at=now(), updated_at=now() WHERE id=$1")
-            .bind(row.id).execute(&state.pool).await?;
+            .bind(row.id)
+            .execute(&state.pool)
+            .await?;
         let first = &memberships[0];
-        audit::write(&state.pool, audit::AuditInfo {
-            user_id: Some(row.id), username: &row.username, tenant_id: Some(first.tenant_id), organization_id: Some(first.organization_id),
-            action: "LOGIN", detail: "登录成功, 签发登录票据", ip: &ip, user_agent: &ua,
-        }).await;
-        accounts.push(CredentialAccount { user_id: row.id, version: row.session_version });
+        audit::write(
+            &state.pool,
+            audit::AuditInfo {
+                user_id: Some(row.id),
+                username: &row.username,
+                tenant_id: Some(first.tenant_id),
+                organization_id: Some(first.organization_id),
+                action: "LOGIN",
+                detail: "登录成功, 签发登录票据",
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await;
+        accounts.push(CredentialAccount {
+            user_id: row.id,
+            version: row.session_version,
+        });
     }
     let Some(first) = accounts.first() else {
         // A successful shared-alias login must not count as a failed attempt
@@ -192,13 +247,25 @@ async fn login(
             state.login_limits.record_failure(&input_key);
             for (id, username) in failures {
                 state.login_limits.record_failure(&format!("user:{id}"));
-                audit::write(&state.pool, audit::AuditInfo {
-                    user_id: Some(id), username: &username, tenant_id: None, organization_id: None,
-                    action: "LOGIN_FAILED", detail: "密码错误", ip: &ip, user_agent: &ua,
-                }).await;
+                audit::write(
+                    &state.pool,
+                    audit::AuditInfo {
+                        user_id: Some(id),
+                        username: &username,
+                        tenant_id: None,
+                        organization_id: None,
+                        action: "LOGIN_FAILED",
+                        detail: "密码错误",
+                        ip: &ip,
+                        user_agent: &ua,
+                    },
+                )
+                .await;
             }
         }
-        if let Some(retry) = locked { return Err(AppError::RateLimited(retry)); }
+        if let Some(retry) = locked {
+            return Err(AppError::RateLimited(retry));
+        }
         if authenticated_without_membership {
             return Err(AppError::forbidden("所属租户或组织已到期, 无法登录"));
         }
@@ -209,17 +276,34 @@ async fn login(
     let account_count = accounts.len();
     let claims = jwt::Claims {
         sub: first.user_id.to_string(),
-        typ: if account_count > 1 { "credential_multi" } else { "credential" }.into(),
-        tenant: None, org: None, cid: None, scope: None, sid: None,
-        ver: Some(first.version), aud: None, jti: None,
-        exp: now + state.config.credential_ticket_ttl_minutes * 60, iat: now,
+        typ: if account_count > 1 {
+            "credential_multi"
+        } else {
+            "credential"
+        }
+        .into(),
+        tenant: None,
+        org: None,
+        cid: None,
+        scope: None,
+        sid: None,
+        ver: Some(first.version),
+        aud: None,
+        jti: None,
+        exp: now + state.config.credential_ticket_ttl_minutes * 60,
+        iat: now,
     };
     let ticket = if account_count == 1 {
         jwt::sign(&claims, &state.config.jwt_secret)?
     } else {
-        jwt::sign_payload(&CredentialSelection { claims, accounts }, &state.config.jwt_secret)?
+        jwt::sign_payload(
+            &CredentialSelection { claims, accounts },
+            &state.config.jwt_secret,
+        )?
     };
-    Ok(Json(json!({ "ticket": ticket, "memberships": choices, "accountCount": account_count })))
+    Ok(Json(
+        json!({ "ticket": ticket, "memberships": choices, "accountCount": account_count }),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -240,40 +324,82 @@ async fn context(
     let claims = jwt::verify(&token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("凭证无效或已过期"))?;
     if claims.typ != "credential" && claims.typ != "credential_multi" && claims.typ != "session" {
-        return Err(AppError::unauthorized("凭证类型错误, 需要 ticket 或会话令牌"));
+        return Err(AppError::unauthorized(
+            "凭证类型错误, 需要 ticket 或会话令牌",
+        ));
     }
-    let org_id: Uuid = body.organization_id.parse()
+    let org_id: Uuid = body
+        .organization_id
+        .parse()
         .map_err(|_| AppError::bad_request("组织 ID 格式错误"))?;
-    let (user_id, claim_version) = if claims.typ == "credential_multi" {
-        let selection: CredentialSelection = jwt::verify_payload(&token, &state.config.jwt_secret)
-            .map_err(|_| AppError::unauthorized("登录选择凭证无效或已过期"))?;
-        let selected = if let Some(selected) = body.user_id { selected } else {
-            let ids: Vec<Uuid> = selection.accounts.iter().map(|account| account.user_id).collect();
-            let candidates: Vec<Uuid> = sqlx::query_scalar(
+    let (user_id, claim_version) =
+        if claims.typ == "credential_multi" {
+            let selection: CredentialSelection =
+                jwt::verify_payload(&token, &state.config.jwt_secret)
+                    .map_err(|_| AppError::unauthorized("登录选择凭证无效或已过期"))?;
+            let selected =
+                if let Some(selected) = body.user_id {
+                    selected
+                } else {
+                    let ids: Vec<Uuid> = selection
+                        .accounts
+                        .iter()
+                        .map(|account| account.user_id)
+                        .collect();
+                    let candidates: Vec<Uuid> = sqlx::query_scalar(
                 "SELECT user_id FROM memberships WHERE organization_id=$1 AND user_id=ANY($2)",
             ).bind(org_id).bind(ids).fetch_all(&state.pool).await?;
-            if candidates.len() != 1 { return Err(AppError::bad_request("请选择要进入该组织的账号")); }
-            candidates[0]
+                    if candidates.len() != 1 {
+                        return Err(AppError::bad_request("请选择要进入该组织的账号"));
+                    }
+                    candidates[0]
+                };
+            let account = selection
+                .accounts
+                .iter()
+                .find(|account| account.user_id == selected)
+                .ok_or_else(|| AppError::forbidden("所选账号未通过本次登录验证"))?;
+            (account.user_id, account.version)
+        } else {
+            let id: Uuid = claims
+                .sub
+                .parse()
+                .map_err(|_| AppError::unauthorized("凭证无效"))?;
+            if body.user_id.is_some_and(|selected| selected != id) {
+                return Err(AppError::forbidden("不能通过当前凭证切换用户账号"));
+            }
+            (
+                id,
+                claims
+                    .ver
+                    .ok_or_else(|| AppError::unauthorized("旧版凭证已失效，请重新登录"))?,
+            )
         };
-        let account = selection.accounts.iter().find(|account| account.user_id == selected)
-            .ok_or_else(|| AppError::forbidden("所选账号未通过本次登录验证"))?;
-        (account.user_id, account.version)
-    } else {
-        let id: Uuid = claims.sub.parse().map_err(|_| AppError::unauthorized("凭证无效"))?;
-        if body.user_id.is_some_and(|selected| selected != id) {
-            return Err(AppError::forbidden("不能通过当前凭证切换用户账号"));
-        }
-        (id, claims.ver.ok_or_else(|| AppError::unauthorized("旧版凭证已失效，请重新登录"))?)
-    };
     let old_session_id = if claims.typ == "session" {
-        let sid: Uuid = claims.sid.as_deref()
+        let sid: Uuid = claims
+            .sid
+            .as_deref()
             .and_then(|value| Uuid::parse_str(value).ok())
             .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
-        let old_tenant = claims.tenant.as_deref().and_then(|value| Uuid::parse_str(value).ok())
+        let old_tenant = claims
+            .tenant
+            .as_deref()
+            .and_then(|value| Uuid::parse_str(value).ok())
             .ok_or_else(|| AppError::unauthorized("会话缺少租户上下文"))?;
-        let old_org = claims.org.as_deref().and_then(|value| Uuid::parse_str(value).ok())
+        let old_org = claims
+            .org
+            .as_deref()
+            .and_then(|value| Uuid::parse_str(value).ok())
             .ok_or_else(|| AppError::unauthorized("会话缺少组织上下文"))?;
-        session::active_user(&state.pool, user_id, old_tenant, old_org, sid, claim_version).await?;
+        session::active_user(
+            &state.pool,
+            user_id,
+            old_tenant,
+            old_org,
+            sid,
+            claim_version,
+        )
+        .await?;
         Some(sid)
     } else {
         None
@@ -286,7 +412,8 @@ async fn context(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::unauthorized("用户不存在"))?;
-    let (username, real_name, email, phone, avatar, gender, is_super, status, session_version) = user;
+    let (username, real_name, email, phone, avatar, gender, is_super, status, session_version) =
+        user;
     if status != "ENABLED" {
         return Err(AppError::unauthorized("账号已被禁用"));
     }
@@ -307,7 +434,18 @@ async fn context(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::forbidden("您在该组织没有成员身份"))?;
-    let (org_id, org_name, org_path, tenant_id, tenant_name, tenant_code, tenant_is_platform, org_is_root, org_expires, tenant_expires) = org;
+    let (
+        org_id,
+        org_name,
+        org_path,
+        tenant_id,
+        tenant_name,
+        tenant_code,
+        tenant_is_platform,
+        org_is_root,
+        org_expires,
+        tenant_expires,
+    ) = org;
     // 会话与刷新均受组织祖先链及租户有效期约束。
     if org_expires.is_some_and(|e| e <= Utc::now()) {
         return Err(AppError::forbidden("该组织已到期, 无法切换"));
@@ -332,25 +470,39 @@ async fn context(
                 $7::timestamptz, $8::timestamptz), $5, $6) \
          RETURNING id, expires_at",
     )
-    .bind(user_id).bind(tenant_id).bind(org_id).bind(ttl.max(refresh_ttl) as f64).bind(&ip).bind(&ua)
-    .bind(org_expires).bind(tenant_expires)
-    .fetch_one(&mut *tx).await?;
+    .bind(user_id)
+    .bind(tenant_id)
+    .bind(org_id)
+    .bind(ttl.max(refresh_ttl) as f64)
+    .bind(&ip)
+    .bind(&ua)
+    .bind(org_expires)
+    .bind(tenant_expires)
+    .fetch_one(&mut *tx)
+    .await?;
     if let Some(old_id) = old_session_id {
         let revoked = sqlx::query(
             "UPDATE platform_sessions SET revoked_at = now() \
              WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > now()",
-        ).bind(old_id).bind(user_id).execute(&mut *tx).await?.rows_affected();
+        )
+        .bind(old_id)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
         if revoked != 1 {
             return Err(AppError::unauthorized("会话已失效，请重新登录"));
         }
     }
     let access_expiry = (now + ttl).min(expires_at.timestamp());
-    let refresh_expiry = DateTime::from_timestamp((now + refresh_ttl).min(expires_at.timestamp()), 0)
-        .ok_or_else(|| AppError::bad_request("刷新令牌有效期配置无效"))?;
+    let refresh_expiry =
+        DateTime::from_timestamp((now + refresh_ttl).min(expires_at.timestamp()), 0)
+            .ok_or_else(|| AppError::bad_request("刷新令牌有效期配置无效"))?;
     if access_expiry <= now || refresh_expiry <= Utc::now() {
         return Err(AppError::forbidden("租户或组织有效期不足，无法签发会话"));
     }
-    let refresh_token = session::issue_refresh_in_tx(&mut tx, session_id, session_version, refresh_expiry).await?;
+    let refresh_token =
+        session::issue_refresh_in_tx(&mut tx, session_id, session_version, refresh_expiry).await?;
     let session = jwt::Claims {
         sub: user_id.to_string(),
         typ: "session".into(),
@@ -367,15 +519,27 @@ async fn context(
     };
     let access_token = jwt::sign(&session, &state.config.jwt_secret)?;
     if claims.typ == "session" {
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user_id), username: &username,
-            tenant_id: Some(tenant_id), organization_id: Some(org_id),
-            action: "CONTEXT_SWITCH", detail: &audit::change_detail("platform_session", session_id,
-                json!({"previousSessionId": old_session_id, "organizationId": claims.org,
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user_id),
+                username: &username,
+                tenant_id: Some(tenant_id),
+                organization_id: Some(org_id),
+                action: "CONTEXT_SWITCH",
+                detail: &audit::change_detail(
+                    "platform_session",
+                    session_id,
+                    json!({"previousSessionId": old_session_id, "organizationId": claims.org,
                     "tenantId": claims.tenant, "username": username}),
-                json!({"organizationId": org_id, "organizationName": org_name,
-                    "tenantId": tenant_id, "username": username})), ip: &ip, user_agent: &ua,
-        }).await?;
+                    json!({"organizationId": org_id, "organizationName": org_name,
+                    "tenantId": tenant_id, "username": username}),
+                ),
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
 
@@ -395,7 +559,10 @@ async fn context(
 }
 
 /// GET /api/auth/profile
-async fn profile(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+async fn profile(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
     let u = sqlx::query_as::<_, (String, String, String, String, String, String, bool)>(
         "SELECT username, COALESCE(real_name,''), COALESCE(email,''), COALESCE(phone,''), \
          COALESCE(avatar,''), COALESCE(gender,'UNKNOWN'), is_super_admin FROM users WHERE id = $1",
@@ -436,12 +603,25 @@ async fn profile(State(state): State<AppState>, user: CurrentUser) -> Result<Jso
     .await?;
     let apps_json: Vec<Value> = apps
         .into_iter()
-        .map(|(id, code, name, icon, base_path, entry_type, entry_url, deployment_version, entry_version_id, runtime_mode)| {
-            json!({"id": id, "code": code, "name": name, "icon": icon, "basePath": base_path,
+        .map(
+            |(
+                id,
+                code,
+                name,
+                icon,
+                base_path,
+                entry_type,
+                entry_url,
+                deployment_version,
+                entry_version_id,
+                runtime_mode,
+            )| {
+                json!({"id": id, "code": code, "name": name, "icon": icon, "basePath": base_path,
                    "entryType": entry_type, "entryUrl": entry_url,
                    "deploymentVersion": deployment_version, "entryVersionId": entry_version_id,
                    "runtimeMode": runtime_mode})
-        })
+            },
+        )
         .collect();
 
     let memberships = fetch_memberships(&state.pool, user.user_id).await?;
@@ -472,21 +652,32 @@ async fn menus(
         .ok_or_else(|| AppError::bad_request("缺少 applicationId 参数"))?;
 
     let rows = if user.is_super_admin {
-        authorization::granted_menu_rows(
-            &state.pool, user.tenant_id, user.org_id, Some(app_id),
-        ).await?
+        authorization::granted_menu_rows(&state.pool, user.tenant_id, user.org_id, Some(app_id))
+            .await?
     } else {
         authorization::effective_menu_rows(
-            &state.pool, user.user_id, user.tenant_id, user.org_id, Some(app_id),
-        ).await?
+            &state.pool,
+            user.user_id,
+            user.tenant_id,
+            user.org_id,
+            Some(app_id),
+        )
+        .await?
     };
     Ok(Json(json!({"menus": authorization::menu_tree(rows)})))
 }
 
 /// GET /api/auth/permissions
-async fn permissions(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+async fn permissions(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
     let roles = state.effective_roles(user.user_id, user.org_id).await?;
-    let mut perms: Vec<String> = state.context_permissions(&user).await?.into_iter().collect();
+    let mut perms: Vec<String> = state
+        .context_permissions(&user)
+        .await?
+        .into_iter()
+        .collect();
     perms.sort();
     Ok(Json(json!({"permissions": perms, "roles": roles})))
 }
@@ -502,21 +693,40 @@ async fn logout(
     let mut tx = state.pool.begin().await?;
     // Follow the same user-before-session lock order as refresh/password changes.
     sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
-        .bind(user.user_id).fetch_one(&mut *tx).await?;
+        .bind(user.user_id)
+        .fetch_one(&mut *tx)
+        .await?;
     let changed = sqlx::query(
         "UPDATE platform_sessions SET revoked_at=now() \
          WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL",
-    ).bind(user.session_id).bind(user.user_id).execute(&mut *tx).await?.rows_affected();
+    )
+    .bind(user.session_id)
+    .bind(user.user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
     if changed != 1 {
         return Err(AppError::unauthorized("会话已失效，请重新登录"));
     }
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "LOGOUT", detail: &audit::change_detail("platform_session", user.session_id,
-            json!({"username": user.username, "revoked": false}),
-            json!({"username": user.username, "revoked": true})), ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(user.tenant_id),
+            organization_id: Some(user.org_id),
+            action: "LOGOUT",
+            detail: &audit::change_detail(
+                "platform_session",
+                user.session_id,
+                json!({"username": user.username, "revoked": false}),
+                json!({"username": user.username, "revoked": true}),
+            ),
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }
@@ -545,25 +755,41 @@ async fn change_password(
     }
     let new_hash = state.passwords.hash(&body.new_password).await?;
     let mut tx = state.pool.begin().await?;
-    let (current_hash, before_version): (String, i64) = sqlx::query_as(
-        "SELECT password_hash, session_version FROM users WHERE id=$1 FOR UPDATE")
-        .bind(user.user_id).fetch_one(&mut *tx).await?;
+    let (current_hash, before_version): (String, i64) =
+        sqlx::query_as("SELECT password_hash, session_version FROM users WHERE id=$1 FOR UPDATE")
+            .bind(user.user_id)
+            .fetch_one(&mut *tx)
+            .await?;
     if current_hash != hash {
         return Err(AppError::conflict("密码已变更，请重新验证"));
     }
     let revoked = session::revoke_all_in_tx(&mut tx, user.user_id, Some(&new_hash)).await?;
     let after_version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user.user_id).fetch_one(&mut *tx).await?;
+        .bind(user.user_id)
+        .fetch_one(&mut *tx)
+        .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(user.tenant_id), organization_id: Some(user.org_id),
-        action: "UPDATE_PASSWORD", detail: &audit::change_detail("user", user.user_id,
-            json!({"username": user.username, "sessionVersion": before_version}),
-            json!({"username": user.username, "sessionVersion": after_version,
-                "passwordChanged": true, "revokedSessions": revoked})), ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(user.tenant_id),
+            organization_id: Some(user.org_id),
+            action: "UPDATE_PASSWORD",
+            detail: &audit::change_detail(
+                "user",
+                user.user_id,
+                json!({"username": user.username, "sessionVersion": before_version}),
+                json!({"username": user.username, "sessionVersion": after_version,
+                "passwordChanged": true, "revokedSessions": revoked}),
+            ),
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }
@@ -608,21 +834,24 @@ async fn login_history(
     .bind(offset)
     .fetch_all(&state.pool)
     .await?;
-    let total: i64 =
-        sqlx::query_scalar(&format!("SELECT count(*) FROM audit_logs WHERE {LOGIN_HISTORY_WHERE}"))
-            .bind(user.user_id)
-            .fetch_one(&state.pool)
-            .await?;
+    let total: i64 = sqlx::query_scalar(&format!(
+        "SELECT count(*) FROM audit_logs WHERE {LOGIN_HISTORY_WHERE}"
+    ))
+    .bind(user.user_id)
+    .fetch_one(&state.pool)
+    .await?;
 
     let records: Vec<Value> = rows
         .into_iter()
-        .map(|(id, action, ip, detail, tenant_name, organization_name, created_at)| {
-            json!({
-                "id": id, "action": action, "ip": ip, "detail": detail,
-                "tenantName": tenant_name, "organizationName": organization_name,
-                "createdAt": created_at,
-            })
-        })
+        .map(
+            |(id, action, ip, detail, tenant_name, organization_name, created_at)| {
+                json!({
+                    "id": id, "action": action, "ip": ip, "detail": detail,
+                    "tenantName": tenant_name, "organizationName": organization_name,
+                    "createdAt": created_at,
+                })
+            },
+        )
         .collect();
     Ok(Json(page_json(records, total, page, size)))
 }
@@ -644,7 +873,10 @@ type MySessionTuple = (
 /// - lastIssuedAt: 全历史最近签发时间; lastExpiresAt: 活跃令牌最晚过期时间 (无活跃为 null)
 /// - scope: 最近一条 access 令牌的 scope (array_agg 按签发时间倒序取首个, 无 access 行为空串)
 /// - revokedTotal (顶层): 本人全部已吊销令牌总数 (无任何令牌时为 0)
-async fn my_sessions(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+async fn my_sessions(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
     let rows: Vec<MySessionTuple> = sqlx::query_as(
         "SELECT client_id, \
          COUNT(*) FILTER (WHERE token_type = 'access' AND revoked = false AND expires_at > now()) AS active_access, \
@@ -659,11 +891,12 @@ async fn my_sessions(State(state): State<AppState>, user: CurrentUser) -> Result
     .bind(user.user_id)
     .fetch_all(&state.pool)
     .await?;
-    let revoked_total: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM oauth_tokens WHERE user_id = $1 AND revoked = true")
-            .bind(user.user_id)
-            .fetch_one(&state.pool)
-            .await?;
+    let revoked_total: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM oauth_tokens WHERE user_id = $1 AND revoked = true",
+    )
+    .bind(user.user_id)
+    .fetch_one(&state.pool)
+    .await?;
 
     let sessions: Vec<Value> = rows
         .into_iter()
@@ -681,10 +914,16 @@ async fn my_sessions(State(state): State<AppState>, user: CurrentUser) -> Result
         )
         .collect();
     let platform_sessions = session::device_sessions(
-        &state.pool, Some(user.user_id), user.user_id, user.session_id,
-    ).await?;
-    Ok(Json(json!({"sessions": sessions, "revokedTotal": revoked_total,
-                   "platformSessions": platform_sessions})))
+        &state.pool,
+        Some(user.user_id),
+        user.user_id,
+        user.session_id,
+    )
+    .await?;
+    Ok(Json(
+        json!({"sessions": sessions, "revokedTotal": revoked_total,
+                   "platformSessions": platform_sessions}),
+    ))
 }
 
 /// DELETE /api/auth/sessions/{id} — 用户撤销自己的指定设备会话。
@@ -694,27 +933,45 @@ async fn revoke_my_session(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
-        .bind(user.user_id).fetch_one(&mut *tx).await?;
+        .bind(user.user_id)
+        .fetch_one(&mut *tx)
+        .await?;
     let target: Option<(Uuid, Uuid)> = sqlx::query_as(
         "UPDATE platform_sessions SET revoked_at = now() \
          WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL \
          RETURNING tenant_id, organization_id",
     )
-    .bind(id).bind(user.user_id).fetch_optional(&mut *tx).await?;
+    .bind(id)
+    .bind(user.user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
     let (tenant_id, org_id) = target.ok_or_else(|| AppError::not_found("会话不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "REVOKE_SESSION", detail: &audit::change_detail("platform_session", id,
-            json!({"username": user.username, "revoked": false}),
-            json!({"username": user.username, "revoked": true})),
-        ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(tenant_id),
+            organization_id: Some(org_id),
+            action: "REVOKE_SESSION",
+            detail: &audit::change_detail(
+                "platform_session",
+                id,
+                json!({"username": user.username, "revoked": false}),
+                json!({"username": user.username, "revoked": true}),
+            ),
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))
 }

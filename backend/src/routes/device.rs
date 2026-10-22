@@ -80,7 +80,9 @@ async fn decide_device(
             .execute(&mut *tx)
             .await?;
         if changed.rows_affected() != 1 {
-            return Err(AppError::Server(anyhow::anyhow!("device expiry did not update one row")));
+            return Err(AppError::Server(anyhow::anyhow!(
+                "device expiry did not update one row"
+            )));
         }
         tx.commit().await?;
         return Err(AppError::conflict("该设备授权请求已过期"));
@@ -98,7 +100,9 @@ async fn decide_device(
         .execute(&mut *tx)
         .await?;
         if changed.rows_affected() != 1 {
-            return Err(AppError::Server(anyhow::anyhow!("device approval did not update one row")));
+            return Err(AppError::Server(anyhow::anyhow!(
+                "device approval did not update one row"
+            )));
         }
         system_in_tx(
             &mut tx,
@@ -140,7 +144,9 @@ async fn decide_device(
             .execute(&mut *tx)
             .await?;
         if changed.rows_affected() != 1 {
-            return Err(AppError::Server(anyhow::anyhow!("device denial did not update one row")));
+            return Err(AppError::Server(anyhow::anyhow!(
+                "device denial did not update one row"
+            )));
         }
         let detail = audit::change_detail(
             "oauth_device_authorization",

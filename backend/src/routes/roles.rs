@@ -54,7 +54,9 @@ async fn list(
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
     let scoped_orgs = state.scoped_org_ids(&user).await?;
@@ -63,11 +65,14 @@ async fn list(
     } else {
         Some(user.tenant_id)
     };
-    let org_filter: Option<Uuid> = params.get("organizationId").and_then(|v| Uuid::parse_str(v).ok());
+    let org_filter: Option<Uuid> = params
+        .get("organizationId")
+        .and_then(|v| Uuid::parse_str(v).ok());
     if let Some(org) = org_filter {
         state.ensure_org_scope(&user, org, "组织").await?;
     }
-    let where_clause = "($1 = '' OR r.name ILIKE '%' || $1 || '%' OR r.code ILIKE '%' || $1 || '%') \
+    let where_clause =
+        "($1 = '' OR r.name ILIKE '%' || $1 || '%' OR r.code ILIKE '%' || $1 || '%') \
      AND ($2::uuid IS NULL OR r.tenant_id = $2) AND ($3::uuid IS NULL OR r.organization_id = $3) \
      AND ($4::uuid[] IS NULL OR r.organization_id = ANY($4))";
     let rows: Vec<RoleListRow> = sqlx::query_as(&format!(
@@ -91,7 +96,10 @@ async fn list(
     .bind(&scoped_orgs)
     .fetch_one(&state.pool)
     .await?;
-    let records: Vec<Value> = rows.iter().map(|r| serde_json::to_value(r).unwrap_or_default()).collect();
+    let records: Vec<Value> = rows
+        .iter()
+        .map(|r| serde_json::to_value(r).unwrap_or_default())
+        .collect();
     Ok(Json(page_json(records, total, page, size)))
 }
 
@@ -107,12 +115,11 @@ struct RoleBody {
 }
 
 async fn load_role_org(pool: &sqlx::PgPool, role: Uuid) -> Result<(Uuid, Uuid, String), AppError> {
-    let row: Option<(Uuid, Uuid, String)> = sqlx::query_as(
-        "SELECT organization_id, tenant_id, name FROM roles WHERE id = $1",
-    )
-    .bind(role)
-    .fetch_optional(pool)
-    .await?;
+    let row: Option<(Uuid, Uuid, String)> =
+        sqlx::query_as("SELECT organization_id, tenant_id, name FROM roles WHERE id = $1")
+            .bind(role)
+            .fetch_optional(pool)
+            .await?;
     row.ok_or_else(|| AppError::not_found("角色不存在"))
 }
 
@@ -147,8 +154,11 @@ async fn lock_role(
         "SELECT id, name, COALESCE(code,'') AS code, status, built_in, \
          COALESCE(description,'') AS description \
          FROM roles WHERE id=$1 FOR NO KEY UPDATE",
-    ).bind(id).fetch_optional(&mut **tx).await?
-        .ok_or_else(|| AppError::not_found("角色不存在"))
+    )
+    .bind(id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| AppError::not_found("角色不存在"))
 }
 
 fn role_summary(row: &RoleListRow) -> Value {
@@ -180,7 +190,9 @@ async fn create(
     user: CurrentUser,
     ApiJson(body): ApiJson<RoleBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
     let name = body.name.trim().to_string();
     if name.is_empty() {
         return Err(AppError::bad_request("角色名称不能为空"));
@@ -189,13 +201,11 @@ async fn create(
         .organization_id
         .parse()
         .map_err(|_| AppError::bad_request("organizationId 格式错误"))?;
-    let (tenant_id,): (Uuid,) = sqlx::query_as(
-        "SELECT tenant_id FROM organizations WHERE id = $1",
-    )
-    .bind(org_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("组织不存在"))?;
+    let (tenant_id,): (Uuid,) = sqlx::query_as("SELECT tenant_id FROM organizations WHERE id = $1")
+        .bind(org_id)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("组织不存在"))?;
     state.ensure_org_scope(&user, org_id, "组织").await?;
     let mut tx = state.pool.begin().await?;
     let row: RoleListRow = sqlx::query_as(
@@ -214,11 +224,20 @@ async fn create(
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let detail = audit::change_detail("role", row.id, Value::Null, role_summary(&row));
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "CREATE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(tenant_id),
+            organization_id: Some(org_id),
+            action: "CREATE_ROLE",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
@@ -242,8 +261,12 @@ async fn update(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<RoleUpdate>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     // 隔离校验需在写库前: 先读角色归属再更新
     let loaded = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, loaded).await?;
@@ -255,7 +278,9 @@ async fn update(
     let scoped_orgs = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
     let before = lock_role(&mut tx, id).await?;
-    if before.managed() { return Err(AppError::conflict("默认管理员角色由系统维护，不允许修改")); }
+    if before.managed() {
+        return Err(AppError::conflict("默认管理员角色由系统维护，不允许修改"));
+    }
     let row: RoleListRow = sqlx::query_as(&format!(
         "UPDATE roles SET name = COALESCE($2, name), code = COALESCE($3, code), \
          description = COALESCE($4, description), updated_at = now() WHERE id = $1 \
@@ -281,16 +306,28 @@ async fn update(
         ("name", before.name != row.name),
         ("code", before.code != row.code),
         ("description", before.description != row.description),
-    ].into_iter().filter_map(|(field, changed)| changed.then_some(field)).collect();
+    ]
+    .into_iter()
+    .filter_map(|(field, changed)| changed.then_some(field))
+    .collect();
     if !changed_fields.is_empty() {
         let mut after = role_summary(&row);
         after["changedFields"] = json!(changed_fields);
         let detail = audit::change_detail("role", id, before.summary(), after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(row.tenant_id), organization_id: Some(row.organization_id),
-            action: "UPDATE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(row.tenant_id),
+                organization_id: Some(row.organization_id),
+                action: "UPDATE_ROLE",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
@@ -303,8 +340,12 @@ async fn delete(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, name)).await?;
     let mut tx = state.pool.begin().await?;
@@ -314,11 +355,16 @@ async fn delete(
     }
     // Upgrade the parent lock before the deletion snapshot and its cascades.
     sqlx::query("SELECT id FROM roles WHERE id=$1 FOR UPDATE")
-        .bind(id).execute(&mut *tx).await?;
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     let (menu_count, user_count): (i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM role_menus WHERE role_id=$1), \
          (SELECT count(*) FROM user_roles WHERE role_id=$1)",
-    ).bind(id).fetch_one(&mut *tx).await?;
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await?;
     let mut summary = before.summary();
     summary["menuCount"] = json!(menu_count);
     summary["userCount"] = json!(user_count);
@@ -329,11 +375,20 @@ async fn delete(
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let detail = audit::change_detail("role", id, summary, Value::Null);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(tenant_id), organization_id: Some(org_id),
-        action: "DELETE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(tenant_id),
+            organization_id: Some(org_id),
+            action: "DELETE_ROLE",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
@@ -345,8 +400,12 @@ async fn get_menus(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let loaded = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, loaded).await?;
     let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT menu_id FROM role_menus WHERE role_id = $1")
@@ -372,8 +431,12 @@ async fn put_menus(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<RoleMenusBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, role_name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, role_name.clone())).await?;
     let menu_ids: Vec<Uuid> = body
@@ -391,10 +454,14 @@ async fn put_menus(
     }
     let mut tx = state.pool.begin().await?;
     let role = lock_role(&mut tx, id).await?;
-    if role.managed() { return Err(AppError::conflict("默认管理员角色的菜单随授权自动同步")); }
-    let before_ids: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT menu_id FROM role_menus WHERE role_id=$1 ORDER BY menu_id",
-    ).bind(id).fetch_all(&mut *tx).await?;
+    if role.managed() {
+        return Err(AppError::conflict("默认管理员角色的菜单随授权自动同步"));
+    }
+    let before_ids: Vec<Uuid> =
+        sqlx::query_scalar("SELECT menu_id FROM role_menus WHERE role_id=$1 ORDER BY menu_id")
+            .bind(id)
+            .fetch_all(&mut *tx)
+            .await?;
     if !unique.is_empty() {
         let n: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM menus m WHERE m.id = ANY($1) \
@@ -421,22 +488,36 @@ async fn put_menus(
             .execute(&mut *tx)
             .await?;
     }
-    let after_ids: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT menu_id FROM role_menus WHERE role_id=$1 ORDER BY menu_id",
-    ).bind(id).fetch_all(&mut *tx).await?;
+    let after_ids: Vec<Uuid> =
+        sqlx::query_scalar("SELECT menu_id FROM role_menus WHERE role_id=$1 ORDER BY menu_id")
+            .bind(id)
+            .fetch_all(&mut *tx)
+            .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     if before_ids != after_ids {
-        let detail = audit::change_detail("role_menus", id,
+        let detail = audit::change_detail(
+            "role_menus",
+            id,
             json!({"id": id, "name": role.name, "menuCount": before_ids.len(),
                    "menuIdsSha256": ids_digest(before_ids.iter().copied())}),
             json!({"id": id, "name": role.name, "menuCount": after_ids.len(),
-                   "menuIdsSha256": ids_digest(after_ids.iter().copied())}));
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(tenant_id), organization_id: Some(org_id),
-            action: "ROLE_MENUS", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+                   "menuIdsSha256": ids_digest(after_ids.iter().copied())}),
+        );
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(tenant_id),
+                organization_id: Some(org_id),
+                action: "ROLE_MENUS",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -449,8 +530,12 @@ async fn get_users(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let loaded = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, loaded).await?;
     let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
@@ -487,8 +572,12 @@ async fn put_users(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<RoleUsersBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, role_name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, role_name.clone())).await?;
     let user_ids: Vec<Uuid> = body
@@ -557,16 +646,28 @@ async fn put_users(
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     if before_bindings != after_bindings {
-        let detail = audit::change_detail("role_users", id,
+        let detail = audit::change_detail(
+            "role_users",
+            id,
             json!({"id": id, "name": role.name, "userCount": before_bindings.len(),
                    "userBindingsSha256": ids_digest(before_bindings.iter().flat_map(|(uid, org)| [*uid, *org]))}),
             json!({"id": id, "name": role.name, "userCount": after_bindings.len(),
-                   "userBindingsSha256": ids_digest(after_bindings.iter().flat_map(|(uid, org)| [*uid, *org]))}));
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(tenant_id), organization_id: Some(org_id),
-            action: "UPDATE_ROLE", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+                   "userBindingsSha256": ids_digest(after_bindings.iter().flat_map(|(uid, org)| [*uid, *org]))}),
+        );
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(tenant_id),
+                organization_id: Some(org_id),
+                action: "UPDATE_ROLE",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();

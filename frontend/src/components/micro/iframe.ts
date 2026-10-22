@@ -1,7 +1,7 @@
 import type { MicroLifecycle, MicroNotifyVariant, MicroProps, MicroMenuItem } from "./types"
 import { SDK_VERSION, MICRO_PROPS_CONTRACT_VERSION, IFRAME_PROTOCOL_VERSION,
-  assertSupportedSdkVersion } from "../../../../examples/micro-app-sdk/generated/protocol.mjs"
-import { assertBrowserCapabilities } from "../../../../examples/micro-app-sdk/src/capabilities.mjs"
+  assertSupportedSdkVersion } from "../../../vendor/micro-app-sdk/generated/protocol.mjs"
+import { assertBrowserCapabilities } from "../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs"
 
 interface IframeOptions {
   /** Trusted host telemetry callback; never sourced from a child message. */

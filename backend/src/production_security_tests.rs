@@ -31,9 +31,10 @@ fn database_options() -> Result<PgConnectOptions> {
     let url = match std::env::var("TEST_DATABASE_URL") {
         Ok(value) if !value.trim().is_empty() => value,
         _ => {
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env.test");
-            let entries = dotenvy::from_path_iter(path)
-                .map_err(|_| anyhow!("configure TEST_DATABASE_URL or ignored root .env.test"))?;
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".env.test");
+            let entries = dotenvy::from_path_iter(path).map_err(|_| {
+                anyhow!("configure TEST_DATABASE_URL or ignored root backend/.env.test")
+            })?;
             let mut configured = None;
             for entry in entries {
                 let (key, value) = entry.map_err(|_| anyhow!("invalid test environment file"))?;

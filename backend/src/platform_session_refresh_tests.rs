@@ -131,8 +131,18 @@ impl Harness {
         sqlx::query("INSERT INTO menus(application_id,title,permission,type) VALUES($1,'用户管理','system:user','MENU')")
             .bind(application).execute(pool).await?;
         sqlx::query("INSERT INTO menus(application_id,title,permission,type,path) VALUES($1,'会话管理','system:oauth','MENU','/system/oauth/tokens')").bind(application).execute(pool).await?;
-        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)").bind(tenant).bind(application).execute(pool).await?;
-        sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)").bind(root).bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+            .bind(tenant)
+            .bind(application)
+            .execute(pool)
+            .await?;
+        sqlx::query(
+            "INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)",
+        )
+        .bind(root)
+        .bind(application)
+        .execute(pool)
+        .await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT $1,id FROM menus WHERE application_id=$2").bind(tenant).bind(application).execute(pool).await?;
         sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) SELECT $1,id FROM menus WHERE application_id=$2").bind(root).bind(application).execute(pool).await?;
         let config = Config::from_values(&HashMap::from([
@@ -242,16 +252,21 @@ async fn expired_access_rotates_context_bound_refresh_once() -> Result<()> {
         let initial = jwt::verify(access, SECRET)?;
         let refresh_deadline: chrono::DateTime<Utc> = sqlx::query_scalar(
             "SELECT expires_at FROM platform_session_refresh_tokens WHERE token_hash=$1",
-        ).bind(hash::sha256_hex(original)).fetch_one(&db.pool).await?;
+        )
+        .bind(hash::sha256_hex(original))
+        .fetch_one(&db.pool)
+        .await?;
         let access_lifetime = initial.exp - initial.iat;
         let refresh_lifetime = refresh_deadline.timestamp() - initial.iat;
         // PostgreSQL and the signing host may have a small clock difference.
         // Assert the actual stored/signed deadlines and configured ceilings.
         ensure!(
             context["expiresIn"].as_i64() == Some(access_lifetime)
-                && access_lifetime > 0 && access_lifetime <= 3600
+                && access_lifetime > 0
+                && access_lifetime <= 3600
                 && context["refreshExpiresIn"].as_i64() == Some(refresh_lifetime)
-                && refresh_lifetime > access_lifetime && refresh_lifetime <= 86400,
+                && refresh_lifetime > access_lifetime
+                && refresh_lifetime <= 86400,
             "context deadlines or configured access/refresh ceilings differ"
         );
         let persisted_hash: String =

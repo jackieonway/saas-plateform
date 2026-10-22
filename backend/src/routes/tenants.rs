@@ -11,9 +11,9 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
-use crate::routes::{page_json, paging};
-use crate::routes::onboarding;
 use crate::routes::contact::{Contact, ContactUpdate};
+use crate::routes::onboarding;
+use crate::routes::{page_json, paging};
 use crate::state::AppState;
 use crate::util::audit;
 
@@ -23,27 +23,52 @@ pub fn routes() -> Router<AppState> {
         .route("/api/tenants/options", get(options))
         .route("/api/tenants/{id}", put(update).delete(delete))
         .route("/api/tenants/{id}/status", put(update_status))
-        .route("/api/tenants/{id}/initialize-administrator", post(initialize_administrator))
-        .route("/api/tenants/{id}/authorizations", get(get_authorizations).put(put_authorizations))
+        .route(
+            "/api/tenants/{id}/initialize-administrator",
+            post(initialize_administrator),
+        )
+        .route(
+            "/api/tenants/{id}/authorizations",
+            get(get_authorizations).put(put_authorizations),
+        )
 }
 
 /// Minimal tenant choices for authorized tenant-scoped management pages.
 /// An ordinary context can only select its own tenant, including global administrators.
-async fn options(State(state): State<AppState>, user: CurrentUser) -> Result<Json<Value>, AppError> {
+async fn options(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> Result<Json<Value>, AppError> {
     let platform = state.is_platform_context(&user).await?;
     let permissions = state.context_permissions(&user).await?;
-    if !["system:tenant", "system:organization", "system:department", "system:user", "system:role", "system:authorization", "system:audit"]
-        .iter().any(|permission| permissions.contains(*permission)) {
+    if ![
+        "system:tenant",
+        "system:organization",
+        "system:department",
+        "system:user",
+        "system:role",
+        "system:authorization",
+        "system:audit",
+    ]
+    .iter()
+    .any(|permission| permissions.contains(*permission))
+    {
         return Err(AppError::forbidden("无租户选择权限"));
     }
     let scope = if platform { None } else { Some(user.tenant_id) };
     let rows: Vec<(Uuid, String, String, bool)> = sqlx::query_as(
         "SELECT id,name,COALESCE(code,''),is_platform FROM tenants \
          WHERE ($1::uuid IS NULL OR id=$1) ORDER BY created_at,id",
-    ).bind(scope).fetch_all(&state.pool).await?;
-    Ok(Json(json!(rows.into_iter().map(|(id,name,code,is_platform)| {
-        json!({"id":id,"name":name,"code":code,"isPlatform":is_platform})
-    }).collect::<Vec<_>>())))
+    )
+    .bind(scope)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(Json(json!(rows
+        .into_iter()
+        .map(|(id, name, code, is_platform)| {
+            json!({"id":id,"name":name,"code":code,"isPlatform":is_platform})
+        })
+        .collect::<Vec<_>>())))
 }
 
 const LIST_SELECT: &str = "SELECT t.id, t.name, t.code, t.tenant_type, t.contact_name, t.contact_phone, t.contact_email, COALESCE(t.description,'') AS description, t.status, t.is_platform, t.created_at, t.expires_at, \
@@ -159,7 +184,9 @@ async fn list(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     let platform = state.is_platform_context(&user).await?;
-    RequirePermission("system:tenant").check(&state, &user).await?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
     let st = params.get("status").cloned().unwrap_or_default();
@@ -191,7 +218,10 @@ async fn list(
     .bind(scope)
     .fetch_one(&state.pool)
     .await?;
-    let records: Vec<Value> = rows.iter().map(|r| serde_json::to_value(r).unwrap_or_default()).collect();
+    let records: Vec<Value> = rows
+        .iter()
+        .map(|r| serde_json::to_value(r).unwrap_or_default())
+        .collect();
     Ok(Json(page_json(records, total, page, size)))
 }
 
@@ -232,15 +262,29 @@ fn default_tenant_type() -> String {
 }
 
 fn validate_tenant_type(tenant_type: &str) -> Result<(), AppError> {
-    if ["PERSONAL", "COMPANY", "PUBLIC_INSTITUTION", "GOVERNMENT", "OTHER"].contains(&tenant_type) {
+    if [
+        "PERSONAL",
+        "COMPANY",
+        "PUBLIC_INSTITUTION",
+        "GOVERNMENT",
+        "OTHER",
+    ]
+    .contains(&tenant_type)
+    {
         Ok(())
     } else {
-        Err(AppError::bad_request("租户类型仅支持个人、公司、事业单位、政府或其他"))
+        Err(AppError::bad_request(
+            "租户类型仅支持个人、公司、事业单位、政府或其他",
+        ))
     }
 }
 
 fn root_organization_type(tenant_type: &str) -> &str {
-    if tenant_type == "PERSONAL" { "OTHER" } else { tenant_type }
+    if tenant_type == "PERSONAL" {
+        "OTHER"
+    } else {
+        tenant_type
+    }
 }
 
 /// POST /api/tenants
@@ -250,7 +294,9 @@ async fn create(
     user: CurrentUser,
     ApiJson(body): ApiJson<TenantBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:tenant").check(&state, &user).await?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
     let name = body.name.trim().to_string();
     if name.is_empty() || body.code.trim().is_empty() {
@@ -298,8 +344,15 @@ async fn create(
         .fetch_one(&mut *tx).await?;
     onboarding::initialize_tenant(&mut tx, row.id, root_id).await?;
     let administrator = onboarding::provision_contact_administrator(
-        &mut tx, (&state.config, &state.passwords), row.id, root_id, &contact, "tenant_admin", None,
-    ).await?;
+        &mut tx,
+        (&state.config, &state.passwords),
+        row.id,
+        root_id,
+        &contact,
+        "tenant_admin",
+        None,
+    )
+    .await?;
     row.organization_count = 1;
     row.user_count = i64::from(administrator.is_some());
     row.authorized_app_count = 1;
@@ -312,16 +365,26 @@ async fn create(
         after["administratorCreated"] = json!(administrator.created);
     }
     let detail = audit::change_detail("tenant", row.id, Value::Null, after);
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(row.id), organization_id: Some(user.org_id),
-        action: "CREATE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(row.id),
+            organization_id: Some(user.org_id),
+            action: "CREATE_TENANT",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     let mut response = serde_json::to_value(&row).map_err(anyhow::Error::from)?;
     if let Some(administrator) = administrator {
-        response["administrator"] = serde_json::to_value(administrator).map_err(anyhow::Error::from)?;
+        response["administrator"] =
+            serde_json::to_value(administrator).map_err(anyhow::Error::from)?;
     }
     Ok(Json(response))
 }
@@ -335,21 +398,36 @@ where
     Deserialize::deserialize(de).map(Some)
 }
 
-pub(super) fn validate_coordinates(longitude: Option<f64>, latitude: Option<f64>) -> Result<(), AppError> {
+pub(super) fn validate_coordinates(
+    longitude: Option<f64>,
+    latitude: Option<f64>,
+) -> Result<(), AppError> {
     match (longitude, latitude) {
         (None, None) => Ok(()),
-        (Some(lon), Some(lat)) if lon.is_finite() && lat.is_finite()
-            && (-180.0..=180.0).contains(&lon) && (-90.0..=90.0).contains(&lat) => Ok(()),
-        _ => Err(AppError::bad_request("经纬度需同时填写；经度范围 -180~180，纬度范围 -90~90")),
+        (Some(lon), Some(lat))
+            if lon.is_finite()
+                && lat.is_finite()
+                && (-180.0..=180.0).contains(&lon)
+                && (-90.0..=90.0).contains(&lat) =>
+        {
+            Ok(())
+        }
+        _ => Err(AppError::bad_request(
+            "经纬度需同时填写；经度范围 -180~180，纬度范围 -90~90",
+        )),
     }
 }
 
 fn validate_tenant_identity(name: &str, code: &str, is_platform: bool) -> Result<(), AppError> {
     if name.trim().is_empty() || name.chars().count() > 100 || name.chars().any(char::is_control) {
-        return Err(AppError::bad_request("租户名称需为 1~100 个字符，且不能包含控制字符"));
+        return Err(AppError::bad_request(
+            "租户名称需为 1~100 个字符，且不能包含控制字符",
+        ));
     }
     if code.trim().is_empty() || code.chars().count() > 50 || code.chars().any(char::is_control) {
-        return Err(AppError::bad_request("租户编码需为 1~50 个字符，且不能包含控制字符"));
+        return Err(AppError::bad_request(
+            "租户编码需为 1~50 个字符，且不能包含控制字符",
+        ));
     }
     if is_platform && code != "admin-tenant" {
         return Err(AppError::bad_request("平台租户编码固定为 admin-tenant"));
@@ -362,7 +440,10 @@ fn validate_tenant_identity(name: &str, code: &str, is_platform: bool) -> Result
 
 #[cfg(test)]
 mod coordinate_tests {
-    use super::{root_organization_type, validate_coordinates, validate_tenant_identity, validate_tenant_type, TenantBody, TenantUpdate};
+    use super::{
+        root_organization_type, validate_coordinates, validate_tenant_identity,
+        validate_tenant_type, TenantBody, TenantUpdate,
+    };
     use serde_json::json;
 
     #[test]
@@ -373,7 +454,10 @@ mod coordinate_tests {
         });
         let legacy: TenantBody = serde_json::from_value(payload.clone()).unwrap();
         assert_eq!(legacy.tenant_type, "COMPANY");
-        assert_eq!((legacy.township.as_str(), legacy.village.as_str()), ("", ""));
+        assert_eq!(
+            (legacy.township.as_str(), legacy.village.as_str()),
+            ("", "")
+        );
 
         payload["township"] = json!("转塘街道");
         payload["village"] = json!("龙王沙社区");
@@ -384,13 +468,24 @@ mod coordinate_tests {
 
     #[test]
     fn tenant_types_and_root_types_follow_the_contract() {
-        for tenant_type in ["PERSONAL", "COMPANY", "PUBLIC_INSTITUTION", "GOVERNMENT", "OTHER"] {
+        for tenant_type in [
+            "PERSONAL",
+            "COMPANY",
+            "PUBLIC_INSTITUTION",
+            "GOVERNMENT",
+            "OTHER",
+        ] {
             assert!(validate_tenant_type(tenant_type).is_ok());
             let body: TenantBody = serde_json::from_value(json!({
                 "name": "业务租户", "code": "business", "tenantType": tenant_type,
-            })).unwrap();
+            }))
+            .unwrap();
             assert_eq!(body.tenant_type, tenant_type);
-            let expected_root_type = if tenant_type == "PERSONAL" { "OTHER" } else { tenant_type };
+            let expected_root_type = if tenant_type == "PERSONAL" {
+                "OTHER"
+            } else {
+                tenant_type
+            };
             assert_eq!(root_organization_type(tenant_type), expected_root_type);
         }
         for invalid in ["", "company", "SUBSIDIARY", "UNKNOWN"] {
@@ -398,7 +493,8 @@ mod coordinate_tests {
         }
         let omitted: TenantUpdate = serde_json::from_value(json!({"name": "新名称"})).unwrap();
         assert_eq!(omitted.tenant_type, None);
-        let update: TenantUpdate = serde_json::from_value(json!({"tenantType": "GOVERNMENT"})).unwrap();
+        let update: TenantUpdate =
+            serde_json::from_value(json!({"tenantType": "GOVERNMENT"})).unwrap();
         assert_eq!(update.tenant_type.as_deref(), Some("GOVERNMENT"));
     }
 
@@ -409,10 +505,12 @@ mod coordinate_tests {
         assert_eq!(omitted.village, None);
         let selected: TenantUpdate = serde_json::from_value(json!({
             "township": "转塘街道", "village": "龙王沙社区",
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(selected.township.as_deref(), Some("转塘街道"));
         assert_eq!(selected.village.as_deref(), Some("龙王沙社区"));
-        let cleared: TenantUpdate = serde_json::from_value(json!({"township": "", "village": ""})).unwrap();
+        let cleared: TenantUpdate =
+            serde_json::from_value(json!({"township": "", "village": ""})).unwrap();
         assert_eq!(cleared.township.as_deref(), Some(""));
         assert_eq!(cleared.village.as_deref(), Some(""));
     }
@@ -480,9 +578,13 @@ async fn update(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<TenantUpdate>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:tenant").check(&state, &user).await?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(name) = &body.name {
         if name.trim().is_empty() {
             return Err(AppError::bad_request("租户名称不能为空"));
@@ -494,10 +596,19 @@ async fn update(
     let contact = body.contact.normalized()?;
     let mut tx = state.pool.begin().await?;
     let before = tenant_configuration_snapshot(&mut tx, id).await?;
-    let (longitude, latitude, current_name, current_code, is_platform): (Option<f64>, Option<f64>, String, String, bool) = sqlx::query_as(
+    let (longitude, latitude, current_name, current_code, is_platform): (
+        Option<f64>,
+        Option<f64>,
+        String,
+        String,
+        bool,
+    ) = sqlx::query_as(
         "SELECT longitude, latitude, name, code, is_platform FROM tenants WHERE id = $1",
-    ).bind(id).fetch_optional(&mut *tx).await?
-        .ok_or_else(|| AppError::not_found("租户不存在"))?;
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::not_found("租户不存在"))?;
     validate_tenant_identity(
         body.name.as_deref().unwrap_or(&current_name).trim(),
         body.code.as_deref().unwrap_or(&current_code).trim(),
@@ -553,11 +664,20 @@ async fn update(
     let after = tenant_configuration_snapshot(&mut tx, id).await?;
     if before != after {
         let detail = audit::change_detail("tenant", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(id), organization_id: Some(user.org_id),
-            action: "UPDATE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(id),
+                organization_id: Some(user.org_id),
+                action: "UPDATE_TENANT",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -571,13 +691,19 @@ async fn delete(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:tenant").check(&state, &user).await?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     // Deletion needs the stronger lock; ordinary edits leave FK checks free.
     sqlx::query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE")
-        .bind(id).execute(&mut *tx).await?;
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     let before = tenant_audit_snapshot(&mut tx, id).await?;
     let is_platform: bool = sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
         .bind(id)
@@ -591,16 +717,28 @@ async fn delete(
     let ua = audit::ua_of(&headers);
     let detail = audit::change_detail("tenant", id, before, Value::Null);
     // Insert while the target still exists so tenant_name survives its deletion.
-    audit::write_in_tx(&mut tx, audit::AuditInfo {
-        user_id: Some(user.user_id), username: &user.username,
-        tenant_id: Some(id), organization_id: Some(user.org_id),
-        action: "DELETE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
-    }).await?;
+    audit::write_in_tx(
+        &mut tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(id),
+            organization_id: Some(user.org_id),
+            action: "DELETE_TENANT",
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await?;
     // A tenant cascade deletes organization trees and their roles. Defer only
     // these existing composite checks until the paired CASCADE FKs have settled.
     sqlx::query("SET CONSTRAINTS fk_organizations_parent_same_tenant, fk_roles_organization_same_tenant DEFERRED")
         .execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM tenants WHERE id=$1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM tenants WHERE id=$1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("SET CONSTRAINTS fk_organizations_parent_same_tenant, fk_roles_organization_same_tenant IMMEDIATE")
         .execute(&mut *tx).await?;
     tx.commit().await?;
@@ -621,12 +759,16 @@ async fn update_status(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<StatusBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:tenant").check(&state, &user).await?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
     if !["ENABLED", "DISABLED"].contains(&body.status.as_str()) {
         return Err(AppError::bad_request("状态仅支持 ENABLED / DISABLED"));
     }
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before = tenant_configuration_snapshot(&mut tx, id).await?;
     let is_platform: bool = sqlx::query_scalar("SELECT is_platform FROM tenants WHERE id = $1")
@@ -637,23 +779,30 @@ async fn update_status(
     if is_platform {
         return Err(AppError::bad_request("平台租户不允许停用"));
     }
-    sqlx::query(
-        "UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1",
-    )
-    .bind(id)
-    .bind(&body.status)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1")
+        .bind(id)
+        .bind(&body.status)
+        .execute(&mut *tx)
+        .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let after = tenant_configuration_snapshot(&mut tx, id).await?;
     if before != after {
         let detail = audit::change_detail("tenant", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(id), organization_id: Some(user.org_id),
-            action: "UPDATE_TENANT", detail: &detail, ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(id),
+                organization_id: Some(user.org_id),
+                action: "UPDATE_TENANT",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -711,9 +860,13 @@ async fn get_authorizations(
     user: CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:tenant").check(&state, &user).await?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
-    let tenant_id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let tenant_id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)")
         .bind(tenant_id)
         .fetch_one(&state.pool)
@@ -787,9 +940,13 @@ async fn put_authorizations(
     Path(id): Path<String>,
     ApiJson(body): ApiJson<AuthzBody>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:tenant").check(&state, &user).await?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
     state.require_platform(&user).await?;
-    let tenant_id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let tenant_id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)")
         .bind(tenant_id)
         .fetch_one(&state.pool)
@@ -881,11 +1038,13 @@ async fn put_authorizations(
             .bind(app)
             .execute(&mut *tx)
             .await?;
-            sqlx::query("DELETE FROM tenant_applications WHERE tenant_id = $1 AND application_id = $2")
-                .bind(tenant_id)
-                .bind(app)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "DELETE FROM tenant_applications WHERE tenant_id = $1 AND application_id = $2",
+            )
+            .bind(tenant_id)
+            .bind(app)
+            .execute(&mut *tx)
+            .await?;
         }
     }
     for (menu, authorized) in menu_ids.iter().zip(menu_authed.iter()) {
@@ -954,13 +1113,20 @@ async fn put_authorizations(
     let after = tenant_authorization_summary(tenant_audit_snapshot(&mut tx, tenant_id).await?);
     if before != after {
         let detail = audit::change_detail("tenant", tenant_id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(tenant_id), organization_id: Some(user.org_id),
-            action: "TENANT_AUTH",
-            detail: &detail,
-            ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(tenant_id),
+                organization_id: Some(user.org_id),
+                action: "TENANT_AUTH",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
@@ -968,12 +1134,23 @@ async fn put_authorizations(
 }
 
 async fn initialize_administrator(
-    State(state): State<AppState>, headers: HeaderMap, user: CurrentUser, Path(id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+    Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    RequirePermission("system:tenant").check(&state, &user).await?;
-    RequirePermission("system:user").check(&state, &user).await?;
-    RequirePermission("system:role").check(&state, &user).await?;
-    let id: Uuid = id.parse().map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
+    RequirePermission("system:user")
+        .check(&state, &user)
+        .await?;
+    RequirePermission("system:role")
+        .check(&state, &user)
+        .await?;
+    let id: Uuid = id
+        .parse()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     state.require_platform(&user).await?;
     let existing_org_scope = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
@@ -981,16 +1158,36 @@ async fn initialize_administrator(
     let (contact_name, contact_phone, contact_email): (String, String, String) = sqlx::query_as(
         "SELECT contact_name,contact_phone,contact_email FROM tenants WHERE id=$1 FOR NO KEY UPDATE",
     ).bind(id).fetch_optional(&mut *tx).await?.ok_or_else(|| AppError::not_found("租户不存在"))?;
-    let roots: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM organizations WHERE tenant_id=$1 AND parent_id IS NULL ORDER BY id")
-        .bind(id).fetch_all(&mut *tx).await?;
-    if roots.len() != 1 { return Err(AppError::bad_request("租户需要唯一根组织，请先维护组织结构")); }
+    let roots: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM organizations WHERE tenant_id=$1 AND parent_id IS NULL ORDER BY id",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await?;
+    if roots.len() != 1 {
+        return Err(AppError::bad_request(
+            "租户需要唯一根组织，请先维护组织结构",
+        ));
+    }
     let tenant_id = id;
     let org_id = roots[0];
     let role_code = "tenant_admin";
-    let contact = Contact { contact_name, contact_phone, contact_email }.normalized();
+    let contact = Contact {
+        contact_name,
+        contact_phone,
+        contact_email,
+    }
+    .normalized();
     let administrator = onboarding::initialize_existing_administrator(
-        &mut tx, (&state.config, &state.passwords), tenant_id, org_id, &contact, role_code, existing_org_scope.as_deref(),
-    ).await?;
+        &mut tx,
+        (&state.config, &state.passwords),
+        tenant_id,
+        org_id,
+        &contact,
+        role_code,
+        existing_org_scope.as_deref(),
+    )
+    .await?;
     if !administrator.already_initialized {
         let ip = audit::client_ip(&headers);
         let ua = audit::ua_of(&headers);
@@ -998,12 +1195,20 @@ async fn initialize_administrator(
         after["administratorUserId"] = json!(administrator.user_id);
         after["administratorCreated"] = json!(administrator.created);
         let detail = audit::change_detail("tenant", id, before, after);
-        audit::write_in_tx(&mut tx, audit::AuditInfo {
-            user_id: Some(user.user_id), username: &user.username,
-            tenant_id: Some(tenant_id), organization_id: Some(org_id),
-            action: "INITIALIZE_ADMINISTRATOR", detail: &detail,
-            ip: &ip, user_agent: &ua,
-        }).await?;
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(tenant_id),
+                organization_id: Some(org_id),
+                action: "INITIALIZE_ADMINISTRATOR",
+                detail: &detail,
+                ip: &ip,
+                user_agent: &ua,
+            },
+        )
+        .await?;
     }
     tx.commit().await?;
     state.invalidate_perm_cache();
