@@ -165,6 +165,11 @@ pub fn normalize_link(link: &str, app_code: &str) -> Result<String, AppError> {
 }
 
 fn normalize(body: &mut PublishBody, app_code: &str) -> Result<Value, AppError> {
+    // PostgreSQL text cannot represent NUL. Reject it as an input error rather
+    // than allowing an otherwise valid JSON body to fail during persistence.
+    if body.title.contains('\0') || body.content.contains('\0') {
+        return Err(AppError::bad_request("title 或 content 不能包含空字符"));
+    }
     if body.idempotency_key.is_empty()
         || body.idempotency_key.len() > 128
         || !body
@@ -475,4 +480,39 @@ pub async fn system_in_tx(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn body() -> PublishBody {
+        PublishBody {
+            idempotency_key: "text-validation".into(),
+            target: Target::Tenant {},
+            r#type: "INFO".into(),
+            title: "通知".into(),
+            content: "第一行\n第二行\t详情".into(),
+            link: String::new(),
+        }
+    }
+
+    #[test]
+    fn notification_text_rejects_nul_but_preserves_multiline_content() {
+        let mut valid = body();
+        normalize(&mut valid, "example").unwrap();
+        assert_eq!(valid.content, "第一行\n第二行\t详情");
+        for is_title in [true, false] {
+            let mut invalid = body();
+            if is_title {
+                invalid.title.push('\0');
+            } else {
+                invalid.content.push('\0');
+            }
+            assert!(matches!(
+                normalize(&mut invalid, "example"),
+                Err(AppError::BadRequest(_))
+            ));
+        }
+    }
 }

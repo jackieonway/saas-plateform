@@ -43,6 +43,9 @@ impl TryFrom<OptionsQuery> for Search {
         }
         let keyword = query.keyword.unwrap_or_default();
         let keyword = keyword.trim();
+        if keyword.contains('\0') {
+            return Err(AppError::bad_request("搜索关键词不能包含空字符"));
+        }
         if keyword.len() > 400 || keyword.chars().count() > 100 {
             return Err(AppError::bad_request("搜索关键词不能超过 100 个字符"));
         }
@@ -352,6 +355,13 @@ mod tests {
 
     #[test]
     fn search_bounds_preserve_literal_unicode_and_use_a_safe_maximum_offset() {
+        assert!(matches!(
+            Search::try_from(OptionsQuery {
+                keyword: Some("text\0query".into()),
+                ..OptionsQuery::default()
+            }),
+            Err(AppError::BadRequest(_))
+        ));
         let search = Search::try_from(OptionsQuery {
             keyword: Some("  %_\\  ".into()),
             page: Some(1_000_000),

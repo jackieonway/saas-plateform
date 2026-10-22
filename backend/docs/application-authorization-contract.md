@@ -15,7 +15,7 @@ combined 使用机密客户端 Basic，表单提交 token、resource、action；
 
 ## 成员目录
 
-GET /api/apps/{appCode}/members 与 /members/{userId} 使用普通应用 Bearer。resource、action、organizationId 必填；列表可用 q、page、size，page 为 1–1000000，size 为 1–50，q 最多 100 字符；单成员接口不接受分页和搜索。
+GET /api/apps/{appCode}/members 与 /members/{userId} 使用普通应用 Bearer。resource、action、organizationId 必填；列表可用 q、page、size，page 为 1–1000000，size 为 1–50，q 最多 100 字符且不能包含空字符（NUL），非法输入返回 400；单成员接口不接受分页和搜索。
 
 平台策略必须显式登记对应 memberLookups，调用者还需具备对应操作权限与数据授权。目录只返回受控组织内有效直接成员，不开放平台用户管理权限，也不临时创造 capability。
 

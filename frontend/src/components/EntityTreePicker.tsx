@@ -52,6 +52,7 @@ export function EntityTreePicker({
   emptyText = "暂无数据",
   icon,
   disabled,
+  ariaLabel,
 }: {
   nodes: PickerNode[]
   value?: string | null
@@ -62,6 +63,7 @@ export function EntityTreePicker({
   emptyText?: string
   icon?: React.ReactNode
   disabled?: boolean
+  ariaLabel?: string
 }) {
   const [open, setOpen] = React.useState(false)
   const [keyword, setKeyword] = React.useState("")
@@ -84,6 +86,7 @@ export function EntityTreePicker({
         <Button
           variant="outline"
           role="combobox"
+          aria-label={ariaLabel ?? placeholder}
           aria-expanded={open}
           disabled={disabled}
           className={cn("h-9 w-full justify-between font-normal", !selectedName && "text-muted-foreground", className)}

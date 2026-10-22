@@ -24,7 +24,7 @@ pub async fn initialize(pool: &PgPool) -> anyhow::Result<()> {
     }
     if imported != Some(true) {
         let mut decoder = GzDecoder::new(DATA_2023);
-        let mut copy = (&mut *tx).copy_in_raw("COPY regions (version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url) FROM STDIN WITH (FORMAT text)").await?;
+        let mut copy = tx.copy_in_raw("COPY regions (version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url) FROM STDIN WITH (FORMAT text)").await?;
         let mut chunk = [0u8; 65536];
         loop {
             let count = decoder.read(&mut chunk).context("decompress region seed")?;

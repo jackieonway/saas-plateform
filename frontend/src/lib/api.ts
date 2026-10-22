@@ -202,10 +202,29 @@ export async function switchPlatformContext(organizationId: string, expected?: S
 /** Remote revoke and local clear share the lock and captured logical identity. */
 export async function logoutPlatformSession(expected = captureSessionFence()): Promise<boolean> {
   try {
-    const result = await sessionCoordinator.operation("logout", expected, async ({ record, signal }) => {
+    const result = await sessionCoordinator.operation("logout", expected, async ({ record, signal, updateTokens }) => {
+      let token = record.token
+      const send = () => {
+        signal.throwIfAborted()
+        return fetch("/api/auth/logout", { method: "POST", signal,
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` } })
+      }
+      let response = await send()
       signal.throwIfAborted()
-      const response = await fetch("/api/auth/logout", { method: "POST", signal,
-        headers: { Accept: "application/json", Authorization: `Bearer ${record.token}` } })
+      // An expired access JWT says nothing about the still-valid refresh pair.
+      // Renew under this same lock before revoking the server-side session.
+      if (response.status === 401 && record.refreshToken) {
+        let tokens: SessionTokens
+        try { tokens = await refreshPair(record, signal) }
+        catch (error) {
+          if (error instanceof SessionOperationError && error.disposition === "invalid") return { value: true }
+          throw error
+        }
+        signal.throwIfAborted()
+        updateTokens(tokens)
+        token = tokens.token
+        response = await send()
+      }
       signal.throwIfAborted()
       if (!response.ok && response.status !== 401) throw new SessionOperationError("退出结果无法确认，请重新登录", "unknown", response.status)
       return { value: true }

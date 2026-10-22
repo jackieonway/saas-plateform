@@ -47,6 +47,8 @@ struct UserListRow {
     role_count: i64,
 }
 
+type UserMembershipRow = (Uuid, Uuid, String, Option<Uuid>, Option<String>);
+
 /// 非平台根组织仅管理当前组织及其下级组织的成员。
 async fn ensure_user_in_scope(
     state: &AppState,
@@ -339,7 +341,7 @@ async fn list(
     let user_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     let mut memberships_map: HashMap<Uuid, Vec<Value>> = HashMap::new();
     if !user_ids.is_empty() {
-        let mrows: Vec<(Uuid, Uuid, String, Option<Uuid>, Option<String>)> = sqlx::query_as(
+        let mrows: Vec<UserMembershipRow> = sqlx::query_as(
             "SELECT m.user_id, m.organization_id, o.name, m.department_id, d.name \
              FROM memberships m JOIN organizations o ON o.id = m.organization_id \
              LEFT JOIN departments d ON d.id = m.department_id \
@@ -1111,6 +1113,33 @@ async fn lock_scoped_member(
     Ok(())
 }
 
+/// The caller holds the user's row lock, shared with membership maintenance.
+/// Validate after taking it so a member move cannot leave a newly assigned
+/// role outside every remaining membership's ancestor chain.
+pub(super) async fn ensure_role_membership_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    role_org: Uuid,
+) -> Result<(), AppError> {
+    let valid: bool = sqlx::query_scalar(
+        "WITH RECURSIVE anc AS ( \
+         SELECT o.id, o.parent_id FROM memberships m \
+         JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=$1 \
+         UNION SELECT o.id, o.parent_id FROM organizations o JOIN anc ON o.id=anc.parent_id ) \
+         SELECT EXISTS(SELECT 1 FROM anc WHERE id=$2)",
+    )
+    .bind(user_id)
+    .bind(role_org)
+    .fetch_one(&mut **tx)
+    .await?;
+    if !valid {
+        return Err(AppError::bad_request(
+            "角色所属组织必须在用户成员组织或其祖先范围内",
+        ));
+    }
+    Ok(())
+}
+
 /// GET /api/users/{id}/roles
 async fn get_roles(
     State(state): State<AppState>,
@@ -1232,6 +1261,8 @@ async fn put_roles(
         };
         parsed.push((role, org));
     }
+    let mut tx = state.pool.begin().await?;
+    lock_scoped_member(&mut tx, uid, scoped_orgs.as_deref()).await?;
     if !parsed.is_empty() {
         let role_ids: Vec<Uuid> = parsed.iter().map(|(r, _)| *r).collect();
         let n: i64 = sqlx::query_scalar(
@@ -1240,7 +1271,7 @@ async fn put_roles(
         )
         .bind(&role_ids)
         .bind(&scoped_orgs)
-        .fetch_one(&state.pool)
+        .fetch_one(&mut *tx)
         .await?;
         if n != role_ids
             .iter()
@@ -1254,33 +1285,16 @@ async fn put_roles(
             let (role_org,): (Uuid,) =
                 sqlx::query_as("SELECT organization_id FROM roles WHERE id = $1")
                     .bind(role)
-                    .fetch_one(&state.pool)
+                    .fetch_one(&mut *tx)
                     .await?;
             if role_org != *org {
                 return Err(AppError::bad_request(
                     "角色授权上下文组织与角色所属组织不一致",
                 ));
             }
-            let valid: bool = sqlx::query_scalar(
-                "WITH RECURSIVE anc AS ( \
-                 SELECT m.organization_id AS id, om.parent_id FROM memberships m \
-                 JOIN organizations om ON om.id = m.organization_id WHERE m.user_id = $1 \
-                 UNION ALL SELECT o.id, o.parent_id FROM organizations o JOIN anc ON o.id = anc.parent_id ) \
-                 SELECT EXISTS(SELECT 1 FROM anc WHERE id = $2)",
-            )
-            .bind(uid)
-            .bind(org)
-            .fetch_one(&state.pool)
-            .await?;
-            if !valid {
-                return Err(AppError::bad_request(
-                    "角色所属组织必须在用户成员组织或其祖先范围内",
-                ));
-            }
+            ensure_role_membership_in_tx(&mut tx, uid, *org).await?;
         }
     }
-    let mut tx = state.pool.begin().await?;
-    lock_scoped_member(&mut tx, uid, scoped_orgs.as_deref()).await?;
     let current: Vec<(Uuid, Uuid)> = sqlx::query_as(
         "SELECT ur.role_id, ur.organization_id FROM user_roles ur JOIN roles r ON r.id=ur.role_id \
          WHERE ur.user_id=$1 AND ($2::uuid[] IS NULL OR \

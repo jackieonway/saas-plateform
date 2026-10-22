@@ -14,8 +14,10 @@
 | 排查登录和凭据问题 | [登录保护](login-protection.md)、[OAuth](oauth-issuance.md)、[审计](management-audit.md) |
 | 运行实时通知 | [通知协议](realtime-protocol.md)及独立通知仓库 README |
 | 管理应用版本 | [升级与保留](upgrade-and-retention.md)、[ZIP 分发](zip-distribution-runbook.md) |
+| 简化微应用创建、发布和授权 | [微应用简易接入](micro-application-onboarding.md) |
 | 健康监控、备份和恢复 | [运维入口](../ops/README.md) |
 | 查看已执行和未执行的检查 | [验证状态](repository-split-validation.md) |
+| 查看本轮全功能审查与修复 | [2026-10-22 审查](project-audit-2026-10-22.md) |
 | 了解后续支付规划 | [支付方案](pay/README.md)、[支付台账](pay/task-ledger.md) |
 
 命令所在目录会在正文中明确说明。命令、接口字段和状态码保留原名称，说明文字使用中文。源码、迁移和配置解析器是接口及运行参数的最终依据。

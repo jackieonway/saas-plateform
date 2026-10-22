@@ -26,7 +26,7 @@ saas-recovery 当前支持 pilot 协议：平台、工单、门店三库共同�
 
 ## 2. 准备版本材料
 
-当前代码仍要求固定材料布局：
+当前校验器要求以下固定材料布局，各前端目录至少包含 index.html：
 
 ```text
 host/                          宿主完整静态产物及保留资源
@@ -34,13 +34,12 @@ stores/v1/、stores/v2/          门店两份完整前端
 work-orders/v1/、work-orders/v2/ 工单两份完整前端
 images/lock.json                四个业务静态镜像的身份及归档摘要
 images/*.tar                   对应四个镜像归档
-routes/                        实际网关与相关路由
-runtime/releases/              平台引用的不可变版本/ZIP 材料
-runtime/bin/                   当前材料协议需要的可执行材料
-runtime/native-lock.json        当前协议需要的身份与来源记录
+routes/nginx.conf               实际网关入口配置
 ```
 
-原生发行入口已移除，但恢复材料格式没有随之重设计，runtime 字段仍按工具实际规则验证。只有新镜像而缺少这些必需材料的 Docker 部署不能直接宣称可用；应先按 src 中格式完成隔离演练，后续若改格式需单独实现与验收。
+此外，应把数据库实际引用的不可变发布版本、ZIP 材料、完整静态依赖和其他运行材料放入 artifact_root，一并冻结和保存。工具会校验已收集文件的路径与摘要，但尚未逐项核对数据库发布引用或 HTML 资源引用是否齐全；runtime/releases、runtime/bin、runtime/native-lock.json 并非当前校验器的必填项。备份成功不代表这些依赖已完整，应通过隔离恢复中的版本页面与旧资源验收确认。
+
+材料路径按实际文件名逐组件保存，拒绝不能准确还原的非 UTF-8 名称和字面反斜线，不通过替换字符或分隔符悄悄改名。认证包校验还会拒绝 NUL、重复路径和父文件/子路径冲突，在创建恢复数据库或写出材料之前报告这些确定失败的输入。
 
 images/lock.json 记录四项 app、version、imageId、archiveSha256、archiveBytes。Docker imageId 与 registry manifest digest 是不同身份，不能互换。所有实际引用和旧资源都要完整保存。
 

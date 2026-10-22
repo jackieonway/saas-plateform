@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{ensure, Result};
+use anyhow::{anyhow, ensure, Result};
 use axum::body::{to_bytes, Body};
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
@@ -129,6 +129,111 @@ async fn call(
     Ok(body)
 }
 
+async fn role_assignment_rechecks_membership_after_lock(
+    app: &Router,
+    pool: &PgPool,
+    token: &str,
+    member_org: Uuid,
+    other_org: Uuid,
+    role: Uuid,
+) -> Result<()> {
+    for role_centric in [false, true] {
+        let target = account(
+            pool,
+            &format!("moving-role-member-{role_centric}"),
+            &[member_org, other_org],
+            false,
+        )
+        .await?;
+        let before: Vec<Uuid> =
+            sqlx::query_scalar("SELECT user_id FROM user_roles WHERE role_id=$1 ORDER BY user_id")
+                .bind(role)
+                .fetch_all(pool)
+                .await?;
+        let mut blocker = pool.begin().await?;
+        let blocker_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+            .fetch_one(&mut *blocker)
+            .await?;
+        sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+            .bind(target)
+            .execute(&mut *blocker)
+            .await?;
+        let (path, body) = if role_centric {
+            (
+                format!("/api/roles/{role}/users"),
+                json!({"userIds":[target]}),
+            )
+        } else {
+            (
+                format!("/api/users/{target}/roles"),
+                json!({"items":[{"roleId":role}]}),
+            )
+        };
+        let (app, token) = (app.clone(), token.to_owned());
+        let pending = tokio::spawn(async move {
+            call(
+                &app,
+                &token,
+                Method::PUT,
+                &path,
+                Some(body),
+                StatusCode::BAD_REQUEST,
+            )
+            .await
+        });
+        // Observe the actual account-lock wait instead of relying on a delay.
+        // The actor keeps the other membership, so the general scope check
+        // still succeeds after the specific role eligibility is removed.
+        let waiting = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                let observed: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() \
+                     AND wait_event_type='Lock' AND $1=ANY(pg_blocking_pids(pid)) \
+                     AND query LIKE '%FROM users%' AND query LIKE '%FOR UPDATE%')",
+                )
+                .bind(blocker_pid)
+                .fetch_one(pool)
+                .await?;
+                if observed {
+                    return Ok::<_, anyhow::Error>(());
+                }
+                if pending.is_finished() {
+                    return Err(anyhow!("role assignment skipped the account-lock barrier"));
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        if !matches!(waiting, Ok(Ok(()))) {
+            blocker.rollback().await?;
+            pending.abort();
+            let _ = pending.await;
+            return Err(anyhow!(
+                "role assignment never reached the observed account-lock barrier"
+            ));
+        }
+        sqlx::query("DELETE FROM memberships WHERE user_id=$1 AND organization_id=$2")
+            .bind(target)
+            .bind(member_org)
+            .execute(&mut *blocker)
+            .await?;
+        blocker.commit().await?;
+        tokio::time::timeout(std::time::Duration::from_secs(10), pending)
+            .await
+            .map_err(|_| anyhow!("role assignment did not finish after the member move"))???;
+        let after: Vec<Uuid> =
+            sqlx::query_scalar("SELECT user_id FROM user_roles WHERE role_id=$1 ORDER BY user_id")
+                .bind(role)
+                .fetch_all(pool)
+                .await?;
+        ensure!(
+            before == after,
+            "rejected role assignment changed existing bindings"
+        );
+    }
+    Ok(())
+}
+
 async fn exercise(platform: bool) -> Result<()> {
     let database = Database::create().await?;
     let pool = &database.pool;
@@ -228,6 +333,15 @@ async fn exercise(platform: bool) -> Result<()> {
             call(&app, &token, Method::PUT, &format!("/api/users/{shared}/roles"),
                 Some(json!({"items":[{"roleId":outside}]})), StatusCode::BAD_REQUEST).await?;
         }
+        // The role-oriented endpoint must enforce the same member/ancestor
+        // relationship as user-oriented assignment, even for visible users.
+        call(&app, &token, Method::PUT, &format!("/api/roles/{leaf_role}/users"),
+            Some(json!({"userIds":[child_user]})), StatusCode::BAD_REQUEST).await?;
+        call(&app, &root_token, Method::PUT, &format!("/api/roles/{sibling_role}/users"),
+            Some(json!({"userIds":[child_user]})), StatusCode::BAD_REQUEST).await?;
+        let retained: Vec<Uuid> = sqlx::query_scalar("SELECT user_id FROM user_roles WHERE role_id=$1")
+            .bind(leaf_role).fetch_all(pool).await?;
+        ensure!(retained == vec![leaf_user], "invalid role member replacement removed existing bindings");
         call(&app, &token, Method::PUT, &format!("/api/users/{shared}"), Some(json!({"realName":"Denied shared edit"})), StatusCode::FORBIDDEN).await?;
         call(&app, &token, Method::PUT, &format!("/api/users/{shared}/status"), Some(json!({"status":"DISABLED"})), StatusCode::FORBIDDEN).await?;
         call(&app, &token, Method::POST, &format!("/api/users/{shared}/reset-password"), Some(json!({"newPassword":"Regression-Strong-123!"})), StatusCode::FORBIDDEN).await?;
@@ -309,6 +423,7 @@ async fn exercise(platform: bool) -> Result<()> {
                 && reused["administrator"].get("initialPassword").is_none(),
                 "scoped or tenant-root contact matching no longer reused an eligible account");
         }
+        role_assignment_rechecks_membership_after_lock(&app, pool, &token, leaf, child, leaf_role).await?;
         Ok(())
     }.await;
     database.finish(result).await

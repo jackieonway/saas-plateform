@@ -12,7 +12,7 @@ cargo build --release --locked
 docker build -t saas-monitor:local .
 ```
 
-本地已有一个 HTTP 故障恢复测试失败，原因尚未确认，见 [验证状态](../../docs/repository-split-validation.md)。
+本地 Windows 执行环境中，HTTP 故障恢复测试仍在成功基线处失败。交叉验证发现：Rust 客户端连接 PowerShell/.NET 的 `127.0.0.1` 和 `::1` 随机监听端口均成功，而 .NET 客户端连接新编译 Rust 程序的两种回环监听均超时，Rust 连接自身监听也超时。探测客户端已经禁用代理；换用 IPv6 或增加 HTTP 超时不能解决该监听入站限制，具体防火墙或主机策略仍需环境侧确认。测试保留真实 HTTP 成功基线及 DOWN/RECOVERED 断言，须在允许该测试程序回环入站连接的环境验收。备份事件去重和状态机另有独立无网络测试，不能用其通过替代真实 HTTP 验证。其他交付限制见 [验证状态](../../docs/repository-split-validation.md)。
 
 ## 配置与运行
 

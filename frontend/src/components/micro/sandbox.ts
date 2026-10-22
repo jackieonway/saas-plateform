@@ -5,7 +5,7 @@
  * run() 仅在同步调用期间包装真实 document 的监听器方法，并在 finally 恢复；
  * mount/update/unmount 及沙箱回调应通过 run() 调用。await 后的资源由应用
  * 使用 MicroProps.signal 和 unmount 自行停止，不延长 document 全局包装时间。
- * MutationObserver 回收新增 STYLE/LINK/SCRIPT，跳过宿主 Vite HMR 样式。
+ * MutationObserver 只记账同步应用作用域内新增的 STYLE/LINK/SCRIPT，避免回收宿主资源。
  */
 
 export type MicroGlobalProxy = Record<string, unknown> & {
@@ -48,6 +48,8 @@ interface DocumentMethods {
 
 // 嵌套 run() 仍调用最初的原生方法，避免给另一个沙箱重复记账。
 const documentMethods = new WeakMap<Document, DocumentMethods>()
+const mutationOwners = new WeakMap<Document, MicroSandbox>()
+const scriptScopeBatches = new WeakMap<Document, Set<() => void>>()
 
 function getDocumentMethods(): DocumentMethods {
   let methods = documentMethods.get(document)
@@ -70,6 +72,7 @@ export class MicroSandbox {
   private readonly boundWindowFns = new Map<string, { raw: unknown; bound: unknown }>()
   private readonly nativeDocument = getDocumentMethods()
   private observer: MutationObserver | null = null
+  private observing = false
   private tornDown = false
 
   constructor(readonly name: string) {
@@ -85,14 +88,63 @@ export class MicroSandbox {
       },
       has: () => true,
     }) as unknown as MicroGlobalProxy
-    this.ensureObserver()
   }
 
   /** 同步调用作用域，真实 document 身份不变；返回 Promise 时立即恢复宿主方法。 */
   run<T>(callback: () => T): T {
+    const leave = this.enterScope()
+    try { return callback() }
+    finally { leave() }
+  }
+
+  /** import-html-entry omits afterExec when a script throws. The first script
+   * schedules the whole synchronous batch's cleanup, ahead of microtasks from
+   * earlier scripts that may otherwise run before a later failing script exits. */
+  beginScriptScope(): () => void {
+    const exitScope = this.enterScope()
+    let batch = scriptScopeBatches.get(document)
+    if (!batch) {
+      batch = new Set()
+      scriptScopeBatches.set(document, batch)
+      const currentBatch = batch
+      queueMicrotask(() => {
+        scriptScopeBatches.delete(document)
+        // Restore nested owners and document descriptors in stack order.
+        for (const leave of [...currentBatch].reverse()) leave()
+      })
+    }
+    const currentBatch = batch
+    const leave = () => { currentBatch.delete(leave); exitScope() }
+    currentBatch.add(leave)
+    return leave
+  }
+
+  private enterScope(): () => void {
     if (this.tornDown) throw new Error(`微应用 ${this.name} 已卸载`)
+    const previousOwner = mutationOwners.get(document)
+    if (previousOwner !== this) {
+      previousOwner?.pauseObserver()
+      this.ensureObserver()
+      mutationOwners.set(document, this)
+    }
     const addDescriptor = Object.getOwnPropertyDescriptor(document, "addEventListener")
     const removeDescriptor = Object.getOwnPropertyDescriptor(document, "removeEventListener")
+    let left = false
+    const leave = () => {
+      if (left) return
+      left = true
+      if (previousOwner !== this) {
+        this.pauseObserver()
+        if (previousOwner && !previousOwner.tornDown) {
+          previousOwner.ensureObserver()
+          mutationOwners.set(document, previousOwner)
+        } else mutationOwners.delete(document)
+      }
+      if (addDescriptor) Object.defineProperty(document, "addEventListener", addDescriptor)
+      else delete (document as unknown as Record<string, unknown>).addEventListener
+      if (removeDescriptor) Object.defineProperty(document, "removeEventListener", removeDescriptor)
+      else delete (document as unknown as Record<string, unknown>).removeEventListener
+    }
     try {
       Object.defineProperty(document, "addEventListener", {
         configurable: true, writable: true, value: this.trackedDocumentAddEventListener,
@@ -100,13 +152,8 @@ export class MicroSandbox {
       Object.defineProperty(document, "removeEventListener", {
         configurable: true, writable: true, value: this.trackedDocumentRemoveEventListener,
       })
-      return callback()
-    } finally {
-      if (addDescriptor) Object.defineProperty(document, "addEventListener", addDescriptor)
-      else delete (document as unknown as Record<string, unknown>).addEventListener
-      if (removeDescriptor) Object.defineProperty(document, "removeEventListener", removeDescriptor)
-      else delete (document as unknown as Record<string, unknown>).removeEventListener
-    }
+    } catch (error) { leave(); throw error }
+    return leave
   }
 
   private handleGet(key: string | symbol): unknown {
@@ -280,17 +327,25 @@ export class MicroSandbox {
   ): void => this.removeListener(document, type, listener, options)
 
   private ensureObserver(): void {
-    if (this.tornDown || this.observer || typeof MutationObserver === "undefined") return
-    const observer = new MutationObserver((records) => {
-      if (!this.tornDown) this.trackMutationRecords(records)
+    if (this.tornDown || this.observing || typeof MutationObserver === "undefined") return
+    const observer = this.observer ?? new MutationObserver((records) => {
+      if (!this.tornDown && this.observing) this.trackMutationRecords(records)
     })
     try {
       observer.observe(document.head, { childList: true, subtree: true })
       observer.observe(document.body, { childList: true, subtree: true })
       this.observer = observer
+      this.observing = true
     } catch {
       observer.disconnect()
     }
+  }
+
+  private pauseObserver(): void {
+    if (!this.observer || !this.observing) return
+    this.trackMutationRecords(this.observer.takeRecords())
+    this.observer.disconnect()
+    this.observing = false
   }
 
   private trackMutationRecords(records: MutationRecord[]): void {
@@ -310,10 +365,10 @@ export class MicroSandbox {
     }
   }
 
-  /** 回收幂等；同步 takeRecords 防止同一任务内插入样式后立即卸载时漏记。 */
+  /** 回收幂等；同步作用域结束或卸载前取走 pending records，防止漏记。 */
   teardown(): void {
     if (this.tornDown) return
-    if (this.observer) this.trackMutationRecords(this.observer.takeRecords())
+    this.pauseObserver()
     this.tornDown = true
 
     for (const [id, kind] of this.timers) {
@@ -332,6 +387,7 @@ export class MicroSandbox {
 
     this.observer?.disconnect()
     this.observer = null
+    if (mutationOwners.get(document) === this) mutationOwners.delete(document)
     for (const node of this.insertedNodes) {
       if (node.isConnected) node.parentNode?.removeChild(node)
     }

@@ -191,6 +191,7 @@ impl Harness {
             ("system:oauth", "/system/oauth/tokens"),
             ("system:settings", "/system/settings"),
             ("system:department", "/system/departments"),
+            ("system:region", "/system/regions"),
             ("notification:publish", "/micro/system"),
         ]
         .into_iter()
@@ -215,7 +216,7 @@ impl Harness {
             .bind(tenant).bind(application).execute(pool).await?;
         sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) SELECT id,$2,'notification','publish','TENANT' FROM memberships WHERE user_id=$1 AND organization_id=$3")
             .bind(actor).bind(application).bind(root).execute(pool).await?;
-        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,application_id,grant_types,scopes) VALUES('audit-client','Audit fixture client',$1,$2,'password,refresh_token','profile')")
+        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,application_id,grant_types,scopes,redirect_uris) VALUES('audit-client','Audit fixture client',$1,$2,'authorization_code,password,refresh_token','profile','https://consumer.example.test/callback')")
             .bind(hash::sha256_hex(CLIENT_SECRET)).bind(application).execute(pool).await?;
         sqlx::raw_sql(
             "CREATE TABLE phase13_audit_fault(action text PRIMARY KEY,mode text NOT NULL,after_first boolean NOT NULL DEFAULT false); \
@@ -376,7 +377,7 @@ impl Harness {
     async fn snapshot(&self, preflight_commits: bool) -> Result<BTreeMap<String, String>> {
         let tables: Vec<String> = sqlx::query_scalar("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename NOT LIKE 'phase13_%' AND tablename<>'_sqlx_migrations' ORDER BY tablename")
             .fetch_all(&self.pool).await?;
-        let mut snapshot = BTreeMap::new();
+        let mut statements = Vec::with_capacity(tables.len());
         for table in tables {
             ensure!(
                 table
@@ -394,12 +395,19 @@ impl Harness {
             } else {
                 ""
             };
-            let rows: String = sqlx::query_scalar(&format!(
-                "SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text FROM \"{table}\" r{filter}"
-            )).fetch_one(&self.pool).await?;
-            snapshot.insert(table, rows);
+            statements.push(format!(
+                "SELECT '{table}'::text, COALESCE(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text FROM \"{table}\" r{filter}"
+            ));
         }
-        Ok(snapshot)
+        if statements.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        // One statement gives every table the same MVCC snapshot and avoids
+        // dozens of database round trips for each injected audit failure.
+        let rows: Vec<(String, String)> = sqlx::query_as(&statements.join(" UNION ALL "))
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows.into_iter().collect())
     }
 
     async fn safe_audits(&self) -> Result<()> {
@@ -648,6 +656,41 @@ where
     .map_err(|_| anyhow!("management audit suite deadline exceeded"))
     .and_then(|value| value);
     database.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "requires explicit TEST_DATABASE_URL and disposable database privileges"]
+async fn region_catalog_mutations_rollback_when_audit_is_rejected() -> Result<()> {
+    run(|h| async move {
+        h.atomic(Operation::new(Method::POST, "/api/regions/versions",
+            json!({"version":"audit-regions","label":"Audited catalog"}),
+            "CREATE_REGION_VERSION").named("Audited catalog")).await?;
+        let mut body = json!({"version":"audit-regions","code":"110000","parentCode":"0",
+            "name":"Audited region","namePinyin":"beijing","nameShort":"bj","level":2});
+        let created = h.atomic(Operation::new(Method::POST,"/api/regions",body.clone(),
+            "CREATE_REGION").named("Audited region")).await?;
+        let region = created.body["id"].as_str().ok_or_else(|| anyhow!("region response omitted id"))?;
+        let path = format!("/api/regions/{region}");
+        body["name"] = json!("Renamed audited region");
+        h.atomic(Operation::new(Method::PUT,&path,body.clone(),"UPDATE_REGION")
+            .named("Renamed audited region")).await?;
+        let before = h.snapshot(false).await?;
+        no_event(&h,Operation::new(Method::PUT,&path,body,"UPDATE_REGION")).await?;
+        ensure!(h.snapshot(false).await? == before,"region no-op changed persisted state");
+        h.atomic(Operation::new(Method::POST,"/api/regions/versions",
+            json!({"version":"audit-copy","label":"Copied catalog","sourceVersion":"audit-regions"}),
+            "CREATE_REGION_VERSION").named("Copied catalog")).await?;
+        let copies: i64 = sqlx::query_scalar("SELECT count(*) FROM regions WHERE version='audit-copy'")
+            .fetch_one(&h.pool).await?;
+        ensure!(copies == 1,"catalog copy lost its region");
+        h.atomic(Operation::new(Method::DELETE,"/api/regions/versions/audit-copy",Value::Null,
+            "DELETE_REGION_VERSION").named("Copied catalog")).await?;
+        h.atomic(Operation::new(Method::DELETE,format!("{path}?version=audit-regions"),Value::Null,
+            "DELETE_REGION").named("Renamed audited region")).await?;
+        h.atomic(Operation::new(Method::DELETE,"/api/regions/versions/audit-regions",Value::Null,
+            "DELETE_REGION_VERSION").named("Audited catalog")).await?;
+        Ok(())
+    }).await
 }
 
 fn id(reply: &Reply) -> Result<Uuid> {
@@ -1211,6 +1254,68 @@ async fn seed_device(h: &Harness, user_code: &str) -> Result<Uuid> {
     h.secrets.lock().unwrap().push(user_code.into());
     Ok(sqlx::query_scalar("INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,scope,expires_at) VALUES($1,$2,'audit-client','profile',now()+interval '1 hour') RETURNING id")
         .bind(hash::sha256_hex(&Uuid::new_v4().to_string())).bind(user_code).fetch_one(&h.pool).await?)
+}
+
+#[tokio::test]
+#[ignore = "requires explicit TEST_DATABASE_URL and disposable database privileges"]
+async fn oauth_pkce_management_defaults_explicit_overrides_and_audit_rollback() -> Result<()> {
+    run(|h| async move {
+        let body = |name: &str, kind: &str| json!({
+            "clientName":name,"clientType":kind,"grantTypes":["authorization_code","refresh_token"],
+            "scopes":["profile"],"redirectUris":["https://pkce.example.test/callback"]
+        });
+        let public = h.atomic(Operation::new(Method::POST,"/api/oauth/clients",
+            body("New public PKCE client","PUBLIC"),"CREATE_CLIENT")).await?;
+        ensure!(public.body["requirePkce"] == true,"new PUBLIC client did not default to required PKCE");
+        let confidential = h.atomic(Operation::new(Method::POST,"/api/oauth/clients",
+            body("New confidential PKCE client","CONFIDENTIAL"),"CREATE_CLIENT")).await?;
+        ensure!(confidential.body["requirePkce"] == false,"new CONFIDENTIAL client changed its compatibility default");
+        for (kind, required) in [("PUBLIC",false),("CONFIDENTIAL",true)] {
+            let mut explicit = body("Explicit PKCE client",kind);
+            explicit["requirePkce"] = json!(required);
+            let reply = h.call(&Operation::new(Method::POST,"/api/oauth/clients",explicit,"CREATE_CLIENT")).await?;
+            ensure!(reply.status.is_success() && reply.body["requirePkce"] == required,
+                "client creation ignored an explicit PKCE policy");
+        }
+
+        // Direct insertion models an existing client after the additive column
+        // migration; managed creation intentionally has different defaults.
+        let legacy: Uuid = sqlx::query_scalar(
+            "INSERT INTO oauth_clients(client_id,client_name,client_type,grant_types,scopes) \
+             VALUES('legacy-pkce-management','Legacy public PKCE client','PUBLIC','authorization_code','profile') RETURNING id",
+        ).fetch_one(&h.pool).await?;
+        let listed = h.call(&Operation::new(Method::GET,"/api/oauth/clients",Value::Null,"LIST_CLIENTS")).await?;
+        ensure!(listed.status == StatusCode::OK,"client listing failed");
+        let legacy_row = listed.body.as_array().and_then(|rows| rows.iter().find(|row| row["id"] == legacy.to_string()))
+            .ok_or_else(|| anyhow!("client listing omitted historical PUBLIC client"))?;
+        ensure!(legacy_row["requirePkce"] == false,"client listing hid historical PKCE compatibility mode");
+        let preserved = h.atomic(Operation::new(Method::PUT,format!("/api/oauth/clients/{legacy}"),
+            json!({"clientName":"Renamed legacy PKCE client"}),"UPDATE_CLIENT")).await?;
+        ensure!(preserved.body["requirePkce"] == false,"unrelated edit tightened historical PUBLIC policy implicitly");
+
+        let client = id(&confidential)?;
+        let path = format!("/api/oauth/clients/{client}");
+        let switched = h.atomic(Operation::new(Method::PUT,&path,json!({"clientType":"PUBLIC"}),"UPDATE_CLIENT")).await?;
+        ensure!(switched.body["requirePkce"] == true,"switching to PUBLIC did not default to required PKCE");
+        let detail: Value = sqlx::query_scalar("SELECT detail::jsonb FROM audit_logs WHERE request_id=$1 AND action='UPDATE_CLIENT'")
+            .bind(switched.request_id).fetch_one(&h.pool).await?;
+        ensure!(detail["before"]["requirePkce"] == false && detail["after"]["requirePkce"] == true,
+            "PKCE policy change was omitted from its management audit");
+
+        // atomic() rejects both throwing and silently skipped audit writes and
+        // compares every business table before retrying, including this policy.
+        let disabled = h.atomic(Operation::new(Method::PUT,&path,json!({"requirePkce":false}),"UPDATE_CLIENT")).await?;
+        ensure!(disabled.body["requirePkce"] == false,"explicit compatibility override was ignored");
+        let back = h.atomic(Operation::new(Method::PUT,&path,json!({"clientType":"CONFIDENTIAL"}),"UPDATE_CLIENT")).await?;
+        ensure!(back.body["requirePkce"] == false,"type edit silently changed an existing policy");
+        let overridden = h.atomic(Operation::new(Method::PUT,&path,
+            json!({"clientType":"PUBLIC","requirePkce":false}),"UPDATE_CLIENT")).await?;
+        ensure!(overridden.body["requirePkce"] == false,"explicit false did not override the PUBLIC transition default");
+        let stored: bool = sqlx::query_scalar("SELECT require_pkce FROM oauth_clients WHERE id=$1")
+            .bind(client).fetch_one(&h.pool).await?;
+        ensure!(!stored,"client response and persisted PKCE policy disagree");
+        Ok(())
+    }).await
 }
 
 async fn oauth_matrix(h: Harness) -> Result<()> {

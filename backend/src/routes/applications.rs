@@ -168,8 +168,25 @@ fn parse_entry_type(t: &str) -> Result<String, AppError> {
     }
 }
 
-/// 校验并归一入口地址 (与 link_url 同口径):
-/// entry_type=HTML 时必填; 非空时必须 http(s):// 或 / 开头且 ≤ 500 字符; ESM 时可空
+/// 与宿主的可执行入口契约保持一致；不会替调用者自动提升为 TRUSTED。
+fn validate_runtime_entry(
+    entry_type: &str,
+    runtime_mode: &str,
+    base_path: &str,
+    code: &str,
+) -> Result<(), AppError> {
+    if base_path.trim_end_matches('/') == format!("/micro/{code}")
+        && entry_type == "ESM"
+        && runtime_mode != "TRUSTED"
+    {
+        return Err(AppError::bad_request(
+            "ESM 微应用须经管理员审核并显式设置 runtimeMode 为 TRUSTED；IFRAME 仅支持 HTML",
+        ));
+    }
+    Ok(())
+}
+
+/// HTML 入口必填；非空入口必须是无凭据的 HTTP(S) 地址或宿主绝对路径。
 fn validate_entry_url(entry_type: &str, raw: &str) -> Result<String, AppError> {
     let url = raw.trim();
     if url.is_empty() {
@@ -187,6 +204,33 @@ fn validate_entry_url(entry_type: &str, raw: &str) -> Result<String, AppError> {
     }
     if url.chars().count() > 500 {
         return Err(AppError::bad_request("入口地址长度不能超过 500 字符"));
+    }
+    if url.starts_with("//") || url.contains('\\') || url.chars().any(char::is_control) {
+        return Err(AppError::bad_request(
+            "入口地址不能包含反斜线、控制字符或省略协议的外部来源",
+        ));
+    }
+    let parsed = reqwest::Url::parse("https://host.invalid/")
+        .and_then(|base| base.join(url))
+        .map_err(|_| AppError::bad_request("入口地址格式错误"))?;
+    if !["http", "https"].contains(&parsed.scheme())
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query_pairs().any(|(key, _)| {
+            [
+                "token",
+                "access_token",
+                "session",
+                "session_token",
+                "client_secret",
+            ]
+            .contains(&key.to_ascii_lowercase().as_str())
+        })
+    {
+        return Err(AppError::bad_request(
+            "入口地址必须为有效 HTTP(S) 地址且不能携带凭据或会话参数",
+        ));
     }
     Ok(url.to_string())
 }
@@ -239,6 +283,7 @@ async fn create(
         } else {
             body.base_path.trim().to_string()
         };
+    validate_runtime_entry(&entry_type, &body.runtime_mode, &base_path, code)?;
     let default_entry_url = format!("/sub-apps/{code}/index.html");
     let default_esm_entry_url = format!("/src/micro-apps/{code}.tsx");
     let raw_entry_url = if entry_type == "HTML" && body.entry_url.trim().is_empty() {
@@ -376,16 +421,18 @@ async fn update(
     };
     let mut tx = state.pool.begin().await?;
     let before = locked_application(&mut tx, id).await?;
-    // HTML 完整性: 切到/保持 HTML 时, 最终 entry_url 不能为空 → 预读当前行做合并校验
-    if new_entry_type.as_deref() == Some("HTML") || new_entry_type.is_none() {
-        let final_type = new_entry_type.as_deref().unwrap_or(&before.entry_type);
-        let final_url = new_entry_url.as_deref().unwrap_or(&before.entry_url);
-        if final_type == "HTML" && final_url.is_empty() {
-            return Err(AppError::bad_request(
-                "HTML 入口应用必须配置入口地址 entryUrl",
-            ));
-        }
-    }
+    // 校验合并后的完整配置，覆盖仅修改入口类型、运行模式或挂载路径的补丁。
+    let final_type = new_entry_type.as_deref().unwrap_or(&before.entry_type);
+    validate_entry_url(
+        final_type,
+        new_entry_url.as_deref().unwrap_or(&before.entry_url),
+    )?;
+    validate_runtime_entry(
+        final_type,
+        body.runtime_mode.as_deref().unwrap_or(&before.runtime_mode),
+        body.base_path.as_deref().unwrap_or(&before.base_path),
+        &before.code,
+    )?;
     let row: ApplicationRow = sqlx::query_as(
         "UPDATE applications SET name = COALESCE($2, name), icon = COALESCE($3, icon), \
          base_path = COALESCE($4, base_path), entry_type = COALESCE($5, entry_type), \
@@ -492,4 +539,55 @@ async fn delete(
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn executable_entry_rejects_browser_normalization_and_credentials() {
+        for invalid in [
+            "//external.test/app/",
+            "/\\external.test/app/",
+            "https://user:secret@external.test/app/",
+            "https://external.test/a\nb/",
+            "http://[invalid/",
+            "/app/?access_token=secret",
+            "/app/?CLIENT_SECRET=secret",
+        ] {
+            assert!(validate_entry_url("HTML", invalid).is_err(), "{invalid:?}");
+        }
+        for valid in [
+            "/sub-apps/demo/versions/v1/index.html",
+            "/src/micro-apps/report-center.tsx",
+            "https://external.test/v1/index.html?locale=zh",
+        ] {
+            assert_eq!(validate_entry_url("HTML", valid).unwrap(), valid);
+        }
+        assert!(validate_entry_url("HTML", "").is_err());
+        assert_eq!(validate_entry_url("ESM", "").unwrap(), "");
+    }
+
+    #[test]
+    fn micro_esm_requires_explicit_trust_and_host_routes_remain_valid() {
+        assert!(
+            validate_runtime_entry("ESM", "IFRAME", "/micro/report-center", "report-center")
+                .is_err()
+        );
+        assert!(
+            validate_runtime_entry("ESM", "IFRAME", "/micro/report-center/", "report-center")
+                .is_err()
+        );
+        for (entry_type, runtime, base_path) in [
+            ("ESM", "TRUSTED", "/micro/report-center"),
+            ("HTML", "IFRAME", "/micro/report-center"),
+            ("HTML", "TRUSTED", "/micro/report-center"),
+            ("ESM", "IFRAME", "/system"),
+        ] {
+            assert!(
+                validate_runtime_entry(entry_type, runtime, base_path, "report-center").is_ok()
+            );
+        }
+    }
 }

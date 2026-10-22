@@ -74,6 +74,9 @@ async fn list(
         return Err(AppError::bad_request("type 不合法"));
     }
     let q = params.get("q").map(|v| v.trim()).unwrap_or("");
+    if q.contains('\0') {
+        return Err(AppError::bad_request("搜索关键词不能包含空字符"));
+    }
     let pattern = if q.is_empty() {
         String::new()
     } else {
@@ -451,15 +454,14 @@ async fn get_prefs(
     .bind(user.user_id)
     .fetch_optional(&state.pool)
     .await?;
-    let (dnd_enabled, dnd_start, dnd_end, muted) =
-        row.map(|(e, s, t, m)| (e, s, t, m)).unwrap_or_else(|| {
-            (
-                PREFS_DEFAULT.0,
-                PREFS_DEFAULT.1.to_string(),
-                PREFS_DEFAULT.2.to_string(),
-                String::new(),
-            )
-        });
+    let (dnd_enabled, dnd_start, dnd_end, muted) = row.unwrap_or_else(|| {
+        (
+            PREFS_DEFAULT.0,
+            PREFS_DEFAULT.1.to_string(),
+            PREFS_DEFAULT.2.to_string(),
+            String::new(),
+        )
+    });
     let muted_types = split_muted_types(&muted);
     Ok(Json(prefs_json(
         dnd_enabled,

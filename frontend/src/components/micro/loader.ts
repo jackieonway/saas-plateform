@@ -63,7 +63,12 @@ function normalizeMessage(e: unknown, entryUrl: string): string {
  * @param entryUrl 入口地址(如 /sub/vue/); 同源相对路径经 Vite 代理转发到子应用服务
  * @param opts.timeoutMs 整体超时(默认 15s), 超时中止全部子请求
  */
-export async function loadHtmlEntry(entryUrl: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<HtmlEntryResult> {
+export async function loadHtmlEntry(entryUrl: string, opts?: {
+  timeoutMs?: number
+  signal?: AbortSignal
+  /** Enter a synchronous script scope; its disposer must also tolerate script errors. */
+  beforeScript?: () => () => void
+}): Promise<HtmlEntryResult> {
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const failures = failedEntries.get(entryUrl) ?? 0
   const generation = entryGenerations.get(entryUrl) ?? 0
@@ -131,11 +136,17 @@ export async function loadHtmlEntry(entryUrl: string, opts?: { timeoutMs?: numbe
     return {
       templateProcessed: entry.template,
       execScripts: async (proxy: object) => {
+        let endScript: (() => void) | undefined
         try {
           check()
           const execOptions = {
             fetch: trackedFetch,
-            beforeExec: () => { check() },
+            beforeExec: () => {
+              check()
+              endScript?.()
+              endScript = opts?.beforeScript?.()
+            },
+            afterExec: () => { endScript?.(); endScript = undefined },
           }
           // Once trusted code starts, abort cannot prove that its returned thenable stopped.
           // Await actual execution; the lifecycle session bounds the wait and poisons unsafe reuse.
@@ -144,7 +155,7 @@ export async function loadHtmlEntry(entryUrl: string, opts?: { timeoutMs?: numbe
           failedEntries.delete(entryUrl)
           return result
         } catch (error) { invalidate(); throw error }
-        finally { cleanup() }
+        finally { endScript?.(); cleanup() }
       },
     }
   } catch (e) {

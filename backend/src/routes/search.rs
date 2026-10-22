@@ -14,6 +14,13 @@ pub fn routes() -> Router<AppState> {
     Router::new().route("/api/search", get(search))
 }
 
+fn literal_keyword(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// 分区权限检查: 无权限返回 false (跳过查询, 该分区返回空数组), 其余错误向上传播
 async fn has_partition_perm(
     state: &AppState,
@@ -44,6 +51,10 @@ async fn search(
     if q.is_empty() {
         return Err(AppError::bad_request("搜索关键词不能为空"));
     }
+    if q.contains('\0') {
+        return Err(AppError::bad_request("搜索关键词不能包含空字符"));
+    }
+    let q = literal_keyword(&q);
     let limit: i64 = params
         .get("limit")
         .and_then(|v| v.parse().ok())
@@ -68,7 +79,7 @@ async fn search(
               ORDER BY m.created_at, m.id LIMIT 1) AS organization_name, \
              u.status \
              FROM users u \
-             WHERE (u.username ILIKE '%' || $1 || '%' OR u.real_name ILIKE '%' || $1 || '%') \
+             WHERE (u.username ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.real_name ILIKE '%' || $1 || '%' ESCAPE '\\') \
              AND ($3::uuid IS NULL OR u.id IN (SELECT m.user_id FROM memberships m \
                   JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = $3)) \
              AND ($4::uuid[] IS NULL OR EXISTS (SELECT 1 FROM memberships m \
@@ -97,7 +108,7 @@ async fn search(
     if has_partition_perm(&state, &user, "system:tenant").await? {
         let rows: Vec<(Uuid, String, String, String)> = sqlx::query_as(
             "SELECT id, name, COALESCE(code,'') AS code, status FROM tenants \
-             WHERE (name ILIKE '%' || $1 || '%' OR code ILIKE '%' || $1 || '%') \
+             WHERE (name ILIKE '%' || $1 || '%' ESCAPE '\\' OR code ILIKE '%' || $1 || '%' ESCAPE '\\') \
              AND ($3::uuid IS NULL OR id = $3) \
              ORDER BY created_at, id LIMIT $2",
         )
@@ -128,7 +139,7 @@ async fn search(
                WHERE ($3::uuid IS NULL OR o.tenant_id = $3) AND ($4::uuid[] IS NULL OR o.id = ANY($4)) \
              ) SELECT o.id, o.name, COALESCE(o.code,'') AS code, p.path FROM organizations o \
              JOIN scoped_paths p ON p.id = o.id \
-             WHERE (o.name ILIKE '%' || $1 || '%' OR o.code ILIKE '%' || $1 || '%') \
+             WHERE (o.name ILIKE '%' || $1 || '%' ESCAPE '\\' OR o.code ILIKE '%' || $1 || '%' ESCAPE '\\') \
              AND ($3::uuid IS NULL OR o.tenant_id = $3) AND ($4::uuid[] IS NULL OR o.id = ANY($4)) \
              ORDER BY o.created_at, o.id LIMIT $2",
         )
@@ -153,7 +164,7 @@ async fn search(
         let rows: Vec<(Uuid, String, String, Option<String>)> = sqlx::query_as(
             "SELECT r.id, r.name, COALESCE(r.code,'') AS code, o.name AS organization_name \
              FROM roles r LEFT JOIN organizations o ON o.id = r.organization_id \
-             WHERE (r.name ILIKE '%' || $1 || '%' OR r.code ILIKE '%' || $1 || '%') \
+             WHERE (r.name ILIKE '%' || $1 || '%' ESCAPE '\\' OR r.code ILIKE '%' || $1 || '%' ESCAPE '\\') \
              AND ($3::uuid IS NULL OR r.tenant_id = $3) \
              AND ($4::uuid[] IS NULL OR r.organization_id = ANY($4)) \
              ORDER BY r.created_at, r.id LIMIT $2",
@@ -178,4 +189,19 @@ async fn search(
         "organizations": organizations,
         "roles": roles,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::literal_keyword;
+
+    #[test]
+    fn search_treats_sql_wildcards_and_escape_characters_as_literal_text() {
+        assert_eq!(literal_keyword("中文 query"), "中文 query");
+        assert_eq!(
+            literal_keyword("100%_value\\path"),
+            "100\\%\\_value\\\\path"
+        );
+        assert_eq!(literal_keyword("\\%_"), "\\\\\\%\\_");
+    }
 }

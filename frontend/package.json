@@ -15,7 +15,7 @@
     "lint": "eslint src vite.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "sdk:check": "node scripts/check-sdk.mjs",
-    "test": "node --test tests/application-navigation.mjs tests/application-release-policy.mjs tests/auth-queries.mjs tests/data-grants-transport.mjs tests/data-grants.mjs tests/map-location-regions.mjs tests/micro-context-runtime.mjs tests/micro-context-updates.mjs tests/micro-iframe-protocol.mjs tests/micro-runtime-faults.mjs tests/micro-sandbox-lifecycle.mjs tests/micro-sdk-client.mjs tests/notification-context.mjs tests/route-policy-guard.mjs tests/route-policy.mjs tests/session-coordinator.mjs tests/session-integration.mjs tests/session-refresh.mjs tests/vite-host-static.mjs",
+    "test": "node --test tests/authorization-dialogs.mjs tests/device-authorization.mjs tests/application-navigation.mjs tests/application-release-policy.mjs tests/auth-queries.mjs tests/data-grants-transport.mjs tests/data-grants.mjs tests/map-location-regions.mjs tests/micro-context-runtime.mjs tests/micro-context-updates.mjs tests/micro-iframe-protocol.mjs tests/micro-runtime-faults.mjs tests/micro-sandbox-lifecycle.mjs tests/micro-sdk-client.mjs tests/notification-context.mjs tests/route-policy-guard.mjs tests/route-policy.mjs tests/session-coordinator.mjs tests/session-integration.mjs tests/session-refresh.mjs tests/vite-host-static.mjs tests/test-entrypoints.mjs deploy/tests/static-image-policy.mjs tests/micro-application-editor.mjs tests/micro-release-flow.mjs tests/micro-access-setup.mjs tests/micro-setup-policy.mjs tests/micro-setup-panel.mjs tests/micro-content-layout.mjs tests/consent-authorization.mjs tests/business-page-flows.mjs tests/oauth-client-policy.mjs tests/business-context-writes.mjs",
     "test:contracts": "npm test",
     "test:notifications:browser": "node tests/notification-frontend-browser.mjs",
     "test:platform:browser": "node tests/platform-settings-browser.mjs",
@@ -23,7 +23,10 @@
     "test:regions:browser": "node tests/region-location-browser.mjs",
     "test:entities:browser": "node tests/entity-types-browser.mjs",
     "test:departments:browser": "node tests/department-context-browser.mjs",
-    "test:auth:routes": "node tests/route-permissions-browser.mjs"
+    "test:auth:routes": "node tests/route-permissions-browser.mjs",
+    "test:static": "node --test deploy/tests/static-image-policy.mjs",
+    "test:applications:browser": "node tests/micro-setup-browser.mjs",
+    "test:micro:sandbox:browser": "node tests/trusted-sandbox-browser.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.5",

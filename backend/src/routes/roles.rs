@@ -281,7 +281,7 @@ async fn update(
     if before.managed() {
         return Err(AppError::conflict("默认管理员角色由系统维护，不允许修改"));
     }
-    let row: RoleListRow = sqlx::query_as(&format!(
+    let row: RoleListRow = sqlx::query_as(
         "UPDATE roles SET name = COALESCE($2, name), code = COALESCE($3, code), \
          description = COALESCE($4, description), updated_at = now() WHERE id = $1 \
          RETURNING id, name, COALESCE(code,'') AS code, COALESCE(description,'') AS description, \
@@ -291,7 +291,7 @@ async fn update(
          (SELECT count(*) FROM user_roles ur WHERE ur.role_id = roles.id \
          AND ($5::uuid[] IS NULL OR (ur.organization_id = ANY($5) AND EXISTS( \
          SELECT 1 FROM memberships um WHERE um.user_id = ur.user_id AND um.organization_id = ANY($5))))) AS user_count"
-    ))
+    )
     .bind(id)
     .bind(&body.name)
     .bind(&body.code)
@@ -614,6 +614,9 @@ async fn put_users(
         }
     }
     let role = lock_role(&mut tx, id).await?;
+    for uid in &unique {
+        super::users::ensure_role_membership_in_tx(&mut tx, *uid, org_id).await?;
+    }
     let before_bindings: Vec<(Uuid, Uuid)> = sqlx::query_as(
         "SELECT ur.user_id, ur.organization_id FROM user_roles ur WHERE ur.role_id=$1 \
          AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \

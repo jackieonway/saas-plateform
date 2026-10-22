@@ -2,7 +2,7 @@ import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { CheckCircle2, FileCheck2, Link2, Loader2, Plus, RefreshCw, Rocket, RotateCcw, XCircle } from "lucide-react"
+import { ArrowRight, CheckCircle2, FileCheck2, Link2, Loader2, PackageOpen, RefreshCw, Rocket, RotateCcw, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { applicationsApi } from "@/api/applications"
 import type { ApplicationEnvironment, ApplicationRecord, ApplicationReleasePayload, ApplicationReleaseRecord } from "@/api/types"
@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils"
 import { ExternalReleaseForm } from "./ExternalReleaseForm"
 import { ZipDistributionPanel } from "./ZipDistributionPanel"
 import { ManagedDeploymentPanel } from "./ManagedDeploymentPanel"
+import { usePermissionsQuery } from "@/hooks/use-auth-data"
 
 const ENVIRONMENTS: { value: ApplicationEnvironment; label: string }[] = [
   { value: "development", label: "开发 · development" },
@@ -47,7 +48,17 @@ type DeploymentAction = (
   | { kind: "activate"; release: ApplicationReleaseRecord }
   | { kind: "rollback"; environment: ApplicationEnvironment; version: string }
 ) & { target: ReleaseTarget }
-type PanelProps = { application: ApplicationRecord; open: boolean; onOpenChange: (open: boolean) => void }
+type PanelProps = {
+  application: ApplicationRecord
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  embedded?: boolean
+  onDeploymentChanged?: () => void
+  onContinue?: () => void
+  onBusyChange?: (busy: boolean) => void
+  environment?: ApplicationEnvironment
+  onEnvironmentChange?: (environment: ApplicationEnvironment) => void
+}
 
 function dateLabel(value: string | null | undefined) {
   if (!value) return "尚未预检"
@@ -81,11 +92,16 @@ export function ApplicationReleasesPanel(props: PanelProps) {
   return <ApplicationReleasesPanelContent key={props.application.id} {...props} />
 }
 
-function ApplicationReleasesPanelContent({ application, open, onOpenChange }: PanelProps) {
+function ApplicationReleasesPanelContent({ application, open, onOpenChange, embedded = false, onDeploymentChanged, onContinue, onBusyChange, environment: selectedEnvironment, onEnvironmentChange }: PanelProps) {
   const queryClient = useQueryClient()
-  const [environment, setEnvironment] = React.useState<ApplicationEnvironment>("development")
-  const [registerOpen, setRegisterOpen] = React.useState(false)
-  const [externalOpen, setExternalOpen] = React.useState(false)
+  const [localEnvironment, setLocalEnvironment] = React.useState<ApplicationEnvironment>("development")
+  const environment = selectedEnvironment ?? localEnvironment
+  const [sourceMode, setSourceMode] = React.useState<"archive" | "url">("archive")
+  const [externalFormVersion, setExternalFormVersion] = React.useState(0)
+  const [deliveryOpen, setDeliveryOpen] = React.useState(false)
+  const permissions = usePermissionsQuery({ enabled: open })
+  const canManageDelivery = permissions.isSuccess && !!permissions.data?.permissions.some(permission =>
+    permission === "system:distribution:read" || permission === "system:deployment:read")
   const [archiveFile, setArchiveFile] = React.useState<File | null>(null)
   const archiveInput = React.useRef<HTMLInputElement>(null)
   const [action, setAction] = React.useState<DeploymentAction | null>(null)
@@ -136,23 +152,46 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
     onSuccess: (release, requested) => {
       if (!isCurrentTarget(requested.target)) return
       if (release.validationStatus === "PASSED") toast.success("版本包已上传，预检通过", { description: "确认版本后即可激活。" })
-      else if (release.validationStatus === "DRAFT") toast.success("版本包已上传，等待节点分发", { description: "请先完成下方ZIP节点分发，再执行预检和激活。" })
+      else if (release.validationStatus === "DRAFT") {
+        toast.success("版本包已上传，等待节点分发", { description: canManageDelivery ? "在「交付与运维」中完成 ZIP 节点分发，再预检并激活。" : "请由有分发权限的管理员完成节点分发，再预检并激活。" })
+        if (canManageDelivery) setDeliveryOpen(true)
+      }
       else toast.error("版本包已上传，预检未通过", { description: "查看诊断；若包内容有误，请使用新版本号重新上传。" })
       form.reset({ version: "" })
       setArchiveFile(null)
       if (archiveInput.current) archiveInput.current.value = ""
-      setRegisterOpen(false)
     },
     onError: (error: Error, requested) => { if (isCurrentTarget(requested.target)) toast.error(error.message || "版本登记失败") },
     onSettled: (_release, _error, requested) => refreshReleaseData(requested.target),
   })
 
   const externalMutation = useMutation({
-    mutationFn: (requested: { target: ReleaseTarget; payload: ApplicationReleasePayload }) => applicationsApi.registerRelease(requested.target.applicationId, requested.payload),
-    onSuccess: (release, requested) => {
+    mutationFn: async (requested: { target: ReleaseTarget; payload: ApplicationReleasePayload }) => {
+      // A registration is durable once its response arrives. A later check
+      // failure must never prompt another registration of the same version.
+      const release = await applicationsApi.registerRelease(requested.target.applicationId, requested.payload)
+      if (!isCurrentTarget(requested.target)) return { release, preflightError: null }
+      try {
+        return {
+          release: await applicationsApi.preflightRelease(requested.target.applicationId, release.id),
+          preflightError: null,
+        }
+      } catch (error) {
+        return { release, preflightError: error instanceof Error ? error.message : "检查请求暂未完成" }
+      }
+    },
+    onSuccess: ({ release, preflightError }, requested) => {
       if (!isCurrentTarget(requested.target)) return
-      toast.success(`版本 ${release.version} URL 已登记，待预检`, { description: "请执行预检，通过后再手动激活。" })
-      setExternalOpen(false)
+      if (preflightError) toast.error(`版本 ${release.version} 已登记，检查暂未完成`, {
+        description: `${preflightError}。版本记录已保留，请在下方重试预检，无需重新登记。`,
+      })
+      else if (release.validationStatus === "PASSED") toast.success(`版本 ${release.version} 已登记并检查通过`, {
+        description: "已自动发现并检查入口引用的脚本与样式，确认版本后即可激活。",
+      })
+      else toast.error(`版本 ${release.version} 已登记，检查未通过`, {
+        description: "查看下方逐项诊断，修复部署后可重新预检；无需重复登记。",
+      })
+      setExternalFormVersion(value => value + 1)
     },
     onError: (error: Error, requested) => { if (isCurrentTarget(requested.target)) toast.error(error.message || "URL 登记失败", { description: "请求结果不明时请先刷新版本记录核对，不要改来源或重复登记。" }) },
     onSettled: (_release, _error, requested) => refreshReleaseData(requested.target),
@@ -180,6 +219,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
           description: `环境：${next.environment}`,
         })
         setAction(null)
+        onDeploymentChanged?.()
       }
       await refreshActiveApplication()
     },
@@ -192,42 +232,56 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
   })
 
   const busy = registerMutation.isPending || externalMutation.isPending || preflightMutation.isPending || deploymentMutation.isPending
+  React.useEffect(() => {
+    onBusyChange?.(busy)
+    return () => onBusyChange?.(false)
+  }, [busy, onBusyChange])
   const selectEnvironment = (value: ApplicationEnvironment) => {
     if (busy) return
-    setEnvironment(value)
+    if (onEnvironmentChange) onEnvironmentChange(value)
+    else if (selectedEnvironment === undefined) setLocalEnvironment(value)
+  }
+  React.useEffect(() => {
     setAction(null)
-    setRegisterOpen(false)
-    setExternalOpen(false)
+    setSourceMode("archive")
+    setDeliveryOpen(false)
+    form.reset({ version: "" })
+    setArchiveFile(null)
+    if (archiveInput.current) archiveInput.current.value = ""
+  }, [environment, form])
+
+  const selectSource = (value: "archive" | "url") => {
+    if (busy || sourceMode === value) return
+    setSourceMode(value)
     form.reset({ version: "" })
     setArchiveFile(null)
     if (archiveInput.current) archiveInput.current.value = ""
   }
+  const Header = embedded ? "header" : SheetHeader
+  const Title = embedded ? "h3" : SheetTitle
+  const Description = embedded ? "p" : SheetDescription
 
-  return (
+  const content = (
     <>
-      <Sheet open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-        <SheetContent className="w-full gap-0 sm:max-w-3xl">
-          <SheetHeader className="shrink-0 border-b p-5 pr-12">
-            <SheetTitle className="flex items-center gap-2"><Rocket className="size-5 text-primary" />{application.name} · 发布版本</SheetTitle>
-            <SheetDescription>登记已部署的 HTML URL 或上传构建包，按环境预检、激活或回滚。</SheetDescription>
+          <Header className={cn("shrink-0 border-b", embedded ? "pb-4" : "p-5 pr-12")}>
+            <Title className="flex items-center gap-2 text-base font-semibold"><Rocket className="size-5 text-primary" />发布应用版本</Title>
+            <Description className="mt-1 text-sm text-muted-foreground">选择版本来源，系统自动检查页面引用的脚本与样式，通过后确认发布。</Description>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="font-mono">{application.code}</Badge>
               <Badge variant="secondary">iframe 隔离 · HTML</Badge>
               {!enabled && <Badge variant="destructive">应用已停用</Badge>}
             </div>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+          </Header>
+          <div className={cn("min-h-0 flex-1", embedded ? "pt-5" : "overflow-y-auto overscroll-contain p-5")}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <Select value={environment} onValueChange={(value) => selectEnvironment(value as ApplicationEnvironment)} disabled={busy}>
+              {!embedded && <Select value={environment} onValueChange={(value) => selectEnvironment(value as ApplicationEnvironment)} disabled={busy}>
                 <SelectTrigger className="w-[220px]" aria-label="发布环境"><SelectValue /></SelectTrigger>
                 <SelectContent>{ENVIRONMENTS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
-              </Select>
+              </Select>}
               <div className="flex gap-2">
                 <Button variant="ghost" size="icon" aria-label="刷新版本与部署" disabled={busy || releasesQuery.isFetching || deploymentsQuery.isFetching} onClick={() => refreshReleaseData()}>
                   <RefreshCw className={cn("size-4", (releasesQuery.isFetching || deploymentsQuery.isFetching) && "animate-spin")} />
                 </Button>
-                <Button size="sm" variant={externalOpen ? "secondary" : "default"} disabled={busy} onClick={() => { setExternalOpen(value => !value); setRegisterOpen(false) }}><Link2 className="size-4" />登记已部署 URL</Button>
-                <Button size="sm" variant={registerOpen ? "secondary" : "outline"} disabled={busy} onClick={() => { setRegisterOpen(value => !value); setExternalOpen(false) }}><Plus className="size-4" />上传版本包</Button>
               </div>
             </div>
 
@@ -258,17 +312,26 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
                   ><RotateCcw className="size-4" />回滚{previousRelease ? `至 ${previousRelease.version}` : "至上一版本"}</Button>
                 )}
               </div>
-              <p className="mt-3 border-t pt-3 text-xs leading-relaxed text-muted-foreground">宿主使用服务端配置的环境入口；切换此筛选只查看并管理该环境的版本。激活后仍沿用现有菜单与授权。</p>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">外部 URL 流程由部署系统先行部署并配置版本路由，平台登记、预检和切换公开入口，不拉取镜像、启停容器或生成 Nginx 规则。已配置受管目标时，也可在下方提交镜像部署任务；发布不会新增授权。</p>
+              <p className="mt-3 border-t pt-3 text-xs leading-relaxed text-muted-foreground">当前管理 {environment} 环境；宿主实际使用服务端指定的环境。确认激活后切换入口，访问范围单独配置。</p>
               {!enabled && <p className="mt-2 text-xs text-destructive">应用停用期间可登记与预检，请启用应用后再激活或回滚。</p>}
               {previousUnsupported && <p className="mt-2 text-xs text-destructive">上一部署为旧 ESM 版本，无法在 iframe 中回滚；请选择已验证的 HTML 版本。</p>}
             </section>
 
-            <ZipDistributionPanel app={application.id} code={application.code} environment={environment} open={open} />
-            <ManagedDeploymentPanel app={application.id} code={application.code} environment={environment} releases={releasesQuery.data ?? []} open={open} />
-            {externalOpen && <ExternalReleaseForm key={`${application.id}:${environment}`} environment={environment} busy={busy} pending={externalMutation.isPending} onSubmit={payload => { if (!busy && isCurrentTarget(target)) externalMutation.mutate({ target, payload }) }} />}
+            <div className="mb-4 grid gap-3 sm:grid-cols-2" role="group" aria-label="版本来源">
+              <Button type="button" variant="outline" disabled={busy} aria-pressed={sourceMode === "archive"} onClick={() => selectSource("archive")}
+                className={cn("h-auto items-start justify-start gap-3 whitespace-normal p-4 text-left", sourceMode === "archive" && "border-primary bg-primary/5 ring-1 ring-primary/20")}>
+                <PackageOpen className="mt-0.5 size-5 shrink-0 text-primary" />
+                <span><span className="flex items-center gap-2 font-medium">上传构建包 <Badge variant="secondary" className="text-[10px]">推荐</Badge></span><span className="mt-1 block text-xs font-normal text-muted-foreground">选择 ZIP 或 tar.gz，自动生成版本入口。</span></span>
+              </Button>
+              <Button type="button" variant="outline" disabled={busy} aria-pressed={sourceMode === "url"} onClick={() => selectSource("url")}
+                className={cn("h-auto items-start justify-start gap-3 whitespace-normal p-4 text-left", sourceMode === "url" && "border-primary bg-primary/5 ring-1 ring-primary/20")}>
+                <Link2 className="mt-0.5 size-5 shrink-0 text-primary" />
+                <span><span className="font-medium">已部署地址</span><span className="mt-1 block text-xs font-normal text-muted-foreground">已有静态站点时，登记固定版本的 HTML 地址。</span></span>
+              </Button>
+            </div>
+            {sourceMode === "url" && <ExternalReleaseForm key={`${application.id}:${environment}:${externalFormVersion}`} environment={environment} busy={busy} pending={externalMutation.isPending} onSubmit={payload => { if (!busy && isCurrentTarget(target)) externalMutation.mutate({ target, payload }) }} />}
 
-            {registerOpen && (
+            {sourceMode === "archive" && (
               <section className="mb-5 rounded-lg border p-4" aria-label="上传新版本">
                 <div className="mb-4">
                   <h3 className="text-sm font-semibold">上传 {environment} 版本</h3>
@@ -312,12 +375,14 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
             {releasesQuery.isLoading ? <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取版本…</div> : releasesQuery.isError ? (
               <ErrorState message={releasesQuery.error instanceof Error ? releasesQuery.error.message : undefined} onRetry={() => releasesQuery.refetch()} />
             ) : releases.length === 0 ? (
-              <EmptyState title="该环境还没有版本" description="可登记已部署 URL 或上传构建包；配置分发目标时先完成节点分发，再预检和激活。" icon={<Rocket className="size-6" />} action={<Button variant="outline" size="sm" disabled={busy} onClick={() => { setRegisterOpen(true); setExternalOpen(false) }}><Plus className="size-4" />上传第一个版本</Button>} />
+              <EmptyState title="等待第一个版本" description="在上方选择版本来源并提交，检查通过后即可确认激活。" icon={<Rocket className="size-6" />} />
             ) : (
               <div className="space-y-3">
                 {releases.map((release) => {
                   const active = deployment ? deployment.activeReleaseId === release.id : release.active
                   const checks = Array.isArray(release.validationResult?.checks) ? release.validationResult.checks : []
+                  const scriptCount = checks.filter(check => check.kind === "SCRIPT").length
+                  const styleCount = checks.filter(check => check.kind === "STYLE").length
                   const preflighting = preflightMutation.isPending && preflightMutation.variables?.releaseId === release.id
                   const unsupported = release.entryType === "ESM"
                   return (
@@ -332,7 +397,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
                           <Button size="sm" disabled={busy || !enabled || active || release.validationStatus !== "PASSED" || unsupported || deploymentsQuery.isLoading || deploymentsQuery.isError} onClick={() => setAction({ kind: "activate", target, release })}><Rocket className="size-4" />{active ? "已激活" : "激活"}</Button>
                         </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>登记 {dateLabel(release.createdAt)}</span><span>预检 {dateLabel(release.checkedAt)}</span><span>{release.resources.length} 项登记资源</span></div>
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>登记 {dateLabel(release.createdAt)}</span><span>预检 {dateLabel(release.checkedAt)}</span>{release.checkedAt && <span>已检查 {scriptCount} 个脚本 · {styleCount} 个样式</span>}{release.resources.length > 0 && <span>{release.resources.length} 项补充资源</span>}</div>
                       {release.healthUrl && <p className="mt-1 break-all text-xs text-muted-foreground">健康检查 <span className="font-mono">{release.healthUrl}</span></p>}
                       {unsupported && <p className="mt-2 text-xs text-destructive">旧 ESM 版本无法在 iframe 中激活，请上传 HTML 版本。</p>}
                       {checks.length > 0 && (
@@ -355,10 +420,32 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
                 })}
               </div>
             )}
+            {canManageDelivery && (
+              <details className="mt-5 rounded-lg border" open={deliveryOpen} onToggle={event => setDeliveryOpen(event.currentTarget.open)}>
+                <summary className="cursor-pointer px-4 py-3 text-sm font-medium">交付与运维</summary>
+                <div className="space-y-4 border-t p-4">
+                  <p className="text-xs leading-relaxed text-muted-foreground">已配置节点或镜像目标时，在此处理分发、部署和重试。任务就绪后，再对版本执行预检与激活。</p>
+                  <ZipDistributionPanel app={application.id} code={application.code} environment={environment} open={open && deliveryOpen} />
+                  <ManagedDeploymentPanel app={application.id} code={application.code} environment={environment} releases={releasesQuery.data ?? []} open={open && deliveryOpen} />
+                </div>
+              </details>
+            )}
+            {onContinue && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">{deployment ? "版本已激活，接下来选择哪些租户、组织和角色可以访问。" : "可以先配置访问范围；该环境仍需激活版本后才能使用。"}</p>
+              <Button type="button" disabled={busy} onClick={onContinue}>继续配置访问范围<ArrowRight className="size-4" /></Button>
+            </div>}
           </div>
-          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : externalMutation.isPending ? "登记公开 URL" : "上传版本包"}，完成后可切换环境或关闭面板。</div>}
-        </SheetContent>
-      </Sheet>
+          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : externalMutation.isPending ? "登记地址并检查脚本与样式" : "上传版本包"}，完成后可切换环境或关闭面板。</div>}
+    </>
+  )
+
+  return (
+    <>
+      {embedded ? <section aria-label={`${application.name}发布版本`} className="min-w-0">{content}</section> : (
+        <Sheet open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
+          <SheetContent className="w-full gap-0 sm:max-w-3xl">{content}</SheetContent>
+        </Sheet>
+      )}
 
       <AlertDialog open={!!action} onOpenChange={(next) => !next && !deploymentMutation.isPending && setAction(null)}>
         <AlertDialogContent>
@@ -373,7 +460,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange }: Pa
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deploymentMutation.isPending}>取消</AlertDialogCancel>
-            <AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); if (action && !busy) deploymentMutation.mutate(action) }}>{deploymentMutation.isPending && <Loader2 className="size-4 animate-spin" />}{action?.kind === "rollback" ? "确认回滚" : "确认激活"}</AlertDialogAction>
+            <AlertDialogAction disabled={busy} onClick={(event) => { event.preventDefault(); if (action && !busy && isCurrentTarget(action.target)) deploymentMutation.mutate(action) }}>{deploymentMutation.isPending && <Loader2 className="size-4 animate-spin" />}{action?.kind === "rollback" ? "确认回滚" : "确认激活"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

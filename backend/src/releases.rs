@@ -187,7 +187,7 @@ pub fn validate_version(value: &str) -> Result<String, AppError> {
         || value.contains("..")
         || !value
             .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || [b'-', b'_', b'.'].contains(&c))
+            .all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
     {
         return Err(AppError::bad_request(
             "version 仅接受 1–64 位字母、数字、点、下划线和中划线，不能含 ..",
@@ -381,17 +381,28 @@ fn frame_error(
     None
 }
 
+struct FetchConstraints<'a> {
+    entry_root: Option<&'a str>,
+    entry_origin: &'a str,
+    pin_entry: bool,
+    cors_origin: Option<&'a str>,
+    frame_origin: Option<&'a str>,
+}
+
 async fn fetch(
     client: &Client,
     policy: &FetchPolicy,
     url: Url,
     kind: &str,
-    entry_root: Option<&str>,
-    entry_origin: &str,
-    pin_entry: bool,
-    cors_origin: Option<&str>,
-    frame_origin: Option<&str>,
+    constraints: FetchConstraints<'_>,
 ) -> Fetched {
+    let FetchConstraints {
+        entry_root,
+        entry_origin,
+        pin_entry,
+        cors_origin,
+        frame_origin,
+    } = constraints;
     let mut current = url.clone();
     for redirect in 0..=MAX_REDIRECTS {
         if let Err(error) = policy.check(&current) {
@@ -703,14 +714,16 @@ async fn run(config: &Config, release: &ReleaseRow) -> Value {
         &policy,
         entry.clone(),
         entry_kind,
-        Some(&root),
-        &entry_origin,
-        true,
-        cors_origin,
-        if release.runtime_mode == "IFRAME" && release.entry_type == "HTML" {
-            Some(browser_origin.as_str())
-        } else {
-            None
+        FetchConstraints {
+            entry_root: Some(&root),
+            entry_origin: &entry_origin,
+            pin_entry: true,
+            cors_origin,
+            frame_origin: if release.runtime_mode == "IFRAME" && release.entry_type == "HTML" {
+                Some(browser_origin.as_str())
+            } else {
+                None
+            },
         },
     )
     .await;
@@ -813,11 +826,13 @@ async fn run(config: &Config, release: &ReleaseRow) -> Value {
             &policy,
             resolved,
             &resource.kind,
-            code_root,
-            &resource_origin,
-            false,
-            resource_cors,
-            None,
+            FetchConstraints {
+                entry_root: code_root,
+                entry_origin: &resource_origin,
+                pin_entry: false,
+                cors_origin: resource_cors,
+                frame_origin: None,
+            },
         )
         .await;
         total_bytes += fetched.check.bytes;
@@ -839,11 +854,13 @@ async fn run(config: &Config, release: &ReleaseRow) -> Value {
                     &policy,
                     url,
                     "HEALTH",
-                    None,
-                    &entry_origin,
-                    false,
-                    None,
-                    None,
+                    FetchConstraints {
+                        entry_root: None,
+                        entry_origin: &entry_origin,
+                        pin_entry: false,
+                        cors_origin: None,
+                        frame_origin: None,
+                    },
                 )
                 .await;
                 total_bytes += fetched.check.bytes;

@@ -562,6 +562,8 @@ export interface OAuthClientRecord {
   clientId: string
   clientName: string
   clientType: ClientType
+  /** Authorization-code requests must use PKCE with S256 when enabled. */
+  requirePkce: boolean
   description?: string | null
   redirectUris: string[]
   grantTypes: string[]
@@ -579,6 +581,8 @@ export interface OAuthClientPayload {
   clientName: string
   clientId?: string
   clientType: ClientType
+  /** Omit on updates to retain the current policy; new PUBLIC clients default to true. */
+  requirePkce?: boolean
   redirectUris: string[]
   grantTypes: string[]
   scopes: string[]

@@ -35,6 +35,7 @@ export default function AppLayout() {
   const setCurrentApplication = useAuthStore((s) => s.setCurrentApplication)
   const ensureApplication = useAuthStore((s) => s.ensureApplication)
   const { pathname, search, key: locationKey } = useLocation()
+  const isMicroRoute = /^\/micro\/[^/]+(?:\/|$)/.test(pathname)
   const { selectApplication, access } = useApplicationNavigation()
   React.useLayoutEffect(() => {
     invalidateApplicationSelection()
@@ -305,7 +306,7 @@ export default function AppLayout() {
           />
           <main
             id="app-scroll"
-            className="flex-1 overflow-y-auto scroll-area p-4 md:p-6"
+            className={`flex-1 overflow-y-auto scroll-area ${isMicroRoute ? "p-0" : "p-4 md:p-6"}`}
             aria-live="polite"
           >
             <RouteRecoveryBoundary key={pageTransitionKey}>
@@ -317,7 +318,7 @@ export default function AppLayout() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="mx-auto w-full max-w-[1600px]"
+                  className={isMicroRoute ? "min-h-full w-full" : "mx-auto w-full max-w-[1600px]"}
                 >
                   <Outlet />
                 </motion.div>

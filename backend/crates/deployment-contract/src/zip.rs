@@ -223,7 +223,7 @@ pub fn file_path(path: &str) -> bool {
         !lower.starts_with(".env")
             && ![
                 ".git",
-                "frontend/.npmrc",
+                ".npmrc",
                 ".yarnrc",
                 ".yarnrc.yml",
                 ".artifact-manifest.json",
@@ -394,6 +394,9 @@ mod tests {
             "/index.html",
             "x\\index.html",
             ".env",
+            ".npmrc",
+            "dist/.NPMRC",
+            "frontend/.npmrc",
             "x/.git/file",
             "index.html/../x",
             "CON.txt",

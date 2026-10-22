@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use axum::{
     extract::{Path, Query, State},
+    http::HeaderMap,
     routing::get,
     Json, Router,
 };
@@ -17,7 +18,34 @@ use crate::{
     error::AppError,
     extractors::{ApiJson, CurrentUser},
     state::AppState,
+    util::audit,
 };
+
+async fn write_audit(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user: &CurrentUser,
+    headers: &HeaderMap,
+    action: &str,
+    detail: Value,
+) -> Result<(), AppError> {
+    let ip = audit::client_ip(headers);
+    let ua = audit::ua_of(headers);
+    let detail = detail.to_string();
+    audit::write_in_tx(
+        tx,
+        audit::AuditInfo {
+            user_id: Some(user.user_id),
+            username: &user.username,
+            tenant_id: Some(user.tenant_id),
+            organization_id: Some(user.org_id),
+            action,
+            detail: &detail,
+            ip: &ip,
+            user_agent: &ua,
+        },
+    )
+    .await
+}
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -70,6 +98,7 @@ struct VersionBody {
 async fn create_version(
     State(state): State<AppState>,
     user: CurrentUser,
+    headers: HeaderMap,
     ApiJson(body): ApiJson<VersionBody>,
 ) -> Result<Json<Value>, AppError> {
     manage(&state, &user).await?;
@@ -90,13 +119,14 @@ async fn create_version(
     }
     let mut tx = state.pool.begin().await?;
     if let Some(ref source) = body.source_version {
-        let found: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1 AND deleted_at IS NULL)",
+        // Keep the source catalog stable until the complete copy commits.
+        let found: Option<String> = sqlx::query_scalar(
+            "SELECT version FROM region_versions WHERE version=$1 AND deleted_at IS NULL FOR SHARE",
         )
         .bind(source)
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
-        if !found {
+        if found.is_none() {
             return Err(AppError::bad_request("来源版本不存在"));
         }
     }
@@ -118,6 +148,17 @@ async fn create_version(
         sqlx::query("INSERT INTO regions(version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url) SELECT $1,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url FROM regions WHERE version=$2")
             .bind(version).bind(source).execute(&mut *tx).await?;
     }
+    write_audit(
+        &mut tx,
+        &user,
+        &headers,
+        "CREATE_REGION_VERSION",
+        json!({
+            "objectType":"regionVersion", "objectId":version, "before":null,
+            "after":{"version":version,"label":label,"sourceVersion":body.source_version}
+        }),
+    )
+    .await?;
     tx.commit().await?;
     Ok(Json(
         json!({"version":version,"label":label,"sourceVersion":body.source_version}),
@@ -128,18 +169,17 @@ async fn delete_version(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(version): Path<String>,
+    headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     manage(&state, &user).await?;
     let mut tx = state.pool.begin().await?;
-    let exists: Option<bool> = sqlx::query_scalar(
-        "SELECT imported FROM region_versions WHERE version=$1 AND deleted_at IS NULL FOR UPDATE",
+    let before: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT label,source_version FROM region_versions WHERE version=$1 AND deleted_at IS NULL FOR UPDATE",
     )
     .bind(&version)
     .fetch_optional(&mut *tx)
     .await?;
-    if exists.is_none() {
-        return Err(AppError::not_found("地区版本不存在"));
-    }
+    let (label, source_version) = before.ok_or_else(|| AppError::not_found("地区版本不存在"))?;
     let removed = sqlx::query("DELETE FROM regions WHERE version=$1")
         .bind(&version)
         .execute(&mut *tx)
@@ -147,6 +187,11 @@ async fn delete_version(
         .rows_affected();
     sqlx::query("UPDATE region_versions SET deleted_at=now(),updated_at=now(),imported=true WHERE version=$1")
         .bind(&version).execute(&mut *tx).await?;
+    write_audit(&mut tx, &user, &headers, "DELETE_REGION_VERSION", json!({
+        "objectType":"regionVersion", "objectId":version,
+        "before":{"version":version,"label":label,"sourceVersion":source_version,"regionCount":removed},
+        "after":null
+    })).await?;
     tx.commit().await?;
     Ok(Json(
         json!({"version":version,"deleted":true,"removedRegions":removed}),
@@ -323,6 +368,12 @@ struct RegionBody {
     source_url: Option<String>,
 }
 
+fn body_summary(id: &str, b: &RegionBody) -> Value {
+    json!({"id":id,"version":b.version,"code":b.code,"parentCode":b.parent_code,
+        "name":b.name,"namePinyin":b.name_pinyin,"nameShort":b.name_short,"level":b.level,
+        "type":b.kind,"typeName":b.type_name,"postCode":b.post_code,"sourceUrl":b.source_url})
+}
+
 fn validate(b: &RegionBody) -> Result<(), AppError> {
     for (value, max, label) in [
         (&b.code, 12, "编码"),
@@ -353,14 +404,26 @@ fn validate(b: &RegionBody) -> Result<(), AppError> {
     Ok(())
 }
 
-async fn check_parent(state: &AppState, b: &RegionBody) -> Result<(), AppError> {
-    let version: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM region_versions WHERE version=$1 AND deleted_at IS NULL)",
+async fn lock_active_version(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    version: &str,
+) -> Result<bool, AppError> {
+    // All mutations of one catalog take this parent lock before reading rows.
+    // A delete/rename can then never race a child insert or version deletion.
+    let active: Option<String> = sqlx::query_scalar(
+        "SELECT version FROM region_versions WHERE version=$1 AND deleted_at IS NULL FOR UPDATE",
     )
-    .bind(&b.version)
-    .fetch_one(&state.pool)
+    .bind(version)
+    .fetch_optional(&mut **tx)
     .await?;
-    if !version {
+    Ok(active.is_some())
+}
+
+async fn check_parent(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    b: &RegionBody,
+) -> Result<(), AppError> {
+    if !lock_active_version(tx, &b.version).await? {
         return Err(AppError::bad_request("版本不存在"));
     }
     if b.parent_code != "0" && b.parent_code != "-1" {
@@ -370,7 +433,7 @@ async fn check_parent(state: &AppState, b: &RegionBody) -> Result<(), AppError> 
         .bind(&b.version)
         .bind(&b.parent_code)
         .bind(b.level)
-        .fetch_one(&state.pool)
+        .fetch_one(&mut **tx)
         .await?;
         if !parent {
             return Err(AppError::bad_request("父级编码不存在或层级无效"));
@@ -382,16 +445,18 @@ async fn check_parent(state: &AppState, b: &RegionBody) -> Result<(), AppError> 
 async fn create(
     State(state): State<AppState>,
     user: CurrentUser,
+    headers: HeaderMap,
     ApiJson(b): ApiJson<RegionBody>,
 ) -> Result<Json<Value>, AppError> {
     manage(&state, &user).await?;
     validate(&b)?;
-    check_parent(&state, &b).await?;
+    let mut tx = state.pool.begin().await?;
+    check_parent(&mut tx, &b).await?;
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM regions WHERE version=$1 AND code=$2)")
             .bind(&b.version)
             .bind(&b.code)
-            .fetch_one(&state.pool)
+            .fetch_one(&mut *tx)
             .await?;
     if exists {
         return Err(AppError::bad_request("该版本中地区编码已存在"));
@@ -400,7 +465,18 @@ async fn create(
     sqlx::query("INSERT INTO regions(version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
         .bind(&b.version).bind(&id).bind(&b.code).bind(&b.parent_code).bind(&b.name)
         .bind(&b.name_pinyin).bind(&b.name_short).bind(b.level).bind(&b.kind).bind(&b.type_name)
-        .bind(&b.post_code).bind(&b.source_url).execute(&state.pool).await?;
+        .bind(&b.post_code).bind(&b.source_url).execute(&mut *tx).await?;
+    write_audit(
+        &mut tx,
+        &user,
+        &headers,
+        "CREATE_REGION",
+        json!({
+            "objectType":"region", "objectId":id, "before":null, "after":body_summary(&id, &b)
+        }),
+    )
+    .await?;
+    tx.commit().await?;
     Ok(Json(json!({"id":id})))
 }
 
@@ -408,24 +484,32 @@ async fn update(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(id): Path<String>,
+    headers: HeaderMap,
     ApiJson(b): ApiJson<RegionBody>,
 ) -> Result<Json<Value>, AppError> {
     manage(&state, &user).await?;
     validate(&b)?;
-    check_parent(&state, &b).await?;
-    let old: Option<String> =
-        sqlx::query_scalar("SELECT code FROM regions WHERE version=$1 AND source_id=$2")
-            .bind(&b.version)
-            .bind(&id)
-            .fetch_optional(&state.pool)
-            .await?;
-    let old = old.ok_or_else(|| AppError::not_found("地区不存在"))?;
+    let mut tx = state.pool.begin().await?;
+    check_parent(&mut tx, &b).await?;
+    let before = sqlx::query("SELECT * FROM regions WHERE version=$1 AND source_id=$2")
+        .bind(&b.version)
+        .bind(&id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    let before = before.ok_or_else(|| AppError::not_found("地区不存在"))?;
+    let old: String = before.get("code");
+    let before = row_json(&before);
+    let after = body_summary(&id, &b);
+    if before == after {
+        tx.commit().await?;
+        return Ok(Json(json!({"id":id})));
+    }
     if old != b.code {
         let exists: bool =
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM regions WHERE version=$1 AND code=$2)")
                 .bind(&b.version)
                 .bind(&b.code)
-                .fetch_one(&state.pool)
+                .fetch_one(&mut *tx)
                 .await?;
         if exists {
             return Err(AppError::bad_request("该版本中地区编码已存在"));
@@ -435,16 +519,38 @@ async fn update(
         )
         .bind(&b.version)
         .bind(&old)
-        .fetch_one(&state.pool)
+        .fetch_one(&mut *tx)
         .await?;
         if children {
             return Err(AppError::bad_request("该编码存在下级地区，不能修改"));
         }
     }
+    let invalid_children: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM regions WHERE version=$1 AND parent_code=$2 AND level<=$3)",
+    )
+    .bind(&b.version)
+    .bind(&old)
+    .bind(b.level)
+    .fetch_one(&mut *tx)
+    .await?;
+    if invalid_children {
+        return Err(AppError::bad_request("地区层级必须小于下级地区层级"));
+    }
     sqlx::query("UPDATE regions SET code=$3,parent_code=$4,name=$5,name_pinyin=$6,name_short=$7,level=$8,type=$9,type_name=$10,post_code=$11,source_url=$12,updated_at=now() WHERE version=$1 AND source_id=$2")
         .bind(&b.version).bind(&id).bind(&b.code).bind(&b.parent_code).bind(&b.name)
         .bind(&b.name_pinyin).bind(&b.name_short).bind(b.level).bind(&b.kind).bind(&b.type_name)
-        .bind(&b.post_code).bind(&b.source_url).execute(&state.pool).await?;
+        .bind(&b.post_code).bind(&b.source_url).execute(&mut *tx).await?;
+    write_audit(
+        &mut tx,
+        &user,
+        &headers,
+        "UPDATE_REGION",
+        json!({
+            "objectType":"region", "objectId":id, "before":before, "after":after
+        }),
+    )
+    .await?;
+    tx.commit().await?;
     Ok(Json(json!({"id":id})))
 }
 
@@ -453,24 +559,30 @@ async fn remove(
     user: CurrentUser,
     Path(id): Path<String>,
     Query(p): Query<HashMap<String, String>>,
+    headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     manage(&state, &user).await?;
     let version = p
         .get("version")
         .ok_or_else(|| AppError::bad_request("缺少版本"))?;
-    let code: Option<String> =
-        sqlx::query_scalar("SELECT code FROM regions WHERE version=$1 AND source_id=$2")
-            .bind(version)
-            .bind(&id)
-            .fetch_optional(&state.pool)
-            .await?;
-    let code = code.ok_or_else(|| AppError::not_found("地区不存在"))?;
+    let mut tx = state.pool.begin().await?;
+    if !lock_active_version(&mut tx, version).await? {
+        return Err(AppError::not_found("地区版本不存在"));
+    }
+    let before = sqlx::query("SELECT * FROM regions WHERE version=$1 AND source_id=$2")
+        .bind(version)
+        .bind(&id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    let before = before.ok_or_else(|| AppError::not_found("地区不存在"))?;
+    let code: String = before.get("code");
+    let before = row_json(&before);
     let children: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM regions WHERE version=$1 AND parent_code=$2)",
     )
     .bind(version)
     .bind(&code)
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await?;
     if children {
         return Err(AppError::bad_request("请先删除下级地区"));
@@ -478,7 +590,18 @@ async fn remove(
     sqlx::query("DELETE FROM regions WHERE version=$1 AND source_id=$2")
         .bind(version)
         .bind(&id)
-        .execute(&state.pool)
+        .execute(&mut *tx)
         .await?;
+    write_audit(
+        &mut tx,
+        &user,
+        &headers,
+        "DELETE_REGION",
+        json!({
+            "objectType":"region", "objectId":id, "before":before, "after":null
+        }),
+    )
+    .await?;
+    tx.commit().await?;
     Ok(Json(json!({"deleted":true})))
 }

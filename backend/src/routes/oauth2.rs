@@ -5,6 +5,7 @@ use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -117,11 +118,11 @@ impl From<sqlx::Error> for OAuthError {
 
 /// OAuth 端点 IP 限流 (滑动窗口 60 秒最多 30 次):
 /// 未超限返回客户端 IP 供后续审计使用; 超限返回 429 + Retry-After 响应
-fn check_oauth_rate(state: &AppState, headers: &HeaderMap) -> Result<String, Response> {
+fn check_oauth_rate(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
     let ip = audit::client_ip(headers);
     match state.record_oauth_request(&ip) {
         None => Ok(ip),
-        Some(retry_after) => Err(AppError::RateLimited(retry_after as u64).into_response()),
+        Some(retry_after) => Err(AppError::RateLimited(retry_after as u64)),
     }
 }
 
@@ -208,6 +209,42 @@ fn append_query(uri: &str, pairs: &[(&str, String)]) -> String {
     }
 }
 
+fn registered_redirect(client: &ClientFull, redirect_uri: &str) -> bool {
+    crate::routes::oauth_admin::split_csv(&client.redirect_uris)
+        .iter()
+        .any(|registered| registered == redirect_uri)
+}
+
+fn valid_s256_challenge(challenge: &str, method: &str) -> bool {
+    method == "S256"
+        && challenge.len() == 43
+        && base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(challenge)
+            .is_ok_and(|bytes| bytes.len() == 32)
+}
+
+fn valid_pkce_verifier(verifier: &str) -> bool {
+    (43..=128).contains(&verifier.len())
+        && verifier
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-._~".contains(&byte))
+}
+
+/// A pending consent is only a request, not a snapshot of lasting authority.
+/// Recheck current registration before displaying or returning its callback.
+fn consent_registration_active(client: &ClientFull, row: &ConsentDetail) -> bool {
+    let scopes = client.scope_list();
+    client.status == "ENABLED"
+        && client.has_grant("authorization_code")
+        && registered_redirect(client, &row.redirect_uri)
+        && (!client.require_pkce
+            || valid_s256_challenge(&row.code_challenge, &row.code_challenge_method))
+        && row
+            .scope
+            .split_whitespace()
+            .all(|scope| scopes.iter().any(|allowed| allowed == scope))
+}
+
 // ===== 授权码端点 =====
 
 /// GET /oauth/authorize — 校验后 302 跳转前端 consent 页
@@ -243,8 +280,7 @@ async fn authorize(
             "仅支持 response_type=code",
         ));
     }
-    let registered: Vec<String> = crate::routes::oauth_admin::split_csv(&client.redirect_uris);
-    if !registered.iter().any(|u| u == &redirect_uri) {
+    if !registered_redirect(&client, &redirect_uri) {
         return Err(OAuthError::invalid_request(
             "redirect_uri 未在客户端注册列表中",
         ));
@@ -252,6 +288,11 @@ async fn authorize(
     let scope = resolve_scope(q.get("scope"), &client)?;
     let code_challenge = q.get("code_challenge").cloned().unwrap_or_default();
     let method = q.get("code_challenge_method").cloned().unwrap_or_default();
+    if client.require_pkce && !valid_s256_challenge(&code_challenge, &method) {
+        return Err(OAuthError::invalid_request(
+            "该客户端要求 PKCE S256，请提供有效 code_challenge 和 code_challenge_method=S256",
+        ));
+    }
     if !code_challenge.is_empty() && method != "S256" && method != "plain" {
         return Err(OAuthError::invalid_request(
             "code_challenge_method 仅支持 S256 或 plain",
@@ -319,13 +360,12 @@ async fn get_consent(
     if row.consumed || row.expires_at < Utc::now() {
         return Err(AppError::not_found("授权请求不存在或已失效"));
     }
-    let client = fetch_client(&state.pool, &row.client_id).await?;
-    let (client_name, description) = match client {
-        Some(c) => (c.client_name, c.description),
-        None => (row.client_id.clone(), String::new()),
-    };
+    let client = fetch_client(&state.pool, &row.client_id)
+        .await?
+        .filter(|client| consent_registration_active(client, &row))
+        .ok_or_else(|| AppError::not_found("客户端授权配置已变更，请重新发起授权"))?;
     Ok(Json(json!({
-        "client": {"clientId": row.client_id, "clientName": client_name, "description": description},
+        "client": {"clientId": row.client_id, "clientName": client.client_name, "description": client.description},
         "scope": row.scope, "redirectUri": row.redirect_uri, "state": row.state,
         "expiresAt": row.expires_at,
     })))
@@ -359,6 +399,19 @@ async fn decide_consent(
     let mut tx = begin_issuance(&state, &client, Some(user.user_id))
         .await
         .map_err(oauth_error_into)?;
+    if !consent_registration_active(&client, &row) {
+        return Err(AppError::bad_request(
+            "客户端授权配置已变更，请重新发起授权",
+        ));
+    }
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     if oauth_issuance::active_identity(
         &mut tx,
         Some(user.user_id),
@@ -639,7 +692,17 @@ struct IssuedToken {
     response: Value,
 }
 
-type IssuanceClientConfig = (String, Option<String>, String, String, String, i64, i64);
+type IssuanceClientConfig = (
+    String,
+    Option<String>,
+    String,
+    String,
+    String,
+    i64,
+    i64,
+    String,
+    bool,
+);
 
 /// Lock mutations in the same order as session/member revocation: user, client,
 /// then the one-time credential. Re-read the authenticated client under its lock.
@@ -653,14 +716,25 @@ async fn begin_issuance<'a>(
     let current: Option<IssuanceClientConfig> =
         sqlx::query_as(
             "SELECT status, client_secret_hash, client_type, COALESCE(grant_types,''), COALESCE(scopes,''), \
-             access_token_validity, refresh_token_validity FROM oauth_clients \
+             access_token_validity, refresh_token_validity, COALESCE(redirect_uris,''), require_pkce FROM oauth_clients \
              WHERE id=$1 AND client_id=$2 FOR UPDATE",
         )
         .bind(client.id)
         .bind(&client.client_id)
         .fetch_optional(&mut *tx)
         .await?;
-    let Some((status, secret, kind, grants, scopes, access_ttl, refresh_ttl)) = current else {
+    let Some((
+        status,
+        secret,
+        kind,
+        grants,
+        scopes,
+        access_ttl,
+        refresh_ttl,
+        redirects,
+        require_pkce,
+    )) = current
+    else {
         return Err(OAuthError::invalid_client("客户端已失效"));
     };
     if status != "ENABLED"
@@ -670,6 +744,8 @@ async fn begin_issuance<'a>(
         || scopes != client.scopes
         || access_ttl != client.access_token_validity
         || refresh_ttl != client.refresh_token_validity
+        || redirects != client.redirect_uris
+        || require_pkce != client.require_pkce
     {
         return Err(OAuthError::invalid_client("客户端配置已变更，请重新请求"));
     }
@@ -760,7 +836,7 @@ async fn token(
 ) -> Result<Response, OAuthError> {
     let ip = match check_oauth_rate(&state, &headers) {
         Ok(ip) => ip,
-        Err(resp) => return Ok(resp),
+        Err(error) => return Ok(error.into_response()),
     };
     let ua = audit::ua_of(&headers);
     let grant = form.get("grant_type").cloned().unwrap_or_default();
@@ -887,10 +963,26 @@ async fn grant_authorization_code(
     if &row.redirect_uri != redirect_uri {
         return Err(OAuthError::invalid_grant("redirect_uri 与授权请求不一致"));
     }
+    if !registered_redirect(client, redirect_uri) {
+        return Err(OAuthError::invalid_grant(
+            "redirect_uri 已不在客户端当前注册列表中",
+        ));
+    }
+    if client.require_pkce && !valid_s256_challenge(&row.code_challenge, &row.code_challenge_method)
+    {
+        return Err(OAuthError::invalid_grant(
+            "该客户端当前要求 PKCE S256，请重新发起授权",
+        ));
+    }
     if !row.code_challenge.is_empty() {
         let verifier = form
             .get("code_verifier")
             .ok_or_else(|| OAuthError::invalid_request("缺少 code_verifier (PKCE)"))?;
+        if client.require_pkce && !valid_pkce_verifier(verifier) {
+            return Err(OAuthError::invalid_grant(
+                "code_verifier 格式不符合 PKCE 要求",
+            ));
+        }
         let ok = match row.code_challenge_method.as_str() {
             "S256" => hash::b64url_sha256(verifier) == row.code_challenge,
             _ => verifier.as_str() == row.code_challenge.as_str(), // plain
@@ -964,6 +1056,12 @@ async fn grant_refresh_token(
     if row.client_id != client.client_id || row.user_id != owner {
         return Err(OAuthError::invalid_grant("刷新令牌与客户端不匹配"));
     }
+    if row.user_id.is_none() && client.client_type != "CONFIDENTIAL" {
+        return Err(OAuthError::bad_request(
+            "unauthorized_client",
+            "机器令牌刷新仅允许经过认证的机密客户端使用",
+        ));
+    }
     if row.revoked {
         return Err(OAuthError::invalid_grant("刷新令牌已被吊销"));
     }
@@ -992,7 +1090,7 @@ async fn grant_refresh_token(
     };
     let original: Vec<&str> = row.scope.split_whitespace().collect();
     for p in scope.split_whitespace() {
-        if !original.iter().any(|o| *o == p) {
+        if !original.contains(&p) {
             return Err(OAuthError::bad_request(
                 "invalid_scope",
                 "scope 超出原令牌范围",
@@ -1036,6 +1134,12 @@ async fn grant_client_credentials(
     ip: &str,
     ua: &str,
 ) -> Result<IssuedToken, OAuthError> {
+    if client.client_type != "CONFIDENTIAL" {
+        return Err(OAuthError::bad_request(
+            "unauthorized_client",
+            "client_credentials 仅允许经过认证的机密客户端使用",
+        ));
+    }
     let scope = resolve_scope(form.get("scope"), client)?;
     issue_tokens(state, client, None, "", None, None, &scope, ip, ua).await
 }
@@ -1100,16 +1204,20 @@ async fn grant_password(
     }
     state.login_limits.clear_account(&input_key);
     state.login_limits.clear_account(&account_key);
-    // 默认取第一个 membership 作为上下文
+    // Use the first currently usable membership; a stale earlier membership
+    // must not block an account that still has another active context.
     let ctx = sqlx::query_as::<_, (Uuid, Uuid)>(
         "SELECT o.tenant_id, m.organization_id FROM memberships m \
-         JOIN organizations o ON o.id = m.organization_id WHERE m.user_id = $1 \
-         ORDER BY m.created_at LIMIT 1",
+         JOIN organizations o ON o.id = m.organization_id \
+         JOIN tenants t ON t.id = o.tenant_id \
+         WHERE m.user_id = $1 AND t.status='ENABLED' \
+         AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) \
+         AND org_chain_active(o.id) ORDER BY m.created_at,m.id LIMIT 1",
     )
     .bind(user_id)
     .fetch_optional(&state.pool)
     .await?
-    .ok_or_else(|| OAuthError::invalid_grant("用户无组织成员关系, 无法签发令牌"))?;
+    .ok_or_else(|| OAuthError::invalid_grant("用户无有效组织成员关系, 无法签发令牌"))?;
     let scope = resolve_scope(form.get("scope"), client)?;
     let mut tx = begin_issuance(state, client, Some(user_id)).await?;
     let current_password: Option<String> =
@@ -1521,8 +1629,8 @@ async fn revoke(
     headers: HeaderMap,
     Form(form): Form<HashMap<String, String>>,
 ) -> Result<Response, OAuthError> {
-    if let Err(resp) = check_oauth_rate(&state, &headers) {
-        return Ok(resp);
+    if let Err(error) = check_oauth_rate(&state, &headers) {
+        return Ok(error.into_response());
     }
     let client = authenticate_client(&state, &headers, &form).await?;
     let token = form
@@ -1597,8 +1705,8 @@ async fn device_authorization(
     headers: HeaderMap,
     Form(form): Form<HashMap<String, String>>,
 ) -> Result<Response, OAuthError> {
-    if let Err(resp) = check_oauth_rate(&state, &headers) {
-        return Ok(resp);
+    if let Err(error) = check_oauth_rate(&state, &headers) {
+        return Ok(error.into_response());
     }
     let client = authenticate_client(&state, &headers, &form).await?;
     if !client.has_grant("urn:ietf:params:oauth:grant-type:device_code") {
@@ -1660,4 +1768,47 @@ async fn discovery(State(state): State<AppState>, headers: HeaderMap) -> Json<Va
         "subject_types_supported": ["public"],
         "code_challenge_methods_supported": ["S256", "plain"],
     }))
+}
+
+#[cfg(test)]
+mod pkce_policy_tests {
+    use super::*;
+
+    #[test]
+    fn s256_challenges_are_canonical_sha256_base64url_values() {
+        let challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+        assert!(valid_s256_challenge(challenge, "S256"));
+        for method in ["", "plain", "s256"] {
+            assert!(!valid_s256_challenge(challenge, method));
+        }
+        for invalid in [
+            String::new(),
+            "A".repeat(42),
+            "_".repeat(43),
+            format!("{challenge}="),
+        ] {
+            assert!(!valid_s256_challenge(&invalid, "S256"));
+        }
+    }
+
+    #[test]
+    fn pkce_verifiers_enforce_rfc7636_length_and_unreserved_characters() {
+        let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        assert!(valid_pkce_verifier(verifier));
+        assert_eq!(
+            hash::b64url_sha256(verifier),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        );
+        assert!(valid_pkce_verifier(&"a".repeat(128)));
+        assert!(valid_pkce_verifier(&"-._~".repeat(11)));
+        for invalid in [
+            "a".repeat(42),
+            "a".repeat(129),
+            "/".repeat(43),
+            "界".repeat(43),
+            format!("{} ", "a".repeat(43)),
+        ] {
+            assert!(!valid_pkce_verifier(&invalid));
+        }
+    }
 }

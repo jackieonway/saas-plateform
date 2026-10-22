@@ -97,6 +97,22 @@ async fn org_configuration_snapshot(
     ))
 }
 
+/// The caller holds this organization's row lock. The platform root is the
+/// only cross-tenant administration context, so losing it locks out recovery
+/// through every ordinary management endpoint as well.
+async fn is_platform_root_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+) -> Result<bool, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM organizations o JOIN tenants t ON t.id=o.tenant_id \
+         WHERE o.id=$1 AND o.parent_id IS NULL AND t.is_platform)",
+    )
+    .bind(id)
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
 /// Subtree totals preserve the extent of cascading creation/deletion in audits.
 async fn org_audit_snapshot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -609,6 +625,9 @@ async fn update(
     let contact = body.contact.normalized()?;
     let mut tx = state.pool.begin().await?;
     let (_, before) = org_configuration_snapshot(&mut tx, id).await?;
+    if body.expires_at.flatten().is_some() && is_platform_root_in_tx(&mut tx, id).await? {
+        return Err(AppError::bad_request("平台根组织不允许设置过期时间"));
+    }
     let current_coordinates: (Option<f64>, Option<f64>) =
         sqlx::query_as("SELECT longitude, latitude FROM organizations WHERE id = $1")
             .bind(id)
@@ -700,6 +719,9 @@ async fn delete(
         .bind(id)
         .execute(&mut *tx)
         .await?;
+    if is_platform_root_in_tx(&mut tx, id).await? {
+        return Err(AppError::bad_request("平台根组织不允许删除"));
+    }
     let (target_tenant, before) = org_audit_snapshot(&mut tx, id).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
@@ -759,6 +781,9 @@ async fn update_status(
     ensure_org_in_scope(&state, &user, id).await?;
     let mut tx = state.pool.begin().await?;
     let (target_tenant, before) = org_configuration_snapshot(&mut tx, id).await?;
+    if body.status == "DISABLED" && is_platform_root_in_tx(&mut tx, id).await? {
+        return Err(AppError::bad_request("平台根组织不允许停用"));
+    }
     sqlx::query("UPDATE organizations SET status = $2, updated_at = now() WHERE id = $1")
         .bind(id)
         .bind(&body.status)

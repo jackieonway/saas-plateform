@@ -1136,8 +1136,9 @@ async fn notification_input_limits_and_context_constraints_fail_before_partial_p
         let token=h.app_token(&h.publisher_session.token,APP_CODE).await?;
         let path=format!("/api/apps/{APP_CODE}/notifications");
         let valid=body("bad-input",user_target(h.recipient,h.root));
+        rejected(&h.router,Method::GET,"/api/notifications?q=%00",&h.publisher_session.token,None,&[StatusCode::BAD_REQUEST]).await?;
         let mut cases=Vec::new();
-        for (field,value) in [("title",json!("")),("title",json!("字".repeat(201))),("type",json!("UNKNOWN")),("content",json!("x".repeat(8193))),
+        for (field,value) in [("title",json!("")),("title",json!("字".repeat(201))),("title",json!("通知\0标题")),("content",json!("通知\0正文")),("type",json!("UNKNOWN")),("content",json!("x".repeat(8193))),
             ("idempotencyKey",json!("")),("idempotencyKey",json!("bad key")),("idempotencyKey",json!("k".repeat(129))),
             ("tenantId",json!(h.tenant_b)),("sourceKind",json!("SYSTEM")),("link",json!("https://external.invalid")),
             ("link",json!(format!("/micro/{OTHER_CODE}/secret"))),("link",json!(format!("/micro/{APP_CODE}/../{OTHER_CODE}/secret"))),

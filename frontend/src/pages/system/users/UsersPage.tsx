@@ -69,6 +69,7 @@ import { TableSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { TableDensityToggle } from "@/components/TableDensityToggle"
 import { ColumnVisibilityDropdown } from "@/components/ColumnVisibilityDropdown"
 import { useSyncedKeyword } from "@/hooks/use-synced-keyword"
+import { usePageRecovery } from "@/hooks/use-page-recovery"
 import { useTableDensity, DENSITY_BODY_CLASS } from "@/hooks/use-table-density"
 import { useColumnVisibility, type ColumnDef } from "@/hooks/use-column-visibility"
 import { useAuthStore } from "@/stores/auth"
@@ -166,6 +167,7 @@ export default function UsersPage() {
   React.useEffect(() => {
     setPage(1)
   }, [debounced, orgFilter, size])
+  usePageRecovery(page, size, listQuery, setPage)
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["users"] })
@@ -870,10 +872,10 @@ export default function UsersPage() {
       </Dialog>
 
       {/* 成员关系 */}
-      <MembershipDialog user={membershipUser} onClose={() => setMembershipUser(null)} allOrgTree={allOrgTree} onSaved={invalidate} />
+      {membershipUser && <MembershipDialog key={membershipUser.id} user={membershipUser} onClose={() => setMembershipUser(null)} allOrgTree={allOrgTree} onSaved={invalidate} />}
 
       {/* 分配角色 */}
-      <RoleAssignDialog user={rolesUser} onClose={() => setRolesUser(null)} onSaved={invalidate} />
+      {rolesUser && <RoleAssignDialog key={rolesUser.id} user={rolesUser} onClose={() => setRolesUser(null)} onSaved={invalidate} />}
 
       {/* 用户详情抽屉 */}
       <UserDetailDrawer
@@ -960,6 +962,7 @@ function MembershipDialog({
   const queryClient = useQueryClient()
   const [rows, setRows] = React.useState<MembershipRow[]>([])
   const [saving, setSaving] = React.useState(false)
+  const [initialized, setInitialized] = React.useState(false)
 
   const query = useQuery({
     queryKey: ["user-memberships", user?.id],
@@ -971,10 +974,11 @@ function MembershipDialog({
   })
 
   React.useEffect(() => {
-    if (query.data) {
+    if (!initialized && query.isSuccess && query.data) {
       setRows(query.data.map((m) => ({ organizationId: m.organizationId, departmentId: m.departmentId, position: m.position ?? "" })))
+      setInitialized(true)
     }
-  }, [query.data])
+  }, [initialized, query.isSuccess, query.data])
 
   const findOrgName = (id: string | null): string => {
     if (!id) return "—"
@@ -987,7 +991,7 @@ function MembershipDialog({
   }
 
   const save = async () => {
-    if (!user) return
+    if (!user || !initialized || !query.isSuccess || saving) return
     const invalid = rows.find((r) => !r.organizationId)
     if (invalid !== undefined && rows.some((r) => !r.organizationId)) {
       toast.error("存在未选择组织的行,请补全或删除")
@@ -1059,7 +1063,7 @@ function MembershipDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             取消
           </Button>
-          <Button onClick={save} disabled={saving || query.isLoading || query.isError}>
+          <Button onClick={save} disabled={saving || !initialized || !query.isSuccess}>
             {saving && <Loader2 className="size-4 animate-spin" />}
             保存成员关系
           </Button>
@@ -1136,6 +1140,7 @@ function RoleAssignDialog({
   const queryClient = useQueryClient()
   const [checked, setChecked] = React.useState<Set<string>>(new Set())
   const [saving, setSaving] = React.useState(false)
+  const [initialized, setInitialized] = React.useState(false)
 
   const userRolesQuery = useQuery({
     queryKey: ["user-roles", user?.id],
@@ -1154,7 +1159,14 @@ function RoleAssignDialog({
   const rolesQueries = useQueries({
     queries: orgIds.map((orgId) => ({
       queryKey: ["roles", "by-org", orgId],
-      queryFn: async () => asPage<RoleRecord>(await rolesApi.list({ organizationId: orgId, page: 1, size: 200 })).records,
+      queryFn: async () => {
+        const records: RoleRecord[] = []
+        for (let page = 1; ; page++) {
+          const result = asPage<RoleRecord>(await rolesApi.list({ organizationId: orgId, page, size: 200 }))
+          records.push(...result.records)
+          if (result.records.length === 0 || records.length >= result.total) return records
+        }
+      },
       staleTime: 30_000,
       retry: 1,
       enabled: !!user,
@@ -1162,17 +1174,21 @@ function RoleAssignDialog({
   })
 
   React.useEffect(() => {
-    if (userRolesQuery.data) {
+    if (!initialized && userRolesQuery.isSuccess && userRolesQuery.data) {
       setChecked(new Set(userRolesQuery.data.map((r) => r.roleId)))
+      setInitialized(true)
     }
-  }, [userRolesQuery.data])
+  }, [initialized, userRolesQuery.isSuccess, userRolesQuery.data])
 
+  const ready = initialized && userRolesQuery.isSuccess && rolesQueries.every((query) => query.isSuccess)
   const save = async () => {
-    if (!user) return
+    if (!user || !ready || saving) return
     const allRoles = rolesQueries.flatMap((q) => q.data ?? [])
-    const items = allRoles
-      .filter((r) => checked.has(r.id))
-      .map((r) => ({ roleId: r.id, organizationId: r.organizationId }))
+    // Preserve assigned roles outside the visible candidate set, including
+    // memberships that were removed while this user's list row was cached.
+    const known = new Map((userRolesQuery.data ?? []).map((item) => [item.roleId, item]))
+    for (const role of allRoles) known.set(role.id, { roleId: role.id, organizationId: role.organizationId })
+    const items = [...known.values()].filter((item) => checked.has(item.roleId))
     setSaving(true)
     try {
       await usersApi.saveRoles(user.id, items)
@@ -1229,6 +1245,11 @@ function RoleAssignDialog({
                           <div key={i} className="h-9 animate-pulse rounded-md bg-muted" />
                         ))}
                       </div>
+                    ) : rolesQueries[oi]?.isError ? (
+                      <ErrorState
+                        message={rolesQueries[oi].error?.message}
+                        onRetry={() => { void rolesQueries[oi].refetch() }}
+                      />
                     ) : roles.length === 0 ? (
                       <p className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">
                         该组织暂无角色,请先在「角色管理」创建
@@ -1274,7 +1295,7 @@ function RoleAssignDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             取消
           </Button>
-          <Button onClick={save} disabled={saving || userRolesQuery.isLoading}>
+          <Button onClick={save} disabled={saving || !ready}>
             {saving && <Loader2 className="size-4 animate-spin" />}
             保存角色分配
           </Button>

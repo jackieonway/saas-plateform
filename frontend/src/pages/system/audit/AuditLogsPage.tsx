@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { DataPagination } from "@/components/DataPagination"
+import { usePageRecovery } from "@/hooks/use-page-recovery"
 import { TableSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { TableDensityToggle } from "@/components/TableDensityToggle"
 import { ColumnVisibilityDropdown } from "@/components/ColumnVisibilityDropdown"
@@ -160,6 +161,7 @@ export default function AuditLogsPage() {
   React.useEffect(() => {
     setPage(1)
   }, [debounced, action, tenantFilter, size])
+  usePageRecovery(page, size, listQuery, setPage)
 
   const records = listQuery.data?.records ?? []
   const total = listQuery.data?.total ?? 0

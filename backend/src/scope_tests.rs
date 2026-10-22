@@ -18,6 +18,16 @@ use crate::util::hash;
 use crate::util::jwt::{self, Claims};
 use crate::util::password;
 
+#[derive(sqlx::FromRow)]
+struct StoredApplicationToken {
+    token_use: String,
+    audience: Option<String>,
+    jti: Option<Uuid>,
+    application_id: Option<Uuid>,
+    platform_session_id: Option<Uuid>,
+    jwt: Option<String>,
+}
+
 async fn call(
     app: &Router,
     method: Method,
@@ -185,7 +195,7 @@ async fn grant_admin(
     .await?;
     let menus: Vec<(Uuid, Uuid)> =
         sqlx::query_as("SELECT id, application_id FROM menus WHERE permission = ANY($1)")
-            .bind(&[
+            .bind([
                 "system:user",
                 "system:role",
                 "system:monitor",
@@ -387,7 +397,7 @@ async fn tenant_management_scope_matrix() -> Result<()> {
         ensure!(status == StatusCode::FORBIDDEN, "A changed a shared global account");
         let (status, body) = call(&app, Method::POST, "/api/users/batch-status", &a,
             Some(json!({"userIds":[shared,admin_b],"status":"DISABLED"}))).await?;
-        ensure!(status == StatusCode::OK && body["failed"].as_array().map_or(false, |a| a.len() == 2), "A batch changed cross-tenant/shared account");
+        ensure!(status == StatusCode::OK && body["failed"].as_array().is_some_and(|a| a.len() == 2), "A batch changed cross-tenant/shared account");
         let (status, _) = call(&app, Method::PUT, &format!("/api/roles/{role_b}"), &a, Some(json!({"name":"Denied"}))).await?;
         ensure!(status == StatusCode::NOT_FOUND, "A changed B role");
         let (status, _) = call(&app, Method::GET, "/api/monitor/overview", &a, None).await?;
@@ -430,7 +440,7 @@ async fn tenant_management_scope_matrix() -> Result<()> {
         ensure!(status == StatusCode::OK, "platform shared-user update failed");
         let logged_tenants: i64 = sqlx::query_scalar("SELECT count(DISTINCT tenant_id) FROM audit_logs \
             WHERE user_id = $1 AND action = 'UPDATE_USER' AND tenant_id = ANY($2)")
-            .bind(platform_user).bind(&[tenant_a, tenant_b]).fetch_one(&pool).await?;
+            .bind(platform_user).bind([tenant_a, tenant_b]).fetch_one(&pool).await?;
         ensure!(logged_tenants == 2, "platform shared-user audit omitted a target tenant");
         let (status, _) = call(&app, Method::PUT, &format!("/api/organizations/{org_b}"), &platform,
             Some(json!({"name":"Platform B"}))).await?;
@@ -472,11 +482,11 @@ async fn tenant_management_scope_matrix() -> Result<()> {
     }.await;
 
     sqlx::query("DELETE FROM audit_logs WHERE tenant_id = ANY($1)")
-        .bind(&[tenant_a, tenant_b])
+        .bind([tenant_a, tenant_b])
         .execute(&pool)
         .await?;
     sqlx::query("DELETE FROM tenants WHERE id = ANY($1)")
-        .bind(&[tenant_a, tenant_b])
+        .bind([tenant_a, tenant_b])
         .execute(&pool)
         .await?;
     sqlx::query("DELETE FROM users WHERE username = $1")
@@ -484,7 +494,7 @@ async fn tenant_management_scope_matrix() -> Result<()> {
         .execute(&pool)
         .await?;
     sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-        .bind(&[admin_a, admin_b, shared])
+        .bind([admin_a, admin_b, shared])
         .execute(&pool)
         .await?;
     sqlx::query("DELETE FROM platform_sessions WHERE id = $1")
@@ -550,11 +560,9 @@ async fn platform_session_lifecycle() -> Result<()> {
         ensure!(
             listing["platformSessions"]
                 .as_array()
-                .map_or(false, |items| items
-                    .iter()
-                    .filter(|item| item["active"] == true)
-                    .count()
-                    >= 2),
+                .is_some_and(
+                    |items| items.iter().filter(|item| item["active"] == true).count() >= 2
+                ),
             "two independent device sessions were not listed"
         );
 
@@ -1042,13 +1050,13 @@ async fn application_token_audience_and_revocation() -> Result<()> {
             && claims.org.as_deref() == Some(org_a.to_string().as_str())
             && claims.aud.as_deref() == Some(code_a.as_str()) && claims.jti.is_some(),
             "app JWT subject/context/audience/jti mismatch");
-        let stored: (String, Option<String>, Option<Uuid>, Option<Uuid>, Option<Uuid>, Option<String>) = sqlx::query_as(
+        let stored: StoredApplicationToken = sqlx::query_as(
             "SELECT token_use, audience, jti, application_id, platform_session_id, jwt \
              FROM oauth_tokens WHERE token_hash = $1",
         ).bind(hash::sha256_hex(&token_a)).fetch_one(&pool).await?;
-        ensure!(stored.0 == "app" && stored.1.as_deref() == Some(code_a.as_str())
-            && stored.2.map(|j| j.to_string()) == claims.jti && stored.3 == Some(app_a)
-            && stored.4.is_some() && stored.5.is_none(), "app token database binding incomplete");
+        ensure!(stored.token_use == "app" && stored.audience.as_deref() == Some(code_a.as_str())
+            && stored.jti.map(|j| j.to_string()) == claims.jti && stored.application_id == Some(app_a)
+            && stored.platform_session_id.is_some() && stored.jwt.is_none(), "app token database binding incomplete");
         let (status, second) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
             Some(json!({"appCode":code_a}))).await?;
         ensure!(status == StatusCode::CREATED && second["accessToken"] != token_a,
@@ -1394,32 +1402,32 @@ async fn application_token_audience_and_revocation() -> Result<()> {
     }.await;
 
     sqlx::query("DELETE FROM oauth_tokens WHERE client_id = ANY($1)")
-        .bind(&[&client_a, &client_b])
+        .bind([&client_a, &client_b])
         .execute(&pool)
         .await?;
     sqlx::query(
         "DELETE FROM audit_logs WHERE tenant_id = ANY($1) OR user_id = ANY($2) \
                  OR username = ANY($3)",
     )
-    .bind(&[tenant_a, tenant_b])
-    .bind(&[user_a, user_b])
-    .bind(&[&client_a, &client_b])
+    .bind([tenant_a, tenant_b])
+    .bind([user_a, user_b])
+    .bind([&client_a, &client_b])
     .execute(&pool)
     .await?;
     sqlx::query("DELETE FROM oauth_clients WHERE client_id = ANY($1)")
-        .bind(&[&client_a, &client_b])
+        .bind([&client_a, &client_b])
         .execute(&pool)
         .await?;
     sqlx::query("DELETE FROM applications WHERE id = ANY($1)")
-        .bind(&[app_a, app_b])
+        .bind([app_a, app_b])
         .execute(&pool)
         .await?;
     sqlx::query("DELETE FROM tenants WHERE id = ANY($1)")
-        .bind(&[tenant_a, tenant_b])
+        .bind([tenant_a, tenant_b])
         .execute(&pool)
         .await?;
     sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-        .bind(&[user_a, user_b])
+        .bind([user_a, user_b])
         .execute(&pool)
         .await?;
     result

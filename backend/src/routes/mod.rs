@@ -2,6 +2,7 @@ mod app_authorize;
 pub mod app_context;
 pub mod app_members;
 pub mod application_releases;
+mod application_setup;
 pub mod applications;
 pub mod audit;
 pub mod auth;
@@ -44,6 +45,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(tenants::routes())
         .merge(applications::routes())
         .merge(application_releases::routes())
+        .merge(application_setup::routes())
         .merge(crate::managed_deployments::routes())
         .merge(crate::artifact_distribution::routes())
         .merge(retention::routes())

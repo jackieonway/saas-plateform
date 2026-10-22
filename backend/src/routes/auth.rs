@@ -798,30 +798,34 @@ const LOGIN_HISTORY_WHERE: &str = "user_id = $1 AND action IN ('LOGIN', 'LOGIN_F
 
 type LoginHistoryTuple = (i64, String, String, String, String, String, DateTime<Utc>);
 
+fn login_history_paging(params: &HashMap<String, String>) -> (i64, i64, i64) {
+    // Preserve this endpoint's 50-row cap while sharing the checked page bound.
+    let size = params
+        .get("size")
+        .and_then(|value| value.parse::<i64>().ok())
+        .filter(|value| *value >= 1)
+        .map(|value| value.min(50))
+        .unwrap_or(10)
+        .to_string();
+    saas_platform_backend::paging::Paging::from_raw(
+        params.get("page").map(String::as_str),
+        Some(&size),
+    )
+    .parts()
+}
+
 /// GET /api/auth/login-history — 本人登录历史时间线 (登录成功/失败)
 ///
 /// 个人安全中心自助查询: 仅本人审计行 (user_id = 当前用户), 只含 LOGIN / LOGIN_FAILED。
 /// 用户名不存在或被限流等场景写入的 LOGIN_FAILED 行 user_id 为 NULL,
 /// 不属于任何用户, 自然不会出现在任何人的历史里 (admin 密码错误的失败行则带有 user_id)。
-/// 分页: page ≥ 1 (非法回落 1), size 上限 50 (超出截断, 非法/未传默认 10), 按时间倒序。
+/// 分页: page 限于 1..=1_000_000 (非法回落 1), size 上限 50, 按时间倒序。
 async fn login_history(
     State(state): State<AppState>,
     user: CurrentUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let page: i64 = params
-        .get("page")
-        .and_then(|v| v.parse().ok())
-        .filter(|v| *v >= 1)
-        .unwrap_or(1);
-    // size: 非法/未传 → 默认 10; 超出上限 50 → 截断为 50
-    let size: i64 = params
-        .get("size")
-        .and_then(|v| v.parse::<i64>().ok())
-        .filter(|v| *v >= 1)
-        .map(|v| v.min(50))
-        .unwrap_or(10);
-    let offset = (page - 1) * size;
+    let (page, size, offset) = login_history_paging(&params);
 
     let rows: Vec<LoginHistoryTuple> = sqlx::query_as(&format!(
         "SELECT id, action, COALESCE(ip,''), COALESCE(detail,''), COALESCE(tenant_name,''), \
@@ -974,4 +978,28 @@ async fn revoke_my_session(
     .await?;
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::login_history_paging;
+    use std::collections::HashMap;
+
+    #[test]
+    fn login_history_bounds_extreme_pages_without_overflow() {
+        let params = HashMap::from([
+            ("page".into(), i64::MAX.to_string()),
+            ("size".into(), i64::MAX.to_string()),
+        ]);
+        assert_eq!(login_history_paging(&params), (1_000_000, 50, 49_999_950));
+    }
+
+    #[test]
+    fn login_history_preserves_defaults_and_its_fifty_row_cap() {
+        for (raw, expected) in [("0", 10), ("invalid", 10), ("51", 50), ("7", 7)] {
+            let params = HashMap::from([("page".into(), "2".into()), ("size".into(), raw.into())]);
+            assert_eq!(login_history_paging(&params), (2, expected, expected));
+        }
+        assert_eq!(login_history_paging(&HashMap::new()), (1, 10, 0));
+    }
 }

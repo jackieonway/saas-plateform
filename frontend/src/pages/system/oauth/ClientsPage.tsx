@@ -65,6 +65,7 @@ const clientSchema = z.object({
     .regex(/^[a-z0-9-]*$/, "仅支持小写字母、数字与中划线")
     .optional(),
   clientType: z.enum(["CONFIDENTIAL", "PUBLIC"]),
+  requirePkce: z.boolean(),
   redirectUris: z.string().min(1, "至少填写一个回调地址"),
   grantTypes: z.array(z.string()).min(1, "至少选择一种授权类型"),
   scopes: z.array(z.string()),
@@ -111,6 +112,17 @@ export default function OAuthClientsPage() {
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<OAuthClientRecord | null>(null)
   const [secret, setSecret] = React.useState<string | null>(null)
+  const writing = React.useRef(false)
+  const [writeBusy, setWriteBusy] = React.useState(false)
+  const mounted = React.useRef(true)
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const startWrite = () => {
+    if (writing.current || !mounted.current) return false
+    writing.current = true
+    setWriteBusy(true)
+    return true
+  }
+  const finishWrite = () => { writing.current = false; if (mounted.current) setWriteBusy(false) }
 
   const form = useForm<ClientForm>({
     resolver: zResolver(clientSchema),
@@ -118,6 +130,7 @@ export default function OAuthClientsPage() {
       clientName: "",
       clientId: "",
       clientType: "CONFIDENTIAL",
+      requirePkce: false,
       redirectUris: "",
       grantTypes: ["authorization_code"],
       scopes: ["profile"],
@@ -130,11 +143,13 @@ export default function OAuthClientsPage() {
   const clientName = form.watch("clientName")
 
   const openCreate = () => {
+    if (writing.current) return
     setEditing(null)
     form.reset({
       clientName: "",
       clientId: "",
       clientType: "CONFIDENTIAL",
+      requirePkce: false,
       redirectUris: "",
       grantTypes: ["authorization_code"],
       scopes: ["profile"],
@@ -147,11 +162,13 @@ export default function OAuthClientsPage() {
   }
 
   const openEdit = (c: OAuthClientRecord) => {
+    if (writing.current) return
     setEditing(c)
     form.reset({
       clientName: c.clientName,
       clientId: c.clientId,
       clientType: c.clientType,
+      requirePkce: c.requirePkce ?? false,
       redirectUris: (c.redirectUris ?? []).join("\n"),
       grantTypes: c.grantTypes ?? [],
       scopes: c.scopes ?? [],
@@ -169,6 +186,7 @@ export default function OAuthClientsPage() {
         clientName: v.clientName,
         clientId: v.clientId,
         clientType: v.clientType,
+        requirePkce: v.requirePkce,
         redirectUris: v.redirectUris
           .split(/\n+/)
           .map((s) => s.trim())
@@ -183,43 +201,49 @@ export default function OAuthClientsPage() {
       }
       if (editing) {
         await oauthApi.updateClient(editing.id, payload)
-        return null
+        return { created: false, secret: null }
       }
       const resp = await oauthApi.createClient(payload)
-      return (resp.clientSecret as string) ?? null
+      return { created: true, secret: resp.clientSecret ?? null }
     },
-    onSuccess: (createdSecret) => {
-      setDialogOpen(false)
+    onSuccess: (result) => {
+      finishWrite()
       queryClient.invalidateQueries({ queryKey: ["oauth-clients"] })
-      if (createdSecret) {
-        setSecret(createdSecret)
+      if (!mounted.current) return
+      setDialogOpen(false)
+      if (result.secret) {
+        setSecret(result.secret)
         toast.success("客户端创建成功,请立即保存密钥")
       } else {
-        toast.success("客户端已更新")
+        toast.success(result.created ? "客户端创建成功" : "客户端已更新")
       }
     },
-    onError: (e: Error) => toast.error(e.message || "保存失败"),
+    onError: (e: Error) => { finishWrite(); if (mounted.current && e.name !== "AbortError") toast.error(e.message || "保存失败") },
   })
 
   const regenerateMutation = useMutation({
     mutationFn: (id: string) => oauthApi.regenerateSecret(id),
     onSuccess: (resp) => {
-      setSecret(resp.clientSecret)
+      finishWrite()
       queryClient.invalidateQueries({ queryKey: ["oauth-clients"] })
+      if (!mounted.current) return
+      setSecret(resp.clientSecret)
       toast.success("已重新生成密钥")
     },
-    onError: (e: Error) => toast.error(e.message || "重新生成失败"),
+    onError: (e: Error) => { finishWrite(); if (mounted.current && e.name !== "AbortError") toast.error(e.message || "重新生成失败") },
   })
 
   const [deleting, setDeleting] = React.useState<OAuthClientRecord | null>(null)
   const deleteMutation = useMutation({
     mutationFn: (id: string) => oauthApi.removeClient(id),
     onSuccess: () => {
+      finishWrite()
+      queryClient.invalidateQueries({ queryKey: ["oauth-clients"] })
+      if (!mounted.current) return
       toast.success("客户端已删除")
       setDeleting(null)
-      queryClient.invalidateQueries({ queryKey: ["oauth-clients"] })
     },
-    onError: (e: Error) => toast.error(e.message || "删除失败"),
+    onError: (e: Error) => { finishWrite(); if (mounted.current && e.name !== "AbortError") toast.error(e.message || "删除失败") },
   })
 
   const clients = listQuery.data ?? []
@@ -231,7 +255,7 @@ export default function OAuthClientsPage() {
         description="接入标准 OAuth 2.0 的第三方应用,支持授权码 / 设备码 / 客户端凭证等模式"
         icon={<KeyRound className="size-5" />}
         actions={
-          <Button onClick={openCreate}>
+          <Button onClick={openCreate} disabled={writeBusy}>
             <Plus className="size-4" />
             新建客户端
           </Button>
@@ -310,6 +334,7 @@ export default function OAuthClientsPage() {
                       {c.clientType === "CONFIDENTIAL" ? <ShieldCheck className="size-3" /> : <Unlock className="size-3" />}
                       {c.clientType === "CONFIDENTIAL" ? "机密" : "公开"}
                     </Badge>
+                    <p className="mt-1 text-xs text-muted-foreground">{c.requirePkce ? "PKCE · 强制 S256" : "PKCE · 兼容模式"}</p>
                   </TableCell>
                   <TableCell>
                     <div className="flex max-w-[16rem] flex-wrap gap-1">
@@ -349,7 +374,7 @@ export default function OAuthClientsPage() {
                     <div className="flex items-center justify-end gap-0.5">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8" aria-label="重新生成 Secret" onClick={() => regenerateMutation.mutate(c.id)} disabled={regenerateMutation.isPending}>
+                          <Button variant="ghost" size="icon" className="size-8" aria-label="重新生成 Secret" onClick={() => { if (startWrite()) regenerateMutation.mutate(c.id) }} disabled={writeBusy}>
                             {regenerateMutation.isPending && regenerateMutation.variables === c.id ? (
                               <Loader2 className="size-4 animate-spin" />
                             ) : (
@@ -369,7 +394,7 @@ export default function OAuthClientsPage() {
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" aria-label="删除" onClick={() => setDeleting(c)}>
+                          <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" aria-label="删除" disabled={writeBusy} onClick={() => setDeleting(c)}>
                             <Trash2 className="size-4" />
                           </Button>
                         </TooltipTrigger>
@@ -386,16 +411,16 @@ export default function OAuthClientsPage() {
       </div>
 
       {/* 新建/编辑 */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={value => { if (!writing.current) setDialogOpen(value) }}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{editing ? `编辑客户端「${editing.clientName}」` : "新建 OAuth 客户端"}</DialogTitle>
             <DialogDescription>
-              {editing ? "client_id 与密钥策略创建后不可变更" : "保存后自动分配 client_id,并生成一次性展示的 client_secret"}
+              {editing ? "client_id 与客户端类型创建后不可变更；可调整 PKCE 策略" : "保存后自动分配 client_id,并生成一次性展示的 client_secret"}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form id="client-form" onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
+            <form id="client-form" onSubmit={form.handleSubmit((v) => { if (startWrite()) saveMutation.mutate(v) })} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -446,7 +471,7 @@ export default function OAuthClientsPage() {
                       <FormLabel>
                         客户端类型 <span className="text-destructive">*</span>
                       </FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={!!editing}>
+                      <Select onValueChange={value => { field.onChange(value); form.setValue("requirePkce", value === "PUBLIC", { shouldDirty: true }) }} value={field.value} disabled={!!editing || writeBusy}>
                         <FormControl>
                           <SelectTrigger className="w-full">
                             <SelectValue />
@@ -509,6 +534,21 @@ export default function OAuthClientsPage() {
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="requirePkce"
+                render={({ field }) => (
+                  <FormItem className="rounded-lg border p-3">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <Checkbox aria-label="强制 PKCE S256" checked={field.value} disabled={writeBusy} onCheckedChange={value => field.onChange(value === true)} />
+                      授权码强制使用 PKCE（S256）
+                    </label>
+                    <FormDescription>启用后，授权请求必须携带 S256 code_challenge，兑换授权码时必须提交对应的 code_verifier。新公开客户端默认启用；已有接入方请先完成 S256 配置再开启，旧的无 PKCE 或 plain 请求需重新发起。关闭时保留兼容模式。仅影响授权码流程。</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -659,7 +699,7 @@ export default function OAuthClientsPage() {
         title={`删除客户端「${deleting?.clientName ?? ""}」?`}
         description="将删除该客户端及其全部令牌与设备码记录,不可撤销。"
         loading={deleteMutation.isPending}
-        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        onConfirm={() => { if (deleting && startWrite()) deleteMutation.mutate(deleting.id) }}
       />
     </div>
   )

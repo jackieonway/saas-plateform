@@ -58,6 +58,31 @@ impl Row {
             nonce: self.nonce.map(|v| v.to_string()).unwrap_or_default(),
         }
     }
+
+    fn claim_work(
+        &mut self,
+        policy: &deployment_contract::Target,
+        protected_cleanup: bool,
+    ) -> Result<Work, &'static str> {
+        if self.policy_revision != revision(policy) || protected_cleanup {
+            return Err("POLICY_REJECTED");
+        }
+        let attempt = self
+            .attempt
+            .checked_add(1)
+            .filter(|value| *value <= 1000)
+            .ok_or("ATTEMPTS_EXHAUSTED")?;
+        let mut work = self.work();
+        let nonce = Uuid::new_v4();
+        work.attempt = attempt;
+        work.nonce = nonce.to_string();
+        if !deployment_contract::work_allowed(&work, policy) {
+            return Err("POLICY_REJECTED");
+        }
+        self.attempt = attempt;
+        self.nonce = Some(nonce);
+        Ok(work)
+    }
 }
 
 async fn claim(
@@ -88,24 +113,18 @@ async fn claim(
     let invalid_policy = row.policy_revision != revision(&allowed.policy);
     let protected_cleanup = row.operation == "CLEANUP"
         && cleanup_protected(&mut tx, row.artifact_id, row.release_id, Some(row.id)).await?;
-    if invalid_policy || protected_cleanup {
-        // End an unexecutable queue head so that other versions can still progress.
-        // CLEANING remains fenced: an expired worker might have touched the engine.
-        sqlx::query("UPDATE managed_deployment_jobs SET state='FAILED',error_code='POLICY_REJECTED',lease_until=NULL,updated_at=now() WHERE id=$1")
-            .bind(id).execute(&mut *tx).await?;
-        audit(&mut tx, app, None, "MANAGED_DEPLOYMENT_REJECT", &json!({"jobId":id,"targetId":target,"policyChanged":invalid_policy,"protectedCleanup":protected_cleanup})).await?;
-        tx.commit().await?;
-        return Ok(Json(Value::Null));
-    }
-    row.attempt = row
-        .attempt
-        .checked_add(1)
-        .filter(|v| *v <= 1000)
-        .ok_or_else(|| AppError::conflict("任务尝试次数超过上限"))?;
-    row.nonce = Some(Uuid::new_v4());
-    if !deployment_contract::work_allowed(&row.work(), &allowed.policy) {
-        return Err(AppError::conflict("任务不符合目标策略"));
-    }
+    let work = match row.claim_work(&allowed.policy, protected_cleanup) {
+        Ok(work) => work,
+        Err(code) => {
+            // End an unexecutable queue head so that other versions can still progress.
+            // CLEANING remains fenced: an expired worker might have touched the engine.
+            sqlx::query("UPDATE managed_deployment_jobs SET state='FAILED',error_code=$2,lease_until=NULL,updated_at=now() WHERE id=$1")
+            .bind(id).bind(code).execute(&mut *tx).await?;
+            audit(&mut tx, app, None, "MANAGED_DEPLOYMENT_REJECT", &json!({"jobId":id,"targetId":target,"policyChanged":invalid_policy,"protectedCleanup":protected_cleanup,"errorCode":code})).await?;
+            tx.commit().await?;
+            return Ok(Json(Value::Null));
+        }
+    };
     sqlx::query("UPDATE managed_deployment_jobs SET state='RUNNING',attempt=$2,nonce=$3,lease_until=now()+interval '10 minutes',receipt=NULL,error_code=NULL,updated_at=now() WHERE id=$1")
         .bind(id).bind(row.attempt).bind(row.nonce).execute(&mut *tx).await?;
     audit(
@@ -117,7 +136,7 @@ async fn claim(
     )
     .await?;
     tx.commit().await?;
-    Ok(Json(json!(row.work())))
+    Ok(Json(json!(work)))
 }
 
 async fn receipt(
@@ -228,4 +247,81 @@ async fn receipt(
     audit(&mut tx,app,None,"MANAGED_DEPLOYMENT_RECEIPT",&json!({"jobId":id,"targetId":target,"state":receipt.state,"attempt":receipt.attempt,"errorCode":receipt.error_code})).await?;
     tx.commit().await?;
     Ok(Json(json!({"reused":false})))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deployment_contract::{Target, Template};
+
+    fn fixture() -> (Row, Target) {
+        let policy = Target {
+            id: "edge".into(),
+            name: "Edge".into(),
+            public_origin: "https://edge.test".into(),
+            repositories: vec!["registry.test/demo".into()],
+            templates: vec![Template {
+                id: "static".into(),
+                application_code: "demo".into(),
+                health_path: "/healthz".into(),
+            }],
+        };
+        let row = Row {
+            id: Uuid::new_v4(),
+            artifact_id: Uuid::new_v4(),
+            release_id: Uuid::new_v4(),
+            application_id: Uuid::new_v4(),
+            application_code: "demo".into(),
+            environment: "development".into(),
+            version: "v1".into(),
+            target_id: policy.id.clone(),
+            template_id: "static".into(),
+            image_ref: format!("registry.test/demo@sha256:{}", "a".repeat(64)),
+            policy_revision: revision(&policy),
+            operation: "DEPLOY".into(),
+            state: "QUEUED".into(),
+            attempt: 0,
+            nonce: None,
+            lease_until: None,
+            receipt: None,
+        };
+        (row, policy)
+    }
+
+    #[test]
+    fn exhausted_or_invalid_jobs_are_terminal_rejections_without_mutating_the_lease() {
+        for attempt in [1000, i32::MAX] {
+            let (mut row, policy) = fixture();
+            row.attempt = attempt;
+            assert_eq!(
+                row.claim_work(&policy, false).unwrap_err(),
+                "ATTEMPTS_EXHAUSTED"
+            );
+            assert_eq!(row.attempt, attempt);
+            assert!(row.nonce.is_none());
+        }
+        let (mut row, policy) = fixture();
+        row.image_ref = "outside.test/demo:latest".into();
+        assert_eq!(
+            row.claim_work(&policy, false).unwrap_err(),
+            "POLICY_REJECTED"
+        );
+        assert_eq!(row.attempt, 0);
+        assert!(row.nonce.is_none());
+    }
+
+    #[test]
+    fn last_allowed_claim_has_a_fenced_nonce_and_preserves_work_identity() {
+        let (mut row, policy) = fixture();
+        row.attempt = 999;
+        let work = row.claim_work(&policy, false).unwrap();
+        assert_eq!(work.attempt, 1000);
+        assert_eq!(work.job_id, row.id.to_string());
+        assert_eq!(work.nonce, row.nonce.unwrap().to_string());
+        assert!(deployment_contract::work_allowed(&work, &policy));
+        assert_eq!(
+            row.claim_work(&policy, false).unwrap_err(),
+            "ATTEMPTS_EXHAUSTED"
+        );
+    }
 }

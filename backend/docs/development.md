@@ -39,13 +39,15 @@ npm run dev
 
 打开 http://127.0.0.1:3000。后端 PUBLIC_APP_URL 应与浏览器使用的来源一致。首次登录后按平台界面创建租户、组织、角色与用户，不把初始化管理员当作普通业务用户。
 
+开发服务器默认仅接受 Vite 允许的 localhost 与 IP 主机名。经外部预览网关访问时，在启动前设置 DEV_ALLOWED_HOSTS，例如 `$env:DEV_ALLOWED_HOSTS='preview.example.com,preview2.example.com'`；仅接受逗号分隔的完整主机名，不接受 URL、端口、前导点或通配符。
+
 ## 3. 接入业务应用
 
 工单、门店按自身开发指南配置专属数据库与机密客户端。平台登记应用、菜单、功能权限和数据授权后，微应用才能代表普通用户调用业务 API。
 
-本地业务前端推荐显式使用绝对 API 地址：工单 http://127.0.0.1:3004/work-orders-api，门店 http://127.0.0.1:3031/stores-api。默认 opaque iframe 请求来源为 null，由业务后端按配置允许，不能以通配来源和 Cookie 替代授权。
+本地业务前端可显式使用绝对 API 地址：工单 http://127.0.0.1:3004/work-orders-api，门店 http://127.0.0.1:3031/stores-api；也可使用宿主同源的 /work-orders-api 和 /stores-api 开发代理。两条代理分别默认指向 3004 和 3031，启动宿主前可通过 WORK_ORDERS_DEV_PROXY_TARGET、STORES_DEV_PROXY_TARGET 覆盖完整目标来源。
 
-宿主当前 /work-orders-api 开发代理写死指向 3104，与工单 API 默认 3004 不同；使用相对路径前须对齐端口。宿主没有默认门店 API 代理。不要把前端启动成功当作业务链路已接通。
+默认 opaque iframe 请求来源为 null，宿主为上述业务代理提供该来源的 OPTIONS 预检响应；实际业务响应仍由业务后端按配置允许来源。不能以通配来源和 Cookie 替代授权。独立业务服务需分别启动，不要把宿主前端启动成功当作业务链路已接通。
 
 可选静态版本目录通过 MICRO_APPS_DEV_DIR 配置绝对路径；缺失版本返回 404。Vue/jQuery 示例代理、聊天及 Socket.IO 等配置见 frontend/vite.config.ts，服务需分别启动。
 

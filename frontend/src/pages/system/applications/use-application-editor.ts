@@ -1,11 +1,10 @@
 import * as React from "react"
-import { useNavigate } from "react-router-dom"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zResolver } from "@/lib/form"
 import { applicationsApi } from "@/api/applications"
-import { hostEsmEntryForCode } from "@/micro-apps/registry"
+import { hostEsmEntryForCode, listHostEsmModules } from "@/micro-apps/registry"
 import { toast } from "sonner"
 import type { ApplicationRecord } from "@/api/types"
 
@@ -42,9 +41,8 @@ export const isHostEsm = (app: ApplicationRecord) => isMicroApp(app) && app.entr
 
 
 /** Owns create/edit validation, immutable entry metadata and post-save coordination. */
-export function useApplicationEditor(onCreatedHtml: (application: ApplicationRecord) => void) {
+export function useApplicationEditor(onCreatedApplication: (application: ApplicationRecord) => void) {
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<ApplicationRecord | null>(null)
   const [quickSetup, setQuickSetup] = React.useState(true)
@@ -55,6 +53,17 @@ export function useApplicationEditor(onCreatedHtml: (application: ApplicationRec
   const entryTypeValue = form.watch("entryType")
   const codeValue = form.watch("code")
   const useQuickSetup = !editing && entryTypeValue === "HTML" && quickSetup
+  const hostEsmModules = React.useMemo(() => listHostEsmModules(), [])
+  const selectHostEsmModule = (code: string) => {
+    const entryUrl = hostEsmEntryForCode(code)
+    if (!entryUrl) {
+      form.setError("code", { message: "请选择当前宿主中已构建的模块" })
+      return
+    }
+    form.setValue("code", code, { shouldValidate: true })
+    form.setValue("entryUrl", entryUrl)
+    form.clearErrors("code")
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -83,6 +92,21 @@ export function useApplicationEditor(onCreatedHtml: (application: ApplicationRec
     mutationFn: async (values: AppForm) => {
       const esm = values.entryType === "ESM"
       const quick = !editing && !esm && quickSetup
+      // Metadata editing never rewrites an existing entry or elevates its trust.
+      if (editing) {
+        await applicationsApi.update(editing.id, {
+          code: editing.code,
+          name: values.name,
+          icon: values.icon || "LayoutGrid",
+          basePath: values.basePath || "",
+          description: values.description || "",
+          sortOrder: values.sortOrder,
+          status: values.status,
+        })
+        return null
+      }
+      const esmEntry = esm ? hostEsmEntryForCode(values.code) : null
+      if (esm && !esmEntry) throw new Error("请选择当前宿主中已构建的模块")
       const payload = {
         code: values.code,
         name: values.name,
@@ -91,33 +115,22 @@ export function useApplicationEditor(onCreatedHtml: (application: ApplicationRec
         description: values.description || "",
         sortOrder: values.sortOrder,
         status: values.status,
-        entryType: editing?.entryType ?? values.entryType,
-        runtimeMode: editing?.runtimeMode ?? (esm ? "TRUSTED" as const : "IFRAME" as const),
-        entryUrl: editing ? editing.entryUrl ?? "" : esm
-          ? hostEsmEntryForCode(values.code) ?? ""
+        entryType: values.entryType,
+        runtimeMode: esm ? "TRUSTED" as const : "IFRAME" as const,
+        entryUrl: esm
+          ? esmEntry!
           : `/sub-apps/${values.code}/unreleased/index.html`,
         autoCreateMenu: quick,
       }
-      if (editing) {
-        await applicationsApi.update(editing.id, payload)
-        return null
-      }
-      /* create 返回新建应用记录(含 id), 供 toast 引导直接跳转菜单配置 */
       const created = await applicationsApi.create(payload)
       return { id: created.id, quick, entryType: values.entryType, application: created }
     },
     onSuccess: (created) => {
-      if (created?.entryType === "HTML") {
-        toast.success("应用已创建，请上传并激活 HTML 版本")
-        onCreatedHtml(created.application)
-      } else if (created?.id) {
-        toast.success("应用创建成功", {
-          description: "ESM 模块随宿主构建；下一步配置菜单与授权",
-          action: {
-            label: "去配置菜单",
-            onClick: () => navigate(`/system/menus?applicationId=${created.id}`),
-          },
+      if (created) {
+        toast.success("应用已创建", {
+          description: created.entryType === "HTML" ? "继续发布版本并配置访问范围" : "模块随宿主发布，继续配置菜单与访问范围",
         })
+        onCreatedApplication(created.application)
       } else {
         toast.success(editing ? "应用已更新" : "应用创建成功")
       }
@@ -131,11 +144,12 @@ export function useApplicationEditor(onCreatedHtml: (application: ApplicationRec
 
   const submit = form.handleSubmit((values) => {
     if (!editing && values.entryType === "ESM" && !hostEsmEntryForCode(values.code)) {
-      form.setError("code", { message: "当前宿主构建中没有与此编码同名的 ESM 模块" })
+      form.setError("code", { message: "请选择当前宿主中已构建的模块" })
       return
     }
     saveMutation.mutate(values)
   })
   return { dialogOpen, setDialogOpen, editing, quickSetup, setQuickSetup, form,
-    entryTypeValue, codeValue, useQuickSetup, openCreate, openEdit, saveMutation, submit }
+    entryTypeValue, codeValue, useQuickSetup, hostEsmModules, selectHostEsmModule,
+    openCreate, openEdit, saveMutation, submit }
 }

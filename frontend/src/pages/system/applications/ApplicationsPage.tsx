@@ -1,9 +1,9 @@
 import { ApplicationEditorDialog } from "./ApplicationEditorDialog"
 import { useApplicationEditor, isMicroApp, isHostEsm } from "./use-application-editor"
 import * as React from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowRight, ChevronDown, ChevronRight, LayoutGrid, ListTree, MoreHorizontal, Pencil, Plus, Rocket, Trash2 } from "lucide-react"
+import { ArrowRight, CheckCircle2, LayoutGrid, ListTree, MoreHorizontal, Pencil, Plus, Rocket, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -14,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
@@ -23,13 +22,14 @@ import { applicationsApi } from "@/api/applications"
 import { asArray } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
-import { ApplicationReleasesPanel } from "./ApplicationReleasesPanel"
+import { ApplicationSetupPanel } from "./ApplicationSetupPanel"
+import { setupEnvironment, setupStep, type ApplicationSetupStep } from "./application-setup-policy"
 import type { ApplicationRecord } from "@/api/types"
 
 export default function ApplicationsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
 
   const listQuery = useQuery({
     queryKey: ["applications"],
@@ -38,8 +38,17 @@ export default function ApplicationsPage() {
     retry: 1,
   })
 
-  const [releasesApplication, setReleasesApplication] = React.useState<ApplicationRecord | null>(null)
-  const editor = useApplicationEditor(setReleasesApplication)
+  const [createdApplication, setCreatedApplication] = React.useState<ApplicationRecord | null>(null)
+  const openSetup = (application: ApplicationRecord, step: ApplicationSetupStep = "overview") => {
+    setCreatedApplication(application)
+    setParams(previous => {
+      const next = new URLSearchParams(previous)
+      next.set("setup", application.id)
+      next.set("step", step)
+      return next
+    })
+  }
+  const editor = useApplicationEditor(application => openSetup(application, application.entryType === "HTML" ? "release" : "overview"))
   const { openCreate, openEdit } = editor
 
   const [deleting, setDeleting] = React.useState<ApplicationRecord | null>(null)
@@ -54,12 +63,28 @@ export default function ApplicationsPage() {
   })
 
   const apps = listQuery.data ?? []
+  const setupId = params.get("setup")
+  const setupApplication = apps.find(application => application.id === setupId)
+    ?? (createdApplication?.id === setupId ? createdApplication : null)
+  const setSetupParam = (key: "step" | "environment", value: string) => setParams(previous => {
+    const next = new URLSearchParams(previous)
+    next.set(key, value)
+    return next
+  }, { replace: true })
+  const closeSetup = () => {
+    setCreatedApplication(null)
+    setParams(previous => {
+      const next = new URLSearchParams(previous)
+      for (const key of ["setup", "step", "environment"]) next.delete(key)
+      return next
+    }, { replace: true })
+  }
 
   return (
     <div>
       <PageHeader
         title="应用管理"
-        description="选择宿主 ESM 或上传 HTML 版本包，再配置菜单与授权"
+        description="创建应用，上传构建包或填写 HTML 地址，再选择访问范围"
         icon={<LayoutGrid className="size-5" />}
         actions={
           <Button onClick={openCreate}>
@@ -70,6 +95,8 @@ export default function ApplicationsPage() {
       />
 
       <OnboardingGuide onCreate={openCreate} />
+
+      {setupId && listQuery.isSuccess && !setupApplication && <div className="mb-5"><ErrorState message="要继续接入的应用不存在，或已不在当前管理范围。" onRetry={closeSetup} /></div>}
 
       {listQuery.isLoading ? (
         <CardGridSkeleton count={8} />
@@ -162,12 +189,14 @@ export default function ApplicationsPage() {
                   <TooltipContent>为该应用配置菜单</TooltipContent>
                 </Tooltip>
               </div>
-              {isHostEsm(a) ? (
-                <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
-                  随宿主发布 · 使用宿主构建版本
-                </div>
-              ) : isMicroApp(a) && (
-                <Button variant="outline" size="sm" className="w-full" onClick={() => setReleasesApplication(a)}>
+              {isMicroApp(a) && (
+                <Button variant="outline" size="sm" className="w-full justify-between" onClick={() => openSetup(a)}>
+                  <span className="flex items-center gap-2"><Rocket className="size-3.5" />继续接入 / 检查配置</span><ArrowRight className="size-3.5" />
+                </Button>
+              )}
+              {isHostEsm(a) && <p className="text-center text-xs text-muted-foreground">第一方模块 · 随宿主发布</p>}
+              {isMicroApp(a) && a.entryType === "HTML" && (
+                <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => openSetup(a, "release")}>
                   <Rocket className="size-3.5" />
                   发布版本
                 </Button>
@@ -190,7 +219,7 @@ export default function ApplicationsPage() {
                       配置菜单
                     </DropdownMenuItem>
                     {isMicroApp(a) && !isHostEsm(a) && (
-                      <DropdownMenuItem onClick={() => setReleasesApplication(a)}>
+                      <DropdownMenuItem onClick={() => openSetup(a, "release")}>
                         <Rocket className="size-4" />
                         发布版本
                       </DropdownMenuItem>
@@ -211,12 +240,16 @@ export default function ApplicationsPage() {
       {/* 新建/编辑弹窗 */}
       <ApplicationEditorDialog editor={editor} />
 
-      {releasesApplication && (
-        <ApplicationReleasesPanel
-          key={releasesApplication.id}
-          application={apps.find((app) => app.id === releasesApplication.id) ?? releasesApplication}
-          open
-          onOpenChange={(open) => !open && setReleasesApplication(null)}
+      {setupApplication && (
+        <ApplicationSetupPanel
+          key={setupApplication.id}
+          application={setupApplication}
+          environment={setupEnvironment(params.get("environment"))}
+          step={setupStep(params.get("step"))}
+          onEnvironmentChange={value => setSetupParam("environment", value)}
+          onStepChange={value => setSetupParam("step", value)}
+          onClose={closeSetup}
+          onEdit={() => openEdit(setupApplication)}
         />
       )}
 
@@ -236,88 +269,16 @@ export default function ApplicationsPage() {
   )
 }
 
-/* ============ 新应用接入四步曲引导卡 ============ */
-
-const ONBOARDING_STEPS: { title: string; desc: string; to: string | null }[] = [
-  { title: "登记应用", desc: "ESM 随宿主发布；HTML 按环境上传、预检并激活", to: null },
-  { title: "配置菜单树", desc: "按需增加子页面、目录与按钮", to: "/system/menus" },
-  { title: "授权租户 / 组织", desc: "把应用授权给租户, 可细化到指定组织", to: "/system/authorizations" },
-  { title: "角色绑定菜单", desc: "给角色分配菜单与按钮权限, 用户即见菜单", to: "/system/roles" },
-]
-
-/** 可折叠的接入引导卡: muted 底 + 步骤圆点 + chevron 连接, 步骤① 高亮为「本页」 */
+/** Keep the entry concise; detailed guidance follows the selected application. */
 function OnboardingGuide({ onCreate }: { onCreate: () => void }) {
-  const [open, setOpen] = React.useState(true)
-
   return (
-    <Card className="mb-4 gap-3 bg-muted/40 py-4 shadow-none">
-      <CardHeader
-        className="cursor-pointer select-none py-0"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Rocket className="size-4 text-primary" />
-          新应用接入四步曲
-        </CardTitle>
-        <CardDescription className="text-xs">应用 → 菜单 → 授权 → 角色绑定, 按序完成即可接入平台</CardDescription>
-        <CardAction>
-          <ChevronDown
-            className={cn("size-4 text-muted-foreground transition-transform", !open && "-rotate-90")}
-          />
-        </CardAction>
-      </CardHeader>
-      {open && (
-        <CardContent className="pt-0">
-          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-stretch">
-            {ONBOARDING_STEPS.map((s, i) => (
-              <React.Fragment key={s.title}>
-                <div
-                  className={cn(
-                    "flex flex-1 items-start gap-3 rounded-lg border bg-card p-3 transition-colors",
-                    s.to === null ? "border-primary/40 ring-1 ring-primary/25" : "hover:border-primary/30"
-                  )}
-                >
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold tabular-nums text-primary">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {s.title}
-                      {s.to === null && (
-                        <Badge variant="secondary" className="h-5 bg-primary/15 px-1.5 text-[10px] font-medium text-primary">
-                          本页
-                        </Badge>
-                      )}
-                    </p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{s.desc}</p>
-                    <div className="mt-2.5">
-                      {s.to ? (
-                        <Button asChild variant="outline" size="sm" className="h-7 gap-1 px-2.5 text-xs">
-                          <Link to={s.to}>
-                            前往
-                            <ArrowRight className="size-3" />
-                          </Link>
-                        </Button>
-                      ) : (
-                        <Button variant="outline" size="sm" className="h-7 gap-1 px-2.5 text-xs" onClick={onCreate}>
-                          开始创建
-                          <Plus className="size-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {i < ONBOARDING_STEPS.length - 1 && (
-                  <div aria-hidden className="hidden shrink-0 items-center px-0.5 lg:flex">
-                    <ChevronRight className="size-4 text-muted-foreground/50" />
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </CardContent>
-      )}
-    </Card>
+    <div className="mb-6 flex flex-col justify-between gap-4 rounded-xl border bg-muted/20 p-5 sm:flex-row sm:items-center">
+      <div>
+        <p className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-primary" />从一个首页开始接入</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">名称与编码 → 发布版本 → 配置访问范围</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">路径和首页自动生成，HTML 中的脚本、样式由系统发现。更多配置按需展开。</p>
+      </div>
+      <Button variant="outline" className="shrink-0" onClick={onCreate}>开始接入<ArrowRight className="size-4" /></Button>
+    </div>
   )
 }

@@ -614,6 +614,9 @@ async fn update(
         body.code.as_deref().unwrap_or(&current_code).trim(),
         is_platform,
     )?;
+    if is_platform && body.expires_at.flatten().is_some() {
+        return Err(AppError::bad_request("平台租户不允许设置过期时间"));
+    }
     validate_coordinates(
         body.longitude.unwrap_or(longitude),
         body.latitude.unwrap_or(latitude),

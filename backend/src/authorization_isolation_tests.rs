@@ -186,7 +186,7 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
     .fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
-    Ok(jwt::sign(
+    jwt::sign(
         &jwt::Claims {
             sub: user.to_string(),
             typ: "session".into(),
@@ -202,7 +202,7 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
             exp: now + 3600,
         },
         SECRET,
-    )?)
+    )
 }
 
 async fn call(

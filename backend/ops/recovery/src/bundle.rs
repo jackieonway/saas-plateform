@@ -101,10 +101,26 @@ pub(crate) fn safe_path(s: &str) -> bool {
             .all(|part| !part.is_empty() && part != "." && part != "..")
         && !s.contains('\\')
         && !s.contains(':')
+        && !s.contains('\0')
         && Path::new(s)
             .components()
             .all(|c| matches!(c, Component::Normal(_)))
         && !s.starts_with('/')
+}
+
+fn portable_relative(path: &Path) -> Result<String> {
+    let parts = path
+        .components()
+        .map(|part| match part {
+            Component::Normal(name) => name.to_str().ok_or(Error("artifact path must be UTF-8")),
+            _ => Err(Error("artifact path cannot be restored safely")),
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let path = parts.join("/");
+    if !safe_path(&path) {
+        return Err(Error("artifact path cannot be restored safely"));
+    }
+    Ok(path)
 }
 pub(crate) fn entry(path: String, bytes: Vec<u8>) -> Entry {
     Entry {
@@ -143,6 +159,17 @@ pub(crate) fn validate(b: &Bundle) -> Result<()> {
             return Err(Error("unsafe or duplicate entry path"));
         }
         decode(e)?;
+    }
+    // Every entry is a regular file. Reject file/directory collisions before
+    // restore creates any databases or writes the first artifact.
+    for path in &paths {
+        let mut ancestor = *path;
+        while let Some((parent, _)) = ancestor.rsplit_once('/') {
+            if paths.contains(parent) {
+                return Err(Error("entry path conflicts with a parent file"));
+            }
+            ancestor = parent;
+        }
     }
     for d in &b.databases {
         if !crate::config::identifier(&d.source_name)
@@ -231,13 +258,8 @@ pub(crate) fn collect(root: &Path, dir: &Path, entries: &mut Vec<Entry>) -> Resu
             if entries.iter().map(|e| e.data.len() as u64).sum::<u64>() + m.len() * 4 / 3 > MAX {
                 return Err(Error("aggregate artifact capacity exceeded"));
             }
-            let item = entry(
-                format!(
-                    "artifacts/{}",
-                    relative.to_string_lossy().replace('\\', "/")
-                ),
-                io(fs::read(p))?,
-            );
+            let relative = portable_relative(relative)?;
+            let item = entry(format!("artifacts/{relative}"), io(fs::read(p))?);
             #[cfg(unix)]
             let item = {
                 use std::os::unix::fs::PermissionsExt;
@@ -255,12 +277,120 @@ pub(crate) fn collect(root: &Path, dir: &Path, entries: &mut Vec<Entry>) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn complete_bundle() -> Bundle {
+        let mut b = Bundle {
+            format: 1,
+            recovery_point: 1,
+            databases: vec![],
+            entries: vec![],
+        };
+        for kind in ["platform", "stores", "work_orders"] {
+            b.databases.push(Database {
+                kind: kind.into(),
+                source_name: format!("source_{kind}"),
+                migrations: "1:checksum:true".into(),
+                server_version: "17".into(),
+                catalog: "catalog".into(),
+            });
+            b.entries
+                .push(entry(format!("db/{kind}.dump"), b"dump".to_vec()));
+        }
+        for path in ["routes/nginx.conf", "host/index.html"] {
+            b.entries
+                .push(entry(format!("artifacts/{path}"), b"content".to_vec()));
+        }
+        let mut images = Vec::new();
+        for app in ["stores", "work-orders"] {
+            for version in ["v1", "v2"] {
+                b.entries.push(entry(
+                    format!("artifacts/{app}/{version}/index.html"),
+                    b"<html>fixture</html>".to_vec(),
+                ));
+                let archive = format!("image-{app}-{version}").into_bytes();
+                images.push(serde_json::json!({
+                    "app":app,"version":version,"imageId":format!("sha256:{}", "a".repeat(64)),
+                    "archiveSha256":hash(&archive),"archiveBytes":archive.len(),
+                }));
+                b.entries.push(entry(
+                    format!("artifacts/images/{app}-{version}.tar"),
+                    archive,
+                ));
+            }
+        }
+        b.entries.push(entry(
+            "artifacts/images/lock.json".into(),
+            serde_json::to_vec(&images).unwrap(),
+        ));
+        b
+    }
+
+    #[test]
+    fn authenticated_bundle_refuses_unrestorable_paths_before_restore() {
+        let mut b = complete_bundle();
+        assert!(validate(&b).is_ok());
+        b.entries.push(entry(
+            "artifacts/host/assets/app.js".into(),
+            b"script".to_vec(),
+        ));
+        // The parent file may come after its child in the serialized manifest.
+        b.entries.push(entry(
+            "artifacts/host/assets".into(),
+            b"parent file".to_vec(),
+        ));
+        assert_eq!(
+            validate(&b).unwrap_err().0,
+            "entry path conflicts with a parent file"
+        );
+        let encrypted = seal(&b, &[1; 32]).unwrap();
+        assert_eq!(
+            open(&encrypted, &[1; 32]).err().unwrap().0,
+            "entry path conflicts with a parent file"
+        );
+
+        let mut b = complete_bundle();
+        b.entries.push(entry(
+            "artifacts/host/bad\0path".into(),
+            b"content".to_vec(),
+        ));
+        assert_eq!(
+            validate(&b).unwrap_err().0,
+            "unsafe or duplicate entry path"
+        );
+    }
     #[test]
     fn rejects_unsafe_paths() {
-        for s in ["", "/etc/passwd", "../x", "a/../x", "x\\y", "c:x"] {
+        for s in [
+            "",
+            "/etc/passwd",
+            "../x",
+            "a/../x",
+            "x\\y",
+            "c:x",
+            "bad\0path",
+        ] {
             assert!(!safe_path(s));
         }
         assert!(safe_path("stores/v1/index.html"));
+    }
+
+    #[test]
+    fn collected_file_names_are_preserved_without_lossy_aliases() {
+        let path = Path::new("stores").join("v1").join("index.html");
+        assert_eq!(portable_relative(&path).unwrap(), "stores/v1/index.html");
+        assert!(portable_relative(Path::new("a/../index.html")).is_err());
+        #[cfg(unix)]
+        {
+            use std::ffi::OsString;
+            use std::os::unix::ffi::OsStringExt;
+            let invalid = OsString::from_vec(vec![b'x', 0xff]);
+            assert_eq!(
+                portable_relative(Path::new(&invalid)).unwrap_err().0,
+                "artifact path must be UTF-8"
+            );
+            // Backslash is a literal Unix filename character, not a separator.
+            assert!(portable_relative(Path::new("stores\\index.html")).is_err());
+        }
     }
     #[test]
     fn malformed_and_wrong_keys_fail() {

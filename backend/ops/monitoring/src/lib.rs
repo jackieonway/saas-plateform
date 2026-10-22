@@ -495,8 +495,51 @@ mod tests {
             Some("CONFIG_TOO_LARGE")
         );
     }
+    #[test]
+    fn backup_events_reject_stale_without_advancing_health() {
+        let config = Config::parse(include_bytes!("../config.example.json")).unwrap();
+        let shared = shared(config).unwrap();
+        assert!(shared
+            .observe(Component::BackupRun, false, Some(1))
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            shared
+                .observe(Component::BackupRun, false, Some(2))
+                .unwrap()
+                .unwrap()
+                .event,
+            "DOWN"
+        );
+        assert_eq!(
+            shared.observe(Component::BackupRun, true, Some(1)).err(),
+            Some(StatusCode::CONFLICT)
+        );
+        assert_eq!(
+            shared.observe(Component::BackupRun, true, Some(2)).err(),
+            Some(StatusCode::CONFLICT)
+        );
+        assert_eq!(
+            shared.slots.lock().unwrap()[&Component::BackupRun]
+                .machine
+                .health(),
+            Health::Down
+        );
+        assert!(shared
+            .observe(Component::BackupRun, true, Some(3))
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            shared
+                .observe(Component::BackupRun, true, Some(4))
+                .unwrap()
+                .unwrap()
+                .event,
+            "RECOVERED"
+        );
+    }
     #[tokio::test]
-    async fn real_http_failures_recover_and_events_reject_stale() {
+    async fn real_http_failures_recover() {
         use std::sync::atomic::{AtomicBool, Ordering};
         let up = Arc::new(AtomicBool::new(true));
         let current = up.clone();
@@ -529,6 +572,13 @@ mod tests {
         let shared = shared(config).unwrap();
         shared.poll().await;
         shared.poll().await;
+        assert_eq!(
+            shared.slots.lock().unwrap()[&Component::Platform]
+                .machine
+                .health(),
+            Health::Up,
+            "local HTTP fixture must be reachable before testing health transitions"
+        );
         up.store(false, Ordering::Relaxed);
         shared.poll().await;
         shared.poll().await;
@@ -541,18 +591,6 @@ mod tests {
             assert_eq!(slots[&Component::Platform].down, 1);
             assert_eq!(slots[&Component::Platform].recovered, 1);
         }
-        assert!(shared
-            .observe(Component::BackupRun, false, Some(1))
-            .unwrap()
-            .is_none());
-        assert!(shared
-            .observe(Component::BackupRun, false, Some(2))
-            .unwrap()
-            .is_some());
-        assert_eq!(
-            shared.observe(Component::BackupRun, true, Some(1)).err(),
-            Some(StatusCode::CONFLICT)
-        );
         task.abort();
         let _ = task.await;
     }

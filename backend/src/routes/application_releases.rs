@@ -440,10 +440,13 @@ async fn register_definition(
             .ok_or_else(|| AppError::not_found("应用不存在"))?;
     // Cleanup fences new references until the remote engine operation finishes.
     // The application lock serializes this check with cleanup submission.
+    let canonical_entry = crate::managed_deployments::canonical_entry(&entry);
+    let managed_root = crate::managed_deployments::version_resource_root(&canonical_entry)
+        .unwrap_or(canonical_entry);
     let managed_state: Option<String> = sqlx::query_scalar(
         "SELECT state FROM managed_image_artifacts WHERE public_url=$1 FOR SHARE",
     )
-    .bind(crate::managed_deployments::canonical_entry(&entry))
+    .bind(managed_root)
     .fetch_optional(&mut *tx)
     .await?;
     if managed_state.as_deref() == Some("CLEANING") {

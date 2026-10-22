@@ -35,6 +35,9 @@ fn validate(query: &MemberQuery, single: bool) -> Result<(i64, i64, String), App
     let page = query.page.unwrap_or(1);
     let size = query.size.unwrap_or(20);
     let q = query.q.as_deref().unwrap_or("").trim();
+    if q.contains('\0') {
+        return Err(AppError::bad_request("搜索关键词不能包含空字符"));
+    }
     if !(1..=1_000_000).contains(&page) || !(1..=50).contains(&size) || q.chars().count() > 100 {
         return Err(AppError::bad_request("分页或搜索参数超出范围"));
     }
@@ -145,10 +148,10 @@ async fn authorize_projection(
     ctx: &Value,
     query: &MemberQuery,
 ) -> Result<(Uuid, Uuid, Uuid, Uuid), AppError> {
-    let user = uuid_of(&ctx, "user")?;
-    let tenant = uuid_of(&ctx, "tenant")?;
-    let org = uuid_of(&ctx, "organization")?;
-    let app = uuid_of(&ctx, "application")?;
+    let user = uuid_of(ctx, "user")?;
+    let tenant = uuid_of(ctx, "tenant")?;
+    let org = uuid_of(ctx, "organization")?;
+    let app = uuid_of(ctx, "application")?;
     let capability = state
         .config
         .data_grant_policy
@@ -173,7 +176,7 @@ async fn authorize_projection(
             })
         })
         .ok_or_else(|| AppError::forbidden("缺少成员用途的独立数据授权"))?;
-    if !organization_allowed(&ctx, grant, org, query.organization_id)? {
+    if !organization_allowed(ctx, grant, org, query.organization_id)? {
         return Err(AppError::not_found("组织不存在或不在授权范围内"));
     }
     validate_target(state, query.organization_id, tenant, app).await?;
@@ -257,6 +260,36 @@ async fn one(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn member_search_rejects_nul_and_preserves_literal_pattern_characters() {
+        let mut query = MemberQuery {
+            resource: "ticket".into(),
+            action: "assign".into(),
+            organization_id: Uuid::from_u128(1),
+            page: None,
+            size: None,
+            q: Some("alice\0bob".into()),
+        };
+        // PostgreSQL text cannot encode NUL, so reject before either the count
+        // or the member query can turn caller input into a database error.
+        assert!(matches!(
+            validate(&query, false),
+            Err(AppError::BadRequest(_))
+        ));
+        query.q = Some("  %_\\  ".into());
+        assert_eq!(
+            validate(&query, false).unwrap(),
+            (1, 20, "%\\%\\_\\\\%".into())
+        );
+        query.q = Some("界".repeat(100));
+        assert!(validate(&query, false).is_ok());
+        query.q = Some("界".repeat(101));
+        assert!(matches!(
+            validate(&query, false),
+            Err(AppError::BadRequest(_))
+        ));
+    }
 
     #[test]
     fn assignment_scopes_intersect_a_separate_ceiling_and_self_stays_current() {

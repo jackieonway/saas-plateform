@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -50,12 +51,13 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { DataPagination } from "@/components/DataPagination"
-import { EntityTreePicker, type PickerNode } from "@/components/EntityTreePicker"
+import { EntityTreePicker, flattenPicker, type PickerNode } from "@/components/EntityTreePicker"
 import { TreeCheck, TreeCheckToolbar, type TreeCheckNode } from "@/components/TreeCheck"
 import { TableSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { TableDensityToggle } from "@/components/TableDensityToggle"
 import { ColumnVisibilityDropdown } from "@/components/ColumnVisibilityDropdown"
 import { useSyncedKeyword } from "@/hooks/use-synced-keyword"
+import { usePageRecovery } from "@/hooks/use-page-recovery"
 import { useTableDensity, DENSITY_BODY_CLASS } from "@/hooks/use-table-density"
 import { useColumnVisibility, type ColumnDef } from "@/hooks/use-column-visibility"
 import { rolesApi } from "@/api/roles"
@@ -102,12 +104,15 @@ const ROLE_COLUMNS: ColumnDef[] = [
 
 export default function RolesPage() {
   const queryClient = useQueryClient()
+  const [params] = useSearchParams()
+  const requestedTenantId = params.get("tenantId")
+  const requestedOrganizationId = params.get("organizationId")
   const [page, setPage] = React.useState(1)
   const [size, setSize] = React.useState(10)
   // 关键字与 URL ?q= 双向同步(命令面板实体跳转预填)
   const [keyword, setKeyword] = useSyncedKeyword()
-  const [tenantId, setTenantId] = React.useState<string | null>(null)
-  const [orgFilter, setOrgFilter] = React.useState<string | null>(null)
+  const [tenantId, setTenantId] = React.useState<string | null>(requestedTenantId)
+  const [orgFilter, setOrgFilter] = React.useState<string | null>(requestedOrganizationId)
   const debounced = useDebounced(keyword, 300)
 
   const tenantsQuery = useQuery({
@@ -116,19 +121,30 @@ export default function RolesPage() {
     staleTime: 60_000,
     retry: 1,
   })
-  const tenants = tenantsQuery.data ?? []
+  const tenants = React.useMemo(() => tenantsQuery.data ?? [], [tenantsQuery.data])
   React.useEffect(() => {
-    if (!tenantId && tenants.length > 0) setTenantId(tenants[0].id)
-  }, [tenants, tenantId])
+    setTenantId(requestedTenantId)
+    setOrgFilter(requestedOrganizationId)
+  }, [requestedTenantId, requestedOrganizationId])
+  React.useEffect(() => {
+    if (tenantsQuery.isSuccess && !tenants.some(tenant => tenant.id === tenantId)) {
+      setTenantId(tenants[0]?.id ?? null)
+      setOrgFilter(null)
+    }
+  }, [tenants, tenantsQuery.isSuccess, tenantId])
 
   const orgTreeQuery = useQuery({
     queryKey: ["org-tree", tenantId],
     queryFn: async () => asArray<OrgNode>(await organizationsApi.tree(tenantId!)),
-    enabled: !!tenantId,
+    enabled: !!tenantId && tenants.some(tenant => tenant.id === tenantId),
     staleTime: 60_000,
     retry: 1,
   })
   const orgTree = orgTreeQuery.data ?? []
+  const organizationAvailable = !!orgFilter && flattenPicker(orgTree).some(node => node.id === orgFilter)
+  React.useEffect(() => {
+    if (orgTreeQuery.isSuccess && orgFilter && !organizationAvailable) setOrgFilter(null)
+  }, [orgTreeQuery.isSuccess, orgFilter, organizationAvailable])
 
   const listQuery = useQuery({
     queryKey: ["roles", page, size, debounced, tenantId, orgFilter],
@@ -143,6 +159,7 @@ export default function RolesPage() {
   React.useEffect(() => {
     setPage(1)
   }, [debounced, tenantId, orgFilter, size])
+  usePageRecovery(page, size, listQuery, setPage)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["roles"] })
 
@@ -156,7 +173,7 @@ export default function RolesPage() {
 
   const openCreate = () => {
     setEditing(null)
-    form.reset({ name: "", code: "", description: "", organizationId: "" })
+    form.reset({ name: "", code: "", description: "", organizationId: organizationAvailable ? orgFilter! : "" })
     setDialogOpen(true)
   }
   const openEdit = (r: RoleRecord) => {
@@ -484,6 +501,7 @@ export default function RolesPage() {
                         onSelect={(id) => field.onChange(id ?? "")}
                         placeholder="选择组织(必选)"
                         allowClear={false}
+                        disabled={!!editing || !orgTreeQuery.isSuccess}
                       />
                     </FormControl>
                     <FormDescription>角色可分配的菜单由该组织的授权范围决定</FormDescription>
@@ -519,8 +537,8 @@ export default function RolesPage() {
       </Dialog>
 
       {/* 菜单权限 / 成员 */}
-      <RoleMenusDialog role={menusRole} onClose={() => setMenusRole(null)} onSaved={invalidate} />
-      <RoleUsersDialog role={usersRole} onClose={() => setUsersRole(null)} onSaved={invalidate} />
+      {menusRole && <RoleMenusDialog key={menusRole.id} role={menusRole} onClose={() => setMenusRole(null)} onSaved={invalidate} />}
+      {usersRole && <RoleUsersDialog key={usersRole.id} role={usersRole} onClose={() => setUsersRole(null)} onSaved={invalidate} />}
 
       <ConfirmDialog
         open={!!deleting}
@@ -553,6 +571,7 @@ function RoleMenusDialog({
   const [selectedAppId, setSelectedAppId] = React.useState<string | null>(null)
   const [checked, setChecked] = React.useState<Set<string>>(new Set())
   const [initial, setInitial] = React.useState<Set<string>>(new Set())
+  const [initialized, setInitialized] = React.useState(false)
 
   // 组织授权范围(应用 + 菜单)
   const authQuery = useQuery({
@@ -572,11 +591,12 @@ function RoleMenusDialog({
   })
 
   React.useEffect(() => {
-    if (roleMenusQuery.data?.menuIds) {
+    if (!initialized && roleMenusQuery.isSuccess && roleMenusQuery.data?.menuIds) {
       setChecked(new Set(roleMenusQuery.data.menuIds))
       setInitial(new Set(roleMenusQuery.data.menuIds))
+      setInitialized(true)
     }
-  }, [roleMenusQuery.data])
+  }, [initialized, roleMenusQuery.isSuccess, roleMenusQuery.data])
 
   React.useEffect(() => {
     if (authQuery.data) {
@@ -585,8 +605,12 @@ function RoleMenusDialog({
     }
   }, [authQuery.data])
 
+  const ready = initialized && authQuery.isSuccess && roleMenusQuery.isSuccess
   const saveMutation = useMutation({
-    mutationFn: () => rolesApi.saveMenus(role!.id, [...checked]),
+    mutationFn: () => {
+      if (!role || !ready) throw new Error("请先成功加载当前角色的菜单权限")
+      return rolesApi.saveMenus(role.id, [...checked])
+    },
     onSuccess: () => {
       toast.success("菜单权限已保存")
       onSaved()
@@ -648,10 +672,10 @@ function RoleMenusDialog({
               ))}
             </div>
           </div>
-        ) : authQuery.isError ? (
+        ) : authQuery.isError || roleMenusQuery.isError ? (
           <ErrorState
-            message={authQuery.error instanceof Error ? authQuery.error.message : undefined}
-            onRetry={() => authQuery.refetch()}
+            message={(authQuery.error ?? roleMenusQuery.error)?.message}
+            onRetry={() => { void authQuery.refetch(); void roleMenusQuery.refetch() }}
           />
         ) : !data || data.applications.length === 0 ? (
           <EmptyState
@@ -736,7 +760,7 @@ function RoleMenusDialog({
           <Button variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
             取消
           </Button>
-          <Button disabled={saveMutation.isPending || !dirty} onClick={() => saveMutation.mutate()}>
+          <Button disabled={saveMutation.isPending || !ready || !dirty} onClick={() => saveMutation.mutate()}>
             {saveMutation.isPending && <Loader2 className="size-4 animate-spin" />}
             保存权限
           </Button>
@@ -760,6 +784,7 @@ function RoleUsersDialog({
   const queryClient = useQueryClient()
   const [checked, setChecked] = React.useState<Set<string>>(new Set())
   const [keyword, setKeyword] = React.useState("")
+  const [initialized, setInitialized] = React.useState(false)
 
   const roleUsersQuery = useQuery({
     queryKey: ["role-users", role?.id],
@@ -781,11 +806,18 @@ function RoleUsersDialog({
   })
 
   React.useEffect(() => {
-    if (roleUsersQuery.data) setChecked(new Set(roleUsersQuery.data.map((u) => u.userId)))
-  }, [roleUsersQuery.data])
+    if (!initialized && roleUsersQuery.isSuccess && roleUsersQuery.data) {
+      setChecked(new Set(roleUsersQuery.data.map((u) => u.userId)))
+      setInitialized(true)
+    }
+  }, [initialized, roleUsersQuery.isSuccess, roleUsersQuery.data])
 
+  const ready = initialized && roleUsersQuery.isSuccess && usersQuery.isSuccess
   const saveMutation = useMutation({
-    mutationFn: () => rolesApi.saveUsers(role!.id, [...checked]),
+    mutationFn: () => {
+      if (!role || !ready) throw new Error("请先成功加载当前角色及组织成员")
+      return rolesApi.saveUsers(role.id, [...checked])
+    },
     onSuccess: () => {
       toast.success("角色成员已保存")
       onSaved()
@@ -825,10 +857,10 @@ function RoleUsersDialog({
               <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
             ))}
           </div>
-        ) : roleUsersQuery.isError ? (
+        ) : roleUsersQuery.isError || usersQuery.isError ? (
           <ErrorState
-            message={roleUsersQuery.error instanceof Error ? roleUsersQuery.error.message : undefined}
-            onRetry={() => roleUsersQuery.refetch()}
+            message={(roleUsersQuery.error ?? usersQuery.error)?.message}
+            onRetry={() => { void roleUsersQuery.refetch(); void usersQuery.refetch() }}
           />
         ) : users.length === 0 ? (
           <EmptyState className="py-8" title="该组织暂无用户" description="请先在「用户管理」中创建用户" />
@@ -864,7 +896,7 @@ function RoleUsersDialog({
           <Button variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
             取消
           </Button>
-          <Button disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+          <Button disabled={saveMutation.isPending || !ready} onClick={() => saveMutation.mutate()}>
             {saveMutation.isPending && <Loader2 className="size-4 animate-spin" />}
             保存成员
           </Button>

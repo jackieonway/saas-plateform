@@ -222,7 +222,43 @@ pub async fn active_user(
     row.ok_or_else(|| AppError::unauthorized("会话已失效，请重新登录"))
 }
 
-/// 修改密码或管理员踢出时原子提升版本并撤销全部平台 session。
+/// Recheck a session after taking the same user lock as password/kick mutations.
+/// Credential approval must keep this lock until its derived code is committed.
+pub(crate) async fn require_active_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    tenant_id: Uuid,
+    org_id: Uuid,
+    session_id: Uuid,
+) -> Result<(), AppError> {
+    sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+        .bind(user_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    let active: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM platform_sessions s \
+         JOIN users u ON u.id=s.user_id AND u.status='ENABLED' \
+         JOIN organizations o ON o.id=s.organization_id AND o.tenant_id=s.tenant_id \
+         JOIN tenants t ON t.id=s.tenant_id AND t.status='ENABLED' \
+         JOIN memberships m ON m.user_id=s.user_id AND m.organization_id=s.organization_id \
+         WHERE s.id=$1 AND s.user_id=$2 AND s.tenant_id=$3 AND s.organization_id=$4 \
+         AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() \
+         AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) \
+         AND org_chain_active(o.id))",
+    )
+    .bind(session_id)
+    .bind(user_id)
+    .bind(tenant_id)
+    .bind(org_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    if !active {
+        return Err(AppError::unauthorized("会话已失效，请重新登录"));
+    }
+    Ok(())
+}
+
+/// 修改密码或管理员踢出时原子提升版本并撤销全部平台与 OAuth 凭据。
 /// Production callers compose this operation with their own checks in one transaction.
 #[cfg(test)]
 pub async fn revoke_all(
@@ -261,5 +297,24 @@ pub async fn revoke_all_in_tx(
     .execute(&mut **tx)
     .await?
     .rows_affected();
+    // Ordinary OAuth grants do not carry the platform session version. Retire
+    // both token types and unconsumed derived credentials in the same user lock
+    // so a password reset cannot be undone by an old refresh/code exchange.
+    sqlx::query("UPDATE oauth_tokens SET revoked=true WHERE user_id=$1 AND revoked=false")
+        .bind(user_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query(
+        "UPDATE oauth_authorization_codes SET consumed=true WHERE user_id=$1 AND consumed=false",
+    )
+    .bind(user_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "UPDATE oauth_device_codes SET status='EXPIRED' WHERE user_id=$1 AND status IN ('PENDING','APPROVED')",
+    )
+    .bind(user_id)
+    .execute(&mut **tx)
+    .await?;
     Ok(revoked)
 }

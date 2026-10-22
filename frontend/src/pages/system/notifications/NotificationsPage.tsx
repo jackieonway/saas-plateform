@@ -70,6 +70,7 @@ import type { NotificationRecord, NotificationSendBody, NotificationType } from 
 import { useAuthStore } from "@/stores/auth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
 import { useTableDensity } from "@/hooks/use-table-density"
+import { usePageRecovery } from "@/hooks/use-page-recovery"
 import { useNotificationHotkeys } from "@/hooks/use-notification-hotkeys"
 import {
   notificationRequestOptions,
@@ -219,6 +220,7 @@ export default function NotificationsPage() {
         ? prev
         : undefined,
   })
+  usePageRecovery(page, size, listQuery, setPage)
   const countQuery = useQuery({
     queryKey: [...(context?.key ?? ["notifications", "inactive"]), "unread-count"],
     queryFn: ({ signal }) => {

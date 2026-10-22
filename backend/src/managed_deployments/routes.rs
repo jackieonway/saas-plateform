@@ -176,13 +176,21 @@ async fn retry(
     let job = uuid(&job)?;
     let mut tx = state.pool.begin().await?;
     lock(&mut tx, app).await?;
-    let row:Option<(Uuid,Uuid,String,String)>=sqlx::query_as("SELECT j.artifact_id,j.release_id,j.state,j.operation FROM managed_deployment_jobs j JOIN managed_image_artifacts a ON a.id=j.artifact_id WHERE j.id=$1 AND a.application_id=$2 FOR UPDATE OF j,a")
+    let row:Option<(Uuid,Uuid,String,String,String)>=sqlx::query_as("SELECT j.artifact_id,j.release_id,j.state,j.operation,a.state FROM managed_deployment_jobs j JOIN managed_image_artifacts a ON a.id=j.artifact_id WHERE j.id=$1 AND a.application_id=$2 FOR UPDATE OF j,a")
         .bind(job).bind(app).fetch_optional(&mut *tx).await?;
-    let (artifact, release, status, operation) =
+    let (artifact, release, status, operation, artifact_state) =
         row.ok_or_else(|| AppError::not_found("任务不存在"))?;
     if status != "FAILED" {
         return Err(AppError::conflict(
             "仅失败任务可重试；在途或完成任务请读取状态",
+        ));
+    }
+    // A failed cleanup may still have changed the engine, so CLEANING remains
+    // fenced until that same cleanup is reconciled. Retrying an older DEPLOY
+    // must obey the same fence as creating a new deployment.
+    if operation == "DEPLOY" && artifact_state == "CLEANING" {
+        return Err(AppError::conflict(
+            "版本正在清理，不能重试部署；请先处理原清理任务",
         ));
     }
     let pending:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM managed_deployment_jobs WHERE artifact_id=$1 AND state IN ('QUEUED','RUNNING'))").bind(artifact).fetch_one(&mut *tx).await?;

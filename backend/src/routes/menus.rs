@@ -75,6 +75,14 @@ async fn lock_menu(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: Uuid,
 ) -> Result<MenuRowTuple, AppError> {
+    // Serialize hierarchy mutations for one application before locking a menu.
+    // Locking only the edited rows lets two concurrent moves create a cycle.
+    let application_id: Uuid = sqlx::query_scalar("SELECT application_id FROM menus WHERE id=$1")
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("菜单不存在"))?;
+    lock_menu_application(tx, application_id).await?;
     sqlx::query_as(&format!(
         "{MENU_SELECT} FROM menus m WHERE m.id=$1 FOR UPDATE"
     ))
@@ -82,6 +90,73 @@ async fn lock_menu(
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| AppError::not_found("菜单不存在"))
+}
+
+async fn lock_menu_application(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    application_id: Uuid,
+) -> Result<(), AppError> {
+    sqlx::query_scalar::<_, Uuid>("SELECT id FROM applications WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(application_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or_else(|| AppError::bad_request("所属应用不存在"))?;
+    Ok(())
+}
+
+fn parse_parent_id(raw: Option<&str>) -> Result<Option<Uuid>, AppError> {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            value
+                .parse()
+                .map_err(|_| AppError::bad_request("parentId 格式错误"))
+        })
+        .transpose()
+}
+
+async fn validate_parent(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    application_id: Uuid,
+    menu_id: Option<Uuid>,
+    parent_id: Option<Uuid>,
+) -> Result<(), AppError> {
+    let Some(parent_id) = parent_id else {
+        return Ok(());
+    };
+    let parent_application: Uuid =
+        sqlx::query_scalar("SELECT application_id FROM menus WHERE id=$1")
+            .bind(parent_id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .ok_or_else(|| AppError::bad_request("父菜单不存在"))?;
+    if parent_application != application_id {
+        return Err(AppError::bad_request("父菜单必须属于同一应用"));
+    }
+    if let Some(menu_id) = menu_id {
+        // UNION also terminates safely for a pre-existing corrupt hierarchy.
+        let creates_cycle: bool = sqlx::query_scalar(
+            "WITH RECURSIVE ancestors(id,parent_id) AS ( \
+             SELECT id,parent_id FROM menus WHERE id=$1 \
+             UNION SELECT m.id,m.parent_id FROM menus m JOIN ancestors a ON m.id=a.parent_id) \
+             SELECT EXISTS(SELECT 1 FROM ancestors WHERE id=$2)",
+        )
+        .bind(parent_id)
+        .bind(menu_id)
+        .fetch_one(&mut **tx)
+        .await?;
+        if creates_cycle {
+            return Err(AppError::bad_request("父菜单不能是自身或下级菜单"));
+        }
+    }
+    Ok(())
+}
+
+fn parent_update<'de, D>(de: D) -> Result<Option<Option<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Deserialize::deserialize(de).map(Some)
 }
 
 /// 校验并归一外链地址: 空 = 非外链; 非空必须 http(s):// 开头且 ≤ 500 字符(与 VARCHAR(500) 同口径)
@@ -192,32 +267,7 @@ async fn create(
         .application_id
         .parse()
         .map_err(|_| AppError::bad_request("applicationId 格式错误"))?;
-    let app_exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM applications WHERE id = $1)")
-            .bind(app_id)
-            .fetch_one(&state.pool)
-            .await?;
-    if !app_exists {
-        return Err(AppError::bad_request("所属应用不存在"));
-    }
-    let parent_id: Option<Uuid> = match &body.parent_id {
-        Some(p) => {
-            let pid: Uuid = p
-                .parse()
-                .map_err(|_| AppError::bad_request("parentId 格式错误"))?;
-            let (parent_app,): (Uuid,) =
-                sqlx::query_as("SELECT application_id FROM menus WHERE id = $1")
-                    .bind(pid)
-                    .fetch_optional(&state.pool)
-                    .await?
-                    .ok_or_else(|| AppError::bad_request("父菜单不存在"))?;
-            if parent_app != app_id {
-                return Err(AppError::bad_request("父菜单必须属于同一应用"));
-            }
-            Some(pid)
-        }
-        None => None,
-    };
+    let parent_id = parse_parent_id(body.parent_id.as_deref())?;
     let title = body.title.trim().to_string();
     if title.is_empty() {
         return Err(AppError::bad_request("菜单标题不能为空"));
@@ -226,6 +276,8 @@ async fn create(
     let link_url = normalize_link_url(&body.link_url)?;
     let link_target = normalize_link_target(Some(&body.link_target));
     let mut tx = state.pool.begin().await?;
+    lock_menu_application(&mut tx, app_id).await?;
+    validate_parent(&mut tx, app_id, None, parent_id).await?;
     let row: MenuRowTuple = sqlx::query_as(
         "INSERT INTO menus (application_id, parent_id, type, title, path, icon, component, permission, sort_order, visible, link_url, link_target) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
@@ -271,8 +323,8 @@ async fn create(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MenuUpdate {
-    #[serde(default)]
-    parent_id: Option<String>,
+    #[serde(default, deserialize_with = "parent_update")]
+    parent_id: Option<Option<String>>,
     #[serde(default)]
     r#type: Option<String>,
     #[serde(default)]
@@ -318,19 +370,11 @@ async fn update(
             return Err(AppError::bad_request("菜单标题不能为空"));
         }
     }
-    let parent_id: Option<Option<Uuid>> = match &body.parent_id {
-        None => None,
-        Some(p) if p.trim().is_empty() => Some(None),
-        Some(p) => {
-            let pid: Uuid = p
-                .parse()
-                .map_err(|_| AppError::bad_request("parentId 格式错误"))?;
-            if pid == id {
-                return Err(AppError::bad_request("父菜单不能是自身"));
-            }
-            Some(Some(pid))
-        }
-    };
+    let parent_id = body
+        .parent_id
+        .as_ref()
+        .map(|value| parse_parent_id(value.as_deref()))
+        .transpose()?;
     let link_url = match &body.link_url {
         Some(u) => Some(normalize_link_url(u)?),
         None => None,
@@ -342,8 +386,11 @@ async fn update(
         .map(|t| normalize_link_target(Some(t)));
     let mut tx = state.pool.begin().await?;
     let before = lock_menu(&mut tx, id).await?;
+    if let Some(parent_id) = parent_id {
+        validate_parent(&mut tx, before.1, Some(id), parent_id).await?;
+    }
     let row: MenuRowTuple = sqlx::query_as(
-        "UPDATE menus SET parent_id = COALESCE($2, parent_id), type = COALESCE($3, type), \
+        "UPDATE menus SET parent_id = CASE WHEN $13 THEN $2::uuid ELSE parent_id END, type = COALESCE($3, type), \
          title = COALESCE($4, title), path = COALESCE($5, path), icon = COALESCE($6, icon), \
          component = COALESCE($7, component), permission = COALESCE($8, permission), \
          sort_order = COALESCE($9, sort_order), visible = COALESCE($10, visible), \
@@ -356,7 +403,7 @@ async fn update(
     .bind(id)
     .bind(parent_id.flatten())
     .bind(&body.r#type)
-    .bind(&body.title)
+    .bind(body.title.as_deref().map(str::trim))
     .bind(&body.path)
     .bind(&body.icon)
     .bind(&body.component)
@@ -365,6 +412,7 @@ async fn update(
     .bind(body.visible)
     .bind(&link_url)
     .bind(&link_target)
+    .bind(parent_id.is_some())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("菜单不存在"))?;
@@ -450,4 +498,30 @@ async fn delete(
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_parent_update_distinguishes_omission_null_and_empty() {
+        let omitted: MenuUpdate = serde_json::from_value(json!({"title": "菜单"})).unwrap();
+        assert_eq!(omitted.parent_id, None);
+        let cleared: MenuUpdate = serde_json::from_value(json!({"parentId": null})).unwrap();
+        assert_eq!(cleared.parent_id, Some(None));
+        let empty: MenuUpdate = serde_json::from_value(json!({"parentId": "  "})).unwrap();
+        assert_eq!(
+            parse_parent_id(empty.parent_id.unwrap().as_deref()).unwrap(),
+            None
+        );
+        let id = Uuid::from_u128(1);
+        let selected: MenuUpdate =
+            serde_json::from_value(json!({"parentId": format!(" {id} ")})).unwrap();
+        assert_eq!(
+            parse_parent_id(selected.parent_id.unwrap().as_deref()).unwrap(),
+            Some(id)
+        );
+        assert!(parse_parent_id(Some("invalid")).is_err());
+    }
 }

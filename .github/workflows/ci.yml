@@ -41,10 +41,63 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: rustup toolchain install 1.97.0 --profile minimal --component rustfmt
+      - run: rustup toolchain install 1.97.0 --profile minimal --component rustfmt --component clippy
       - run: cargo fmt --all -- --check
       - run: cargo check --locked --all-targets
+      - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
+      - run: cargo test --locked --manifest-path crates/deployment-contract/Cargo.toml
+  backend-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: platform-ci-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:platform-ci-only@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.97.0 --profile minimal
+      - name: OAuth issuance and revocation
+        run: 'cargo test --locked --bin saas-platform-backend oauth_issuance_tests:: -- --ignored --test-threads=2'
+      - name: OAuth administration and PKCE migration audit
+        run: 'cargo test --locked --bin saas-platform-backend management_audit_tests::oauth_ -- --ignored --test-threads=1'
+      - name: Entity creation and menu relationships
+        run: 'cargo test --locked --bin saas-platform-backend entity_creation_tests:: -- --ignored --test-threads=2'
+      - name: Notification publication and visibility
+        run: 'cargo test --locked --bin saas-platform-backend notification_tests:: -- --ignored --test-threads=2'
+      - name: Organization subtree reporting and search
+        run: 'cargo test --locked --bin saas-platform-backend organization_subtree_reporting_tests:: -- --ignored --test-threads=2'
+      - name: Role assignment membership and concurrency
+        run: 'cargo test --locked --bin saas-platform-backend organization_subtree_user_role_tests:: -- --ignored --test-threads=2'
+      - name: Region catalog atomic audit
+        run: 'cargo test --locked --bin saas-platform-backend region_catalog_mutations_rollback_when_audit_is_rejected -- --ignored --test-threads=1'
+      - name: Historical managed version readiness and cleanup
+        run: 'cargo test --locked --bin saas-platform-backend release_tests::managed_gate:: -- --ignored --test-threads=1'
+      - name: Data grant changes and isolation
+        run: 'cargo test --locked --bin saas-platform-backend data_grant_tests:: -- --ignored --test-threads=2'
+      - name: Data grant discovery boundaries
+        run: 'cargo test --locked --bin saas-platform-backend data_grant_discovery_tests:: -- --ignored --test-threads=2'
+      - name: Platform session refresh
+        run: 'cargo test --locked --bin saas-platform-backend platform_session_refresh_tests:: -- --ignored --test-threads=2'
+      - name: Micro application setup and access
+        run: 'cargo test --locked --bin saas-platform-backend routes::application_setup::tests:: -- --ignored --test-threads=2'
   operations:
     runs-on: ubuntu-24.04
     strategy:

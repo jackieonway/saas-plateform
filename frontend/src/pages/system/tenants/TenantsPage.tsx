@@ -8,7 +8,6 @@ import { Crown, Info, Landmark, Loader2, Pencil, Plus, Search, Settings2, Trash2
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -42,6 +41,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { DataPagination } from "@/components/DataPagination"
 import { TableSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { useSyncedKeyword } from "@/hooks/use-synced-keyword"
+import { usePageRecovery } from "@/hooks/use-page-recovery"
 import { useAuthStore } from "@/stores/auth"
 import { hasPlatformContext } from "@/lib/platform-context"
 import { tenantsApi } from "@/api/tenants"
@@ -110,6 +110,7 @@ export default function TenantsPage() {
   React.useEffect(() => {
     setPage(1)
   }, [debouncedKeyword, status, size])
+  usePageRecovery(page, size, listQuery, setPage)
 
   /* ---- 新建 / 编辑 ---- */
   const [dialogOpen, setDialogOpen] = React.useState(false)
@@ -136,7 +137,7 @@ export default function TenantsPage() {
       description: t.description ?? "",
       province: t.province ?? "", city: t.city ?? "", district: t.district ?? "", township: t.township ?? "", village: t.village ?? "", address: t.address ?? "",
       longitude: t.longitude == null ? "" : String(t.longitude), latitude: t.latitude == null ? "" : String(t.latitude),
-      expiresAt: isoToLocalInput(t.expiresAt),
+      expiresAt: t.isPlatform ? "" : isoToLocalInput(t.expiresAt),
     })
     setDialogOpen(true)
   }
@@ -149,7 +150,7 @@ export default function TenantsPage() {
         contactName: values.contactName, contactPhone: values.contactPhone, contactEmail: values.contactEmail,
         province: values.province, city: values.city, district: values.district, township: values.township, village: values.village, address: values.address,
         longitude: coordinateOrNull(values.longitude), latitude: coordinateOrNull(values.latitude),
-        expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
+        expiresAt: editing?.isPlatform ? null : values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
       }
       if (editing) await tenantsApi.update(editing.id, body)
       else return (await tenantsApi.create(body)).administrator
@@ -512,10 +513,11 @@ export default function TenantsPage() {
                         type="datetime-local"
                         aria-label="租户过期时间"
                         {...field}
-                        value={field.value ?? ""}
+                        value={editing?.isPlatform ? "" : field.value ?? ""}
+                        disabled={!!editing?.isPlatform}
                       />
                     </FormControl>
-                    <FormDescription>留空表示永不过期；到期后该租户下所有用户无法登录</FormDescription>
+                    <FormDescription>{editing?.isPlatform ? "平台租户永久有效，保存时会清除历史到期配置。" : "留空表示永不过期；到期后该租户下所有用户无法登录"}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -24,7 +24,9 @@ npm run build
 ```sh
 cargo fmt --all -- --check
 cargo check --locked --all-targets
+cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
+cargo test --locked --manifest-path crates/deployment-contract/Cargo.toml
 ```
 
 网关配置测试在 backend 执行 node --test tests/nginx-render-policy.mjs。监控、恢复及 tools 中的独立工程进入各自目录执行 Cargo 命令。前端测试位于 frontend/tests，浏览器工具见 [浏览器验收](../../frontend/tests/browser/README.md)。
@@ -34,6 +36,8 @@ cargo test --locked --all-targets
 ## CI 实际行为
 
 .github/workflows/ci.yml 仅检出本仓库。contracts 任务运行仓库结构、跨端 SDK 与后端网关检查；其他任务分别执行前端、后端、monitoring/recovery 测试，并以 frontend、backend、backend/ops/monitoring 为上下文构建镜像。不推送 registry、不部署、不准备业务源码。
+
+backend-integration 任务使用专属 PostgreSQL 17 服务和显式 TEST_DATABASE_URL，分开执行 OAuth 发放与撤销、OAuth 管理与 PKCE 迁移审计、实体与菜单/地区、通知、组织子树报表、角色分配并发、地区事务审计、历史发布门禁、数据授权变更、数据授权发现、平台会话刷新、微应用接入的 ignored 用例。实体专项包含平台管理入口不可删除、停用或过期的保护，发布专项包含清理围栏下的失败部署重试。每个用例创建并删除自己的唯一数据库；普通 backend 任务仍保持默认非数据库测试行为。该配置只使用临时 CI 测试凭据，不读取生产 secrets。
 
 工单、门店、通知、SDK 和示例各自拥有工作流。应用上线前仍需在目标环境确认网络、数据库、证书与授权配置。
 

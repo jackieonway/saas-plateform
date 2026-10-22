@@ -26,24 +26,37 @@ function normalizeCode(raw: string): string {
 export default function DevicePage() {
   const { footerText } = usePlatformBranding()
   const token = useAuthStore((s) => s.token)
+  const contextEpoch = useAuthStore((s) => s.contextEpoch)
   const [params] = useSearchParams()
   const returnTo = `/device${params.get("user_code") ? `?user_code=${params.get("user_code")}` : ""}`
   useDocumentTitle("设备授权")
 
   const [code, setCode] = React.useState(() => normalizeCode(params.get("user_code") ?? ""))
-  const [info, setInfo] = React.useState<DeviceInfo | null>(null)
+  const [verified, setVerified] = React.useState<{ userCode: string; info: DeviceInfo; epoch: number } | null>(null)
+  const info = verified?.epoch === contextEpoch ? verified.info : null
   const [error, setError] = React.useState<string | null>(null)
   const [result, setResult] = React.useState<"approved" | "denied" | "failed" | null>(null)
   const [resultMsg, setResultMsg] = React.useState<string | null>(null)
 
+  React.useEffect(() => {
+    setVerified(null)
+    setError(null)
+    setResult(null)
+    setResultMsg(null)
+  }, [contextEpoch])
+
   const lookup = useMutation({
-    mutationFn: (userCode: string) => deviceApi.info(userCode),
+    mutationFn: async (userCode: string) => {
+      const epoch = useAuthStore.getState().contextEpoch
+      return { userCode, info: await deviceApi.info(userCode), epoch }
+    },
     onSuccess: (data) => {
       setError(null)
-      setInfo(data)
+      setVerified(data)
     },
     onError: (e: Error) => {
-      setInfo(null)
+      if (e.name === "AbortError") return
+      setVerified(null)
       setError(e.message || "设备码查询失败")
     },
   })
@@ -55,6 +68,7 @@ export default function DevicePage() {
       setResult(vars.approve ? "approved" : "denied")
     },
     onError: (e: Error) => {
+      if (e.name === "AbortError") return
       setResult("failed")
       setResultMsg(e.message || "决策提交失败")
     },
@@ -147,7 +161,7 @@ export default function DevicePage() {
                   <Tv className="size-6" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">设备码 {code} 对应的客户端</p>
+                  <p className="text-xs text-muted-foreground">设备码 {verified?.userCode} 对应的客户端</p>
                   <h2 className="truncate text-lg font-semibold">{info.clientName}</h2>
                   <p className="truncate font-mono text-xs text-muted-foreground">{info.clientId}</p>
                 </div>
@@ -186,7 +200,7 @@ export default function DevicePage() {
                       variant="outline"
                       className="h-10 flex-1"
                       disabled={decide.isPending}
-                      onClick={() => decide.mutate({ userCode: code, approve: false })}
+                      onClick={() => verified && decide.mutate({ userCode: verified.userCode, approve: false })}
                     >
                       {decide.isPending && decide.variables?.approve === false && (
                         <Loader2 className="size-4 animate-spin" />
@@ -196,7 +210,7 @@ export default function DevicePage() {
                     <Button
                       className="h-10 flex-1"
                       disabled={decide.isPending}
-                      onClick={() => decide.mutate({ userCode: code, approve: true })}
+                      onClick={() => verified && decide.mutate({ userCode: verified.userCode, approve: true })}
                     >
                       {decide.isPending && decide.variables?.approve === true && (
                         <Loader2 className="size-4 animate-spin" />
@@ -259,7 +273,7 @@ export default function DevicePage() {
                 className="mt-6"
                 onClick={() => {
                   setResult(null)
-                  setInfo(null)
+                  setVerified(null)
                   setError(null)
                   setCode("")
                 }}

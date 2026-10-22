@@ -1,3 +1,4 @@
+import * as React from "react"
 import { useFieldArray, useForm } from "react-hook-form"
 import { Loader2, Plus, Trash2 } from "lucide-react"
 import type { ApplicationEnvironment, ApplicationReleasePayload } from "@/api/types"
@@ -17,11 +18,14 @@ export function ExternalReleaseForm({ environment, busy, pending, onSubmit }: {
   const form = useForm<ExternalReleaseValues>({ resolver: zResolver(externalReleaseSchema),
     defaultValues: { version: "", entryUrl: "", healthUrl: "", resources: [] } })
   const resources = useFieldArray({ control: form.control, name: "resources" })
+  const [moreOpen, setMoreOpen] = React.useState(false)
+  const optionalErrors = !!form.formState.errors.healthUrl || !!form.formState.errors.resources
+  React.useEffect(() => { if (optionalErrors) setMoreOpen(true) }, [optionalErrors])
   return (
     <section className="mb-5 rounded-lg border p-4" aria-label="登记已部署 URL">
       <div className="mb-4">
         <h3 className="text-sm font-semibold">登记 {environment} 外部入口</h3>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">先部署固定版本的 HTML，再登记公开地址。入口须含版本目录；登记后为待预检状态，通过预检后手动激活。</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">填写版本号和页面地址即可。系统自动发现并检查 HTML 引用的 JS、CSS，无需逐项填写资源地址；检查通过后再确认激活。</p>
       </div>
       <Form {...form}>
         <form className="space-y-4" onSubmit={form.handleSubmit(values => { if (!busy) onSubmit(externalReleasePayload(environment, values)) })}>
@@ -31,12 +35,15 @@ export function ExternalReleaseForm({ environment, busy, pending, onSubmit }: {
           <FormField control={form.control} name="entryUrl" render={({ field }) => (
             <FormItem><FormLabel>HTML 入口 URL <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} placeholder="/sub-apps/app/versions/1.0.0/index.html" className="font-mono" disabled={busy} /></FormControl><p className="text-xs text-muted-foreground">网关根路径或批准 origin 的绝对 HTTPS URL；服务端仍检查白名单。入口类型固定 HTML。</p><FormMessage /></FormItem>
           )} />
+          <details className="rounded-md border" open={moreOpen} onToggle={event => setMoreOpen(event.currentTarget.open)}>
+            <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">补充检查项（可选）</summary>
+            <div className="space-y-4 border-t px-3 py-4">
           <FormField control={form.control} name="healthUrl" render={({ field }) => (
             <FormItem><FormLabel>健康 URL（可选）</FormLabel><FormControl><Input {...field} placeholder="https://approved-origin/healthz" className="font-mono" disabled={busy} /></FormControl><p className="text-xs text-muted-foreground">使用网关根路径或绝对 HTTPS URL；根路径相对平台网关解析。检查此公开地址不等于读取 Docker 容器健康状态。</p><FormMessage /></FormItem>
           )} />
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium">显式资源（可选，最多 48 项）</legend>
-            <p className="text-xs leading-relaxed text-muted-foreground">预检自动发现入口资源；可补充动态 chunk。相对路径按 HTML 入口解析。</p>
+            <legend className="text-sm font-medium">补充资源（可选，最多 48 项）</legend>
+            <p className="text-xs leading-relaxed text-muted-foreground">页面直接引用的 JS、CSS 已自动发现。仅在需要额外检查 HTML 未直接引用的动态加载资源时补充；相对路径按页面入口解析。</p>
             {resources.fields.map((resource, index) => (
               <div key={resource.id} className="space-y-2 rounded-md border bg-muted/20 p-3" role="group" aria-label={`资源 ${index + 1}`}>
                 <div className="flex items-end gap-2">
@@ -53,9 +60,11 @@ export function ExternalReleaseForm({ environment, busy, pending, onSubmit }: {
             <Button type="button" variant="outline" size="sm" disabled={busy || resources.fields.length >= 48} onClick={() => resources.append({ kind: "SCRIPT", url: "" })}><Plus className="size-4" />添加资源</Button>
             {form.formState.errors.resources?.root?.message && <p className="text-sm text-destructive" role="alert">{form.formState.errors.resources.root.message}</p>}
           </fieldset>
+            </div>
+          </details>
           <div className="flex items-center justify-between gap-3 border-t pt-3">
-            <p className="text-xs text-muted-foreground">仅登记，不自动预检、激活或新增授权。</p>
-            <Button type="submit" size="sm" disabled={busy}>{pending && <Loader2 className="size-4 animate-spin" />}登记 URL</Button>
+            <p className="text-xs text-muted-foreground">登记后自动检查 JS、CSS，通过后再确认激活。</p>
+            <Button type="submit" size="sm" disabled={busy}>{pending && <Loader2 className="size-4 animate-spin" />}登记并检查</Button>
           </div>
         </form>
       </Form>

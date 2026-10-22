@@ -42,9 +42,10 @@ export function ConfirmDialog({
           <AlertDialogCancel disabled={loading}>取消</AlertDialogCancel>
           <AlertDialogAction
             className={cn(buttonVariants({ variant: "destructive" }))}
+            disabled={loading}
             onClick={(e) => {
               e.preventDefault()
-              onConfirm()
+              if (!loading) onConfirm()
             }}
           >
             {loading && <Loader2 className="size-4 animate-spin" />}

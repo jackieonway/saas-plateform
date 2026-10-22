@@ -12,30 +12,68 @@ import { useDocumentTitle } from "@/hooks/use-document-title"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { SCOPE_LABELS } from "@/lib/format"
 import { AppIcon } from "@/lib/icons"
+import { captureAuthSession, isCurrentAuthSession } from "@/lib/auth-queries"
+import type { AuthQuerySession } from "@/lib/auth-queries"
 import type { ConsentInfo } from "@/api/types"
 
 export default function ConsentPage() {
   const token = useAuthStore((s) => s.token)
+  const contextEpoch = useAuthStore((s) => s.contextEpoch)
+  const switching = useAuthStore((s) => s.contextSwitching)
   const [params] = useSearchParams()
   const requestId = params.get("request_id") ?? ""
-  const returnTo = `/consent${requestId ? `?request_id=${requestId}` : ""}`
+  const returnTo = `/consent${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ""}`
   useDocumentTitle("授权确认")
+  const session = captureAuthSession()
+  const viewKey = JSON.stringify([contextEpoch, session.identity, requestId])
+  const activeView = React.useRef(viewKey)
+  activeView.current = viewKey
+  const mounted = React.useRef(true)
+  const submitting = React.useRef(false)
+  React.useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+  const isCurrent = (view: string, captured: AuthQuerySession) =>
+    mounted.current && activeView.current === view && isCurrentAuthSession(captured)
+  const assertCurrent = (view: string, captured: AuthQuerySession) => {
+    if (!isCurrent(view, captured)) throw new DOMException("授权请求或登录上下文已变化", "AbortError")
+  }
 
   const infoQuery = useQuery({
-    queryKey: ["consent", requestId],
-    queryFn: () => consentApi.info(requestId),
-    enabled: !!requestId && !!token,
-    retry: 1,
+    queryKey: ["consent", contextEpoch, session.identity, requestId],
+    queryFn: async () => {
+      assertCurrent(viewKey, session)
+      const info = await consentApi.info(requestId)
+      assertCurrent(viewKey, session)
+      return { info, viewKey }
+    },
+    enabled: !!requestId && !!token && !switching,
+    retry: (count, error) => error.name !== "AbortError" && count < 1,
     staleTime: 30_000,
   })
 
   const decide = useMutation({
-    mutationFn: (approve: boolean) => consentApi.decide(requestId, approve),
-    onSuccess: (data) => {
-      // 跳回客户端回调地址
-      window.location.href = data.redirectTo
+    mutationFn: async (decision: { requestId: string; approve: boolean; viewKey: string; session: AuthQuerySession }) => {
+      try {
+        assertCurrent(decision.viewKey, decision.session)
+        const result = await consentApi.decide(decision.requestId, decision.approve)
+        assertCurrent(decision.viewKey, decision.session)
+        return result
+      } finally {
+        submitting.current = false
+      }
+    },
+    onSuccess: (data, decision) => {
+      if (isCurrent(decision.viewKey, decision.session)) window.location.href = data.redirectTo
     },
   })
+  const submit = (approve: boolean) => {
+    if (submitting.current || decide.isPending || !infoQuery.isSuccess ||
+      infoQuery.data?.viewKey !== viewKey || !isCurrent(viewKey, session)) return
+    submitting.current = true
+    decide.mutate({ requestId, approve, viewKey, session })
+  }
 
   if (!token) {
     return <Navigate to={`/login?return=${encodeURIComponent(returnTo)}`} replace />
@@ -51,7 +89,7 @@ export default function ConsentPage() {
     )
   }
 
-  if (infoQuery.isLoading) {
+  if (switching || (!infoQuery.isError && (!infoQuery.isSuccess || infoQuery.data?.viewKey !== viewKey))) {
     return (
       <ConsentShell>
         <div className="flex flex-col items-center gap-3 py-14 text-muted-foreground">
@@ -77,7 +115,7 @@ export default function ConsentPage() {
     )
   }
 
-  const info: ConsentInfo = infoQuery.data!
+  const info: ConsentInfo = infoQuery.data!.info
   const scopes = info.scope.split(/\s+/).filter(Boolean)
   const redirectHost = (() => {
     try {
@@ -140,7 +178,7 @@ export default function ConsentPage() {
           </span>
         </p>
 
-        {decide.isError && (
+        {decide.isError && decide.variables?.viewKey === viewKey && decide.error.name !== "AbortError" && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="size-4" />
             <AlertDescription>
@@ -154,17 +192,17 @@ export default function ConsentPage() {
             variant="outline"
             className="h-10 flex-1"
             disabled={decide.isPending}
-            onClick={() => decide.mutate(false)}
+            onClick={() => submit(false)}
           >
-            {decide.isPending && decide.variables === false && <Loader2 className="size-4 animate-spin" />}
+            {decide.isPending && decide.variables?.approve === false && <Loader2 className="size-4 animate-spin" />}
             拒绝
           </Button>
           <Button
             className="h-10 flex-1"
             disabled={decide.isPending}
-            onClick={() => decide.mutate(true)}
+            onClick={() => submit(true)}
           >
-            {decide.isPending && decide.variables === true ? (
+            {decide.isPending && decide.variables?.approve === true ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <ShieldCheck className="size-4" />

@@ -9,26 +9,18 @@
  *     在宿主页执行。每次获取应用上下文重新校验服务端实时运行模式。
  *  3. 先取得应用 token 与受众限定的完整上下文，再挂载；定时刷新上下文并续期 token。
  *  4. MicroProps 2.0 完整授权内容变化走 update；没有 update 时串行卸载后重挂。
- *  5. 沙箱诊断(v1.1): HTML 通道挂载后状态条提供实时 getStats() 面板
- *     (计时器/监听/插入节点/自有键/覆盖键)。
+ *  5. 成功挂载仅显示业务内容；加载与错误恢复由宿主提供。
  *  6. 卸载: lifecycle.unmount() → sandbox.teardown()(StrictMode 双挂载用挂载序号防竞态)
  */
 
 import * as React from "react"
 import { loadHostEsm } from "@/micro-apps/registry"
-import { useLocation, useNavigate, useParams } from "react-router-dom"
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
 import {
-  Activity,
-  Boxes,
   ChevronRight,
   CircleAlert,
-  Ear,
-  FileCode2,
-  Package,
   RotateCw,
   ShieldQuestion,
-  Timer,
-  Zap,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
@@ -40,25 +32,18 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { AppIcon } from "@/lib/icons"
 import { cn } from "@/lib/utils"
 import { reconcileSessionSync, useAuthStore } from "@/stores/auth"
 import { useTheme } from "@/components/theme-provider"
 import { api, ApiError } from "@/lib/api"
 import { microRouteAccess } from "@/lib/micro-route-permissions"
+import { normalizedRoutePath } from "@/lib/route-permissions"
 import type { OAuthSessionTokenResp } from "@/api/types"
 import { MicroContextRuntime, MicroLifecycleSession, isMicroRuntimeFault, microPropsSignature, microPropsDelivery, requiresMicroRemount,
   trustedMicroRuntimeDomain } from "./runtime"
 import type { MicroContextSnapshot, MicroRuntimeFault } from "./runtime"
-import { EmptyState, ErrorState } from "@/components/states"
+import { EmptyState } from "@/components/states"
 import { MicroSandbox } from "./sandbox"
-import type { MicroSandboxStats } from "./sandbox"
 import { loadHtmlEntry, markEntryFailed } from "./loader"
 import { createIframeLifecycle } from "./iframe"
 import { resolveMicroEntry, microEntrySignature, assertMicroEntrySnapshot } from "./entry"
@@ -73,15 +58,16 @@ import type {
   MicroNotifyVariant,
   MicroProps,
   MicroStatus,
-  MicroTokenState,
 } from "./types"
 
 /* ============================ 外层: 入口配置解析 ============================ */
 
 export default function MicroAppContainer() {
   const { appCode = "" } = useParams()
-  const { pathname } = useLocation()
-  const activeRoute = !!appCode && (pathname === `/micro/${appCode}` || pathname.startsWith(`/micro/${appCode}/`))
+  const { pathname, search = "", hash = "" } = useLocation()
+  const normalizedPath = normalizedRoutePath(pathname)
+  const basePath = `/micro/${appCode.toLowerCase()}`
+  const activeRoute = !!appCode && (normalizedPath === basePath || normalizedPath.startsWith(`${basePath}/`))
   const profile = useAuthStore((s) => s.profile)
   const sessionToken = useAuthStore((s) => s.token)
   const contextEpoch = useAuthStore((s) => s.contextEpoch)
@@ -90,7 +76,7 @@ export default function MicroAppContainer() {
   const navigate = useNavigate()
 
   const app = React.useMemo(
-    () => profile?.applications.find((a) => a.code === appCode) ?? null,
+    () => profile?.applications.find((a) => a.code.toLowerCase() === appCode.toLowerCase()) ?? null,
     [profile?.applications, appCode]
   )
 
@@ -102,6 +88,11 @@ export default function MicroAppContainer() {
   }, [activeRoute, app, profile, switching, navigate])
 
   if (!activeRoute) return null
+
+  // React Router decodes route parameters and matches case-insensitively. Use
+  // the registered spelling before the layout selects the route's application.
+  const canonicalPath = app ? pathname.replace(/^\/[^/]+\/[^/]+/, `/micro/${app.code}`) : pathname
+  if (canonicalPath !== pathname) return <Navigate to={`${canonicalPath}${search}${hash}`} replace />
 
   if (!profile || switching || !sessionToken) return <div className="relative min-h-[480px]"><MountAreaSkeleton /></div>
   if (app && selectedApplicationId !== app.id) return <div className="relative min-h-[480px]"><MountAreaSkeleton /></div>
@@ -141,7 +132,7 @@ export default function MicroAppContainer() {
   return <MicroMountZone key={`${contextEpoch}:${app.code}:${entryInfo.runtimeMode}`} entryInfo={entryInfo} />
 }
 
-/* ============================ 内层: 挂载编排 + 状态条 UI ============================ */
+/* ============================ 内层: 挂载编排 ============================ */
 
 interface ActiveEntry {
   entry: ApplicationEntryInfo
@@ -197,13 +188,8 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   routeRef.current = routePath
   const [status, setStatus] = React.useState<MicroStatus>(faultRef.current ? "error" : "loading")
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
-  const [tokenState, setTokenState] = React.useState<MicroTokenState>(faultRef.current ? "missing" : "pending")
-  const [tokenNote, setTokenNote] = React.useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = React.useState(0)
   const [mountNonce, setMountNonce] = React.useState(0)
-  const [supportsUpdate, setSupportsUpdate] = React.useState(false)
-  const [stats, setStats] = React.useState<MicroSandboxStats | null>(null)
-  const [recoveryAttempt, setRecoveryAttempt] = React.useState(0)
 
   React.useEffect(() => {
     aliveRef.current = true
@@ -253,11 +239,6 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     setRuntimeFault(faultRef.current)
     setStatus("error")
     setErrorMessage("可信应用运行故障，需要重新加载宿主")
-    setTokenState("missing")
-    setTokenNote("可信运行域已停止复用")
-    setRecoveryAttempt(0)
-    setSupportsUpdate(false)
-    setStats(null)
   }, [disposeEntry])
 
   React.useEffect(() => {
@@ -336,17 +317,12 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     lastDeliveryRef.current = null
     setSnapshot(null)
     setStatus("loading")
-    setTokenState("pending")
-    setTokenNote(null)
     setErrorMessage(null)
-    setRecoveryAttempt(0)
     try { assertBrowserCapabilities("host") }
     catch (error) {
       const message = error instanceof Error ? error.message : "Required browser capabilities are unavailable"
       setStatus("error")
       setErrorMessage(message)
-      setTokenState("missing")
-      setTokenNote(message)
       return
     }
     let modeRefreshRequested = false
@@ -401,29 +377,19 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
           if (active) void disposeEntry(active)
           lastPushSigRef.current = null
           lastDeliveryRef.current = null
-          setSupportsUpdate(false)
         }
         setSnapshot(value)
-        if (value) setTokenState("injected")
-        else { setTokenState("pending"); setStatus("loading") }
+        if (!value) setStatus("loading")
       },
       onRecovery: (state) => {
         if (faultRef.current || (isTrusted && trustedMicroRuntimeDomain.fault)) return
-        setRecoveryAttempt(state?.attempt ?? 0)
-        if (!state) setTokenNote(null)
-        if (state) {
-          setStatus("loading")
-          setTokenState("missing")
-          setTokenNote("授权服务暂时不可用，正在重新验证")
-        }
+        if (state) setStatus("loading")
       },
       onError: (error) => {
         if (faultRef.current || (isTrusted && trustedMicroRuntimeDomain.fault)) return
         const message = error instanceof Error ? error.message : "应用授权上下文获取失败"
         setStatus("error")
         setErrorMessage(message)
-        setTokenState("missing")
-        setTokenNote(message)
         if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
           toast.error("当前应用授权已失效，已退出应用")
           navigateRef.current("/", { replace: true })
@@ -479,8 +445,6 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     activeRef.current = active
     lastPushSigRef.current = null
     setStatus("loading")
-    setSupportsUpdate(false)
-    setStats(null)
     const stale = () => {
       if (controller.signal.aborted || sequence !== seqRef.current || !!faultRef.current) return true
       const current = snapshotRef.current
@@ -496,6 +460,14 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
       if (!microRouteAccess(current.context.menus, appCode, routeRef.current).allowed) {
         throw new ApiError("当前组织未授权访问此应用菜单", "FORBIDDEN", 403)
       }
+    }
+    const handleIframeFailure = (error: Error) => {
+      if (stale() || activeRef.current !== active) return
+      reportRuntimeFailure("LIFECYCLE_FAILED", "update")
+      runtimeRef.current?.stop()
+      setStatus("error")
+      setErrorMessage(error.message)
+      void disposeEntry(active)
     }
     let mountedProps: MicroProps | null = null
 
@@ -513,6 +485,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
         if (!isTrusted) {
           if (entryInfo.entryType !== "HTML") throw new Error("隔离 iframe 应用需要 HTML 入口，请联系平台管理员配置")
           return createIframeLifecycle({ entryUrl: entryInfo.entryUrl, appCode, signal: controller.signal,
+            onError: handleIframeFailure,
             timing: (stage, durationMs) => {
               const value = snapshotRef.current
               if (!value || value.signal.aborted || controller.signal.aborted) return
@@ -531,7 +504,8 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
         if (entryInfo.entryType === "HTML") {
           sandbox = new MicroSandbox(appCode)
           active.sandbox = sandbox
-          const entry = await loadHtmlEntry(entryInfo.entryUrl, { signal: controller.signal })
+          const entry = await loadHtmlEntry(entryInfo.entryUrl, { signal: controller.signal,
+            beforeScript: () => sandbox!.beginScriptScope() })
           check()
           node.innerHTML = entry.templateProcessed
           await entry.execScripts(sandbox.proxy)
@@ -561,7 +535,6 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     })().then(() => {
       if (stale() || (isTrusted && trustedMicroRuntimeDomain.fault)) return
       try { check() } catch { return }
-      setSupportsUpdate(session.supportsUpdate)
       setStatus("mounted")
     }).catch((error) => {
       if (isTrusted && isMicroRuntimeFault(error)) { latchTrustedFault(error); return }
@@ -620,21 +593,6 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     })
   }, [snapshot, routePath, resolvedTheme, status, buildProps, hasSnapshot, disposeEntry, reportRuntimeFailure, latchTrustedFault])
 
-  /* ---------- 沙箱诊断(v1.1): HTML 通道挂载后 1s 轮询 getStats ---------- */
-  React.useEffect(() => {
-    if (entryInfo.runtimeMode !== "TRUSTED" || entryInfo.entryType !== "HTML" || status !== "mounted") {
-      setStats(null)
-      return
-    }
-    const read = () => {
-      const sandbox = activeRef.current?.sandbox
-      if (sandbox) setStats(sandbox.getStats())
-    }
-    read()
-    const id = window.setInterval(read, 1000)
-    return () => window.clearInterval(id)
-  }, [entryInfo.runtimeMode, entryInfo.entryType, status, reloadNonce])
-
   const fault = runtimeFault ?? (isTrusted ? trustedMicroRuntimeDomain.fault : null)
   const handleReload = () => {
     if (isTrusted && trustedMicroRuntimeDomain.fault) {
@@ -645,151 +603,30 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   }
   const loading = !fault && status === "loading"
 
+  return <MicroMountContent entryName={entryInfo.name} status={status} loading={loading}
+    fault={fault} hasRuntimeToken={!!snapshot?.token} errorMessage={errorMessage}
+    containerRef={containerRef} onRetry={handleReload} />
+}
+
+/** Business content fills the host viewport; recovery controls appear only on failure. */
+function MicroMountContent({ entryName, status, loading, fault, hasRuntimeToken, errorMessage, containerRef, onRetry }: {
+  entryName: string
+  status: MicroStatus
+  loading: boolean
+  fault: MicroRuntimeFault | null
+  hasRuntimeToken: boolean
+  errorMessage: string | null
+  containerRef: React.RefObject<HTMLDivElement | null>
+  onRetry: () => void
+}) {
+  if (fault) return <div className="p-4 md:p-6"><TrustedRuntimeFaultCard fault={fault} hasRuntimeToken={hasRuntimeToken} /></div>
+  if (status === "error") return <div className="p-4 md:p-6"><MountErrorCard message={errorMessage} onRetry={onRetry} /></div>
   return (
-    <div className="space-y-4">
-      {/* ---------- 状态条 ---------- */}
-      <div
-        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card px-4 py-3 shadow-sm"
-        data-testid="micro-status-bar"
-        data-token-state={tokenState}
-        data-recovery-attempt={recoveryAttempt}
-      >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <AppIcon name={entryInfo.icon} className="size-5" />
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold leading-tight">{entryInfo.name}</p>
-            <code className="shrink-0 rounded bg-muted px-1.5 py-px font-mono text-[10px] text-muted-foreground">
-              {entryInfo.code}
-            </code>
-          </div>
-          <p
-            className="mt-0.5 truncate font-mono text-[11px] leading-tight text-muted-foreground"
-            title={`当前路由: ${routePath} · 基路径: ${basePath}`}
-          >
-            {routePath}
-          </p>
-        </div>
-
-        {/* 通道徽章: HTML 入口·沙箱(紫) / ESM 模块·直挂(灰) */}
-        {entryInfo.runtimeMode === "IFRAME" ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            <ShieldQuestion className="size-3" />
-            隔离 iframe
-          </span>
-        ) : entryInfo.entryType === "HTML" ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[11px] font-medium text-purple-700 dark:text-purple-300">
-            <Boxes className="size-3" />
-            HTML 入口 · 沙箱
-          </span>
-        ) : (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            <Package className="size-3" />
-            ESM 模块 · 直挂
-          </span>
-        )}
-
-        {entryInfo.deploymentVersion && (
-          <span className="font-mono text-[11px] text-muted-foreground" title={entryInfo.entryVersionId ?? undefined}>
-            v{entryInfo.deploymentVersion}
-          </span>
-        )}
-
-        {/* 运行时属性更新能力，不代表重新部署前端代码。 */}
-        {supportsUpdate && status === "mounted" && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                <Zap className="size-3" />
-                运行时同步
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs text-xs">
-              授权上下文续期、子路径或主题变化时只更新运行时属性；不重新部署代码，
-              也不重挂页面（计时器、输入等内部状态保留）。
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* 令牌状态点 */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex shrink-0 cursor-default items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span
-                aria-hidden
-                className={cn(
-                  "size-2 rounded-full transition-colors",
-                  tokenState === "injected" && "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]",
-                  tokenState === "missing" && "border border-muted-foreground/40 bg-transparent",
-                  tokenState === "pending" && "animate-pulse bg-amber-500"
-                )}
-              />
-              {tokenState === "injected" ? "令牌已注入" : tokenState === "missing" ? "未携带令牌" : "令牌获取中"}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs text-xs">
-            {tokenState === "injected"
-              ? `POST /api/oauth/session-token 已为 ${entryInfo.code} 签发访问令牌并注入 props.token`
-              : tokenState === "missing"
-                ? `授权上下文获取失败: ${tokenNote ?? "未知原因"}`
-                : "正在为子应用申请会话令牌..."}
-          </TooltipContent>
-        </Tooltip>
-
-        {/* 沙箱诊断入口(v1.1, 仅 HTML 通道) */}
-        {entryInfo.entryType === "HTML" && stats && (
-          <SandboxDiagnostics stats={stats} />
-        )}
-
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {status === "mounted" && (
-            <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:inline-flex">
-              <span aria-hidden className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-              </span>
-              运行中
-            </span>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                aria-label={`重新加载 ${entryInfo.name}`}
-                onClick={handleReload}
-                disabled={loading || !!fault}
-              >
-                <RotateCw className={cn("size-4", loading && "animate-spin")} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              强制重新挂载子应用
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
-      {/* ---------- 挂载区 / 错误卡 ---------- */}
-      {fault ? (
-        <TrustedRuntimeFaultCard fault={fault} hasRuntimeToken={!!snapshot?.token} />
-      ) : status === "error" ? (
-        <MountErrorCard message={errorMessage} onRetry={handleReload} />
-      ) : (
-        <div className="relative min-h-[480px] overflow-hidden rounded-xl border bg-card">
-          {/* 加载骨架: React 管理的覆盖层(不进 containerRef, 避免与 innerHTML 互相打架) */}
-          {loading && <MountAreaSkeleton />}
-          {/* 子应用挂载点: 禁止放任何 React 子节点(innerHTML 由微前端内核接管) */}
-          <div
-            ref={containerRef}
-            className="micro-mount-zone min-h-[480px] w-full"
-            aria-label={`${entryInfo.name} 挂载区`}
-            aria-busy={loading}
-          />
-        </div>
-      )}
+    <div className="relative min-h-[max(480px,calc(100dvh-3.5rem))] w-full bg-card">
+      {/* React owns the overlay; the runtime exclusively owns the empty mount point. */}
+      {loading && <MountAreaSkeleton />}
+      <div ref={containerRef} className="micro-mount-zone min-h-[max(480px,calc(100dvh-3.5rem))] w-full"
+        aria-label={`${entryName} 挂载区`} aria-busy={loading} />
     </div>
   )
 }
@@ -813,77 +650,6 @@ function TrustedRuntimeFaultCard({ fault, hasRuntimeToken }: { fault: MicroRunti
         </Button>
       </div>
     </Alert>
-  )
-}
-
-/* ============================ 沙箱诊断面板(v1.1) ============================ */
-
-function SandboxDiagnostics({ stats }: { stats: MicroSandboxStats }) {
-  const items = [
-    { icon: Timer, label: "计时器", value: stats.timers, hint: "沙箱记账的 setTimeout/setInterval 存活数, 卸载时批量清理" },
-    { icon: Ear, label: "window 监听", value: stats.listeners, hint: "沙箱记账的 window 级事件监听, 卸载时批量移除" },
-    { icon: FileCode2, label: "插入节点", value: stats.insertedNodes, hint: "MutationObserver 记账的 head/body 新增 STYLE/LINK/SCRIPT, 卸载时回收" },
-  ]
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex shrink-0 cursor-default items-center gap-1 rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-          aria-label="查看沙箱诊断统计"
-        >
-          <Activity className="size-3 text-primary" />
-          <span className="tabular-nums">
-            沙箱 {stats.timers}t/{stats.listeners}l/{stats.insertedNodes}n
-          </span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="w-80">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400">
-              <Boxes className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold leading-tight">沙箱运行诊断</p>
-              <p className="font-mono text-[10px] text-muted-foreground">{stats.name}</p>
-            </div>
-            {stats.tornDown && (
-              <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">已卸载</span>
-            )}
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {items.map((it) => (
-              <Tooltip key={it.label}>
-                <TooltipTrigger asChild>
-                  <div className="rounded-lg border bg-muted/40 px-2 py-2 text-center">
-                    <it.icon className="mx-auto size-3.5 text-muted-foreground" />
-                    <p className="mt-1 font-mono text-sm font-semibold tabular-nums leading-none">{it.value}</p>
-                    <p className="mt-1 text-[10px] leading-tight text-muted-foreground">{it.label}</p>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[220px] text-xs">{it.hint}</TooltipContent>
-              </Tooltip>
-            ))}
-          </div>
-          <div className="space-y-1.5 rounded-lg border bg-muted/30 px-3 py-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">沙箱自有全局键</span>
-              <span className="font-mono font-semibold tabular-nums">{stats.ownProps}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2 text-[11px]">
-              <span className="shrink-0 text-muted-foreground">覆盖真实 window 键</span>
-              <span className="min-w-0 truncate font-mono text-right" title={stats.overriddenKeys.join(", ") || "(无)"}>
-                {stats.overriddenKeys.length ? stats.overriddenKeys.join(", ") : "0 个"}
-              </span>
-            </div>
-          </div>
-          <p className="text-[10px] leading-relaxed text-muted-foreground">
-            沙箱目标为防误伤与资源回收(计时器/监听/样式记账清理), 不是安全边界; 不可信代码走 iframe 通道。
-          </p>
-        </div>
-      </PopoverContent>
-    </Popover>
   )
 }
 

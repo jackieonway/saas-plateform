@@ -63,6 +63,14 @@ async fn decide_device(
 ) -> Result<Json<Value>, AppError> {
     let code = user_code.trim().to_uppercase();
     let mut tx = state.pool.begin().await?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     let row = sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>)>(
         "SELECT id, client_id, status, expires_at FROM oauth_device_codes WHERE UPPER(user_code) = $1 FOR UPDATE",
     )

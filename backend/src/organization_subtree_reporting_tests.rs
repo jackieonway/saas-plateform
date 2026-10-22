@@ -343,6 +343,11 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
 
         for account in [manager, global_admin] {
             let token = session(pool, account, tenant, current).await?;
+            call(&app, &token, Method::GET, "/api/search?q=%00", None, StatusCode::BAD_REQUEST).await?;
+            for query in ["%25", "_", "%5C"] {
+                let search = call(&app, &token, Method::GET, &format!("/api/search?q={query}&limit=10"), None, StatusCode::OK).await?;
+                ensure!(search == json!({"users":[],"tenants":[],"organizations":[],"roles":[]}), "search interpreted a literal keyword as a SQL pattern: {search}");
+            }
             let search = call(&app, &token, Method::GET, "/api/search?q=report&limit=10", None, StatusCode::OK).await?;
             for key in ["organizations", "roles"] {
                 ensure!(search[key].as_array().is_some_and(|rows| rows.len() == 2), "unscoped {key}: {search}");

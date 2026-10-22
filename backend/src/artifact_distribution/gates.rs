@@ -2,6 +2,7 @@ use super::{
     audit, config, lock, transport,
     worker::{Job, SELECT},
 };
+use crate::managed_deployments::version_resource_root as root;
 use crate::{
     error::AppError,
     releases::{FetchPolicy, ReleaseRow},
@@ -16,24 +17,6 @@ use uuid::Uuid;
 fn entry(state: &AppState, row: &ReleaseRow) -> Result<String, AppError> {
     Ok(crate::managed_deployments::canonical_entry(
         &FetchPolicy::new(&state.config, &row.environment)?.resolve(&row.entry_url, None)?,
-    ))
-}
-fn root(entry: &str) -> Option<String> {
-    let url = reqwest::Url::parse(entry).ok()?;
-    let parts: Vec<_> = url.path().split('/').collect();
-    if parts.len() < 6
-        || parts[1] != "sub-apps"
-        || parts[3] != "versions"
-        || parts[2].is_empty()
-        || parts[4].is_empty()
-    {
-        return None;
-    }
-    Some(format!(
-        "{}/sub-apps/{}/versions/{}/",
-        url.origin().ascii_serialization(),
-        parts[2],
-        parts[4]
     ))
 }
 fn configured(cfg: &config::Config, entry: &str) -> bool {

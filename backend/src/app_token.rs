@@ -18,6 +18,19 @@ pub struct AppTokenInfo {
     pub session_id: Uuid,
 }
 
+type AppTokenRow = (
+    Uuid,
+    String,
+    Uuid,
+    Uuid,
+    Uuid,
+    String,
+    Uuid,
+    String,
+    DateTime<Utc>,
+    Uuid,
+);
+
 /// 应用令牌必须同时满足数据库撤销状态、签发会话、成员和两级应用授权。
 pub async fn inspect(
     pool: &PgPool,
@@ -27,7 +40,7 @@ pub async fn inspect(
     if claims.typ != "access" {
         return Ok(None);
     }
-    let row: Option<(Uuid, String, Uuid, Uuid, Uuid, String, Uuid, String, DateTime<Utc>, Uuid)> =
+    let row: Option<AppTokenRow> =
         sqlx::query_as(
             "SELECT tok.user_id, tok.client_id, tok.tenant_id, tok.organization_id, \
              tok.application_id, tok.audience, tok.jti, COALESCE(tok.scope,''), tok.expires_at, tok.platform_session_id \

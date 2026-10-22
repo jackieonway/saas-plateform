@@ -60,6 +60,8 @@ pub struct ClientFull {
     pub client_name: String,
     pub description: String,
     pub client_type: String,
+    /// Require RFC 7636 S256 for authorization-code requests and exchanges.
+    pub require_pkce: bool,
     pub redirect_uris: String,
     pub grant_types: String,
     pub scopes: String,
@@ -83,7 +85,7 @@ impl ClientFull {
     pub fn to_public_json(&self) -> Value {
         json!({
             "id": self.id, "clientId": self.client_id, "clientName": self.client_name,
-            "clientType": self.client_type, "description": self.description,
+            "clientType": self.client_type, "requirePkce": self.require_pkce, "description": self.description,
             "redirectUris": split_csv(&self.redirect_uris), "grantTypes": self.grant_list(),
             "scopes": self.scope_list(), "accessTokenValidity": self.access_token_validity,
             "refreshTokenValidity": self.refresh_token_validity, "status": self.status,
@@ -106,7 +108,7 @@ pub async fn fetch_client(
     let row = sqlx::query_as::<_, ClientFull>(
         "SELECT id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
-         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id \
+         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce \
          FROM oauth_clients WHERE client_id = $1",
     )
     .bind(client_id)
@@ -122,7 +124,7 @@ async fn client_audit_snapshot(
 ) -> Result<Value, AppError> {
     sqlx::query_scalar(
         "SELECT jsonb_build_object('id',id,'name',client_name,'clientId',client_id, \
-         'clientType',client_type,'status',status,'applicationId',application_id, \
+         'clientType',client_type,'requirePkce',require_pkce,'status',status,'applicationId',application_id, \
          'grantTypes',grant_types,'scopeCount',COALESCE(array_length(string_to_array(scopes,','),1),0), \
          'redirectUriCount',COALESCE(array_length(string_to_array(redirect_uris,','),1),0), \
          'accessTokenValidity',access_token_validity,'refreshTokenValidity',refresh_token_validity) \
@@ -169,6 +171,9 @@ async fn lock_client_applications(
     Ok(())
 }
 
+type ClientMetadataRow = (Uuid, DateTime<Utc>, Option<Uuid>, Option<String>);
+type ClientMetadata = (DateTime<Utc>, Option<Uuid>, Option<String>);
+
 /// GET /api/oauth/clients — 不返回 secret
 async fn list_clients(
     State(state): State<AppState>,
@@ -176,7 +181,7 @@ async fn list_clients(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     // (id, created_at, application_id, application_name): LEFT JOIN applications 取关联应用名
-    let times: Vec<(Uuid, DateTime<Utc>, Option<Uuid>, Option<String>)> = sqlx::query_as(
+    let times: Vec<ClientMetadataRow> = sqlx::query_as(
         "SELECT c.id, c.created_at, c.application_id, a.name \
          FROM oauth_clients c LEFT JOIN applications a ON a.id = c.application_id \
          ORDER BY c.created_at",
@@ -186,12 +191,12 @@ async fn list_clients(
     let rows: Vec<ClientFull> = sqlx::query_as(
         "SELECT id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
-         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id \
+         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce \
          FROM oauth_clients ORDER BY created_at",
     )
     .fetch_all(&state.pool)
     .await?;
-    let mut time_map: HashMap<Uuid, (DateTime<Utc>, Option<Uuid>, Option<String>)> = HashMap::new();
+    let mut time_map: HashMap<Uuid, ClientMetadata> = HashMap::new();
     for (id, t, app_id, app_name) in times {
         time_map.insert(id, (t, app_id, app_name));
     }
@@ -220,6 +225,8 @@ struct ClientBody {
     #[serde(default = "default_client_type")]
     client_type: String,
     #[serde(default)]
+    require_pkce: Option<bool>,
+    #[serde(default)]
     redirect_uris: Vec<String>,
     #[serde(default)]
     grant_types: Vec<String>,
@@ -237,6 +244,20 @@ fn default_client_type() -> String {
     "CONFIDENTIAL".into()
 }
 
+fn created_pkce_requirement(kind: &str, requested_requirement: Option<bool>) -> bool {
+    requested_requirement.unwrap_or(kind == "PUBLIC")
+}
+
+fn updated_pkce_requirement(
+    current_kind: &str,
+    current_required: bool,
+    requested_kind: Option<&str>,
+    requested_requirement: Option<bool>,
+) -> bool {
+    requested_requirement
+        .unwrap_or(current_required || current_kind != "PUBLIC" && requested_kind == Some("PUBLIC"))
+}
+
 fn default_access_validity() -> i64 {
     7200
 }
@@ -245,40 +266,103 @@ fn default_refresh_validity() -> i64 {
     604800
 }
 
+fn validate_grants(grants: &[String]) -> Result<(), AppError> {
+    if grants.is_empty() {
+        return Err(AppError::bad_request("至少配置一种授权模式"));
+    }
+    if grants.iter().any(|grant| {
+        ![
+            "authorization_code",
+            "refresh_token",
+            "client_credentials",
+            "password",
+            "urn:ietf:params:oauth:grant-type:device_code",
+        ]
+        .contains(&grant.as_str())
+    }) {
+        return Err(AppError::bad_request("包含不支持的授权模式"));
+    }
+    Ok(())
+}
+
+fn validate_client_grants(kind: &str, grants: &[String]) -> Result<(), AppError> {
+    if kind == "PUBLIC" && grants.iter().any(|grant| grant == "client_credentials") {
+        return Err(AppError::bad_request(
+            "PUBLIC 客户端不能使用 client_credentials 授权模式",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_scopes(scopes: &[String]) -> Result<(), AppError> {
+    if scopes.is_empty() {
+        return Err(AppError::bad_request("至少配置一个 scope"));
+    }
+    // Each array entry is one OAuth scope token; commas are also excluded
+    // because the existing storage representation uses them as delimiters.
+    if scopes.iter().any(|scope| {
+        scope.is_empty()
+            || !scope.bytes().all(|byte| {
+                (byte == 0x21 || (0x23..=0x5b).contains(&byte) || (0x5d..=0x7e).contains(&byte))
+                    && byte != b','
+            })
+    }) {
+        return Err(AppError::bad_request(
+            "scope 必须是独立的可打印 ASCII 标识，不能包含空白或逗号",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_validity(validity: i64) -> Result<(), AppError> {
+    if validity <= 0
+        || Utc::now()
+            .timestamp()
+            .checked_add(validity)
+            .and_then(|seconds| DateTime::from_timestamp(seconds, 0))
+            .is_none()
+    {
+        return Err(AppError::bad_request("令牌有效期必须为可表示的正整数 (秒)"));
+    }
+    Ok(())
+}
+
 fn validate_client_body(body: &ClientBody) -> Result<(), AppError> {
-    if body.client_name.trim().is_empty() {
-        return Err(AppError::bad_request("客户端名称不能为空"));
+    if body.client_name.trim().is_empty() || body.client_name.trim().chars().count() > 200 {
+        return Err(AppError::bad_request("客户端名称须为 1 至 200 个字符"));
     }
     if !["CONFIDENTIAL", "PUBLIC"].contains(&body.client_type.as_str()) {
         return Err(AppError::bad_request(
             "客户端类型仅支持 CONFIDENTIAL / PUBLIC",
         ));
     }
-    if body.grant_types.is_empty() {
-        return Err(AppError::bad_request("至少配置一种授权模式"));
-    }
-    if body.scopes.is_empty() {
-        return Err(AppError::bad_request("至少配置一个 scope"));
-    }
-    if body.access_token_validity <= 0 || body.refresh_token_validity <= 0 {
-        return Err(AppError::bad_request("令牌有效期必须为正整数 (秒)"));
-    }
+    validate_grants(&body.grant_types)?;
+    validate_client_grants(&body.client_type, &body.grant_types)?;
+    validate_scopes(&body.scopes)?;
+    validate_validity(body.access_token_validity)?;
+    validate_validity(body.refresh_token_validity)?;
     Ok(())
 }
 
-/// 生成可读 client_id: 名称 slug + 随机后缀
-async fn generate_client_id(pool: &sqlx::PgPool, name: &str) -> Result<String, AppError> {
+fn client_id_prefix(name: &str) -> String {
     let slug: String = name
         .to_lowercase()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        // Leave room for the separator and random suffix in VARCHAR(100).
+        .take(80)
         .collect();
     let slug = slug.trim_matches('-').to_string();
-    let base = if slug.is_empty() {
+    if slug.is_empty() {
         "client".to_string()
     } else {
         slug
-    };
+    }
+}
+
+/// 生成可读 client_id: 名称 slug + 随机后缀
+async fn generate_client_id(pool: &sqlx::PgPool, name: &str) -> Result<String, AppError> {
+    let base = client_id_prefix(name);
     for _ in 0..8 {
         let suffix = hash::random_token(6).to_lowercase();
         let candidate = format!("{}-{}", base, suffix);
@@ -303,6 +387,7 @@ async fn create_client(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     validate_client_body(&body)?;
+    let require_pkce = created_pkce_requirement(&body.client_type, body.require_pkce);
     let client_id = generate_client_id(&state.pool, &body.client_name).await?;
     let secret = hash::random_token(32);
     let secret_hash = if body.client_type == "CONFIDENTIAL" {
@@ -313,8 +398,8 @@ async fn create_client(
     let mut tx = state.pool.begin().await?;
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO oauth_clients \
-         (client_id, client_secret_hash, client_name, description, client_type, redirect_uris, grant_types, scopes, access_token_validity, refresh_token_validity) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+         (client_id, client_secret_hash, client_name, description, client_type, redirect_uris, grant_types, scopes, access_token_validity, refresh_token_validity, require_pkce) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
     )
     .bind(&client_id)
     .bind(&secret_hash)
@@ -326,6 +411,7 @@ async fn create_client(
     .bind(body.scopes.join(","))
     .bind(body.access_token_validity)
     .bind(body.refresh_token_validity)
+    .bind(require_pkce)
     .fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
@@ -353,7 +439,7 @@ async fn create_client(
     tx.commit().await?;
     Ok(Json(json!({
         "id": id, "clientId": client_id, "clientName": body.client_name,
-        "clientType": body.client_type, "description": body.description,
+        "clientType": body.client_type, "requirePkce": require_pkce, "description": body.description,
         "redirectUris": body.redirect_uris, "grantTypes": body.grant_types, "scopes": body.scopes,
         "accessTokenValidity": body.access_token_validity, "refreshTokenValidity": body.refresh_token_validity,
         "status": "ENABLED", "clientSecret": secret, "applicationId": null,
@@ -377,6 +463,8 @@ struct ClientUpdate {
     client_name: Option<String>,
     #[serde(default)]
     client_type: Option<String>,
+    #[serde(default)]
+    require_pkce: Option<bool>,
     #[serde(default)]
     redirect_uris: Option<Vec<String>>,
     #[serde(default)]
@@ -414,9 +502,21 @@ async fn update_client(
         }
     }
     if let Some(name) = &body.client_name {
-        if name.trim().is_empty() {
-            return Err(AppError::bad_request("客户端名称不能为空"));
+        if name.trim().is_empty() || name.trim().chars().count() > 200 {
+            return Err(AppError::bad_request("客户端名称须为 1 至 200 个字符"));
         }
+    }
+    if let Some(grants) = &body.grant_types {
+        validate_grants(grants)?;
+    }
+    if let Some(scopes) = &body.scopes {
+        validate_scopes(scopes)?;
+    }
+    if let Some(validity) = body.access_token_validity {
+        validate_validity(validity)?;
+    }
+    if let Some(validity) = body.refresh_token_validity {
+        validate_validity(validity)?;
     }
     // 关联应用三态归一: None(键缺省)=不更新; Some(None)=清除(null/空串); Some(Some)=校验存在后关联
     let application_id: Option<Option<Uuid>> = match body.application_id {
@@ -444,6 +544,28 @@ async fn update_client(
     };
     let mut tx = state.pool.begin().await?;
     lock_client_applications(&mut tx, id, application_id).await?;
+    // Partial updates must validate the resulting combination. In particular,
+    // switching only the type cannot retain a machine grant on a public client.
+    let (current_kind, current_grants, current_pkce): (String, String, bool) = sqlx::query_as(
+        "SELECT client_type, COALESCE(grant_types,''), require_pkce FROM oauth_clients WHERE id=$1",
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let grants = body
+        .grant_types
+        .clone()
+        .unwrap_or_else(|| split_csv(&current_grants));
+    validate_client_grants(
+        body.client_type.as_deref().unwrap_or(&current_kind),
+        &grants,
+    )?;
+    let require_pkce = updated_pkce_requirement(
+        &current_kind,
+        current_pkce,
+        body.client_type.as_deref(),
+        body.require_pkce,
+    );
     let before = client_audit_snapshot(&mut tx, id).await?;
     let private_changes: (bool, bool, bool) = sqlx::query_as(
         "SELECT redirect_uris IS DISTINCT FROM COALESCE($2,redirect_uris), \
@@ -461,11 +583,11 @@ async fn update_client(
          redirect_uris = COALESCE($4, redirect_uris), grant_types = COALESCE($5, grant_types), \
          scopes = COALESCE($6, scopes), access_token_validity = COALESCE($7, access_token_validity), \
          refresh_token_validity = COALESCE($8, refresh_token_validity), description = COALESCE($9, description), \
-         application_id = CASE WHEN $10 THEN $11::uuid ELSE application_id END, \
+         application_id = CASE WHEN $10 THEN $11::uuid ELSE application_id END, require_pkce=$12, \
          updated_at = now() WHERE id = $1 \
          RETURNING id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
-         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id",
+         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce",
     )
     .bind(id)
     .bind(body.client_name.as_deref().map(str::trim))
@@ -478,6 +600,7 @@ async fn update_client(
     .bind(&body.description)
     .bind(application_id.is_some())
     .bind(application_id.flatten())
+    .bind(require_pkce)
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("客户端不存在"))?;
@@ -859,7 +982,8 @@ async fn kick_sessions(
     // retiring platform sessions and the OAuth credentials they can renew.
     let mut tx = state.pool.begin().await?;
     let before = session_audit_snapshot(&mut tx, target).await?;
-    let platform_revoked = session::revoke_all_in_tx(&mut tx, target, None).await?;
+    // Retain the endpoint's OAuth revocation count before the shared operation
+    // retires the remaining credentials. session_audit_snapshot holds user lock.
     let revoked = sqlx::query(
         "UPDATE oauth_tokens SET revoked = true WHERE user_id = $1 AND revoked = false",
     )
@@ -867,6 +991,7 @@ async fn kick_sessions(
     .execute(&mut *tx)
     .await?
     .rows_affected();
+    let platform_revoked = session::revoke_all_in_tx(&mut tx, target, None).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let detail = audit::change_detail(
@@ -1008,4 +1133,109 @@ async fn revoke_device_code(
     }
     tx.commit().await?;
     Ok(Json(json!({"ok": true})))
+}
+
+#[cfg(test)]
+mod client_policy_tests {
+    use super::*;
+
+    fn client_body() -> ClientBody {
+        serde_json::from_value(json!({
+            "clientName": "策略验证客户端",
+            "grantTypes": ["authorization_code", "refresh_token"],
+            "scopes": ["profile", "orders:read"],
+            "redirectUris": ["https://client.example.test/callback"]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn pkce_policy_defaults_secure_new_public_clients_and_preserve_explicit_migration_choices() {
+        assert!(created_pkce_requirement("PUBLIC", None));
+        assert!(!created_pkce_requirement("CONFIDENTIAL", None));
+        for kind in ["PUBLIC", "CONFIDENTIAL"] {
+            assert!(created_pkce_requirement(kind, Some(true)));
+            assert!(!created_pkce_requirement(kind, Some(false)));
+            for current in [false, true] {
+                assert_eq!(updated_pkce_requirement(kind, current, None, None), current);
+                assert_eq!(
+                    updated_pkce_requirement(kind, current, Some(kind), None),
+                    current
+                );
+                assert!(!updated_pkce_requirement(
+                    kind,
+                    current,
+                    Some("PUBLIC"),
+                    Some(false)
+                ));
+                assert!(updated_pkce_requirement(kind, current, None, Some(true)));
+            }
+        }
+        assert!(updated_pkce_requirement(
+            "CONFIDENTIAL",
+            false,
+            Some("PUBLIC"),
+            None
+        ));
+        assert!(updated_pkce_requirement(
+            "PUBLIC",
+            true,
+            Some("CONFIDENTIAL"),
+            None
+        ));
+        assert!(!updated_pkce_requirement(
+            "PUBLIC",
+            false,
+            Some("CONFIDENTIAL"),
+            None
+        ));
+        let explicit: ClientBody = serde_json::from_value(json!({
+            "clientName":"Legacy public client", "clientType":"PUBLIC", "requirePkce":false
+        }))
+        .unwrap();
+        assert_eq!(explicit.require_pkce, Some(false));
+        let update: ClientUpdate = serde_json::from_value(json!({"requirePkce":true})).unwrap();
+        assert_eq!(update.require_pkce, Some(true));
+    }
+
+    #[test]
+    fn client_configuration_rejects_invalid_lifetimes_and_scope_tokens() {
+        assert!(validate_client_body(&client_body()).is_ok());
+        for ttl in [0, -1, i64::MAX] {
+            let mut body = client_body();
+            body.access_token_validity = ttl;
+            assert!(validate_client_body(&body).is_err());
+            assert!(validate_validity(ttl).is_err());
+        }
+        for scopes in [
+            vec![],
+            vec![""],
+            vec!["profile,email"],
+            vec!["profile email"],
+        ] {
+            let mut body = client_body();
+            body.scopes = scopes.into_iter().map(String::from).collect();
+            assert!(validate_client_body(&body).is_err());
+        }
+    }
+
+    #[test]
+    fn public_clients_cannot_register_or_retain_machine_grants() {
+        let mut body = client_body();
+        body.client_type = "PUBLIC".into();
+        assert!(validate_client_body(&body).is_ok());
+        body.grant_types.push("client_credentials".into());
+        assert!(validate_client_body(&body).is_err());
+        assert!(validate_client_grants("PUBLIC", &body.grant_types).is_err());
+        assert!(validate_client_grants("CONFIDENTIAL", &body.grant_types).is_ok());
+        body.grant_types = vec!["unsupported_grant".into()];
+        assert!(validate_client_body(&body).is_err());
+    }
+
+    #[test]
+    fn generated_client_prefix_fits_storage_for_maximum_length_names() {
+        assert_eq!(client_id_prefix(&"a".repeat(200)), "a".repeat(80));
+        assert_eq!(client_id_prefix("中文客户端"), "client");
+        assert_eq!(client_id_prefix(" Example Client "), "example-client");
+    }
 }

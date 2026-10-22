@@ -4,6 +4,8 @@ import { SDK_VERSION, MICRO_PROPS_CONTRACT_VERSION, IFRAME_PROTOCOL_VERSION,
 import { assertBrowserCapabilities } from "../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs"
 
 interface IframeOptions {
+  /** Unexpected failures after mounting must surface in the host recovery UI. */
+  onError?: (error: Error) => void
   /** Trusted host telemetry callback; never sourced from a child message. */
   timing?: (stage: "entry" | "ready" | "mount", durationMs: number) => void
   entryUrl: string
@@ -98,6 +100,7 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
   }
   const dispose = (error: Error = abortError()) => {
     if (stopped) return
+    const reportFailure = mounted && error.name !== "AbortError"
     stopped = true
     // 卸载不等待 ACK：父节点可已被移除，frame 销毁负责最终回收其执行环境。
     if (port && current) {
@@ -116,6 +119,9 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
     if (frame) { frame.onload = null; frame.onerror = null; frame.remove() }
     frame = null
     container = null
+    if (reportFailure) {
+      try { options.onError?.(error) } catch { /* Host diagnostics must not prevent capability cleanup. */ }
+    }
   }
   const onScopeAbort = () => dispose()
   options.signal?.addEventListener("abort", onScopeAbort, { once: true })
@@ -272,10 +278,9 @@ export function createIframeLifecycle(options: IframeOptions): MicroLifecycle {
       frame.title = `${appCode} application`
       frame.setAttribute("sandbox", "allow-scripts allow-forms")
       frame.referrerPolicy = "no-referrer"
-      // The mount zone has an automatic height, so height:100% collapsed to the
-      // minimum and left desktop dialogs in a 480px viewport. Reserve room for
-      // the host navigation while letting the frame follow viewport resizing.
-      frame.style.cssText = "display:block;width:100%;min-height:480px;height:max(480px, calc(100dvh - 220px));border:0"
+      // The host top bar is h-14; the micro route has no extra toolbar or outer
+      // padding. Fill the remaining viewport so dialogs use the available room.
+      frame.style.cssText = "display:block;width:100%;min-height:480px;height:max(480px, calc(100dvh - 3.5rem));border:0"
       const channel = new MessageChannel()
       port = channel.port1
       port.onmessage = receive

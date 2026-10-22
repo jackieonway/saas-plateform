@@ -1,16 +1,15 @@
 import * as React from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zResolver } from "@/lib/form"
-import { Building2, ChevronDown, ChevronRight, Landmark, ListTree, Loader2, Network, Pencil, Plus, Settings2, Trash2 } from "lucide-react"
+import { Building2, ChevronDown, ChevronRight, ListTree, Loader2, Network, Pencil, Plus, Settings2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Separator } from "@/components/ui/separator"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -53,7 +52,6 @@ import { tenantsApi } from "@/api/tenants"
 import { organizationsApi } from "@/api/organizations"
 import { departmentsApi } from "@/api/departments"
 import { asArray, asPage } from "@/lib/api"
-import { formatDateTime } from "@/lib/format"
 import { expiryBadge, ExpiryCell, isoToLocalInput } from "@/lib/expiry"
 import { coordinateField, coordinateOrNull, coordinatePoint, hasCoordinatePair, locationText } from "@/lib/location"
 import { organizationTypes, organizationTypeLabels } from "@/lib/entity-types"
@@ -92,8 +90,12 @@ const orgNodeSchema = nodeSchema.extend({
     .optional(),
 }).refine(hasCoordinatePair, { message: "经纬度需同时填写或同时留空", path: ["longitude"] })
 type OrgNodeForm = z.infer<typeof orgNodeSchema>
+type OrganizationSaveRequest = { values: OrgNodeForm; tenantId: string; parentId: string | null; editingId: string | null; platformRoot: boolean; viewKey: string }
+type OrganizationDepartmentSaveRequest = { values: NodeForm; organizationId: string; parentId: string | null; editingId: string | null; viewKey: string }
+type ScopedDeleteRequest = { id: string; viewKey: string }
 
-function orgToEditable(nodes: OrgNode[]): EditableNode[] {
+type OrganizationEditableNode = Omit<EditableNode, "children"> & { children: OrganizationEditableNode[]; platformRoot: boolean }
+function orgToEditable(nodes: OrgNode[], platformTenant = false): OrganizationEditableNode[] {
   return nodes.map((n) => ({
     id: n.id,
     name: n.name,
@@ -101,7 +103,8 @@ function orgToEditable(nodes: OrgNode[]): EditableNode[] {
     status: n.status,
     description: n.description,
     expiresAt: n.expiresAt ?? null,
-    children: n.children ? orgToEditable(n.children) : [],
+    platformRoot: platformTenant && n.parentId === null,
+    children: n.children ? orgToEditable(n.children, platformTenant) : [],
   }))
 }
 
@@ -127,7 +130,6 @@ function findNode(nodes: OrgNode[] | DeptNode[], id: string | null): OrgNode | D
 
 export default function OrganizationsPage() {
   const queryClient = useQueryClient()
-  const [params] = useSearchParams()
 
   /** 视图切换: 树形管理 / 架构图总览 */
   const [view, setView] = React.useState<"tree" | "chart">("tree")
@@ -138,8 +140,10 @@ export default function OrganizationsPage() {
     staleTime: 60_000,
     retry: 1,
   })
-  const tenants = tenantsQuery.data ?? []
+  const tenants = React.useMemo(() => tenantsQuery.data ?? [], [tenantsQuery.data])
   const [tenantId, setTenantId] = React.useState<string | null>(null)
+  const platformTenant = tenants.some(tenant => tenant.id === tenantId && tenant.isPlatform === true)
+  const isPlatformRoot = (organization: OrgNode | null) => platformTenant && organization?.parentId === null
   React.useEffect(() => {
     if (!tenantId && tenants.length > 0) setTenantId(tenants[0].id)
   }, [tenants, tenantId])
@@ -151,7 +155,7 @@ export default function OrganizationsPage() {
     staleTime: 30_000,
     retry: 1,
   })
-  const orgTree = treeQuery.data ?? []
+  const orgTree = React.useMemo(() => treeQuery.data ?? [], [treeQuery.data])
 
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   React.useEffect(() => {
@@ -161,6 +165,22 @@ export default function OrganizationsPage() {
     if (orgTree.length === 0) setSelectedId(null)
   }, [orgTree, selectedId])
   const selected = findNode(orgTree, selectedId) as OrgNode | null
+  const scopeKey = `${tenantId}:${selectedId}`
+  const scopeGeneration = React.useRef({ key: scopeKey, value: 0 })
+  if (scopeGeneration.current.key !== scopeKey) scopeGeneration.current = { key: scopeKey, value: scopeGeneration.current.value + 1 }
+  const viewKey = `${scopeKey}:${scopeGeneration.current.value}`
+  const activeView = React.useRef(viewKey)
+  activeView.current = viewKey
+  const writing = React.useRef<string | null>(null)
+  const mounted = React.useRef(true)
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const isCurrent = (key: string) => mounted.current && activeView.current === key
+  const beginWrite = () => {
+    if (!isCurrent(viewKey) || writing.current === viewKey) return false
+    writing.current = viewKey
+    return true
+  }
+  const finishWrite = (key: string) => { if (writing.current === key) writing.current = null }
 
   // 层级路径面包屑
   const pathChain = React.useMemo(() => {
@@ -192,12 +212,14 @@ export default function OrganizationsPage() {
   })
 
   const openOrgCreate = (parentId: string | null) => {
+    if (!tenantId || !treeQuery.isSuccess || !isCurrent(viewKey) || writing.current === viewKey) return
     setOrgEditing(null)
     setOrgParent(parentId)
     orgForm.reset({ contactName: "", contactPhone: "", contactEmail: "", name: "", code: "", organizationType: "COMPANY", sortOrder: 0, description: "", province: "", city: "", district: "", township: "", village: "", address: "", longitude: "", latitude: "", expiresAt: "" })
     setOrgDialog(true)
   }
   const openOrgEdit = (node: EditableNode) => {
+    if (!isCurrent(viewKey) || writing.current === viewKey) return
     const full = findNode(orgTree, node.id) as OrgNode | null
     if (!full) return
     setOrgEditing(full)
@@ -211,17 +233,19 @@ export default function OrganizationsPage() {
       description: full.description ?? "",
       province: full.province ?? "", city: full.city ?? "", district: full.district ?? "", township: full.township ?? "", village: full.village ?? "", address: full.address ?? "",
       longitude: full.longitude == null ? "" : String(full.longitude), latitude: full.latitude == null ? "" : String(full.latitude),
-      expiresAt: isoToLocalInput(full.expiresAt),
+      expiresAt: isPlatformRoot(full) ? "" : isoToLocalInput(full.expiresAt),
     })
     setOrgDialog(true)
   }
 
   const orgSave = useMutation({
-    mutationFn: async (v: OrgNodeForm) => {
+    mutationFn: async (request: OrganizationSaveRequest) => {
+      if (!isCurrent(request.viewKey)) throw new DOMException("组织管理范围已变化", "AbortError")
+      const v = request.values
       /* datetime-local("2026-12-31T23:59") → ISO; 空串 → null(清除/永久) */
       const payload = {
-        tenantId: tenantId!,
-        parentId: orgParent,
+        tenantId: request.tenantId,
+        parentId: request.parentId,
         name: v.name,
         code: v.code,
         organizationType: v.organizationType,
@@ -230,42 +254,49 @@ export default function OrganizationsPage() {
         description: v.description || "",
         province: v.province, city: v.city, district: v.district, township: v.township, village: v.village, address: v.address,
         longitude: coordinateOrNull(v.longitude), latitude: coordinateOrNull(v.latitude),
-        expiresAt: v.expiresAt ? new Date(v.expiresAt).toISOString() : null,
+        expiresAt: request.platformRoot ? null : v.expiresAt ? new Date(v.expiresAt).toISOString() : null,
       }
-      if (orgEditing) await organizationsApi.update(orgEditing.id, payload)
+      if (request.editingId) await organizationsApi.update(request.editingId, payload)
       else return (await organizationsApi.create(payload)).administrator
     },
-    onSuccess: (createdAdministrator) => {
-      if (createdAdministrator) setAdministrator(createdAdministrator)
-      toast.success(orgEditing ? "组织已更新" : "组织创建成功")
-      setOrgDialog(false)
+    onSuccess: (createdAdministrator, request) => {
+      finishWrite(request.viewKey)
       queryClient.invalidateQueries({ queryKey: ["org-tree"] })
       queryClient.invalidateQueries({ queryKey: ["department-organizations"] })
       queryClient.invalidateQueries({ queryKey: ["roles"] })
       queryClient.invalidateQueries({ queryKey: ["users"] })
       queryClient.invalidateQueries({ queryKey: ["tenants"] })
       queryClient.invalidateQueries({ queryKey: ["profile"] })
+      if (!isCurrent(request.viewKey)) return
+      if (createdAdministrator) setAdministrator(createdAdministrator)
+      toast.success(request.editingId ? "组织已更新" : "组织创建成功")
+      setOrgDialog(false)
     },
-    onError: (e: Error) => toast.error(e.message || "保存失败"),
+    onError: (e: Error, request) => { finishWrite(request.viewKey); if (isCurrent(request.viewKey) && e.name !== "AbortError") toast.error(e.message || "保存失败") },
   })
 
   const [orgDeleting, setOrgDeleting] = React.useState<EditableNode | null>(null)
   const orgDelete = useMutation({
-    mutationFn: (id: string) => organizationsApi.remove(id),
-    onSuccess: () => {
-      toast.success("组织已删除")
-      setOrgDeleting(null)
+    mutationFn: (request: ScopedDeleteRequest) => {
+      if (!isCurrent(request.viewKey)) throw new DOMException("组织管理范围已变化", "AbortError")
+      return organizationsApi.remove(request.id)
+    },
+    onSuccess: (_result, request) => {
+      finishWrite(request.viewKey)
       queryClient.invalidateQueries({ queryKey: ["org-tree"] })
       queryClient.invalidateQueries({ queryKey: ["department-organizations"] })
+      if (!isCurrent(request.viewKey)) return
+      toast.success("组织已删除")
+      setOrgDeleting(null)
     },
-    onError: (e: Error) => toast.error(e.message || "删除失败"),
+    onError: (e: Error, request) => { finishWrite(request.viewKey); if (isCurrent(request.viewKey) && e.name !== "AbortError") toast.error(e.message || "删除失败") },
   })
 
   /* ---------- 部门 CRUD(选中组织的部门树) ---------- */
   const deptTreeQuery = useQuery({
-    queryKey: ["dept-tree", selectedId],
-    queryFn: async () => asArray<DeptNode>(await departmentsApi.tree(selectedId!)),
-    enabled: !!selectedId,
+    queryKey: ["dept-tree", selected?.id ?? null],
+    queryFn: async () => asArray<DeptNode>(await departmentsApi.tree(selected!.id)),
+    enabled: !!selected,
     staleTime: 30_000,
     retry: 1,
   })
@@ -280,12 +311,14 @@ export default function OrganizationsPage() {
   })
 
   const openDeptCreate = (parentId: string | null) => {
+    if (!selected || !isCurrent(viewKey) || writing.current === viewKey) return
     setDeptEditing(null)
     setDeptParent(parentId)
     deptForm.reset({ name: "", code: "", sortOrder: 0, description: "" })
     setDeptDialog(true)
   }
   const openDeptEdit = (node: EditableNode) => {
+    if (!isCurrent(viewKey) || writing.current === viewKey) return
     const full = findNode(deptTree, node.id) as DeptNode | null
     if (!full) return
     setDeptEditing(full)
@@ -295,36 +328,50 @@ export default function OrganizationsPage() {
   }
 
   const deptSave = useMutation({
-    mutationFn: async (v: NodeForm) => {
+    mutationFn: async (request: OrganizationDepartmentSaveRequest) => {
+      if (!isCurrent(request.viewKey)) throw new DOMException("组织管理范围已变化", "AbortError")
+      const v = request.values
       const payload = {
-        organizationId: selectedId!,
-        parentId: deptParent,
+        organizationId: request.organizationId,
+        parentId: request.parentId,
         name: v.name,
         code: v.code,
         sortOrder: v.sortOrder,
         description: v.description || "",
       }
-      if (deptEditing) await departmentsApi.update(deptEditing.id, payload)
+      if (request.editingId) await departmentsApi.update(request.editingId, payload)
       else await departmentsApi.create(payload)
     },
-    onSuccess: () => {
-      toast.success(deptEditing ? "部门已更新" : "部门创建成功")
+    onSuccess: (_result, request) => {
+      finishWrite(request.viewKey)
+      queryClient.invalidateQueries({ queryKey: ["dept-tree", request.organizationId] })
+      if (!isCurrent(request.viewKey)) return
+      toast.success(request.editingId ? "部门已更新" : "部门创建成功")
       setDeptDialog(false)
-      queryClient.invalidateQueries({ queryKey: ["dept-tree"] })
     },
-    onError: (e: Error) => toast.error(e.message || "保存失败"),
+    onError: (e: Error, request) => { finishWrite(request.viewKey); if (isCurrent(request.viewKey) && e.name !== "AbortError") toast.error(e.message || "保存失败") },
   })
 
   const [deptDeleting, setDeptDeleting] = React.useState<EditableNode | null>(null)
   const deptDelete = useMutation({
-    mutationFn: (id: string) => departmentsApi.remove(id),
-    onSuccess: () => {
+    mutationFn: (request: ScopedDeleteRequest) => {
+      if (!isCurrent(request.viewKey)) throw new DOMException("组织管理范围已变化", "AbortError")
+      return departmentsApi.remove(request.id)
+    },
+    onSuccess: (_result, request) => {
+      finishWrite(request.viewKey)
+      queryClient.invalidateQueries({ queryKey: ["dept-tree"] })
+      if (!isCurrent(request.viewKey)) return
       toast.success("部门已删除")
       setDeptDeleting(null)
-      queryClient.invalidateQueries({ queryKey: ["dept-tree"] })
     },
-    onError: (e: Error) => toast.error(e.message || "删除失败"),
+    onError: (e: Error, request) => { finishWrite(request.viewKey); if (isCurrent(request.viewKey) && e.name !== "AbortError") toast.error(e.message || "删除失败") },
   })
+  React.useEffect(() => {
+    setOrgDialog(false); setOrgEditing(null); setOrgParent(null); setOrgDeleting(null)
+    setDeptDialog(false); setDeptEditing(null); setDeptParent(null); setDeptDeleting(null)
+    setAdministrator(null)
+  }, [viewKey])
 
   return (
     <div>
@@ -423,12 +470,12 @@ export default function OrganizationsPage() {
             ) : (
               <div className="[&_button]:ring-inset">
                 <SelectableTree
-                  nodes={orgToEditable(orgTree)}
+                  nodes={orgToEditable(orgTree, platformTenant)}
                   selectedId={selectedId}
                   onSelect={setSelectedId}
                   onAdd={openOrgCreate}
                   onEdit={openOrgEdit}
-                  onDelete={setOrgDeleting}
+                  onDelete={node => { if (!isPlatformRoot(findNode(orgTree, node.id) as OrgNode | null)) setOrgDeleting(node) }}
                   onAdministrator={setAdministrator}
                 />
               </div>
@@ -568,7 +615,7 @@ export default function OrganizationsPage() {
       )}
 
       {/* 组织弹窗 */}
-      <Dialog open={orgDialog} onOpenChange={setOrgDialog}>
+      <Dialog open={orgDialog} onOpenChange={value => { if (writing.current !== viewKey) setOrgDialog(value) }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{orgEditing ? `编辑组织「${orgEditing.name}」` : "新增组织"}</DialogTitle>
@@ -577,7 +624,9 @@ export default function OrganizationsPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...orgForm}>
-            <form id="org-form" onSubmit={orgForm.handleSubmit((v) => orgSave.mutate(v))} className="space-y-4">
+            <form id="org-form" onSubmit={orgForm.handleSubmit((values) => {
+              if (tenantId && beginWrite()) orgSave.mutate({ values, tenantId, parentId: orgParent, editingId: orgEditing?.id ?? null, platformRoot: isPlatformRoot(orgEditing), viewKey })
+            })} className="space-y-4">
               <FormField
                 control={orgForm.control}
                 name="name"
@@ -637,10 +686,11 @@ export default function OrganizationsPage() {
                         type="datetime-local"
                         aria-label="组织过期时间"
                         {...field}
-                        value={field.value ?? ""}
+                        value={isPlatformRoot(orgEditing) ? "" : field.value ?? ""}
+                        disabled={isPlatformRoot(orgEditing)}
                       />
                     </FormControl>
-                    <FormDescription>留空表示永不过期；到期后该组织下所有用户无法登录</FormDescription>
+                    <FormDescription>{isPlatformRoot(orgEditing) ? "平台根组织永久有效，保存时会清除历史到期配置。" : "留空表示永不过期；到期后该组织下所有用户无法登录"}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -717,7 +767,7 @@ export default function OrganizationsPage() {
       </Dialog>
 
       {/* 部门弹窗 */}
-      <Dialog open={deptDialog} onOpenChange={setDeptDialog}>
+      <Dialog open={deptDialog} onOpenChange={value => { if (writing.current !== viewKey) setDeptDialog(value) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{deptEditing ? `编辑部门「${deptEditing.name}」` : "新增部门"}</DialogTitle>
@@ -726,7 +776,9 @@ export default function OrganizationsPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...deptForm}>
-            <form id="dept-form" onSubmit={deptForm.handleSubmit((v) => deptSave.mutate(v))} className="space-y-4">
+            <form id="dept-form" onSubmit={deptForm.handleSubmit((values) => {
+              if (selectedId && selected && beginWrite()) deptSave.mutate({ values, organizationId: selectedId, parentId: deptParent, editingId: deptEditing?.id ?? null, viewKey })
+            })} className="space-y-4">
               <FormField
                 control={deptForm.control}
                 name="name"
@@ -808,7 +860,7 @@ export default function OrganizationsPage() {
           </>
         }
         loading={orgDelete.isPending}
-        onConfirm={() => orgDeleting && orgDelete.mutate(orgDeleting.id)}
+        onConfirm={() => { if (orgDeleting && !isPlatformRoot(findNode(orgTree, orgDeleting.id) as OrgNode | null) && beginWrite()) orgDelete.mutate({ id: orgDeleting.id, viewKey }) }}
       />
       <ConfirmDialog
         open={!!deptDeleting}
@@ -820,7 +872,7 @@ export default function OrganizationsPage() {
           </>
         }
         loading={deptDelete.isPending}
-        onConfirm={() => deptDeleting && deptDelete.mutate(deptDeleting.id)}
+        onConfirm={() => { if (deptDeleting && beginWrite()) deptDelete.mutate({ id: deptDeleting.id, viewKey }) }}
       />
     </div>
   )
@@ -836,7 +888,7 @@ function SelectableTree({
   onDelete,
   onAdministrator,
 }: {
-  nodes: EditableNode[]
+  nodes: OrganizationEditableNode[]
   selectedId: string | null
   onSelect: (id: string) => void
   onAdd: (parentId: string) => void
@@ -850,7 +902,6 @@ function SelectableTree({
         <SelectRow
           key={n.id}
           node={n}
-          siblings={nodes}
           depth={0}
           selectedId={selectedId}
           onSelect={onSelect}
@@ -866,7 +917,6 @@ function SelectableTree({
 
 function SelectRow({
   node,
-  siblings,
   depth,
   selectedId,
   onSelect,
@@ -875,8 +925,7 @@ function SelectRow({
   onDelete,
   onAdministrator,
 }: {
-  node: EditableNode
-  siblings: EditableNode[]
+  node: OrganizationEditableNode
   depth: number
   selectedId: string | null
   onSelect: (id: string) => void
@@ -932,9 +981,9 @@ function SelectRow({
           <IconBtn label="编辑" onClick={() => onEdit(node)}>
             <Pencil className="size-3.5" />
           </IconBtn>
-          <IconBtn label="删除" danger onClick={() => onDelete(node)}>
+          {!node.platformRoot && <IconBtn label="删除" danger onClick={() => onDelete(node)}>
             <Trash2 className="size-3.5" />
-          </IconBtn>
+          </IconBtn>}
         </div>
       </div>
       {hasChildren && open && (
@@ -943,7 +992,6 @@ function SelectRow({
             <SelectRow
               key={c.id}
               node={c}
-              siblings={node.children}
               depth={depth + 1}
               selectedId={selectedId}
               onSelect={onSelect}

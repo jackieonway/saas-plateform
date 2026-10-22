@@ -24,6 +24,14 @@ const stripMapProxyCredentials = (request: ClientRequest) => {
 };
 const mapProxyHeaders = { "User-Agent": "SaaSPlatform/1.0 map-resource-proxy" };
 const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || "http://127.0.0.1:3001";
+const workOrdersProxyTarget = process.env.WORK_ORDERS_DEV_PROXY_TARGET || "http://127.0.0.1:3004";
+const storesProxyTarget = process.env.STORES_DEV_PROXY_TARGET || "http://127.0.0.1:3031";
+const additionalAllowedHosts = [...new Set((process.env.DEV_ALLOWED_HOSTS || "")
+  .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean))];
+if (additionalAllowedHosts.some((host) => host.length > 253 || host.split(".").some((label) =>
+  label.length > 63 || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)))) {
+  throw new Error("DEV_ALLOWED_HOSTS must contain exact hostnames separated by commas, without URLs, ports or wildcards");
+}
 
 export default defineConfig({
   plugins: [
@@ -71,7 +79,8 @@ export default defineConfig({
           const pathname = req.url?.split("?", 1)[0];
           const externalView = pathname === "/api/external/menus" || pathname === "/api/external/roles";
           const workOrdersApi = pathname === "/work-orders-api" || pathname?.startsWith("/work-orders-api/");
-          if (req.method !== "OPTIONS" || req.headers.origin !== "null" || (!externalView && !workOrdersApi)) {
+          const storesApi = pathname === "/stores-api" || pathname?.startsWith("/stores-api/");
+          if (req.method !== "OPTIONS" || req.headers.origin !== "null" || (!externalView && !workOrdersApi && !storesApi)) {
             next();
             return;
           }
@@ -94,9 +103,8 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     host: true,
-    // 沙箱预览经外部网关域名访问 (如 *.cn-hongkong-vpc.fcapp.run), Host 头非 localhost,
-    // Vite 6 默认会拦截 (403 Blocked request), 必须放行全部 Host 才能经 Caddy 网关预览。
-    allowedHosts: true,
+    // Preserve Vite's localhost/IP defaults; external previews require explicit hostnames.
+    allowedHosts: additionalAllowedHosts,
     proxy: {
       // Development host can reach the public map services even when WSL's
       // backend cannot. Production /api/maps/* is served by the Rust gateway.
@@ -137,7 +145,11 @@ export default defineConfig({
         changeOrigin: true,
       },
       "/work-orders-api": {
-        target: "http://127.0.0.1:3104",
+        target: workOrdersProxyTarget,
+        changeOrigin: true,
+      },
+      "/stores-api": {
+        target: storesProxyTarget,
         changeOrigin: true,
       },
       // Development aliases for the independent Vite compatibility examples.

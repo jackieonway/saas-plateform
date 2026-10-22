@@ -3,6 +3,15 @@ import type { MicroEsmModule } from "@/components/micro/types"
 // Vite includes these first-party modules in the host build as lazy chunks.
 const modules = import.meta.glob<MicroEsmModule>("./*.tsx")
 
+/** Only modules included in this host build can be selected for trusted access. */
+export function listHostEsmModules(): { code: string; entryUrl: string }[] {
+  return Object.keys(modules)
+    .map((key) => /^\.\/([a-z0-9-]+)\.tsx$/.exec(key)?.[1])
+    .filter((code): code is string => Boolean(code))
+    .sort()
+    .map((code) => ({ code, entryUrl: `/src/micro-apps/${code}.tsx` }))
+}
+
 export function hostEsmEntryForCode(code: string): string | null {
   if (!/^[a-z0-9-]+$/.test(code)) return null
   return modules[`./${code}.tsx`] ? `/src/micro-apps/${code}.tsx` : null

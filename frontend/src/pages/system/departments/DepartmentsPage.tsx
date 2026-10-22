@@ -41,6 +41,14 @@ const deptSchema = z.object({
   description: z.string().max(255).optional(),
 })
 type DeptForm = z.infer<typeof deptSchema>
+type DepartmentSaveRequest = {
+  values: DeptForm
+  organizationId: string
+  parentId: string | null
+  editingId: string | null
+  viewKey: string
+}
+type DepartmentDeleteRequest = { id: string; organizationId: string; viewKey: string }
 
 function deptToEditable(nodes: DeptNode[]): EditableNode[] {
   return nodes.map((n) => ({
@@ -102,6 +110,17 @@ export default function DepartmentsPage() {
   // Derive the active organization during render so session switches cannot issue a request for the
   // previously selected organization before a state-reset effect runs.
   const organizationId = selectedOrg?.id ?? null
+  const scopeKey = `${contextKey}:${organizationId}`
+  const scopeGeneration = React.useRef({ key: scopeKey, value: 0 })
+  if (scopeGeneration.current.key !== scopeKey) scopeGeneration.current = { key: scopeKey, value: scopeGeneration.current.value + 1 }
+  const viewKey = `${scopeKey}:${scopeGeneration.current.value}`
+  const activeView = React.useRef(viewKey)
+  activeView.current = viewKey
+  const mounted = React.useRef(true)
+  const writing = React.useRef<string | null>(null)
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const isCurrent = (key: string) => mounted.current && activeView.current === key
+  const finishWrite = (key: string) => { if (writing.current === key) writing.current = null }
 
   const treeQuery = useQuery({
     queryKey: ["dept-tree", organizationId, contextEpoch],
@@ -122,13 +141,14 @@ export default function DepartmentsPage() {
   })
 
   const openCreate = (parentId: string | null) => {
-    if (!organizationId) return
+    if (!organizationId || !isCurrent(viewKey) || writing.current === viewKey) return
     setEditing(null)
     setParent(parentId)
     form.reset({ name: "", code: "", sortOrder: 0, description: "" })
     setDialogOpen(true)
   }
   const openEdit = (node: EditableNode) => {
+    if (!isCurrent(viewKey) || writing.current === viewKey) return
     const full = findDept(deptTree, node.id)
     if (!full) return
     setEditing(full)
@@ -138,25 +158,31 @@ export default function DepartmentsPage() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: async (v: DeptForm) => {
-      if (!organizationId || contextSwitching) throw new Error("请等待登录组织加载完成")
+    mutationFn: async (request: DepartmentSaveRequest) => {
+      if (!isCurrent(request.viewKey) || contextSwitching) throw new DOMException("部门管理范围已变化", "AbortError")
+      const v = request.values
       const payload = {
-        organizationId,
-        parentId: parent,
+        organizationId: request.organizationId,
+        parentId: request.parentId,
         name: v.name,
         code: v.code,
         sortOrder: v.sortOrder,
         description: v.description || "",
       }
-      if (editing) await departmentsApi.update(editing.id, payload)
+      if (request.editingId) await departmentsApi.update(request.editingId, payload)
       else await departmentsApi.create(payload)
     },
-    onSuccess: () => {
-      toast.success(editing ? "部门已更新" : "部门创建成功")
+    onSuccess: (_result, request) => {
+      finishWrite(request.viewKey)
+      queryClient.invalidateQueries({ queryKey: ["dept-tree", request.organizationId] })
+      if (!isCurrent(request.viewKey)) return
+      toast.success(request.editingId ? "部门已更新" : "部门创建成功")
       setDialogOpen(false)
-      queryClient.invalidateQueries({ queryKey: ["dept-tree"] })
     },
-    onError: (e: Error) => toast.error(e.message || "保存失败"),
+    onError: (e: Error, request) => {
+      finishWrite(request.viewKey)
+      if (isCurrent(request.viewKey) && e.name !== "AbortError") toast.error(e.message || "保存失败")
+    },
   })
 
   const [deleting, setDeleting] = React.useState<EditableNode | null>(null)
@@ -168,13 +194,21 @@ export default function DepartmentsPage() {
   }, [contextKey, organizationId])
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => departmentsApi.remove(id),
-    onSuccess: () => {
+    mutationFn: (request: DepartmentDeleteRequest) => {
+      if (!isCurrent(request.viewKey)) throw new DOMException("部门管理范围已变化", "AbortError")
+      return departmentsApi.remove(request.id)
+    },
+    onSuccess: (_result, request) => {
+      finishWrite(request.viewKey)
+      queryClient.invalidateQueries({ queryKey: ["dept-tree", request.organizationId] })
+      if (!isCurrent(request.viewKey)) return
       toast.success("部门已删除")
       setDeleting(null)
-      queryClient.invalidateQueries({ queryKey: ["dept-tree"] })
     },
-    onError: (e: Error) => toast.error(e.message || "删除失败"),
+    onError: (e: Error, request) => {
+      finishWrite(request.viewKey)
+      if (isCurrent(request.viewKey) && e.name !== "AbortError") toast.error(e.message || "删除失败")
+    },
   })
 
   return (
@@ -264,7 +298,7 @@ export default function DepartmentsPage() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={value => { if (writing.current !== viewKey) setDialogOpen(value) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? `编辑部门「${editing.name}」` : "新增部门"}</DialogTitle>
@@ -273,7 +307,11 @@ export default function DepartmentsPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form id="dept-form2" onSubmit={form.handleSubmit((v) => saveMutation.mutate(v))} className="space-y-4">
+            <form id="dept-form2" onSubmit={form.handleSubmit((values) => {
+              if (!organizationId || !contextReady || !isCurrent(viewKey) || writing.current === viewKey) return
+              writing.current = viewKey
+              saveMutation.mutate({ values, organizationId, parentId: parent, editingId: editing?.id ?? null, viewKey })
+            })} className="space-y-4">
               <FormField
                 control={form.control}
                 name="name"
@@ -354,7 +392,11 @@ export default function DepartmentsPage() {
           </>
         }
         loading={deleteMutation.isPending}
-        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        onConfirm={() => {
+          if (!deleting || !organizationId || !contextReady || !isCurrent(viewKey) || writing.current === viewKey) return
+          writing.current = viewKey
+          deleteMutation.mutate({ id: deleting.id, organizationId, viewKey })
+        }}
       />
     </div>
   )

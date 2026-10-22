@@ -22,6 +22,40 @@ pub fn routes() -> Router<AppState> {
         .route("/api/maps/ip-location", get(ip_location))
 }
 
+fn append_bounded(body: &mut Vec<u8>, chunk: &[u8], limit: usize) -> Result<(), ()> {
+    if chunk.len() > limit.saturating_sub(body.len()) {
+        return Err(());
+    }
+    body.extend_from_slice(chunk);
+    Ok(())
+}
+
+async fn bounded_body(
+    mut response: reqwest::Response,
+    limit: usize,
+    invalid: &'static str,
+    too_large: &'static str,
+) -> Result<Vec<u8>, AppError> {
+    if response
+        .content_length()
+        .is_some_and(|len| len > limit as u64)
+    {
+        return Err(AppError::Server(anyhow::anyhow!(too_large)));
+    }
+    // Content-Length may be absent or inaccurate. Stop at the first chunk that
+    // exceeds the budget instead of collecting an unbounded upstream response.
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| AppError::Server(anyhow::anyhow!(invalid)))?
+    {
+        append_bounded(&mut body, &chunk, limit)
+            .map_err(|_| AppError::Server(anyhow::anyhow!(too_large)))?;
+    }
+    Ok(body)
+}
+
 fn valid_tile(z: u8, x: u32, file: &str) -> Option<u32> {
     let y: u32 = file.strip_suffix(".png")?.parse().ok()?;
     let dimension = 1u64.checked_shl(u32::from(z))?;
@@ -52,13 +86,13 @@ async fn tile(
             "MAP_TILE_UPSTREAM_FAILED"
         )));
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|_| AppError::Server(anyhow::anyhow!("MAP_TILE_UPSTREAM_FAILED")))?;
-    if bytes.len() > 2_000_000 {
-        return Err(AppError::Server(anyhow::anyhow!("MAP_TILE_TOO_LARGE")));
-    }
+    let bytes = bounded_body(
+        response,
+        2_000_000,
+        "MAP_TILE_UPSTREAM_FAILED",
+        "MAP_TILE_TOO_LARGE",
+    )
+    .await?;
     Ok((
         StatusCode::OK,
         [
@@ -112,15 +146,13 @@ async fn search(
             "MAP_SEARCH_UPSTREAM_FAILED"
         )));
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|_| AppError::Server(anyhow::anyhow!("MAP_SEARCH_INVALID_RESPONSE")))?;
-    if bytes.len() > 200_000 {
-        return Err(AppError::Server(anyhow::anyhow!(
-            "MAP_SEARCH_RESPONSE_TOO_LARGE"
-        )));
-    }
+    let bytes = bounded_body(
+        response,
+        200_000,
+        "MAP_SEARCH_INVALID_RESPONSE",
+        "MAP_SEARCH_RESPONSE_TOO_LARGE",
+    )
+    .await?;
     let data: Value = serde_json::from_slice(&bytes)
         .map_err(|_| AppError::Server(anyhow::anyhow!("MAP_SEARCH_INVALID_RESPONSE")))?;
     if !data.is_array() {
@@ -165,15 +197,13 @@ async fn reverse(
             "MAP_REVERSE_UPSTREAM_FAILED"
         )));
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|_| AppError::Server(anyhow::anyhow!("MAP_REVERSE_INVALID_RESPONSE")))?;
-    if bytes.len() > 100_000 {
-        return Err(AppError::Server(anyhow::anyhow!(
-            "MAP_REVERSE_RESPONSE_TOO_LARGE"
-        )));
-    }
+    let bytes = bounded_body(
+        response,
+        100_000,
+        "MAP_REVERSE_INVALID_RESPONSE",
+        "MAP_REVERSE_RESPONSE_TOO_LARGE",
+    )
+    .await?;
     let data: Value = serde_json::from_slice(&bytes)
         .map_err(|_| AppError::Server(anyhow::anyhow!("MAP_REVERSE_INVALID_RESPONSE")))?;
     if !data.is_object() {
@@ -231,15 +261,13 @@ async fn ip_location(
             "IP_LOCATION_UPSTREAM_FAILED"
         )));
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|_| AppError::Server(anyhow::anyhow!("IP_LOCATION_INVALID_RESPONSE")))?;
-    if bytes.len() > 100_000 {
-        return Err(AppError::Server(anyhow::anyhow!(
-            "IP_LOCATION_RESPONSE_TOO_LARGE"
-        )));
-    }
+    let bytes = bounded_body(
+        response,
+        100_000,
+        "IP_LOCATION_INVALID_RESPONSE",
+        "IP_LOCATION_RESPONSE_TOO_LARGE",
+    )
+    .await?;
     let data: Value = serde_json::from_slice(&bytes)
         .map_err(|_| AppError::Server(anyhow::anyhow!("IP_LOCATION_INVALID_RESPONSE")))?;
     if data["success"] != true {
@@ -255,6 +283,40 @@ async fn ip_location(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn upstream_byte_budget_stops_before_retaining_an_oversized_chunk() {
+        let mut bytes = Vec::new();
+        append_bounded(&mut bytes, b"ab", 5).unwrap();
+        append_bounded(&mut bytes, b"cde", 5).unwrap();
+        assert_eq!(bytes, b"abcde");
+        assert!(append_bounded(&mut bytes, b"f", 5).is_err());
+        assert_eq!(bytes, b"abcde");
+        assert!(append_bounded(&mut bytes, b"", 5).is_ok());
+        let mut small = vec![1];
+        assert!(append_bounded(&mut small, &[2, 3, 4, 5, 6], 5).is_err());
+        assert_eq!(small, [1]);
+    }
+
+    #[tokio::test]
+    async fn upstream_body_accepts_the_limit_and_rejects_known_oversize() {
+        let response =
+            |body: &'static str| reqwest::Response::from(axum::http::Response::new(body));
+        assert_eq!(
+            bounded_body(response("hello"), 5, "INVALID", "TOO_LARGE")
+                .await
+                .unwrap(),
+            b"hello"
+        );
+        assert!(
+            matches!(bounded_body(response("hello!"), 5, "INVALID", "TOO_LARGE")
+            .await, Err(AppError::Server(error)) if error.to_string()=="TOO_LARGE")
+        );
+        assert!(bounded_body(response(""), 0, "INVALID", "TOO_LARGE")
+            .await
+            .unwrap()
+            .is_empty());
+    }
 
     #[test]
     fn tile_path_and_client_ip_are_bounded() {

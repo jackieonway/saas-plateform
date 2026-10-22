@@ -316,6 +316,371 @@ impl Harness {
     }
 }
 
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn platform_control_plane_cannot_be_deleted_disabled_or_expired() -> Result<()> {
+    let database = Database::create().await?;
+    let result = async {
+        let pool = &database.pool;
+        let h = Harness::create(pool).await?;
+        let (platform, root): (Uuid, Uuid) = sqlx::query_as(
+            "SELECT t.id,o.id FROM tenants t JOIN organizations o ON o.tenant_id=t.id \
+             WHERE t.is_platform AND o.parent_id IS NULL",
+        )
+        .fetch_one(pool)
+        .await?;
+        let tenant_path = format!("/api/tenants/{platform}");
+        let root_path = format!("/api/organizations/{root}");
+        let before: String = sqlx::query_scalar(
+            "SELECT jsonb_build_array(t.status,t.expires_at,o.status,o.expires_at, \
+             (SELECT count(*) FROM memberships WHERE organization_id=o.id), \
+             (SELECT count(*) FROM organization_menus WHERE organization_id=o.id), \
+             (SELECT count(*) FROM audit_logs))::text \
+             FROM tenants t JOIN organizations o ON o.tenant_id=t.id WHERE o.id=$1",
+        )
+        .bind(root)
+        .fetch_one(pool)
+        .await?;
+        request(
+            &h.app,
+            &h.token,
+            Method::DELETE,
+            &root_path,
+            None,
+            StatusCode::BAD_REQUEST,
+        )
+        .await?;
+        h.invalid(
+            Method::PUT,
+            &format!("{root_path}/status"),
+            json!({"status":"DISABLED"}),
+        )
+        .await?;
+        for expires_at in ["2000-01-01T00:00:00Z", "2099-01-01T00:00:00Z"] {
+            for path in [&tenant_path, &root_path] {
+                h.invalid(Method::PUT, path, json!({"expiresAt":expires_at}))
+                    .await?;
+            }
+        }
+        let after: String = sqlx::query_scalar(
+            "SELECT jsonb_build_array(t.status,t.expires_at,o.status,o.expires_at, \
+             (SELECT count(*) FROM memberships WHERE organization_id=o.id), \
+             (SELECT count(*) FROM organization_menus WHERE organization_id=o.id), \
+             (SELECT count(*) FROM audit_logs))::text \
+             FROM tenants t JOIN organizations o ON o.tenant_id=t.id WHERE o.id=$1",
+        )
+        .bind(root)
+        .fetch_one(pool)
+        .await?;
+        ensure!(
+            before == after,
+            "rejected control-plane lifecycle edits changed data or audits"
+        );
+        for path in [&tenant_path, &root_path] {
+            let updated = h
+                .ok(Method::PUT, path, Some(json!({"expiresAt":null})))
+                .await?;
+            ensure!(
+                updated["expiresAt"].is_null(),
+                "clearing a control-plane expiry was rejected"
+            );
+        }
+        h.ok(
+            Method::PUT,
+            &format!("{root_path}/status"),
+            Some(json!({"status":"ENABLED"})),
+        )
+        .await?;
+        h.ok(
+            Method::PUT,
+            &root_path,
+            Some(json!({"name":"Updated platform headquarters"})),
+        )
+        .await?;
+
+        // Only the platform control plane is protected. Platform descendants
+        // and ordinary tenant roots keep their existing lifecycle operations.
+        let child = h
+            .ok(
+                Method::POST,
+                "/api/organizations",
+                Some(json!({
+                    "tenantId":platform,"parentId":root,"name":"Disposable platform department",
+                })),
+            )
+            .await?;
+        let child_path = format!("/api/organizations/{}", id(&child)?);
+        h.ok(
+            Method::PUT,
+            &child_path,
+            Some(json!({"expiresAt":"2000-01-01T00:00:00Z"})),
+        )
+        .await?;
+        h.ok(
+            Method::PUT,
+            &format!("{child_path}/status"),
+            Some(json!({"status":"DISABLED"})),
+        )
+        .await?;
+        h.ok(Method::DELETE, &child_path, None).await?;
+        let tenant = h
+            .ok(
+                Method::POST,
+                "/api/tenants",
+                Some(json!({
+                    "name":"Ordinary lifecycle tenant","code":"ordinary-lifecycle",
+                })),
+            )
+            .await?;
+        let ordinary_tenant = id(&tenant)?;
+        let ordinary_root: Uuid = sqlx::query_scalar(
+            "SELECT id FROM organizations WHERE tenant_id=$1 AND parent_id IS NULL",
+        )
+        .bind(ordinary_tenant)
+        .fetch_one(pool)
+        .await?;
+        h.ok(
+            Method::PUT,
+            &format!("/api/tenants/{ordinary_tenant}"),
+            Some(json!({"expiresAt":"2000-01-01T00:00:00Z"})),
+        )
+        .await?;
+        let ordinary_root_path = format!("/api/organizations/{ordinary_root}");
+        h.ok(
+            Method::PUT,
+            &ordinary_root_path,
+            Some(json!({"expiresAt":"2000-01-01T00:00:00Z"})),
+        )
+        .await?;
+        h.ok(
+            Method::PUT,
+            &format!("{ordinary_root_path}/status"),
+            Some(json!({"status":"DISABLED"})),
+        )
+        .await?;
+        h.ok(Method::DELETE, &ordinary_root_path, None).await?;
+        Ok(())
+    }
+    .await;
+    database.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn menu_hierarchy_moves_preserve_application_and_acyclicity() -> Result<()> {
+    let database = Database::create().await?;
+    let result = async {
+        let pool = &database.pool;
+        let h = Harness::create(pool).await?;
+        let permission: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus(application_id,title,permission,type) \
+             VALUES($1,'菜单管理','system:menu','BUTTON') RETURNING id",
+        ).bind(h.application).fetch_one(pool).await?;
+        sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT id,$1 FROM tenants WHERE is_platform")
+            .bind(permission).execute(pool).await?;
+        sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) \
+            SELECT o.id,$1 FROM organizations o JOIN tenants t ON t.id=o.tenant_id WHERE t.is_platform AND o.parent_id IS NULL")
+            .bind(permission).execute(pool).await?;
+
+        let parent = h.ok(Method::POST, "/api/menus", Some(json!({
+            "applicationId": h.application, "title": "父菜单", "type": "DIR",
+        }))).await?;
+        let parent = id(&parent)?;
+        let child = h.ok(Method::POST, "/api/menus", Some(json!({
+            "applicationId": h.application, "title": "子菜单", "parentId": parent,
+        }))).await?;
+        let child = id(&child)?;
+        let parent_path = format!("/api/menus/{parent}");
+        let child_path = format!("/api/menus/{child}");
+
+        // Updating ordinary fields preserves the parent; explicit clears remove it.
+        let unchanged = h.ok(Method::PUT, &child_path, Some(json!({"title":" 子菜单新名称 "}))).await?;
+        ensure!(unchanged["parentId"] == json!(parent) && unchanged["title"] == "子菜单新名称", "omitted parent changed or title was not normalized");
+        for clear in [Value::Null, json!("")] {
+            let cleared = h.ok(Method::PUT, &child_path, Some(json!({"parentId":clear}))).await?;
+            ensure!(cleared["parentId"].is_null(), "explicit parent clear was ignored");
+            h.ok(Method::PUT, &child_path, Some(json!({"parentId":parent}))).await?;
+        }
+        for invalid in [parent, child] {
+            h.invalid(Method::PUT, &parent_path, json!({"parentId":invalid})).await?;
+        }
+        h.invalid(Method::PUT, &child_path, json!({"parentId":Uuid::new_v4()})).await?;
+        let foreign_application: Uuid = sqlx::query_scalar(
+            "INSERT INTO applications(name,code) VALUES('其他应用','menu-other-app') RETURNING id",
+        ).fetch_one(pool).await?;
+        let foreign_menu: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus(application_id,title) VALUES($1,'其他应用父菜单') RETURNING id",
+        ).bind(foreign_application).fetch_one(pool).await?;
+        h.invalid(Method::PUT, &child_path, json!({"parentId":foreign_menu})).await?;
+        h.invalid(Method::POST, "/api/menus", json!({
+            "applicationId": h.application, "title":"跨应用菜单", "parentId":foreign_menu,
+        })).await?;
+        let actual_parent: Option<Uuid> = sqlx::query_scalar("SELECT parent_id FROM menus WHERE id=$1")
+            .bind(child).fetch_one(pool).await?;
+        ensure!(actual_parent == Some(parent), "rejected menu move changed hierarchy");
+
+        h.ok(Method::PUT, &child_path, Some(json!({"parentId":null}))).await?;
+        let move_menu = async |menu: Uuid, new_parent: Uuid| -> Result<StatusCode> {
+            let response = h.app.clone().oneshot(Request::builder().method(Method::PUT)
+                .uri(format!("/api/menus/{menu}"))
+                .header(header::AUTHORIZATION, format!("Bearer {}", h.token))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&json!({"parentId":new_parent}))?))?).await?;
+            Ok(response.status())
+        };
+        let (first, second) = tokio::time::timeout(Duration::from_secs(15), async {
+            tokio::join!(move_menu(parent, child), move_menu(child, parent))
+        }).await.map_err(|_|anyhow!("concurrent menu moves timed out"))?;
+        let statuses = [first?, second?];
+        ensure!(statuses.contains(&StatusCode::OK) && statuses.contains(&StatusCode::BAD_REQUEST),
+            "concurrent reciprocal moves were not serialized: {statuses:?}");
+        let menu_count: i64 = sqlx::query_scalar("SELECT count(*) FROM menus WHERE id=ANY($1)")
+            .bind(vec![parent, child]).fetch_one(pool).await?;
+        ensure!(menu_count == 2, "concurrent moves lost a menu");
+        Ok(())
+    }.await;
+    database.finish(result).await
+}
+
+async fn wait_for_catalog_mutation_lock(
+    pool: &PgPool,
+    task: &tokio::task::JoinHandle<Result<Value>>,
+) -> Result<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while tokio::time::Instant::now() < deadline {
+        ensure!(
+            !task.is_finished(),
+            "catalog mutation bypassed the version lock"
+        );
+        let blocked: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM pg_stat_activity \
+             WHERE datname=current_database() AND pid<>pg_backend_pid() AND wait_event_type='Lock')",
+        ).fetch_one(pool).await?;
+        if blocked {
+            return Ok(());
+        }
+        tokio::task::yield_now().await;
+    }
+    Err(anyhow!(
+        "catalog mutation did not wait for the active version transaction"
+    ))
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn region_mutations_serialize_with_catalog_deletion() -> Result<()> {
+    let database = Database::create().await?;
+    let result = async {
+        let pool = &database.pool;
+        let h = Harness::create(pool).await?;
+        let permission: Uuid = sqlx::query_scalar(
+            "INSERT INTO menus(application_id,title,permission,type) \
+             VALUES($1,'地区管理','system:region','BUTTON') RETURNING id",
+        ).bind(h.application).fetch_one(pool).await?;
+        sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT id,$1 FROM tenants WHERE is_platform")
+            .bind(permission).execute(pool).await?;
+        sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) \
+            SELECT o.id,$1 FROM organizations o JOIN tenants t ON t.id=o.tenant_id WHERE t.is_platform AND o.parent_id IS NULL")
+            .bind(permission).execute(pool).await?;
+        let region = json!({"version":"catalog-test", "code":"100", "parentCode":"0",
+            "name":"测试省", "namePinyin":"ceshisheng", "nameShort":"css", "level":2});
+
+        // Hold the same lock as DELETE /versions while each row mutation starts.
+        // After the deletion commits, stale requests must reject the tombstone.
+        for method in [Method::POST, Method::PUT, Method::DELETE] {
+            h.ok(Method::POST, "/api/regions/versions", Some(json!({
+                "version":"catalog-test", "label":"测试版本",
+            }))).await?;
+            let created = h.ok(Method::POST, "/api/regions", Some(region.clone())).await?;
+            let id = created["id"].as_str().ok_or_else(||anyhow!("region ID missing"))?;
+            let mut blocker = pool.begin().await?;
+            sqlx::query("SELECT version FROM region_versions WHERE version='catalog-test' FOR UPDATE")
+                .execute(&mut *blocker).await?;
+            sqlx::query("DELETE FROM regions WHERE version='catalog-test'").execute(&mut *blocker).await?;
+            sqlx::query("UPDATE region_versions SET deleted_at=now() WHERE version='catalog-test'")
+                .execute(&mut *blocker).await?;
+            let path = if method == Method::POST { "/api/regions".to_string() }
+                else { format!("/api/regions/{id}?version=catalog-test") };
+            let mut body = region.clone();
+            body["code"] = json!("101");
+            let expected = if method == Method::DELETE { StatusCode::NOT_FOUND } else { StatusCode::BAD_REQUEST };
+            let app = h.app.clone();
+            let token = h.token.clone();
+            let task = tokio::spawn(async move {
+                let body = (method != Method::DELETE).then_some(body);
+                request(&app, &token, method, &path, body, expected).await
+            });
+            let waited = wait_for_catalog_mutation_lock(pool, &task).await;
+            blocker.commit().await?;
+            let response = task.await?;
+            waited?;
+            response?;
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM regions WHERE version='catalog-test'")
+                .fetch_one(pool).await?;
+            ensure!(count == 0, "a stale request wrote into a deleted catalog");
+        }
+
+        h.ok(Method::POST, "/api/regions/versions", Some(json!({
+            "version":"catalog-test", "label":"测试版本",
+        }))).await?;
+        let parent = h.ok(Method::POST, "/api/regions", Some(region.clone())).await?;
+        let parent_id = parent["id"].as_str().ok_or_else(||anyhow!("parent region ID missing"))?;
+        let mut child = region.clone();
+        child["code"] = json!("110");
+        child["parentCode"] = json!("100");
+        child["level"] = json!(3);
+        let created_child = h.ok(Method::POST, "/api/regions", Some(child.clone())).await?;
+        let mut invalid_parent = region.clone();
+        invalid_parent["level"] = json!(3);
+        h.invalid(Method::PUT, &format!("/api/regions/{parent_id}"), invalid_parent).await?;
+        h.invalid(Method::PUT, &format!("/api/regions/{parent_id}"), {
+            let mut renamed = region.clone(); renamed["code"] = json!("102"); renamed
+        }).await?;
+        h.ok(Method::DELETE, &format!("/api/regions/{}?version=catalog-test",created_child["id"].as_str().unwrap()), None).await?;
+
+        // Removing a parent while a child create waits cannot leave an orphan.
+        let mut blocker = pool.begin().await?;
+        sqlx::query("SELECT version FROM region_versions WHERE version='catalog-test' FOR UPDATE")
+            .execute(&mut *blocker).await?;
+        sqlx::query("DELETE FROM regions WHERE version='catalog-test' AND source_id=$1")
+            .bind(parent_id).execute(&mut *blocker).await?;
+        let app = h.app.clone();
+        let token = h.token.clone();
+        let task = tokio::spawn(async move {
+            request(&app, &token, Method::POST, "/api/regions", Some(child), StatusCode::BAD_REQUEST).await
+        });
+        let waited = wait_for_catalog_mutation_lock(pool, &task).await;
+        blocker.commit().await?;
+        let response = task.await?;
+        waited?;
+        response?;
+
+        // Copying also waits for the source version and rechecks its tombstone.
+        let mut blocker = pool.begin().await?;
+        sqlx::query("SELECT version FROM region_versions WHERE version='catalog-test' FOR UPDATE")
+            .execute(&mut *blocker).await?;
+        sqlx::query("UPDATE region_versions SET deleted_at=now() WHERE version='catalog-test'")
+            .execute(&mut *blocker).await?;
+        let app = h.app.clone();
+        let token = h.token.clone();
+        let task = tokio::spawn(async move {
+            request(&app, &token, Method::POST, "/api/regions/versions", Some(json!({
+                "version":"catalog-copy", "label":"复制版本", "sourceVersion":"catalog-test",
+            })), StatusCode::BAD_REQUEST).await
+        });
+        let waited = wait_for_catalog_mutation_lock(pool, &task).await;
+        blocker.commit().await?;
+        let response = task.await?;
+        waited?;
+        response?;
+        let copied: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM region_versions WHERE version='catalog-copy')")
+            .fetch_one(pool).await?;
+        ensure!(!copied, "copy of a deleted source left a partial version");
+        Ok(())
+    }.await;
+    database.finish(result).await
+}
+
 async fn managed_role(pool: &PgPool, tenant: Uuid, org: Uuid, code: &str) -> Result<Uuid> {
     let roles: Vec<Uuid> = sqlx::query_scalar(
         "SELECT id FROM roles WHERE tenant_id=$1 AND organization_id=$2 AND code=$3 AND built_in",

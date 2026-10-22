@@ -28,6 +28,7 @@ use crate::state::AppState;
 use crate::util::hash;
 use crate::util::jwt::{self, Claims};
 
+mod managed_gate;
 mod phase31;
 mod zip_registration;
 
@@ -667,12 +668,14 @@ async fn release_archive_upload_registers_files_and_preserves_version_bytes() ->
     database.finish(result).await
 }
 
+type OriginRequestLog = Arc<Mutex<Vec<(String, Option<String>)>>>;
+
 #[derive(Clone)]
 struct ResourceState {
     gateway_origin: String,
     denied_origin: String,
     requests: Arc<Mutex<Vec<String>>>,
-    request_headers: Arc<Mutex<Vec<(String, Option<String>)>>>,
+    request_headers: OriginRequestLog,
     unavailable: Arc<Mutex<HashSet<String>>>,
 }
 
@@ -680,9 +683,9 @@ struct HttpFixture {
     origin: String,
     other_origin: String,
     requests: Arc<Mutex<Vec<String>>>,
-    request_headers: Arc<Mutex<Vec<(String, Option<String>)>>>,
+    request_headers: OriginRequestLog,
     denied_hits: Arc<AtomicUsize>,
-    cors_requests: Arc<Mutex<Vec<(String, Option<String>)>>>,
+    cors_requests: OriginRequestLog,
     unavailable: Arc<Mutex<HashSet<String>>>,
     servers: Vec<JoinHandle<()>>,
 }
@@ -698,7 +701,7 @@ impl Drop for HttpFixture {
 #[derive(Clone)]
 struct OtherOriginState {
     hits: Arc<AtomicUsize>,
-    requests: Arc<Mutex<Vec<(String, Option<String>)>>>,
+    requests: OriginRequestLog,
     gateway_origin: String,
 }
 
@@ -1159,15 +1162,19 @@ fn profile_contains(profile: &Value, app: Uuid) -> bool {
         .is_some_and(|apps| apps.iter().any(|row| row["id"] == app.to_string()))
 }
 
+struct ExpectedReleaseEntry<'a> {
+    version: &'a str,
+    entry_type: &'a str,
+    entry_url: &'a str,
+}
+
 fn check_deployment(
     row: &Value,
     app: Uuid,
     environment: &str,
     active: Uuid,
     previous: Option<Uuid>,
-    version: &str,
-    entry_type: &str,
-    entry_url: &str,
+    entry: ExpectedReleaseEntry<'_>,
 ) -> Result<()> {
     ensure!(
         row["applicationId"] == app.to_string() && row["environment"] == environment,
@@ -1182,7 +1189,9 @@ fn check_deployment(
         "deployment previous release is incorrect: {row}"
     );
     ensure!(
-        row["version"] == version && row["entryType"] == entry_type && row["entryUrl"] == entry_url,
+        row["version"] == entry.version
+            && row["entryType"] == entry.entry_type
+            && row["entryUrl"] == entry.entry_url,
         "deployment effective entry is incorrect: {row}"
     );
     ensure!(
@@ -1662,9 +1671,11 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
             ENVIRONMENT,
             star_id,
             None,
-            "trusted-star-cors",
-            "ESM",
-            &star_url,
+            ExpectedReleaseEntry {
+                version: "trusted-star-cors",
+                entry_type: "ESM",
+                entry_url: &star_url,
+            },
         )?;
         let mut gateway = release_body("trusted-gateway-cors", "HTML");
         let gateway_url = format!(
@@ -1680,9 +1691,11 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
             ENVIRONMENT,
             gateway_id,
             Some(star_id),
-            "trusted-gateway-cors",
-            "HTML",
-            &gateway_url,
+            ExpectedReleaseEntry {
+                version: "trusted-gateway-cors",
+                entry_type: "HTML",
+                entry_url: &gateway_url,
+            },
         )?;
         check_profile_entry(
             &h.profile(&h.a).await?,
@@ -1912,7 +1925,8 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         let v1 = release_id(&h.register(release_body("v1", "HTML")).await?)?;
         h.preflight(v1, "PASSED").await?;
         let deployed_v1 = h.activate(v1).await?;
-        check_deployment(&deployed_v1, h.main_app, ENVIRONMENT, v1, None, "v1", "HTML", "/micro/v1/index.html")?;
+        check_deployment(&deployed_v1, h.main_app, ENVIRONMENT, v1, None,
+            ExpectedReleaseEntry { version: "v1", entry_type: "HTML", entry_url: "/micro/v1/index.html" })?;
         let (status, _) = call(&h.app, Method::POST,
             &format!("/api/applications/{}/deployments/{ENVIRONMENT}/rollback", h.main_app), &h.platform, None).await?;
         ensure!(status == StatusCode::CONFLICT, "rollback without a previous release was accepted");
@@ -1941,7 +1955,8 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         http.set_unavailable("/micro/v2/health", false)?;
         h.preflight(v2, "PASSED").await?;
         let deployed_v2 = h.activate(v2).await?;
-        check_deployment(&deployed_v2, h.main_app, ENVIRONMENT, v2, Some(v1), "v2", "ESM", "/micro/v2/entry.js")?;
+        check_deployment(&deployed_v2, h.main_app, ENVIRONMENT, v2, Some(v1),
+            ExpectedReleaseEntry { version: "v2", entry_type: "ESM", entry_url: "/micro/v2/entry.js" })?;
         for token in [&h.a, &h.b] {
             let profile = h.profile(token).await?;
             check_profile_entry(&profile, h.main_app, v2, "v2", "ESM", "/micro/v2/entry.js")?;
@@ -1962,7 +1977,7 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         h.preflight(staging_id, "PASSED").await?;
         let staging_deployment = h.activate(staging_id).await?;
         check_deployment(&staging_deployment, h.main_app, "staging", staging_id, None,
-            "staging-v1", "ESM", "/micro/staging-v1/entry.js")?;
+            ExpectedReleaseEntry { version: "staging-v1", entry_type: "ESM", entry_url: "/micro/staging-v1/entry.js" })?;
         check_profile_entry(&h.profile(&h.a).await?, h.main_app, v2, "v2", "ESM", "/micro/v2/entry.js")?;
         let listed = successful_call(&h.app, Method::GET,
             &format!("/api/applications/{}/deployments", h.main_app), &h.platform, None).await?;
@@ -1970,7 +1985,8 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         ensure!(deployments.len() == 2, "deployment listing lost an environment");
         let dev = deployments.iter().find(|row| row["environment"] == ENVIRONMENT)
             .ok_or_else(|| anyhow!("development deployment missing"))?;
-        check_deployment(dev, h.main_app, ENVIRONMENT, v2, Some(v1), "v2", "ESM", "/micro/v2/entry.js")?;
+        check_deployment(dev, h.main_app, ENVIRONMENT, v2, Some(v1),
+            ExpectedReleaseEntry { version: "v2", entry_type: "ESM", entry_url: "/micro/v2/entry.js" })?;
 
         http.set_unavailable("/micro/v1/main.js", true)?;
         let (status, _) = call(&h.app, Method::POST,
@@ -1984,7 +2000,8 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         let rollback = successful_call(&h.app, Method::POST,
             &format!("/api/applications/{}/deployments/{ENVIRONMENT}/rollback", h.main_app),
             &h.platform, None).await?;
-        check_deployment(&rollback, h.main_app, ENVIRONMENT, v1, Some(v2), "v1", "HTML", "/micro/v1/index.html")?;
+        check_deployment(&rollback, h.main_app, ENVIRONMENT, v1, Some(v2),
+            ExpectedReleaseEntry { version: "v1", entry_type: "HTML", entry_url: "/micro/v1/index.html" })?;
         ensure!(h.profile(&h.a).await? == profile_v1_a && h.profile(&h.b).await? == profile_v1_b,
             "rollback did not restore the exact v1 profile for both tenants");
         let context_rollback = successful_call(&h.app, Method::GET, "/api/apps/release-app/context", &app_token, None).await?;
@@ -2134,9 +2151,11 @@ async fn release_esm_activation_requires_explicit_platform_trust() -> Result<()>
             ENVIRONMENT,
             esm,
             None,
-            "esm-v1",
-            "ESM",
-            "/micro/esm-v1/entry.js",
+            ExpectedReleaseEntry {
+                version: "esm-v1",
+                entry_type: "ESM",
+                entry_url: "/micro/esm-v1/entry.js",
+            },
         )?;
         for token in [&h.a, &h.b] {
             let profile = h.profile(token).await?;

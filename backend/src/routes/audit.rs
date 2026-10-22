@@ -93,12 +93,21 @@ fn tenant_filter_clause(tf: &str) -> Result<(&'static str, Option<Uuid>), AppErr
     }
 }
 
-/// CSV 字段转义: 含逗号/引号/换行时用双引号包裹并把内部引号翻倍 (导出端点共用)
+/// Export user-controlled labels as text, then apply CSV delimiter escaping.
+/// CSV quoting alone does not stop Excel from executing a leading formula.
 pub(crate) fn csv_escape(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
-        format!("\"{}\"", s.replace('"', "\"\""))
+    let formula = s
+        .trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
+        .starts_with(['=', '+', '-', '@']);
+    let literal = if formula || s.starts_with(['\t', '\r', '\n']) {
+        format!("'{s}")
     } else {
         s.to_string()
+    };
+    if literal.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", literal.replace('"', "\"\""))
+    } else {
+        literal
     }
 }
 
@@ -252,4 +261,38 @@ async fn list(
         })
         .collect();
     Ok(Json(page_json(records, total, page, size)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::csv_escape;
+
+    #[test]
+    fn csv_exports_neutralize_formulas_in_user_controlled_labels() {
+        for value in [
+            "=1+1",
+            "+SUM(A1:A2)",
+            "-1+2",
+            "@SUM(A1:A2)",
+            "  =1+1",
+            "\u{feff}=1+1",
+            "\t=1+1",
+        ] {
+            assert_eq!(csv_escape(value), format!("'{value}"));
+        }
+        assert_eq!(csv_escape("=SUM(1,2)"), "\"'=SUM(1,2)\"");
+        assert_eq!(csv_escape("\r=1+1"), "\"'\r=1+1\"");
+        assert_eq!(csv_escape("\n=1+1"), "\"'\n=1+1\"");
+    }
+
+    #[test]
+    fn csv_exports_preserve_plain_text_and_escape_delimiters() {
+        assert_eq!(csv_escape(""), "");
+        assert_eq!(csv_escape("普通名称"), "普通名称");
+        assert_eq!(csv_escape("123"), "123");
+        assert_eq!(csv_escape("O'Reilly"), "O'Reilly");
+        assert_eq!(csv_escape("a,b"), "\"a,b\"");
+        assert_eq!(csv_escape("a\"b"), "\"a\"\"b\"");
+        assert_eq!(csv_escape("a\nb"), "\"a\nb\"");
+    }
 }
