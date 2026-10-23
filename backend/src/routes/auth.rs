@@ -586,14 +586,27 @@ async fn profile(
     .fetch_one(&state.pool)
     .await?;
 
-    let apps = sqlx::query_as::<_, (Uuid, String, String, String, String, String, String, Option<String>, Option<Uuid>, String)>(
+    let apps = sqlx::query_as::<
+        _,
+        (
+            Uuid,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<Uuid>,
+            String,
+        ),
+    >(
         "SELECT a.id, a.code, a.name, COALESCE(a.icon,''), COALESCE(a.base_path,''), \
-         COALESCE(r.entry_type,a.entry_type,'ESM'), COALESCE(r.entry_url,a.entry_url,''), r.version, r.id, a.runtime_mode \
+         e.entry_type, e.entry_url, e.version, e.id, e.runtime_mode \
          FROM applications a \
          JOIN tenant_applications ta ON ta.application_id = a.id AND ta.tenant_id = $1 \
          JOIN organization_applications oa ON oa.application_id = a.id AND oa.organization_id = $2 \
-         LEFT JOIN application_deployments d ON d.application_id=a.id AND d.environment=$3 \
-         LEFT JOIN application_releases r ON r.application_id=a.id AND r.environment=d.environment AND r.id=d.active_release_id \
+         CROSS JOIN LATERAL application_effective_entry(a.id,$3) e \
          WHERE a.status = 'ENABLED' ORDER BY a.sort_order, a.created_at",
     )
     .bind(user.tenant_id)

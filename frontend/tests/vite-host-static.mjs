@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSy
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createServer as createHttpServer } from 'node:http'
 import { createServer, loadConfigFromFile } from '../node_modules/vite/dist/node/index.js'
 
 const workspace = fileURLToPath(new URL('../', import.meta.url))
@@ -34,28 +35,40 @@ test('business API proxies match service defaults and support independent target
       } else await assert.rejects(load, /exact hostnames/)
     }
 
-    const plugin = overrides.plugins.find(plugin => plugin?.name === 'opaque-microapp-api-preflight')
-    let middleware
-    plugin.configureServer({ middlewares: { use: handler => { middleware = handler } } })
-    for (const url of ['/work-orders-api', '/work-orders-api/orders', '/stores-api', '/stores-api/stores/123']) {
-      const headers = {}
-      let ended = false
-      const res = { setHeader: (name, value) => { headers[name] = value }, end: () => { ended = true } }
-      middleware({ url, method: 'OPTIONS', headers: { origin: 'null' } }, res, () => assert.fail(`unexpected fallthrough: ${url}`))
-      assert.equal(res.statusCode, 204)
-      assert.equal(ended, true)
-      assert.equal(headers['Access-Control-Allow-Origin'], 'null')
-      assert.match(headers['Access-Control-Allow-Methods'], /PATCH/)
-    }
-    for (const [url, method, origin] of [
-      ['/stores-api-other/stores', 'OPTIONS', 'null'],
-      ['/work-orders-api-other/orders', 'OPTIONS', 'null'],
-      ['/stores-api/stores', 'OPTIONS', 'https://other.test'],
-      ['/stores-api/stores', 'GET', 'null'],
-    ]) {
-      let passed = false
-      middleware({ url, method, headers: { origin } }, {}, () => { passed = true })
-      assert.equal(passed, true)
+    assert.equal(overrides.plugins.some(plugin => plugin?.name === 'external-user-view-preflight'), false,
+      'The qiankun host must not synthesize the retired opaque iframe preflight')
+  } finally {
+    keys.forEach((key, index) => {
+      if (previous[index] === undefined) delete process.env[key]
+      else process.env[key] = previous[index]
+    })
+  }
+})
+
+test('OAuth exercise proxies have independent explicit targets and fixed namespace rewrites', async () => {
+  const keys = ['OAUTH_PLAYGROUND_DEV_PROXY_TARGET', 'OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET']
+  const previous = keys.map(key => process.env[key])
+  const load = async () => (await loadConfigFromFile({ command: 'serve', mode: 'test' }, path.join(workspace, 'vite.config.ts'), workspace, 'silent')).config
+  try {
+    for (const key of keys) delete process.env[key]
+    const defaults = await load(), apiKey = '^/oauth-playground-api(?:/|\\?|$)', callbackKey = '^/callback(?:\\?|$)'
+    assert.equal(defaults.server.proxy[apiKey].target, 'http://127.0.0.1:3011')
+    assert.equal(defaults.server.proxy[callbackKey].target, 'http://127.0.0.1:3010')
+    assert.equal(defaults.server.proxy['^/sub/oauth-playground/'].target, 'http://127.0.0.1:3010')
+    assert.equal(defaults.server.proxy[apiKey].rewrite('/oauth-playground-api/config?flow=code'), '/api/config?flow=code')
+    assert.equal(defaults.server.proxy[apiKey].rewrite('/oauth-playground-api?flow=code'), '/api?flow=code')
+    assert.equal(defaults.server.proxy[callbackKey].rewrite('/callback?code=secret&state=opaque'), '/callback.html?code=secret&state=opaque')
+    assert.equal(new RegExp(apiKey).test('/oauth-playground-api-other/config'), false)
+    assert.equal(new RegExp(callbackKey).test('/callback.html'), false)
+    assert.ok(Object.keys(defaults.server.proxy).indexOf(apiKey) < Object.keys(defaults.server.proxy).indexOf('/oauth'))
+    process.env.OAUTH_PLAYGROUND_DEV_PROXY_TARGET = 'http://127.0.0.1:4011'
+    process.env.OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET = 'http://127.0.0.1:4010'
+    const overrides = await load()
+    assert.equal(overrides.server.proxy[apiKey].target, 'http://127.0.0.1:4011')
+    assert.equal(overrides.server.proxy[callbackKey].target, 'http://127.0.0.1:4010')
+    for (const invalid of ['http://user:secret@127.0.0.1:4011', 'http://127.0.0.1:4011/path', 'http://127.0.0.1:4011?token=secret', 'file:///private']) {
+      process.env.OAUTH_PLAYGROUND_DEV_PROXY_TARGET = invalid
+      await assert.rejects(load, /exact HTTP\(S\) origin/)
     }
   } finally {
     keys.forEach((key, index) => {
@@ -139,15 +152,85 @@ test('host serves relative version resources and rejects missing or malformed pa
   assert.equal(await head.text(), '')
 })
 
-test('built-in static aliases do not turn missing assets into host HTML', async (t) => {
+test('retired non-versioned microapp aliases always return a real 404', async (t) => {
   const f = fixture(t)
   const origin = await host(t, f, path.join(f.root, 'not-created'))
-  const entry = await fetch(`${origin}/sub-apps/vue/index.html`)
-  assert.equal(entry.status, 200)
-  assert.match(await entry.text(), /micro-vue/)
-  for (const suffix of ['missing.js', 'missing.css', 'missing.html', 'vendor/missing.js']) {
+  for (const suffix of ['index.html', 'app.js', 'vendor/micro-sdk.js', 'missing.css', 'versions-not-a-route/index.html']) {
     const response = await fetch(`${origin}/sub-apps/vue/${suffix}`, { headers: { Accept: 'text/html,*/*' } })
     assert.equal(response.status, 404, suffix)
+    assert.equal(response.headers.get('cache-control'), 'no-store')
     assert.doesNotMatch(await response.text(), /<html/)
   }
+})
+
+test('OAuth exercise HTTP proxy isolates platform credentials, preserves origin and cookies, and bounds callback methods', async t => {
+  const f = fixture(t), seen = [], staticSeen = []
+  const api = createHttpServer(async (request, response) => {
+    let body = ''
+    for await (const chunk of request) body += chunk
+    seen.push({ path: request.url, method: request.method, headers: request.headers, body })
+    response.setHeader('Content-Type', 'application/json')
+    response.setHeader('Set-Cookie', ['oauth_playground=next; HttpOnly; SameSite=Lax; Path=/', '__Host-oauth_playground=secure; HttpOnly; Secure; SameSite=Lax; Path=/'])
+    response.end(JSON.stringify({ ok: true }))
+  })
+  const assets = createHttpServer((request, response) => {
+    staticSeen.push({ path: request.url, method: request.method, headers: request.headers })
+    if (!['/callback.html', '/index.html', '/assets/callback.js'].includes(request.url.split('?')[0])) { response.writeHead(404); response.end(); return }
+    response.setHeader('Content-Type', request.url.includes('.js') ? 'text/javascript' : 'text/html')
+    response.end(request.url.includes('.js') ? 'window.__callbackReady = true' : '<!doctype html><div data-oauth-playground></div>')
+  })
+  await Promise.all([new Promise(resolve => api.listen(0, '127.0.0.1', resolve)), new Promise(resolve => assets.listen(0, '127.0.0.1', resolve))])
+  const keys = ['OAUTH_PLAYGROUND_DEV_PROXY_TARGET', 'OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET'], previous = keys.map(key => process.env[key])
+  t.after(async () => {
+    for (const server of [api, assets]) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
+    keys.forEach((key, index) => { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index] })
+  })
+  process.env.OAUTH_PLAYGROUND_DEV_PROXY_TARGET = `http://127.0.0.1:${api.address().port}`
+  process.env.OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET = `http://127.0.0.1:${assets.address().port}`
+  const origin = await host(t, f, path.join(f.root, 'no-versions'))
+  const request = await fetch(`${origin}/oauth-playground-api/callback?kind=code`, { method: 'POST', headers: {
+    Origin: origin, Authorization: 'Bearer platform-private-token', 'Content-Type': 'application/json',
+    Cookie: 'platform_session=platform-private-cookie; oauth_playground=demo-session; another=private; __Host-oauth_playground=secure-demo-session; oauth_playground_evil=blocked',
+  }, body: '{"code":"exercise-code","state":"exercise-state"}' })
+  assert.equal(request.status, 200)
+  assert.deepEqual(request.headers.getSetCookie(), ['oauth_playground=next; HttpOnly; SameSite=Lax; Path=/', '__Host-oauth_playground=secure; HttpOnly; Secure; SameSite=Lax; Path=/'])
+  assert.equal(seen[0].path, '/api/callback?kind=code')
+  assert.equal(seen[0].method, 'POST')
+  assert.equal(seen[0].headers.origin, origin)
+  assert.equal(seen[0].headers.authorization, undefined)
+  assert.equal(seen[0].headers.cookie, 'oauth_playground=demo-session; __Host-oauth_playground=secure-demo-session')
+  assert.equal(seen[0].body, '{"code":"exercise-code","state":"exercise-state"}')
+  await fetch(`${origin}/oauth-playground-api/config`, { headers: { Cookie: 'platform_session=private', Authorization: 'Bearer private' } })
+  assert.equal(seen[1].headers.cookie, undefined)
+  assert.equal(seen[1].headers.authorization, undefined)
+  for (const suffix of ['internal', 'internal/events', 'metrics', 'metrics/private', '%69nternal/secret']) {
+    const response = await fetch(`${origin}/oauth-playground-api/${suffix}`)
+    assert.equal(response.status, 404)
+  }
+  assert.equal(seen.length, 2)
+  for (const method of ['GET', 'HEAD']) {
+    const callback = await fetch(`${origin}/callback?code=callback-code&state=callback-state`, { method, headers: { Authorization: 'Bearer private', Cookie: 'platform_session=private; oauth_playground=demo' } })
+    assert.equal(callback.status, 200)
+    assert.equal(callback.headers.get('cache-control'), 'no-store')
+    assert.equal(staticSeen.at(-1).path, '/callback.html?code=callback-code&state=callback-state')
+    assert.equal(staticSeen.at(-1).headers.authorization, undefined)
+    assert.equal(staticSeen.at(-1).headers.cookie, undefined)
+    if (method === 'HEAD') assert.equal(await callback.text(), '')
+  }
+  for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
+    const callback = await fetch(`${origin}/callback?code=blocked`, { method })
+    assert.equal(callback.status, 405)
+    assert.equal(callback.headers.get('allow'), 'GET, HEAD')
+    assert.equal((await fetch(`${origin}/sub/oauth-playground/assets/callback.js`, { method })).status, 405)
+  }
+  assert.equal(staticSeen.length, 2)
+  const script = await fetch(`${origin}/sub/oauth-playground/assets/callback.js`, { headers: { Authorization: 'Bearer private', Cookie: 'platform_session=private' } })
+  assert.equal(script.status, 200)
+  assert.equal(staticSeen.at(-1).path, '/assets/callback.js')
+  assert.equal(staticSeen.at(-1).headers.authorization, undefined)
+  assert.equal(staticSeen.at(-1).headers.cookie, undefined)
+  const redirect = await fetch(`${origin}/sub/oauth-playground?view=code`, { redirect: 'manual' })
+  assert.equal(redirect.status, 308)
+  assert.equal(redirect.headers.get('location'), '/sub/oauth-playground/?view=code')
+  assert.equal((await fetch(`${origin}/sub/oauth-playground/missing.js`)).status, 404)
 })

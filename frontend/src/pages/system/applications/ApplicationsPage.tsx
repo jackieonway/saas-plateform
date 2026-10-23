@@ -1,5 +1,5 @@
 import { ApplicationEditorDialog } from "./ApplicationEditorDialog"
-import { useApplicationEditor, isMicroApp, isHostEsm } from "./use-application-editor"
+import { useApplicationEditor, isMicroApp } from "./use-application-editor"
 import * as React from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -23,7 +23,7 @@ import { asArray } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
 import { ApplicationSetupPanel } from "./ApplicationSetupPanel"
-import { setupEnvironment, setupStep, type ApplicationSetupStep } from "./application-setup-policy"
+import { setupEnvironment, setupStep, isQiankunApp, type ApplicationSetupStep } from "./application-setup-policy"
 import type { ApplicationRecord } from "@/api/types"
 
 export default function ApplicationsPage() {
@@ -48,7 +48,7 @@ export default function ApplicationsPage() {
       return next
     })
   }
-  const editor = useApplicationEditor(application => openSetup(application, application.entryType === "HTML" ? "release" : "overview"))
+  const editor = useApplicationEditor(application => openSetup(application, "release"))
   const { openCreate, openEdit } = editor
 
   const [deleting, setDeleting] = React.useState<ApplicationRecord | null>(null)
@@ -84,7 +84,7 @@ export default function ApplicationsPage() {
     <div>
       <PageHeader
         title="应用管理"
-        description="创建应用，上传构建包或填写 HTML 地址，再选择访问范围"
+        description="接入 qiankun 微应用，按环境配置 HTTP/HTTPS 入口与访问范围"
         icon={<LayoutGrid className="size-5" />}
         actions={
           <Button onClick={openCreate}>
@@ -141,12 +141,12 @@ export default function ApplicationsPage() {
                 <Badge variant="secondary" className="text-[11px] tabular-nums">{a.menuCount} 菜单</Badge>
                 <Badge variant="outline" className="text-[11px] tabular-nums">排序 {a.sortOrder}</Badge>
                 {isMicroApp(a) ? (
-                  <Badge variant="outline" className="text-[11px]">{a.entryType === "ESM" ? "宿主 ESM" : "iframe 隔离"}</Badge>
+                  <Badge variant={isQiankunApp(a) ? "outline" : "destructive"} className="text-[11px]">{isQiankunApp(a) ? "qiankun" : "需重新配置"}</Badge>
                 ) : (
                   <Badge variant="outline" className="text-[11px]">宿主内置</Badge>
                 )}
                 {/* 内置页面不使用微应用入口；独立微应用显示实际入口通道。 */}
-                {isMicroApp(a) && a.entryType === "HTML" ? (
+                {isMicroApp(a) && isQiankunApp(a) ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span
@@ -160,14 +160,10 @@ export default function ApplicationsPage() {
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-[20rem]">
-                      <span className="block text-xs">HTML 入口 · iframe 隔离执行</span>
+                      <span className="block text-xs">HTML 入口 · qiankun 生命周期</span>
                       <span className="mt-0.5 block font-mono text-xs break-all">{a.entryUrl ?? "(未配置)"}</span>
                     </TooltipContent>
                   </Tooltip>
-                ) : isMicroApp(a) ? (
-                  <span className="rounded-full border bg-muted px-2 py-px text-[10px] font-medium text-muted-foreground">
-                    ESM
-                  </span>
                 ) : null}
                 {a.basePath && (
                   <code className="max-w-[9rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
@@ -194,11 +190,11 @@ export default function ApplicationsPage() {
                   <span className="flex items-center gap-2"><Rocket className="size-3.5" />继续接入 / 检查配置</span><ArrowRight className="size-3.5" />
                 </Button>
               )}
-              {isHostEsm(a) && <p className="text-center text-xs text-muted-foreground">第一方模块 · 随宿主发布</p>}
-              {isMicroApp(a) && a.entryType === "HTML" && (
+              {isMicroApp(a) && !isQiankunApp(a) && <p className="text-xs leading-relaxed text-muted-foreground">请重新配置 qiankun 入口，当前应用不会运行。</p>}
+              {isMicroApp(a) && (
                 <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => openSetup(a, "release")}>
                   <Rocket className="size-3.5" />
-                  发布版本
+                  配置入口 / 发布版本
                 </Button>
               )}
 
@@ -218,10 +214,10 @@ export default function ApplicationsPage() {
                       <ListTree className="size-4" />
                       配置菜单
                     </DropdownMenuItem>
-                    {isMicroApp(a) && !isHostEsm(a) && (
+                    {isMicroApp(a) && (
                       <DropdownMenuItem onClick={() => openSetup(a, "release")}>
                         <Rocket className="size-4" />
-                        发布版本
+                        配置入口 / 发布版本
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
@@ -275,8 +271,8 @@ function OnboardingGuide({ onCreate }: { onCreate: () => void }) {
     <div className="mb-6 flex flex-col justify-between gap-4 rounded-xl border bg-muted/20 p-5 sm:flex-row sm:items-center">
       <div>
         <p className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-primary" />从一个首页开始接入</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">名称与编码 → 发布版本 → 配置访问范围</p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">路径和首页自动生成，HTML 中的脚本、样式由系统发现。更多配置按需展开。</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">名称与编码 → 配置应用入口 → 配置访问范围</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">使用 qiankun，路径和首页自动生成。按环境填写入口地址，也可上传构建包发布版本。</p>
       </div>
       <Button variant="outline" className="shrink-0" onClick={onCreate}>开始接入<ArrowRight className="size-4" /></Button>
     </div>

@@ -1,5 +1,6 @@
 mod app_authorization;
 mod app_token;
+mod application_entries;
 mod artifact_distribution;
 mod authorization;
 mod bootstrap;
@@ -12,6 +13,7 @@ mod error;
 mod extractors;
 mod login_limits;
 mod managed_deployments;
+mod micro_proxy;
 mod notifications;
 mod oauth_issuance;
 mod observability;

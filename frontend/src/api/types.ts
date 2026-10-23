@@ -5,16 +5,16 @@
 import type { OrganizationType, TenantType } from "@/lib/entity-types"
 export type { OrganizationType, TenantType } from "@/lib/entity-types"
 import type { NotificationType, NotificationTarget,
-  NotificationPublication as NotificationPublishResponse } from "../../vendor/micro-app-sdk/generated/types"
+  NotificationPublication as NotificationPublishResponse } from "../../vendor/micro-app-sdk/types"
 export type { NotificationType, NotificationTarget, NotificationRecord, NotificationSocketContext,
-  RealtimeNotification, NotificationPublication as NotificationPublishResponse } from "../../vendor/micro-app-sdk/generated/types"
+  RealtimeNotification, NotificationPublication as NotificationPublishResponse } from "../../vendor/micro-app-sdk/types"
 
 export type Status = "ENABLED" | "DISABLED"
 export type MenuType = "DIR" | "MENU" | "BUTTON"
 export type ClientType = "CONFIDENTIAL" | "PUBLIC"
 export type DeviceStatus = "PENDING" | "APPROVED" | "DENIED" | "EXPIRED"
-export type ApplicationRuntimeMode = "IFRAME" | "TRUSTED"
-export type ApplicationEntryType = "ESM" | "HTML"
+export type ApplicationRuntimeMode = "TRUSTED"
+export type ApplicationEntryType = "HTML"
 export type ApplicationEnvironment = "development" | "staging" | "production"
 
 export interface PageResp<T> {
@@ -83,12 +83,12 @@ export interface AppBrief {
   name: string
   icon: string
   basePath: string
-  /** 默认 iframe 隔离；仅显式标记的自有可信应用可在宿主内运行。 */
+  /** 活动应用统一为可信 HTML；内置页面由 React 路由渲染。 */
   runtimeMode?: ApplicationRuntimeMode
   /** 当前宿主环境的活动版本入口类型。 */
   entryType?: ApplicationEntryType
-  /** 当前宿主环境的活动版本入口地址；未发布时使用应用配置。 */
-  entryUrl?: string
+  /** 微应用的有效 HTML 入口；内置页面不使用外部入口。 */
+  entryUrl?: string | null
   deploymentVersion?: string | null
   entryVersionId?: string | null
 }
@@ -274,7 +274,14 @@ export interface AuthorizationPayload {
 
 /* ============ 2.3 应用 ============ */
 
-export interface ApplicationRecord {
+/** Only application administration reads archived, disabled entry metadata. */
+export interface ArchivedApplicationEntryMetadata {
+  /** Read-only persisted value; reconfiguration must use the active HTML contract. */
+  entryType?: string
+  runtimeMode?: string
+}
+
+export interface ApplicationRecord extends ArchivedApplicationEntryMetadata {
   id: string
   code: string
   name: string
@@ -284,9 +291,6 @@ export interface ApplicationRecord {
   sortOrder: number
   status: Status
   menuCount: number
-  runtimeMode?: ApplicationRuntimeMode
-  /** 应用基础入口类型，环境部署可通过版本指针选择活动入口。 */
-  entryType?: ApplicationEntryType
   entryUrl?: string | null
 }
 
@@ -299,12 +303,28 @@ export interface ApplicationPayload {
   sortOrder: number
   status: Status
   runtimeMode?: ApplicationRuntimeMode
-  /** iframe 应用仅支持 HTML；可信应用支持 HTML / ESM。 */
+  /** 应用配置统一使用可信 HTML。 */
   entryType?: ApplicationEntryType
-  /** HTML 入口留空时由后端推导为 /sub-apps/{code}/index.html */
+  /** 微应用需要 HTML 入口；内置页面保留空入口。 */
   entryUrl?: string | null
   /** 新建 HTML 微应用时，一并创建 /micro/{code} 首页菜单 */
   autoCreateMenu?: boolean
+}
+
+/** Environment-specific live entry. Its browser URL may use the platform proxy. */
+export interface ApplicationUrlEntryRecord {
+  applicationId: string
+  environment: ApplicationEnvironment
+  entryUrl: string
+  proxyEnabled: boolean
+  browserEntryUrl: string
+  revision?: string
+  updatedAt: string
+}
+
+export interface ApplicationUrlEntryPayload {
+  entryUrl: string
+  proxyEnabled: boolean
 }
 
 export type ApplicationResourceKind = "SCRIPT" | "STYLE" | "ASSET"
@@ -347,7 +367,8 @@ export interface ApplicationReleaseRecord {
   applicationId: string
   environment: ApplicationEnvironment
   version: string
-  entryType: ApplicationEntryType
+  /** Archived releases retain their persisted type for compatibility checks. */
+  entryType: string
   entryUrl: string
   healthUrl: string | null
   resources: ApplicationReleaseResource[]
@@ -364,7 +385,8 @@ export interface ApplicationDeploymentRecord {
   activeReleaseId: string
   previousReleaseId: string | null
   version: string
-  entryType: ApplicationEntryType
+  /** A disabled application's deployment history may contain incompatible metadata. */
+  entryType: string
   entryUrl: string
   updatedAt: string
 }

@@ -22,7 +22,6 @@ export default defineConfig([
   },
   {
     files: [
-      "src/components/micro/iframe.ts",
       "src/lib/notification-protocol.ts",
       "src/pages/system/settings/PlatformSettingsPage.tsx",
       "vite.config.ts",

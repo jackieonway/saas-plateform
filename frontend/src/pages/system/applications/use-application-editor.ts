@@ -4,12 +4,10 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zResolver } from "@/lib/form"
 import { applicationsApi } from "@/api/applications"
-import { hostEsmEntryForCode, listHostEsmModules } from "@/micro-apps/registry"
 import { toast } from "sonner"
 import type { ApplicationRecord } from "@/api/types"
 
-const appSchema = z
-  .object({
+const appSchema = z.object({
     code: z
       .string()
       .min(2, "请输入应用编码")
@@ -21,23 +19,12 @@ const appSchema = z
     description: z.string().max(255).optional(),
     sortOrder: z.coerce.number().int().min(0).max(9999),
     status: z.enum(["ENABLED", "DISABLED"]),
-    entryType: z.enum(["ESM", "HTML"]),
-    entryUrl: z.string().max(500).optional(),
-  })
-  .superRefine((v, ctx) => {
-    const url = (v.entryUrl ?? "").trim()
-    if (url && !/^(https?:\/\/|\/)/i.test(url)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["entryUrl"], message: "入口地址需以 http(s):// 或 / 开头" })
-    }
   })
 type AppForm = z.infer<typeof appSchema>
 
 // 只有 /micro/:appCode/* 会进入微应用容器；宿主内置路由随主前端发布。
 export const isMicroApp = (app: ApplicationRecord) =>
   app.basePath?.replace(/\/+$/, "") === `/micro/${app.code}`
-
-// ESM 随宿主构建；只有 HTML 微应用使用独立版本上传。
-export const isHostEsm = (app: ApplicationRecord) => isMicroApp(app) && app.entryType === "ESM"
 
 
 /** Owns create/edit validation, immutable entry metadata and post-save coordination. */
@@ -48,27 +35,15 @@ export function useApplicationEditor(onCreatedApplication: (application: Applica
   const [quickSetup, setQuickSetup] = React.useState(true)
   const form = useForm<AppForm>({
     resolver: zResolver(appSchema),
-    defaultValues: { code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" },
+    defaultValues: { code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED" },
   })
-  const entryTypeValue = form.watch("entryType")
   const codeValue = form.watch("code")
-  const useQuickSetup = !editing && entryTypeValue === "HTML" && quickSetup
-  const hostEsmModules = React.useMemo(() => listHostEsmModules(), [])
-  const selectHostEsmModule = (code: string) => {
-    const entryUrl = hostEsmEntryForCode(code)
-    if (!entryUrl) {
-      form.setError("code", { message: "请选择当前宿主中已构建的模块" })
-      return
-    }
-    form.setValue("code", code, { shouldValidate: true })
-    form.setValue("entryUrl", entryUrl)
-    form.clearErrors("code")
-  }
+  const useQuickSetup = !editing && quickSetup
 
   const openCreate = () => {
     setEditing(null)
     setQuickSetup(true)
-    form.reset({ code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED", entryType: "HTML", entryUrl: "" })
+    form.reset({ code: "", name: "", icon: "LayoutGrid", basePath: "", description: "", sortOrder: 0, status: "ENABLED" })
     setDialogOpen(true)
   }
   const openEdit = (a: ApplicationRecord) => {
@@ -82,18 +57,18 @@ export function useApplicationEditor(onCreatedApplication: (application: Applica
       description: a.description ?? "",
       sortOrder: a.sortOrder ?? 0,
       status: a.status,
-      entryType: a.entryType === "ESM" ? "ESM" : "HTML",
-      entryUrl: a.entryUrl ?? "",
     })
     setDialogOpen(true)
   }
 
   const saveMutation = useMutation({
     mutationFn: async (values: AppForm) => {
-      const esm = values.entryType === "ESM"
-      const quick = !editing && !esm && quickSetup
-      // Metadata editing never rewrites an existing entry or elevates its trust.
+      const quick = !editing && quickSetup
+      // Entry configuration is managed separately from application metadata.
       if (editing) {
+        if (isMicroApp(editing) && (editing.entryType !== "HTML" || editing.runtimeMode !== "TRUSTED")) {
+          throw new Error("请先在应用入口中重新配置 qiankun，再编辑或启用应用")
+        }
         await applicationsApi.update(editing.id, {
           code: editing.code,
           name: values.name,
@@ -105,30 +80,26 @@ export function useApplicationEditor(onCreatedApplication: (application: Applica
         })
         return null
       }
-      const esmEntry = esm ? hostEsmEntryForCode(values.code) : null
-      if (esm && !esmEntry) throw new Error("请选择当前宿主中已构建的模块")
       const payload = {
         code: values.code,
         name: values.name,
         icon: values.icon || "LayoutGrid",
-        basePath: !editing && (quick || esm) ? `/micro/${values.code}` : values.basePath || "",
+        basePath: quick ? `/micro/${values.code}` : values.basePath || "",
         description: values.description || "",
         sortOrder: values.sortOrder,
         status: values.status,
-        entryType: values.entryType,
-        runtimeMode: esm ? "TRUSTED" as const : "IFRAME" as const,
-        entryUrl: esm
-          ? esmEntry!
-          : `/sub-apps/${values.code}/unreleased/index.html`,
+        entryType: "HTML" as const,
+        runtimeMode: "TRUSTED" as const,
+        entryUrl: `/sub-apps/${values.code}/unreleased/index.html`,
         autoCreateMenu: quick,
       }
       const created = await applicationsApi.create(payload)
-      return { id: created.id, quick, entryType: values.entryType, application: created }
+      return { id: created.id, quick, application: created }
     },
     onSuccess: (created) => {
       if (created) {
         toast.success("应用已创建", {
-          description: created.entryType === "HTML" ? "继续发布版本并配置访问范围" : "模块随宿主发布，继续配置菜单与访问范围",
+          description: "继续配置 qiankun 应用入口与访问范围",
         })
         onCreatedApplication(created.application)
       } else {
@@ -142,14 +113,8 @@ export function useApplicationEditor(onCreatedApplication: (application: Applica
   })
 
 
-  const submit = form.handleSubmit((values) => {
-    if (!editing && values.entryType === "ESM" && !hostEsmEntryForCode(values.code)) {
-      form.setError("code", { message: "请选择当前宿主中已构建的模块" })
-      return
-    }
-    saveMutation.mutate(values)
-  })
+  const submit = form.handleSubmit((values) => saveMutation.mutate(values))
   return { dialogOpen, setDialogOpen, editing, quickSetup, setQuickSetup, form,
-    entryTypeValue, codeValue, useQuickSetup, hostEsmModules, selectHostEsmModule,
+    codeValue, useQuickSetup,
     openCreate, openEdit, saveMutation, submit }
 }

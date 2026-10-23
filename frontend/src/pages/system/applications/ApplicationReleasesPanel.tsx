@@ -29,6 +29,8 @@ import { ExternalReleaseForm } from "./ExternalReleaseForm"
 import { ZipDistributionPanel } from "./ZipDistributionPanel"
 import { ManagedDeploymentPanel } from "./ManagedDeploymentPanel"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
+import { ApplicationUrlEntryForm } from "./ApplicationUrlEntryForm"
+import { isQiankunApp } from "./application-setup-policy"
 
 const ENVIRONMENTS: { value: ApplicationEnvironment; label: string }[] = [
   { value: "development", label: "开发 · development" },
@@ -99,6 +101,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
   const [sourceMode, setSourceMode] = React.useState<"archive" | "url">("archive")
   const [externalFormVersion, setExternalFormVersion] = React.useState(0)
   const [deliveryOpen, setDeliveryOpen] = React.useState(false)
+  const [urlEntryBusy, setUrlEntryBusy] = React.useState(false)
   const permissions = usePermissionsQuery({ enabled: open })
   const canManageDelivery = permissions.isSuccess && !!permissions.data?.permissions.some(permission =>
     permission === "system:distribution:read" || permission === "system:deployment:read")
@@ -127,11 +130,22 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
     enabled: open,
     retry: 1,
   })
+  const urlEntryQuery = useQuery({
+    queryKey: ["application-url-entry", application.id, environment],
+    queryFn: () => applicationsApi.urlEntry(application.id, environment),
+    enabled: open,
+    retry: 1,
+    staleTime: 0,
+  })
+  const urlEntryReady = urlEntryQuery.isSuccess && !urlEntryQuery.isPlaceholderData
+    && (urlEntryQuery.data === null || urlEntryQuery.data?.applicationId === application.id && urlEntryQuery.data.environment === environment)
+  const urlEntry = urlEntryReady ? urlEntryQuery.data ?? null : null
   const releases = releasesQuery.data ?? []
   const deployment = deploymentsQuery.data?.find((item) => item.environment === environment)
   const previousRelease = releases.find((item) => item.id === deployment?.previousReleaseId)
-  const previousUnsupported = previousRelease?.entryType === "ESM"
+  const previousUnsupported = !!previousRelease && previousRelease.entryType !== "HTML"
   const enabled = application.status === "ENABLED"
+  const compatible = isQiankunApp(application)
 
   const form = useForm<ReleaseForm>({
     resolver: zResolver(releaseSchema),
@@ -141,6 +155,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
   const refreshReleaseData = (requested: ReleaseTarget = target) => Promise.all([
     queryClient.invalidateQueries({ queryKey: ["application-releases", requested.applicationId] }),
     queryClient.invalidateQueries({ queryKey: ["application-deployments", requested.applicationId] }),
+    queryClient.invalidateQueries({ queryKey: ["application-url-entry", requested.applicationId, requested.environment] }),
   ])
   const refreshActiveApplication = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ["applications"] }),
@@ -148,7 +163,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
   ])
 
   const registerMutation = useMutation({
-    mutationFn: (requested: { target: ReleaseTarget; version: string; file: File }) => applicationsApi.uploadRelease(requested.target.applicationId, requested.target.environment, requested.version, "HTML", requested.file),
+    mutationFn: (requested: { target: ReleaseTarget; version: string; file: File }) => applicationsApi.uploadRelease(requested.target.applicationId, requested.target.environment, requested.version, requested.file),
     onSuccess: (release, requested) => {
       if (!isCurrentTarget(requested.target)) return
       if (release.validationStatus === "PASSED") toast.success("版本包已上传，预检通过", { description: "确认版本后即可激活。" })
@@ -231,7 +246,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
     onSettled: (_deployment, _error, requested) => refreshReleaseData(requested.target),
   })
 
-  const busy = registerMutation.isPending || externalMutation.isPending || preflightMutation.isPending || deploymentMutation.isPending
+  const busy = urlEntryBusy || registerMutation.isPending || externalMutation.isPending || preflightMutation.isPending || deploymentMutation.isPending
   React.useEffect(() => {
     onBusyChange?.(busy)
     return () => onBusyChange?.(false)
@@ -264,11 +279,11 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
   const content = (
     <>
           <Header className={cn("shrink-0 border-b", embedded ? "pb-4" : "p-5 pr-12")}>
-            <Title className="flex items-center gap-2 text-base font-semibold"><Rocket className="size-5 text-primary" />发布应用版本</Title>
-            <Description className="mt-1 text-sm text-muted-foreground">选择版本来源，系统自动检查页面引用的脚本与样式，通过后确认发布。</Description>
+            <Title className="flex items-center gap-2 text-base font-semibold"><Rocket className="size-5 text-primary" />配置应用入口</Title>
+            <Description className="mt-1 text-sm text-muted-foreground">按环境填写独立站点地址，或上传构建包、发布可回滚的固定版本。</Description>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="font-mono">{application.code}</Badge>
-              <Badge variant="secondary">iframe 隔离 · HTML</Badge>
+              <Badge variant={compatible ? "secondary" : "destructive"}>{compatible ? "qiankun · HTML" : "需重新配置 qiankun 入口"}</Badge>
               {!enabled && <Badge variant="destructive">应用已停用</Badge>}
             </div>
           </Header>
@@ -289,7 +304,10 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-muted-foreground">{environment} 当前部署</p>
-                  {deploymentsQuery.isLoading ? <p className="mt-2 text-sm text-muted-foreground">正在读取部署…</p> : deploymentsQuery.isError ? (
+                  {!compatible ? <><p className="mt-1 text-xl font-semibold">等待重新配置 qiankun</p><p className="mt-2 text-xs text-muted-foreground">现有入口不会运行，请在下方明确保存新的 qiankun HTML 入口。</p></> : urlEntryQuery.isError ? <p className="mt-2 text-sm text-destructive">直接地址读取失败，无法确认当前生效入口。</p> : !urlEntryReady ? <p className="mt-2 text-sm text-muted-foreground">正在读取入口…</p> : urlEntry ? (
+                    <><p className="mt-1 text-xl font-semibold">直接地址</p><p className="mt-1 break-all font-mono text-xs text-muted-foreground">{urlEntry.entryUrl}</p><p className="mt-2 text-xs text-muted-foreground">{urlEntry.proxyEnabled ? "通过平台同域代理" : "浏览器直接加载上游"} · 更新于 {dateLabel(urlEntry.updatedAt)}</p>
+                      {deployment && <p className="mt-2 text-xs text-muted-foreground">保留版本 {deployment.version}，移除直接地址后恢复。</p>}</>
+                  ) : deploymentsQuery.isLoading ? <p className="mt-2 text-sm text-muted-foreground">正在读取部署…</p> : deploymentsQuery.isError ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-destructive">
                       <span>{deploymentsQuery.error instanceof Error ? deploymentsQuery.error.message : "部署读取失败"}</span>
                       <Button variant="outline" size="sm" onClick={() => deploymentsQuery.refetch()} disabled={busy}>重试</Button>
@@ -306,22 +324,27 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={busy || !enabled || deploymentsQuery.isError || previousRelease?.validationStatus !== "PASSED" || previousUnsupported}
-                    title={!enabled ? "应用停用期间不能切换部署" : previousUnsupported ? "iframe 隔离应用无法回滚至 ESM 版本" : previousRelease?.validationStatus !== "PASSED" ? "上一版本需预检通过后才能回滚" : undefined}
+                    disabled={busy || !enabled || !compatible || !urlEntryReady || deploymentsQuery.isError || previousRelease?.validationStatus !== "PASSED" || previousUnsupported}
+                    title={!compatible ? "请先重新配置 qiankun 入口" : !enabled ? "应用停用期间不能切换部署" : previousUnsupported ? "上一版本不兼容 qiankun" : previousRelease?.validationStatus !== "PASSED" ? "上一版本需预检通过后才能回滚" : undefined}
                     onClick={() => setAction({ kind: "rollback", target, environment, version: previousRelease?.version ?? deployment.previousReleaseId! })}
                   ><RotateCcw className="size-4" />回滚{previousRelease ? `至 ${previousRelease.version}` : "至上一版本"}</Button>
                 )}
               </div>
               <p className="mt-3 border-t pt-3 text-xs leading-relaxed text-muted-foreground">当前管理 {environment} 环境；宿主实际使用服务端指定的环境。确认激活后切换入口，访问范围单独配置。</p>
               {!enabled && <p className="mt-2 text-xs text-destructive">应用停用期间可登记与预检，请启用应用后再激活或回滚。</p>}
-              {previousUnsupported && <p className="mt-2 text-xs text-destructive">上一部署为旧 ESM 版本，无法在 iframe 中回滚；请选择已验证的 HTML 版本。</p>}
+              {previousUnsupported && <p className="mt-2 text-xs text-destructive">上一部署不兼容 qiankun，请选择已验证的 HTML 版本。</p>}
             </section>
+
+            {urlEntryQuery.isError && <div className="mb-4"><ErrorState message={urlEntryQuery.error.message} onRetry={() => urlEntryQuery.refetch()} /></div>}
+            <ApplicationUrlEntryForm key={`${application.id}:${environment}`} application={application} environment={environment} entry={urlEntry} ready={urlEntryReady} busy={busy} onBusyChange={setUrlEntryBusy} onChanged={() => onDeploymentChanged?.()} />
+
+            <div className="mb-3"><h3 className="text-sm font-semibold">版本发布与回滚</h3><p className="mt-1 text-xs text-muted-foreground">固定版本适合正式发布。激活或回滚会移除当前环境的直接地址配置。</p></div>
 
             <div className="mb-4 grid gap-3 sm:grid-cols-2" role="group" aria-label="版本来源">
               <Button type="button" variant="outline" disabled={busy} aria-pressed={sourceMode === "archive"} onClick={() => selectSource("archive")}
                 className={cn("h-auto items-start justify-start gap-3 whitespace-normal p-4 text-left", sourceMode === "archive" && "border-primary bg-primary/5 ring-1 ring-primary/20")}>
                 <PackageOpen className="mt-0.5 size-5 shrink-0 text-primary" />
-                <span><span className="flex items-center gap-2 font-medium">上传构建包 <Badge variant="secondary" className="text-[10px]">推荐</Badge></span><span className="mt-1 block text-xs font-normal text-muted-foreground">选择 ZIP 或 tar.gz，自动生成版本入口。</span></span>
+                <span><span className="flex items-center gap-2 font-medium">上传构建包</span><span className="mt-1 block text-xs font-normal text-muted-foreground">选择 ZIP 或 tar.gz，自动生成版本入口。</span></span>
               </Button>
               <Button type="button" variant="outline" disabled={busy} aria-pressed={sourceMode === "url"} onClick={() => selectSource("url")}
                 className={cn("h-auto items-start justify-start gap-3 whitespace-normal p-4 text-left", sourceMode === "url" && "border-primary bg-primary/5 ring-1 ring-primary/20")}>
@@ -379,27 +402,27 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
             ) : (
               <div className="space-y-3">
                 {releases.map((release) => {
-                  const active = deployment ? deployment.activeReleaseId === release.id : release.active
+                  const active = compatible && !urlEntry && (deployment ? deployment.activeReleaseId === release.id : release.active)
                   const checks = Array.isArray(release.validationResult?.checks) ? release.validationResult.checks : []
                   const scriptCount = checks.filter(check => check.kind === "SCRIPT").length
                   const styleCount = checks.filter(check => check.kind === "STYLE").length
                   const preflighting = preflightMutation.isPending && preflightMutation.variables?.releaseId === release.id
-                  const unsupported = release.entryType === "ESM"
+                  const unsupported = release.entryType !== "HTML"
                   return (
                     <article key={release.id} className={cn("rounded-lg border p-4", active && "border-primary/40 bg-primary/5")}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold tabular-nums">{release.version}</h4><ValidationBadge release={release} />{active && <Badge>当前部署</Badge>}<Badge variant="outline">{release.entryType}</Badge></div>
+                          <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold tabular-nums">{release.version}</h4><ValidationBadge release={release} />{active && <Badge>当前部署</Badge>}<Badge variant="outline">{unsupported ? "需重新发布" : "HTML"}</Badge></div>
                           <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{release.entryUrl}</p>
                         </div>
                         <div className="flex shrink-0 gap-2">
                           <Button variant="outline" size="sm" disabled={busy} onClick={() => preflightMutation.mutate({ target, releaseId: release.id })}>{preflighting ? <Loader2 className="size-4 animate-spin" /> : <FileCheck2 className="size-4" />}{release.checkedAt ? "重新预检" : "预检"}</Button>
-                          <Button size="sm" disabled={busy || !enabled || active || release.validationStatus !== "PASSED" || unsupported || deploymentsQuery.isLoading || deploymentsQuery.isError} onClick={() => setAction({ kind: "activate", target, release })}><Rocket className="size-4" />{active ? "已激活" : "激活"}</Button>
+                          <Button size="sm" disabled={busy || !enabled || !compatible || !urlEntryReady || active || release.validationStatus !== "PASSED" || unsupported || deploymentsQuery.isLoading || deploymentsQuery.isError} onClick={() => setAction({ kind: "activate", target, release })}><Rocket className="size-4" />{active ? "已激活" : "激活"}</Button>
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>登记 {dateLabel(release.createdAt)}</span><span>预检 {dateLabel(release.checkedAt)}</span>{release.checkedAt && <span>已检查 {scriptCount} 个脚本 · {styleCount} 个样式</span>}{release.resources.length > 0 && <span>{release.resources.length} 项补充资源</span>}</div>
                       {release.healthUrl && <p className="mt-1 break-all text-xs text-muted-foreground">健康检查 <span className="font-mono">{release.healthUrl}</span></p>}
-                      {unsupported && <p className="mt-2 text-xs text-destructive">旧 ESM 版本无法在 iframe 中激活，请上传 HTML 版本。</p>}
+                      {unsupported && <p className="mt-2 text-xs text-destructive">此版本不兼容 qiankun，请上传包含标准生命周期的 HTML 版本。</p>}
                       {checks.length > 0 && (
                         <details className="mt-3 border-t pt-3" open={release.validationStatus === "FAILED"}>
                           <summary className="cursor-pointer text-xs font-medium">逐资源预检诊断 · {checks.filter((check) => check.passed).length}/{checks.length} 通过</summary>
@@ -431,11 +454,11 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
               </details>
             )}
             {onContinue && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-              <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">{deployment ? "版本已激活，接下来选择哪些租户、组织和角色可以访问。" : "可以先配置访问范围；该环境仍需激活版本后才能使用。"}</p>
+              <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">{compatible && (urlEntry || deployment) ? "入口已配置，接下来选择哪些租户、组织和角色可以访问。" : "可以先配置访问范围；该环境仍需保存 qiankun 直接地址或激活版本后才能使用。"}</p>
               <Button type="button" disabled={busy} onClick={onContinue}>继续配置访问范围<ArrowRight className="size-4" /></Button>
             </div>}
           </div>
-          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : externalMutation.isPending ? "登记地址并检查脚本与样式" : "上传版本包"}，完成后可切换环境或关闭面板。</div>}
+          {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{urlEntryBusy ? "保存应用入口" : deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : externalMutation.isPending ? "登记地址并检查脚本与样式" : "上传版本包"}，完成后可切换环境或关闭面板。</div>}
     </>
   )
 
@@ -456,6 +479,7 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
                 ? `将 ${action.environment} 环境切回上一部署版本 ${action.version}。`
                 : action ? `将 ${action.release.environment} 环境切换至版本 ${action.release.version}。` : ""}
               服务端会重新预检；验证通过后切换入口，现有授权继续生效。
+              {urlEntry && "当前环境的直接地址配置将被移除。"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

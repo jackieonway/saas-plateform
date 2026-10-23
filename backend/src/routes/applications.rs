@@ -29,9 +29,9 @@ struct ApplicationRow {
     name: String,
     icon: String,
     base_path: String,
-    /// 入口通道: 'ESM' (原生模块) | 'HTML' (微前端 HTML 入口, 迁移 0011)
+    /// 微应用固定 HTML；历史与内置页面的旧字段仍用于读取。
     entry_type: String,
-    /// HTML 通道 = 子应用 HTML 入口(如 /sub/vue/); ESM 通道 = 模块 URL; 空 = 未配置
+    /// qiankun HTML 入口；内置平台页面可为空。
     entry_url: String,
     runtime_mode: String,
     description: String,
@@ -138,11 +138,11 @@ fn default_status() -> String {
 }
 
 fn default_entry_type() -> String {
-    "ESM".into()
+    "HTML".into()
 }
 
 fn default_runtime_mode() -> String {
-    "IFRAME".into()
+    "TRUSTED".into()
 }
 
 async fn authorize_runtime_mode(
@@ -150,8 +150,8 @@ async fn authorize_runtime_mode(
     user: &CurrentUser,
     mode: &str,
 ) -> Result<(), AppError> {
-    if !["IFRAME", "TRUSTED"].contains(&mode) {
-        return Err(AppError::bad_request("runtimeMode 仅支持 IFRAME / TRUSTED"));
+    if mode != "TRUSTED" {
+        return Err(AppError::bad_request("runtimeMode 仅支持 TRUSTED"));
     }
     // Explicit trust approval requires a platform administrator with application permission.
     RequirePermission("system:application")
@@ -160,37 +160,29 @@ async fn authorize_runtime_mode(
     state.require_platform(user).await
 }
 
-/// 校验入口类型: 仅 ESM / HTML
+/// 新增和更新统一使用 HTML；历史枚举仅用于保留的停用记录。
 fn parse_entry_type(t: &str) -> Result<String, AppError> {
     match t {
-        "ESM" | "HTML" => Ok(t.to_string()),
-        _ => Err(AppError::bad_request("入口类型仅支持 ESM / HTML")),
+        "HTML" => Ok(t.to_string()),
+        _ => Err(AppError::bad_request("入口类型仅支持 HTML")),
     }
 }
 
-/// 与宿主的可执行入口契约保持一致；不会替调用者自动提升为 TRUSTED。
-fn validate_runtime_entry(
-    entry_type: &str,
-    runtime_mode: &str,
-    base_path: &str,
-    code: &str,
-) -> Result<(), AppError> {
-    if base_path.trim_end_matches('/') == format!("/micro/{code}")
-        && entry_type == "ESM"
-        && runtime_mode != "TRUSTED"
-    {
+/// 所有可维护的应用统一配置，不为内置路由保留旧加载类型。
+fn validate_runtime_entry(entry_type: &str, runtime_mode: &str) -> Result<(), AppError> {
+    if entry_type != "HTML" || runtime_mode != "TRUSTED" {
         return Err(AppError::bad_request(
-            "ESM 微应用须经管理员审核并显式设置 runtimeMode 为 TRUSTED；IFRAME 仅支持 HTML",
+            "应用仅支持 qiankun（HTML + TRUSTED）；停用的旧配置须由管理员明确重新配置",
         ));
     }
     Ok(())
 }
 
-/// HTML 入口必填；非空入口必须是无凭据的 HTTP(S) 地址或宿主绝对路径。
-fn validate_entry_url(entry_type: &str, raw: &str) -> Result<String, AppError> {
+/// 独立微应用入口必填；内置路由可空，非空地址统一校验。
+fn validate_entry_url(required: bool, raw: &str) -> Result<String, AppError> {
     let url = raw.trim();
     if url.is_empty() {
-        if entry_type == "HTML" {
+        if required {
             return Err(AppError::bad_request(
                 "HTML 入口应用必须配置入口地址 entryUrl",
             ));
@@ -283,20 +275,15 @@ async fn create(
         } else {
             body.base_path.trim().to_string()
         };
-    validate_runtime_entry(&entry_type, &body.runtime_mode, &base_path, code)?;
+    validate_runtime_entry(&entry_type, &body.runtime_mode)?;
     let default_entry_url = format!("/sub-apps/{code}/index.html");
-    let default_esm_entry_url = format!("/src/micro-apps/{code}.tsx");
-    let raw_entry_url = if entry_type == "HTML" && body.entry_url.trim().is_empty() {
+    let micro = base_path.trim_end_matches('/') == format!("/micro/{code}");
+    let raw_entry_url = if micro && entry_type == "HTML" && body.entry_url.trim().is_empty() {
         default_entry_url.as_str()
-    } else if entry_type == "ESM"
-        && body.entry_url.trim().is_empty()
-        && base_path == format!("/micro/{code}")
-    {
-        default_esm_entry_url.as_str()
     } else {
         body.entry_url.as_str()
     };
-    let entry_url = validate_entry_url(&entry_type, raw_entry_url)?;
+    let entry_url = validate_entry_url(micro, raw_entry_url)?;
     let mut tx = state.pool.begin().await?;
     let mut row: ApplicationRow = sqlx::query_as(
         "INSERT INTO applications (code, name, icon, base_path, entry_type, entry_url, description, sort_order, status, runtime_mode) \
@@ -412,26 +399,17 @@ async fn update(
         None => None,
     };
     // entry_url: 键缺省 = 不更新; 显式传值(含空串) = 按目标 entry_type 校验后更新
-    let new_entry_url = match &body.entry_url {
-        Some(u) => Some(validate_entry_url(
-            new_entry_type.as_deref().unwrap_or("ESM"),
-            u,
-        )?),
-        None => None,
-    };
+    let new_entry_url = body.entry_url.as_ref().map(|url| url.trim().to_owned());
     let mut tx = state.pool.begin().await?;
     let before = locked_application(&mut tx, id).await?;
     // 校验合并后的完整配置，覆盖仅修改入口类型、运行模式或挂载路径的补丁。
     let final_type = new_entry_type.as_deref().unwrap_or(&before.entry_type);
-    validate_entry_url(
-        final_type,
-        new_entry_url.as_deref().unwrap_or(&before.entry_url),
-    )?;
+    let final_base_path = body.base_path.as_deref().unwrap_or(&before.base_path);
+    let micro = final_base_path.trim_end_matches('/') == format!("/micro/{}", before.code);
+    validate_entry_url(micro, new_entry_url.as_deref().unwrap_or(&before.entry_url))?;
     validate_runtime_entry(
         final_type,
         body.runtime_mode.as_deref().unwrap_or(&before.runtime_mode),
-        body.base_path.as_deref().unwrap_or(&before.base_path),
-        &before.code,
     )?;
     let row: ApplicationRow = sqlx::query_as(
         "UPDATE applications SET name = COALESCE($2, name), icon = COALESCE($3, icon), \
@@ -556,38 +534,24 @@ mod tests {
             "/app/?access_token=secret",
             "/app/?CLIENT_SECRET=secret",
         ] {
-            assert!(validate_entry_url("HTML", invalid).is_err(), "{invalid:?}");
+            assert!(validate_entry_url(true, invalid).is_err(), "{invalid:?}");
         }
         for valid in [
             "/sub-apps/demo/versions/v1/index.html",
-            "/src/micro-apps/report-center.tsx",
             "https://external.test/v1/index.html?locale=zh",
         ] {
-            assert_eq!(validate_entry_url("HTML", valid).unwrap(), valid);
+            assert_eq!(validate_entry_url(true, valid).unwrap(), valid);
         }
-        assert!(validate_entry_url("HTML", "").is_err());
-        assert_eq!(validate_entry_url("ESM", "").unwrap(), "");
+        assert!(validate_entry_url(true, "").is_err());
+        assert_eq!(validate_entry_url(false, "").unwrap(), "");
     }
 
     #[test]
-    fn micro_esm_requires_explicit_trust_and_host_routes_remain_valid() {
-        assert!(
-            validate_runtime_entry("ESM", "IFRAME", "/micro/report-center", "report-center")
-                .is_err()
-        );
-        assert!(
-            validate_runtime_entry("ESM", "IFRAME", "/micro/report-center/", "report-center")
-                .is_err()
-        );
-        for (entry_type, runtime, base_path) in [
-            ("ESM", "TRUSTED", "/micro/report-center"),
-            ("HTML", "IFRAME", "/micro/report-center"),
-            ("HTML", "TRUSTED", "/micro/report-center"),
-            ("ESM", "IFRAME", "/system"),
-        ] {
-            assert!(
-                validate_runtime_entry(entry_type, runtime, base_path, "report-center").is_ok()
-            );
+    fn all_application_configs_only_accept_html_trusted() {
+        for (entry_type, runtime) in [("ESM", "IFRAME"), ("ESM", "TRUSTED"), ("HTML", "IFRAME")] {
+            assert!(validate_runtime_entry(entry_type, runtime).is_err());
         }
+        assert!(validate_runtime_entry("HTML", "TRUSTED").is_ok());
+        assert!(parse_entry_type("ESM").is_err());
     }
 }

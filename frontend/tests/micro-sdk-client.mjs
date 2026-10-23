@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { SDK_VERSION, createContextClient, createNotificationPublisher, MicroSdkError, requestWithContext,
-  authorizationContextSignature, sameAuthorizationContext } from '../vendor/micro-app-sdk/releases/1.0.0/index.mjs'
+  authorizationContextSignature, sameAuthorizationContext } from '../vendor/micro-app-sdk/index.mjs'
 
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done }); return { promise, resolve } }
 function props(extra = {}) {
@@ -11,7 +11,7 @@ function props(extra = {}) {
     signal: new AbortController().signal, user: { id: 'u' }, tenant: { id: 't' }, organization: { id: 'o' }, ...extra }
 }
 const json = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
-const schema = JSON.parse(readFileSync(new URL('../vendor/micro-app-sdk/contracts/schema.json', import.meta.url), 'utf8'))
+const schema = JSON.parse(readFileSync(new URL('../vendor/micro-app-sdk/schema.json', import.meta.url), 'utf8'))
 
 test('registered context client forces omitted credentials and captured Bearer, preserves a valid request identifier', async () => {
   const requestId = '02345678-1234-4321-abcd-123456789abc', requests = []
@@ -118,12 +118,12 @@ test('caller cancellation, host cancellation and expired contexts fail closed', 
   expired.dispose()
 })
 
-test('unknown SDK and MicroProps versions are explicitly rejected while the exact versionless baseline remains supported', () => {
-  for (const extra of [{ sdkVersion: '2.0.0' }, { sdkVersion: '1.0.1' }, { contractVersion: '3.0' }]) {
+test('archived and unknown SDK or MicroProps versions are rejected while optional version metadata remains supported', () => {
+  for (const extra of [{ sdkVersion: '1.0.0' }, { sdkVersion: '2.0.1' }, { contractVersion: '3.0' }]) {
     assert.throws(() => createContextClient(props(extra)), error => error instanceof MicroSdkError && error.kind === 'PROTOCOL')
   }
   const legacy = createContextClient(props({ sdkVersion: undefined }))
-  assert.equal(legacy.sdkVersion, '1.0.0'); legacy.dispose()
+  assert.equal(legacy.sdkVersion, SDK_VERSION); legacy.dispose()
   const client = createContextClient(props())
   assert.throws(() => client.update(props({ sdkVersion: '999.0.0' })), error => error.code === 'UNSUPPORTED_SDK_VERSION')
   assert.equal(client.current(), null)
@@ -139,7 +139,7 @@ test('text transport preserves CSV BOM, observes a smaller bound and forbids rai
 test('notification helper preserves event idempotency and only consumes the supplied active client', async () => {
   const requests = [], client = createContextClient(props(), async (url, options) => { requests.push({ url, ...options }); return json({ duplicate: true }) })
   const publisher = createNotificationPublisher(client), body = { idempotencyKey: 'event-stable', title: 'Reminder' }
-  assert.equal(publisher.sdkVersion, '1.0.0')
+  assert.equal(publisher.sdkVersion, SDK_VERSION)
   assert.deepEqual(await publisher.publish(body), { duplicate: true }); await publisher.publish(body)
   assert.equal(requests[0].url, '/api/apps/orders/notifications'); assert.equal(requests[0].body, requests[1].body)
   assert.equal(requests[0].credentials, 'omit')

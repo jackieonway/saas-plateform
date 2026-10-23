@@ -32,6 +32,23 @@ function fixture() {
     anotherConsumer: () => createApplicationNavigation(dependencies, sequence) }
 }
 
+test("built-in applications retain React destinations with HTML metadata and no external entry", async () => {
+  for (const [code, destination] of [["system", "/system/applications"], ["hermes", "/hermes/inbox"]]) {
+    const app = { id: code, code, basePath: `/${code}`, entryType: "HTML", runtimeMode: "TRUSTED", entryUrl: "" }
+    const state = { token: "token", epoch: 1, switching: false, identity: "user:tenant:org", currentApplicationId: null, applications: [app] }
+    const destinations = []
+    const select = createApplicationNavigation({
+      session: () => state, select: id => { state.currentApplicationId = id },
+      menus: async () => [menu(destination)], allowed: path => path.startsWith(`${app.basePath}/`),
+      navigate: path => destinations.push(path), failed: () => assert.fail("Built-in navigation must succeed"),
+    })
+    await select(code, "/dashboard")
+    assert.equal(state.currentApplicationId, code)
+    assert.deepEqual(destinations, [destination])
+    assert.equal(destinations.some(path => path.startsWith("/micro/")), false)
+  }
+})
+
 test("application selection A then B ignores A late menu success", async () => {
   const f = fixture(), a = f.select("A", "/dashboard"), b = f.select("B", "/dashboard")
   f.requests[1].resolve([menu("/micro/B/list")]); await b

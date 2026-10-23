@@ -1,7 +1,5 @@
 /** Public micro-application contracts come from the registered SDK generator. */
 export type {
-  MicroEntryType,
-  MicroRuntimeMode,
   MicroTheme,
   MicroNotifyVariant,
   MicroUser,
@@ -12,14 +10,17 @@ export type {
   MicroDataGrant,
   AppAuthorizationContext,
   MicroProps,
-  MicroLifecycle,
-  MicroEsmModule,
-} from "../../../vendor/micro-app-sdk/generated/types"
+} from "../../../vendor/micro-app-sdk/types"
 
-import type { MicroEntryType, MicroRuntimeMode } from "../../../vendor/micro-app-sdk/generated/types"
+import type { MicroProps } from "../../../vendor/micro-app-sdk/types"
 
-/** 子应用全局生命周期挂载键。 */
-export const MICRO_APP_GLOBAL = "__MICRO_APP__" as const
+/** Host-owned handle for sequencing qiankun work and authorization cleanup. */
+export interface MicroApplicationHandle {
+  name: string
+  mount: (container: HTMLElement, props: MicroProps) => void | Promise<void>
+  update?: (props: MicroProps) => void | Promise<void>
+  unmount: () => void | Promise<void>
+}
 
 /** 容器侧从应用列表解析出的入口信息；不是 SDK 公开 DTO。 */
 export interface ApplicationEntryInfo {
@@ -27,8 +28,8 @@ export interface ApplicationEntryInfo {
   code: string
   name: string
   icon: string
-  entryType: MicroEntryType
-  runtimeMode: MicroRuntimeMode
+  entryType: "HTML"
+  runtimeMode: "TRUSTED"
   deploymentVersion?: string | null
   entryVersionId?: string | null
   entryUrl: string

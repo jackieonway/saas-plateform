@@ -19,7 +19,8 @@ async function waitState(predicate, message, timeout = 12_000) {
 }
 const menu = (id, title, pathname, permission = null, extra = {}) => ({ id, parentId: null,
   type: 'MENU', title, path: pathname, icon: 'Boxes', permission, sortOrder: 1, visible: true, children: [], ...extra })
-const system = { id: 'nav-system', code: 'system', name: '系统管理', icon: 'LayoutGrid', basePath: '/system' }
+const system = { id: 'nav-system', code: 'system', name: '系统管理', icon: 'LayoutGrid', basePath: '/system',
+  entryType: 'HTML', runtimeMode: 'TRUSTED' }
 const app = (suffix) => ({ id: 'nav-app-' + suffix, code: 'nav-' + suffix, name: '导航应用 ' + suffix.toUpperCase(),
   icon: 'Boxes', basePath: '/micro/nav-' + suffix, runtimeMode: 'TRUSTED', entryType: 'HTML',
   entryUrl: '/__phase9/' + suffix + '/index.html', deploymentVersion: 'phase9', entryVersionId: 'nav-release-' + suffix })
@@ -118,10 +119,11 @@ async function fixture(pathname, options = {}) {
     const pathname = new URL(route.request().url()).pathname
     state.entries.push(pathname)
     await route.fulfill({ status: 200, contentType: 'text/html', body: `<!doctype html><html><body><script>
-      var active; window.__MICRO_APP__ = { name: 'phase9-menu-probe',
-        mount: function(container, props) { active = container; var node = document.createElement('p'); node.dataset.testid = 'phase9-mounted'; node.textContent = props.organization.id + ':' + props.routePath; container.replaceChildren(node); },
-        update: function(props) { active.querySelector('[data-testid="phase9-mounted"]').textContent = props.organization.id + ':' + props.routePath; },
-        unmount: function() { if(active) active.replaceChildren(); } };
+      var active; window.Phase9MenuProbe = {
+        bootstrap: async function() {},
+        mount: async function(props) { var container = props.container, platform = props.platform; active = container; var node = document.createElement('p'); node.dataset.testid = 'phase9-mounted'; node.textContent = platform.organization.id + ':' + platform.routePath; container.replaceChildren(node); },
+        update: async function(props) { active.querySelector('[data-testid="phase9-mounted"]').textContent = props.platform.organization.id + ':' + props.platform.routePath; },
+        unmount: async function() { if(active) active.replaceChildren(); } };
       </script></body></html>` })
   })
   await context.route(url => url.origin === origin && url.pathname.startsWith('/api/'), async route => {

@@ -35,23 +35,6 @@ function expression(relative, name, bindings = {}, kind = 'variable') {
   return vm.runInNewContext(`${output}\nresult`, { DOMException, Promise, ...bindings }, { filename: relative })
 }
 
-test('a mounted iframe failure stops authorization renewal and exposes the host retry state', () => {
-  const active = {}, events = []
-  let retired = false
-  const handle = expression('src/components/micro/MicroAppContainer.tsx', 'handleIframeFailure', {
-    stale: () => retired, activeRef: { current: active }, active,
-    reportRuntimeFailure: (...args) => events.push(['report', ...args]),
-    runtimeRef: { current: { stop: () => events.push(['stop']) } },
-    setStatus: status => events.push(['status', status]), setErrorMessage: message => events.push(['message', message]),
-    disposeEntry: entry => { assert.equal(entry, active); events.push(['dispose']); retired = true },
-  })
-  handle(new Error('Iframe application navigated away from its connected document'))
-  assert.deepEqual(events.map(([kind]) => kind), ['report', 'stop', 'status', 'message', 'dispose'])
-  assert.deepEqual(events.find(([kind]) => kind === 'status'), ['status', 'error'])
-  handle(new Error('late failure'))
-  assert.equal(events.length, 5, 'a retired mounting instance cannot overwrite the replacement UI')
-})
-
 test('context selection delegates the whole operation to the locked platform transaction', async () => {
   const calls = [], expected = { accessToken: 'organization-b', refreshToken: 'refresh-b' }
   const useSwitch = expression('src/hooks/use-auth-data.ts', 'useSwitchContext', {
@@ -225,10 +208,11 @@ test('the actual authorization effect accepts token rotation before React render
   const ref = () => ({ current: null }), setter = () => {}
   const effect = expression('src/components/micro/MicroAppContainer.tsx', 'authorization effect', {
     sessionId: 'session-a', contextEpoch: 3, sessionToken: 'old-access',
-    useAuthStore: { getState: () => state }, reconcileSessionSync() {}, appCode: 'work-orders', isTrusted: false,
+    useAuthStore: { getState: () => state }, reconcileSessionSync() {}, appCode: 'work-orders',
+    trustedMicroRuntimeDomain: { fault: null }, faultRef: ref(),
     snapshotRef: ref(), activeRef: ref(), lastPushSigRef: ref(), lastDeliveryRef: ref(), runtimeRef: ref(),
     setSnapshot: setter, setStatus: setter, setTokenState: setter, setTokenNote: setter, setErrorMessage: setter, setRecoveryAttempt: setter,
-    assertBrowserCapabilities() {}, MicroContextRuntime: class { constructor(options) { captured = options } refresh() { return Promise.resolve() } stop() {} },
+    assertQiankunCapabilities() {}, MicroContextRuntime: class { constructor(options) { captured = options } refresh() { return Promise.resolve() } stop() {} },
     api: { post: (...args) => { calls.push({ args, latestToken: state.token }); return Promise.resolve({ accessToken: 'application-token' }) } },
   }, 'runtime-effect')
   const cleanup = effect()

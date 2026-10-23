@@ -1,51 +1,89 @@
-# OAuth 与凭据生命周期
+# OAuth 与应用令牌签发
 
-平台提供 /oauth/authorize、/token、/userinfo、/introspect、/revoke、/device/authorization 和发现文档；对应路由在 src/routes/oauth2.rs，核心签发逻辑在 src/oauth_issuance.rs。
+平台同时提供普通 OAuth 授权、平台会话刷新和 qiankun 应用专用令牌。它们共用部分传输入口，但身份、存储用途和验证规则不同。当前实现位于 `src/routes/oauth2.rs`、`src/oauth_issuance.rs`、`src/session.rs`、`src/app_token.rs`；客户端管理位于 `src/routes/oauth_admin.rs`。
 
-## 凭据用途
+## 路由与用途
 
-平台管理会话、应用 Bearer 和普通 OAuth token 有不同受众与权限。业务 API 必须验证应用绑定、用户/租户/组织和当前有效状态，不能把任意可解码 JWT 当作业务授权。
-
-授权码、refresh 和设备码使用受控单次消费。发行、消费与关键审计在事务中处理；撤销、用户状态、成员关系与会话状态按当前请求重新检查。机密客户端 secret 只在后端或私有环境中保存。
-
-`client_credentials` 及无用户上下文的机器令牌刷新只允许经过认证的 `CONFIDENTIAL` 客户端。`PUBLIC` 客户端标识不能作为机器身份凭据，管理端也会拒绝该类型与机器授权模式的组合，包括仅修改类型的局部更新。创建和更新同时校验支持的授权模式、独立 scope 标识和有效期；有效期必须为可表示的正整数秒，scope 数组每项不能包含空白或逗号。
-
-修改密码、管理员重置密码和全会话踢出会在同一事务内提升用户会话版本，撤销平台会话与该用户全部 OAuth access/refresh，并消费尚未使用的授权码、终止已批准设备码。机器授权不关联用户，保持独立。授权确认与设备批准在持有用户锁后复验平台会话，避免等待期间的改密或踢出被旧请求绕过。
-
-待处理授权请求不保留永久授权：展示和批准时重新检查客户端当前的回调地址、授权码模式及 scope；兑换授权码时也检查该回调仍在注册列表。签发事务在锁内比较回调配置，管理员撤回配置后不能继续使用旧快照完成签发。历史 password 模式选择有效租户及有效组织祖先链中的成员身份，最早的失效成员身份不会阻断其他有效成员身份；全部失效仍拒绝发放。
-
-## 客户端接入
-
-1. 在管理界面创建匹配用途的客户端，配置真实 grant、scope、应用绑定和准确回调 URI。
-2. 浏览器通过授权入口，后端交换 code，PKCE 参数与发起会话绑定。
-3. 根据 token 类型调用资源端点；机器 client_credentials 不自动拥有用户身份。
-4. 轮换、撤销和退出按正式端点处理，不只删除浏览器本地值。
-
-普通 OAuth、平台会话刷新和应用令牌不能互换恢复协议。历史 password 仅对实际允许的客户端使用，不作为新业务登录方案；OAuth 演练示例默认禁用该流程。
-
-## PKCE 策略与兼容迁移
-
-客户端管理 API 的创建、列表和更新使用布尔字段 `requirePkce`。启用后，授权码流程要求 RFC 7636 S256：授权请求携带 `code_challenge_method=S256` 与 43 位无填充 base64url SHA-256 challenge；兑换时携带同一次请求对应的 `code_verifier`，长度为 43–128 位，仅使用字母、数字和 `-._~`。调用方为每次授权随机生成 verifier，将其与自己的发起会话绑定，避免复用或泄漏。
-
-| 操作 | 省略 `requirePkce` 时的行为 |
+| 路由 | 用途 |
 | --- | --- |
-| 创建 PUBLIC 客户端 | 默认 `true` |
-| 创建 CONFIDENTIAL 客户端 | 默认 `false` |
-| 编辑已有客户端 | 保留当前值，包括存量 PUBLIC 的兼容值 |
-| 实际从 CONFIDENTIAL 切换成 PUBLIC | 默认收紧到 `true` |
+| `GET /oauth/authorize` | 授权码请求，进入平台同意流程 |
+| `POST /oauth/token` | 表单提交授权码、刷新令牌、机器凭据、密码或设备码 |
+| `GET /oauth/userinfo` | 验证访问令牌并返回对应身份信息 |
+| `POST /oauth/introspect` | 经过机密客户端认证后查询令牌当前状态 |
+| `POST /oauth/revoke` | 经过客户端认证后撤销属于该客户端的令牌 |
+| `POST /oauth/device/authorization` | 发起设备授权 |
+| `GET /oauth/.well-known/openid-configuration` | 当前端点、grant 和 PKCE 方法声明 |
+| `GET /api/oauth/consent/{request_id}` | 平台会话读取待同意请求 |
+| `POST /api/oauth/consent/{request_id}/decision` | 当前会话确认或拒绝请求 |
+| `POST /api/oauth/session-token` | 当前平台会话换取应用专用令牌 |
 
-创建和编辑均可显式传入 `true` 或 `false`；CONFIDENTIAL 也可开启。`false` 为兼容模式，沿用既有可省略 PKCE 或显式使用 plain/S256 的流程，不代表推荐新接入使用这些弱策略。发现文档继续列出 S256、plain，以反映平台对兼容客户端的实际能力；每个客户端的当前策略决定能否使用 plain。
+`/oauth/token` 的普通 OAuth grant 为 `authorization_code`、`refresh_token`、`client_credentials`、`password`、`urn:ietf:params:oauth:grant-type:device_code`。客户端必须启用对应 grant。机密客户端验证密钥；公共客户端没有可保密的密钥，不能申请机器凭据或刷新无用户的机器凭据。
 
-增量迁移 `0007_oauth_pkce_policy.sql` 为存量客户端增加 `require_pkce=false`，不重写旧迁移、不清洗凭据，也不自动中断已有接入。迁移已有 PUBLIC 客户端时，先让接入方完成 S256 请求和兑换改造，再在管理界面开启“要求 PKCE S256”或调用更新 API 传入 `{"requirePkce":true}`。启用会立即复验待处理 consent 和尚未兑换的授权码：旧的无 PKCE/plain 请求不能继续，必须重新发起授权。签发锁等待期间发生策略变更也会拒绝旧配置快照，防止并发请求绕过收紧操作。
+## 普通 OAuth 签发的一致性
 
-该策略作用于授权码流程，不改变已发放 access/refresh 的生命周期，也不替代机密客户端认证、准确回调匹配或应用授权；紧急终止既有访问仍使用撤销端点或管理端踢出操作。
+普通用户 grant 必须同时具有 user、tenant、organization，且用户启用、直接成员关系存在、租户有效、组织到根的完整链启用且未到期、客户端启用。机器 grant 三个身份字段均为空，其主体为 client ID，不随无关用户或组织状态失效。
 
-开启策略后，服务回退也必须使用识别并执行 `require_pkce` 的兼容构建。早期服务即使能连接新增列后的数据库，也不会执行该策略；不能仅凭数据库迁移成功就把旧构建视为安全回退版本。
+签发事务按用户、客户端、一次性凭据的顺序获取必要锁，等待后重查当前身份及客户端配置。授权码、设备码只能消费一次；刷新会消费旧刷新令牌，签发完整替换对。凭据消费、access 写入、可选 refresh 写入及相应事务审计必须一起提交，任一步骤失败全部回滚。
 
-## 提交未知与回退
+访问令牌使用带随机 `jti` 的 JWT；普通 OAuth 刷新令牌使用随机不透明字符串。新记录的 `token_use='oauth'`、`storage_version=2`、`jwt=NULL`，数据库只保存令牌摘要。客户端启用了 `refresh_token` 才附带刷新令牌。已知租户或祖先组织到期时间会进一步限制两个令牌的到期时间，后续禁用或撤销仍通过实时检查生效。
 
-连接断开或提交回执丢失不能证明数据库回滚。普通 OAuth 没有重新取回已签发 token 原文的对账接口；结果未知的 refresh 不应自动重复消费，应停止使用未知轮换结果并重新授权。
+普通 token 响应使用 OAuth 命名：
 
-已执行的凭据迁移不回写旧 SQL，也不删除迁移历史。旧 issuer 与新存储/单次消费约束可能不兼容，回退需要兼容当前历史的构建或隔离恢复；不能通过重新写回 JWT 原文绕过约束。
+```json
+{
+  "access_token": "<access-token>",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "read",
+  "refresh_token": "<only-when-enabled>"
+}
+```
 
-开发与回调来源见 [开发指南](development.md)，数据库恢复后的旧凭据失效见 [恢复指南](../ops/recovery/README.md)。
+`expires_in` 来自当前有效期计算，不保证等于配置值。成功的 `/oauth/token` 响应带 `Cache-Control: no-store` 和 `Pragma: no-cache`。刷新请求可以收窄 scope，不能扩大 scope；空客户端 scope 按空集合处理。
+
+## 授权码与 PKCE
+
+客户端公开字段 `requirePkce` 对应数据库 `require_pkce`。通过管理接口创建的新公共客户端默认要求 S256；明确关闭的历史客户端保留可选 PKCE 行为。`requirePkce=true` 时，授权请求必须携带规范 S256 challenge，换码必须使用符合 RFC 7636 长度和字符规则的 verifier，禁止降级到 `plain`。
+
+待同意请求和授权码兑换会重查当前 redirect、grant、scope 和 PKCE 策略。管理员收紧策略或移除 redirect 后，先前创建的请求不获得豁免。发现文档同时列出 S256 与 plain，具体客户端仍以其策略为准。
+
+`migrations/0003_oauth_issuance.sql` 保留历史 token 元数据；`0007_oauth_pkce_policy.sql` 增加 PKCE 策略。旧普通 OAuth 无 `jti` 的令牌及旧明文字段属于受控存储兼容，不代表前端仍支持 iframe 或旧 SDK。不要通过修改历史迁移或直接清空令牌表来做 qiankun 文档清理。
+
+## 平台会话刷新
+
+当 `grant_type=refresh_token` 且 refresh token 属于平台会话格式时，`/oauth/token` 分派给 `session::refresh`。此分支禁止 OAuth `client_id`、`client_secret`、Basic 凭据和 scope 参数，返回新的平台会话 access/refresh 及 `refresh_expires_in`。平台刷新凭据不能转换成普通 OAuth grant。
+
+## qiankun 应用专用令牌
+
+```http
+POST /api/oauth/session-token
+Authorization: Bearer <platform-session-access-token>
+Content-Type: application/json
+
+{"appCode":"work-orders"}
+```
+
+平台要求应用启用、当前租户和所选组织均授权该应用，并选择关联该应用、已启用且创建时间最早的机密客户端。成功为 HTTP 201：
+
+```json
+{
+  "accessToken": "<application-access-token>",
+  "expiresIn": 299,
+  "tokenType": "Bearer",
+  "audience": "work-orders"
+}
+```
+
+有效期取客户端 access TTL、300 秒和父平台会话剩余时间的最小值。记录使用 `token_use='app'`，绑定应用 audience、`jti` 和 `platform_session_id`，不签发应用 refresh token。后续通过 SDK 重新向壳请求短期 token。该接口是当前 qiankun 运行链路的一部分。
+
+应用上下文、业务授权和通知发布均使用实时 `app_token::inspect`，校验令牌、父会话、成员关系和两级应用授权。契约详见[应用授权契约](application-authorization-contract.md)。应用内省要求调用方的应用绑定匹配，不能只凭 client ID 或 context hash 访问其他应用。
+
+## 管理、限流与排查
+
+客户端管理在 `/api/oauth/clients`；令牌管理在 `/api/oauth/tokens`，包括单令牌撤销、会话踢出和过期清理；设备码管理在 `/api/oauth/device-codes`。管理权限除 `system:oauth` 外还要求对应客户端或令牌菜单路径。客户端列表不返回密钥摘要，创建和重生成密钥时应由调用方安全接收一次性结果。
+
+普通 OAuth 错误使用 `error`、`error_description`，受保护平台 API 使用 `code`、`message`。无效或未知 token 的内省通常为 `{ "active": false }`；撤销未知或不属于调用客户端的 token 不披露其存在。发生限流应遵循 `Retry-After`。
+
+内省和机密授权相关配置：`OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE=600`、`OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE=30`、`OAUTH_INTROSPECTION_ATTEMPTS_PER_MINUTE=3000`。配置从服务端加载，不能由请求扩大预算。`OAUTH_AUTO_PURGE` 默认关闭。
+
+关键验证位于 `src/oauth_issuance_tests.rs`、`src/platform_session_refresh_tests.rs`、`src/management_audit_tests.rs`：涵盖并发刷新单赢家、一次性消费、写入回滚、身份撤销、PKCE 收紧、旧存储升级和独立令牌撤销。数据库套件需隔离测试数据库；文档变更本身不等于这些集成测试已执行。

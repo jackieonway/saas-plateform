@@ -1,5 +1,5 @@
 import { api, qs } from "@/lib/api"
-import type { ApplicationEntryType, ApplicationEnvironment, ApplicationRuntimeMode, Status } from "./types"
+import type { ApplicationEnvironment, Status } from "./types"
 
 export interface ApplicationOrganizationOption {
   id: string
@@ -26,11 +26,16 @@ export interface ApplicationSetupStatus {
   applicationId: string
   environment: ApplicationEnvironment
   applicationEnabled: boolean
-  entryType: ApplicationEntryType
-  runtimeMode: ApplicationRuntimeMode
+  /** Management reads may include archived metadata of disabled applications. */
+  entryType: string
+  runtimeMode: string
   releaseRequired: boolean
   activeVersion: string | null
   releaseValidated: boolean
+  /** Optional during rolling upgrades with older platform servers. */
+  entrySource?: "URL" | "RELEASE" | "LEGACY"
+  urlEntryConfigured?: boolean
+  proxyEnabled?: boolean
   menuCount: number
   entryMenuCount: number
   canConfigureAccess: boolean

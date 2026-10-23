@@ -60,6 +60,11 @@ fn public_contract_sources_and_pinned_rust_are_exact() {
             "release.json",
             include_bytes!("../tests/fixtures/micro-app-protocol/release.json").as_slice(),
         ),
+        (
+            "artifact-manifest.json",
+            include_bytes!("../tests/fixtures/micro-app-protocol/artifact-manifest.json")
+                .as_slice(),
+        ),
     ] {
         assert_eq!(
             source["files"][name],
@@ -85,7 +90,8 @@ fn public_contract_sources_and_pinned_rust_are_exact() {
         release["contracts"]["microProps"],
         protocol::MICRO_PROPS_VERSION
     );
-    assert_eq!(release["contracts"]["iframe"], protocol::IFRAME_VERSION);
+    assert!(release["contracts"].get("iframe").is_none());
+    assert_eq!(release["supportedSdkVersions"], json!(["2.0.0"]));
     assert_eq!(
         release["contracts"]["notification"],
         protocol::NOTIFICATION_VERSION
@@ -99,6 +105,48 @@ fn public_contract_sources_and_pinned_rust_are_exact() {
         release["limits"]["maxJsonResponseBytes"],
         protocol::RESPONSE_LIMIT_BYTES
     );
+    let manifest: Value = serde_json::from_str(include_str!(
+        "../tests/fixtures/micro-app-protocol/artifact-manifest.json"
+    ))
+    .expect("registered artifact manifest");
+    assert_eq!(manifest["sdkVersion"], protocol::SDK_VERSION);
+    assert_eq!(manifest["contracts"], release["contracts"]);
+    for (name, contents) in [
+        (
+            "protocol.rs",
+            include_bytes!("../tests/fixtures/micro-app-protocol/protocol.rs").as_slice(),
+        ),
+        (
+            "schema.json",
+            include_bytes!("../tests/fixtures/micro-app-protocol/schema.json").as_slice(),
+        ),
+    ] {
+        let file = manifest["files"]
+            .as_array()
+            .expect("registered files")
+            .iter()
+            .find(|file| file["path"] == name)
+            .expect("registered contract artifact");
+        assert_eq!(file["bytes"], contents.len());
+        assert_eq!(file["sha256"], format!("{:x}", Sha256::digest(contents)));
+    }
+}
+
+#[test]
+fn public_contract_only_accepts_qiankun_metadata_and_current_sdk() {
+    for (field, value) in [("entryType", "ESM"), ("runtimeMode", "IFRAME")] {
+        let mut value_context = context();
+        value_context["application"][field] = json!(value);
+        let error = protocol::AppAuthorizationContext::from_json(&bytes(&value_context))
+            .err()
+            .expect("legacy application metadata is unsupported");
+        assert_eq!(error.to_string(), "PUBLIC_CONTRACT_INVALID");
+    }
+    let mut value_props = props();
+    value_props["sdkVersion"] = json!("1.0.0");
+    assert!(protocol::MicroPropsWire::from_json(&bytes(&value_props)).is_err());
+    value_props["sdkVersion"] = json!(protocol::SDK_VERSION);
+    assert!(protocol::MicroPropsWire::from_json(&bytes(&value_props)).is_ok());
 }
 
 #[test]

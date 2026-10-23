@@ -4,7 +4,7 @@
     "contextVersion": "fixture-context-v1",
     "expiresAt": "2099-01-01T00:00:00Z",
     "appCode": "orders",
-    "application": { "id": "fixture-application", "name": "Orders", "runtimeMode": "IFRAME", "entryType": "HTML", "entryUrl": "/micro-versions/orders/1.0.0/index.html", "deploymentVersion": "1.0.0", "entryVersionId": null },
+    "application": { "id": "fixture-application", "name": "Orders", "runtimeMode": "TRUSTED", "entryType": "HTML", "entryUrl": "/micro-versions/orders/1.0.0/index.html", "deploymentVersion": "1.0.0", "entryVersionId": null },
     "user": { "id": "fixture-user", "username": "fixture", "displayName": "Fixture User" },
     "tenant": { "id": "fixture-tenant", "code": "fixture", "name": "Fixture Tenant" },
     "organization": { "id": "fixture-organization", "name": "Fixture Organization", "path": "Fixture Organization" },

@@ -1,21 +1,21 @@
 {
   "name": "saas-platform-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "packageManager": "npm@11.16.0",
   "engines": {
-    "node": ">=24.18.0 <25",
+    "node": ">=24.22.1 <25",
     "npm": ">=11.16.0 <12"
   },
   "scripts": {
     "dev": "vite --port 3000 --strictPort --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/check-qiankun-delivery.mjs --dist dist",
     "preview": "vite preview",
     "lint": "eslint src vite.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "sdk:check": "node scripts/check-sdk.mjs",
-    "test": "node --test tests/authorization-dialogs.mjs tests/device-authorization.mjs tests/application-navigation.mjs tests/application-release-policy.mjs tests/auth-queries.mjs tests/data-grants-transport.mjs tests/data-grants.mjs tests/map-location-regions.mjs tests/micro-context-runtime.mjs tests/micro-context-updates.mjs tests/micro-iframe-protocol.mjs tests/micro-runtime-faults.mjs tests/micro-sandbox-lifecycle.mjs tests/micro-sdk-client.mjs tests/notification-context.mjs tests/route-policy-guard.mjs tests/route-policy.mjs tests/session-coordinator.mjs tests/session-integration.mjs tests/session-refresh.mjs tests/vite-host-static.mjs tests/test-entrypoints.mjs deploy/tests/static-image-policy.mjs tests/micro-application-editor.mjs tests/micro-release-flow.mjs tests/micro-access-setup.mjs tests/micro-setup-policy.mjs tests/micro-setup-panel.mjs tests/micro-content-layout.mjs tests/consent-authorization.mjs tests/business-page-flows.mjs tests/oauth-client-policy.mjs tests/business-context-writes.mjs",
+    "test": "node --test tests/authorization-dialogs.mjs tests/device-authorization.mjs tests/application-navigation.mjs tests/application-release-policy.mjs tests/auth-queries.mjs tests/data-grants-transport.mjs tests/data-grants.mjs tests/map-location-regions.mjs tests/micro-context-runtime.mjs tests/micro-context-updates.mjs tests/micro-runtime-faults.mjs tests/micro-sdk-client.mjs tests/micro-qiankun-lifecycle.mjs tests/micro-host-services.mjs tests/notification-context.mjs tests/route-policy-guard.mjs tests/route-policy.mjs tests/session-coordinator.mjs tests/session-integration.mjs tests/session-refresh.mjs tests/vite-host-static.mjs tests/test-entrypoints.mjs deploy/tests/static-image-policy.mjs tests/micro-application-editor.mjs tests/micro-release-flow.mjs tests/micro-access-setup.mjs tests/micro-setup-policy.mjs tests/micro-setup-panel.mjs tests/micro-content-layout.mjs tests/consent-authorization.mjs tests/business-page-flows.mjs tests/oauth-client-policy.mjs tests/business-context-writes.mjs tests/micro-url-entry.mjs tests/micro-container-routing.mjs tests/qiankun-delivery.mjs",
     "test:contracts": "npm test",
     "test:notifications:browser": "node tests/notification-frontend-browser.mjs",
     "test:platform:browser": "node tests/platform-settings-browser.mjs",
@@ -26,7 +26,8 @@
     "test:auth:routes": "node tests/route-permissions-browser.mjs",
     "test:static": "node --test deploy/tests/static-image-policy.mjs",
     "test:applications:browser": "node tests/micro-setup-browser.mjs",
-    "test:micro:sandbox:browser": "node tests/trusted-sandbox-browser.mjs"
+    "test:micro:qiankun:browser": "node tests/micro-qiankun-browser.mjs",
+    "qiankun:check": "node scripts/check-qiankun-delivery.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.5",
@@ -67,10 +68,10 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.2",
-    "import-html-entry": "^1.17.0",
     "input-otp": "^1.4.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.525.0",
+    "qiankun": "2.10.16",
     "react": "^19.0.0",
     "react-day-picker": "^9.8.0",
     "react-dom": "^19.0.0",
@@ -94,6 +95,7 @@
     "@vitejs/plugin-react": "^4.5.0",
     "eslint": "10.12.0",
     "eslint-plugin-react-hooks": "7.1.1",
+    "parse5": "8.0.0",
     "tailwindcss": "^4.1.8",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5.8.3",

@@ -3,6 +3,7 @@ pub mod app_context;
 pub mod app_members;
 pub mod application_releases;
 mod application_setup;
+pub(crate) use application_setup::actor_permissions as platform_application_permissions;
 pub mod applications;
 pub mod audit;
 pub mod auth;
@@ -44,6 +45,8 @@ pub fn api_router() -> Router<AppState> {
         .merge(auth::routes())
         .merge(tenants::routes())
         .merge(applications::routes())
+        .merge(crate::application_entries::routes())
+        .merge(crate::micro_proxy::routes())
         .merge(application_releases::routes())
         .merge(application_setup::routes())
         .merge(crate::managed_deployments::routes())

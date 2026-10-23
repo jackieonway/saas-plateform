@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { MessageChannel } from 'node:worker_threads'
-import { createIframeLifecycle } from '../src/components/micro/iframe.ts'
 import { normalizedRoutePath } from '../src/lib/route-permissions.ts'
 import { componentFixture, elements, button, success } from './helpers/component-fixture.mjs'
 
@@ -10,9 +8,9 @@ function contentFixture() {
     'MicroMountContent', 'MountAreaSkeleton', 'MountErrorCard', 'TrustedRuntimeFaultCard',
   ], {
     './runtime': { trustedMicroRuntimeDomain: { fault: null } },
-    './sandbox': {}, './loader': {}, './iframe': {}, './entry': {}, './types': {},
-    '../../../vendor/micro-app-sdk/generated/protocol.mjs': {},
-    '../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs': {},
+    './qiankun': {}, './capabilities': {}, './entry': {}, './types': {},
+    '../../../vendor/micro-app-sdk/protocol.mjs': {},
+    '../../../vendor/micro-app-sdk/index.mjs': {},
   })
 }
 
@@ -45,7 +43,7 @@ test('application loading keeps its accessible overlay without adding a permanen
 })
 
 test('encoded and case-variant micro entry routes redirect to the registered spelling with query and hash intact', () => {
-  const app = { id: 'orders', code: 'orders', name: 'Orders', runtimeMode: 'IFRAME', entryType: 'HTML', entryUrl: '/orders/' }
+  const app = { id: 'orders', code: 'orders', name: 'Orders', runtimeMode: 'TRUSTED', entryType: 'HTML', entryUrl: '/orders/' }
   for (const pathname of ['/micro/%6frders/detail', '/MICRO/orders/detail', '/micro/ORDERS/detail']) {
     const state = { token: 'session', profile: { applications: [app] }, contextEpoch: 1, currentApplicationId: 'previous-app' }
     const f = componentFixture('src/components/micro/MicroAppContainer.tsx', ['MicroAppContainer'], {
@@ -54,14 +52,32 @@ test('encoded and case-variant micro entry routes redirect to the registered spe
       '@/stores/auth': { useAuthStore: selector => selector(state) },
       '@/lib/route-permissions': { normalizedRoutePath },
       './runtime': { trustedMicroRuntimeDomain: { fault: null } },
-      './sandbox': {}, './loader': {}, './iframe': {}, './entry': {}, './types': {},
-      '../../../vendor/micro-app-sdk/generated/protocol.mjs': {},
-      '../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs': {},
+      './qiankun': {}, './capabilities': {}, './entry': {}, './types': {},
+      '../../../vendor/micro-app-sdk/protocol.mjs': {},
+      '../../../vendor/micro-app-sdk/index.mjs': {},
     })
     const tree = f.render('MicroAppContainer')
     assert.equal(tree.type, 'Navigate')
     assert.equal(tree.props.to, '/micro/orders/detail?status=pending#latest')
     assert.equal(tree.props.replace, true)
+  }
+})
+
+test('legacy iframe and host ESM discoveries show a reconfiguration state without entering a mount zone', () => {
+  for (const legacy of [{ entryType: 'HTML', runtimeMode: 'IFRAME' }, { entryType: 'ESM', runtimeMode: 'TRUSTED' }]) {
+    const app = { id: 'orders', code: 'orders', name: 'Orders', entryUrl: '/old-entry/', ...legacy }
+    const state = { token: 'session', profile: { applications: [app] }, contextEpoch: 1, currentApplicationId: app.id }
+    const f = componentFixture('src/components/micro/MicroAppContainer.tsx', ['MicroAppContainer'], {
+      'react-router-dom': { useParams: () => ({ appCode: app.code }),
+        useLocation: () => ({ pathname: '/micro/orders', search: '', hash: '' }), useNavigate: () => () => {}, Navigate: 'Navigate' },
+      '@/stores/auth': { useAuthStore: selector => selector(state) },
+      '@/lib/route-permissions': { normalizedRoutePath },
+      './runtime': { trustedMicroRuntimeDomain: { fault: null } }, './qiankun': {}, './capabilities': {}, './entry': {}, './types': {},
+      '../../../vendor/micro-app-sdk/protocol.mjs': {},
+    })
+    const tree = f.render('MicroAppContainer')
+    assert.equal(tree.props.title, '应用需要重新配置')
+    assert.match(tree.props.description, /qiankun/)
   }
 })
 
@@ -122,48 +138,5 @@ test('only actual micro routes remove the host padding and width cap while prese
     const tree = layout(path)
     assert.match(elements(tree, item => item.type === 'main')[0].props.className, /p-4 md:p-6/)
     assert.match(elements(tree, item => item.type === 'motion.div')[0].props.className, /max-w-\[1600px\]/)
-  }
-})
-
-test('the actual iframe mount fills the viewport below the host top bar and preserves isolation', async () => {
-  const frames = [], originals = new Map(), channels = []
-  const target = { isConnected: true, nodes: [], contains(frame) { return this.nodes.includes(frame) }, replaceChildren(...nodes) { this.nodes = nodes } }
-  class Frame {}
-  Frame.prototype.sandbox = {}
-  class Channel {
-    constructor() { const real = new MessageChannel(); this.port1 = real.port1; this.port2 = real.port2; channels.push(this) }
-  }
-  const document = { documentElement: {}, createElement(tag) {
-    assert.equal(tag, 'iframe')
-    const frame = { style: {}, attributes: {}, setAttribute(key, value) { this.attributes[key] = value },
-      remove() { target.nodes = [] }, contentWindow: { postMessage() {} } }
-    frames.push(frame)
-    return frame
-  } }
-  for (const [name, value] of Object.entries({ document, window: { location: { href: 'https://host.test/', origin: 'https://host.test' } },
-    HTMLIFrameElement: Frame, MessageChannel: Channel, MutationObserver: class { observe() {} disconnect() {} } })) {
-    originals.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
-    Object.defineProperty(globalThis, name, { configurable: true, value })
-  }
-  const lifecycle = createIframeLifecycle({ appCode: 'orders', entryUrl: '/orders/' })
-  const props = { contractVersion: '2.0', contextVersion: 'v1', contextEpoch: 1, appCode: 'orders',
-    basePath: '/micro/orders', token: 'application-token', signal: new AbortController().signal,
-    expiresAt: new Date(Date.now() + 60_000).toISOString(), tokenExpiresAt: new Date(Date.now() + 60_000).toISOString() }
-  const mounting = lifecycle.mount(target, props)
-  mounting.catch(() => {})
-  try {
-    for (let turn = 0; turn < 10; turn++) await Promise.resolve()
-    assert.equal(frames.length, 1)
-    assert.match(frames[0].style.cssText, /width:100%/)
-    assert.match(frames[0].style.cssText, /height:max\(480px, calc\(100dvh - 3\.5rem\)\)/)
-    assert.equal(frames[0].attributes.sandbox, 'allow-scripts allow-forms')
-  } finally {
-    lifecycle.unmount()
-    await mounting.catch(() => {})
-    for (const channel of channels) { channel.port1.close(); channel.port2.close() }
-    for (const [name, descriptor] of originals) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
-      else delete globalThis[name]
-    }
   }
 })

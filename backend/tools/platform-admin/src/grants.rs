@@ -487,7 +487,7 @@ fn preflight(manifest: &Manifest, request: &mut Request<'_>) -> Result<(), SafeE
             && text(&app, "code")? == manifest.application_code.code()
             && text(&app, "status")? == "ENABLED"
             && text(&app, "basePath")? == manifest.application_code.base_path()
-            && text(&app, "runtimeMode")? == "IFRAME"
+            && text(&app, "runtimeMode")? == "TRUSTED"
             && text(&app, "entryType")? == "HTML",
         PRECONDITION,
     )?;

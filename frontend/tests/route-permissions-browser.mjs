@@ -45,7 +45,8 @@ const profile = {
     phone: "", gender: "UNKNOWN", avatar: "", isSuperAdmin: true },
   tenant: { id: "guard-tenant", name: "权限验收租户", code: "guard-tenant", isPlatform: true },
   organization: { id: "guard-org", name: "权限验收组织", path: "权限验收组织" },
-  applications: [{ id: "guard-system", code: "system", name: "系统管理", icon: "LayoutGrid", basePath: "/system" }],
+  applications: [{ id: "guard-system", code: "system", name: "系统管理", icon: "LayoutGrid", basePath: "/system",
+    entryType: "HTML", runtimeMode: "TRUSTED" }],
   memberships: [{ userId: "guard-user", tenantId: "guard-tenant", tenantName: "权限验收租户",
     organizationId: "guard-org", organizationName: "权限验收组织", organizationPath: "权限验收组织" }],
 }
@@ -106,10 +107,11 @@ async function fixture(pathname, options = {}) {
     state.entries++
     await route.fulfill({ status: 200, contentType: "text/html", body: `<!doctype html><html><body><script>
       var active;
-      window.__MICRO_APP__ = { name: "guard-menu-probe",
-        mount: function(container, props) { active = container; container.innerHTML = '<p data-testid="guard-micro-mounted">' + props.routePath + '</p>'; },
-        update: function(props) { active.querySelector('[data-testid="guard-micro-mounted"]').textContent = props.routePath; },
-        unmount: function() { if (active) active.replaceChildren(); }
+      window.GuardMenuProbe = {
+        bootstrap: async function() {},
+        mount: async function(props) { var container = props.container; active = container; container.innerHTML = '<p data-testid="guard-micro-mounted">' + props.platform.routePath + '</p>'; },
+        update: async function(props) { active.querySelector('[data-testid="guard-micro-mounted"]').textContent = props.platform.routePath; },
+        unmount: async function() { if (active) active.replaceChildren(); }
       };
     </script></body></html>` })
   })

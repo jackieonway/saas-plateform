@@ -83,8 +83,7 @@ pub(crate) async fn run() -> anyhow::Result<()> {
     tracing::info!("PostgreSQL 连接成功");
 
     // 迁移文件在编译时嵌入，新增迁移须重建后端镜像。
-    sqlx::migrate!("./migrations")
-        .run(&pool)
+    database::run_migrations(&pool)
         .await
         .map_err(|_| anyhow::anyhow!("DATABASE_MIGRATION_FAILED"))?;
     tracing::info!("数据库迁移完成");
@@ -211,14 +210,7 @@ pub(crate) fn cors_layer(config: &Config) -> CorsLayer {
         .map(|origin| HeaderValue::from_str(origin).expect("validated origin"))
         .collect();
     CorsLayer::new()
-        .allow_origin(AllowOrigin::predicate(move |origin, request| {
-            origins.contains(origin)
-                || (origin == "null"
-                    && matches!(
-                        request.uri.path(),
-                        "/api/external/menus" | "/api/external/roles"
-                    ))
-        }))
+        .allow_origin(AllowOrigin::list(origins))
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -237,12 +229,17 @@ pub(crate) fn cors_layer(config: &Config) -> CorsLayer {
 
 #[cfg(test)]
 #[tokio::test]
-async fn opaque_iframe_cors_only_allows_legacy_user_views() {
+async fn cors_requires_the_configured_host_origin_for_every_api() {
     use axum::body::Body;
     use axum::http::Request;
     use tower::ServiceExt;
 
-    let config = Config::from_values(&Default::default()).unwrap();
+    let host_origin = "http://127.0.0.1:3000";
+    let config = Config::from_values(&std::collections::HashMap::from([(
+        "CORS_ALLOWED_ORIGINS".into(),
+        host_origin.into(),
+    )]))
+    .unwrap();
     let app = axum::Router::new()
         .route("/api/external/menus", axum::routing::get(|| async { "ok" }))
         .route("/api/external/roles", axum::routing::get(|| async { "ok" }))
@@ -253,23 +250,26 @@ async fn opaque_iframe_cors_only_allows_legacy_user_views() {
         "/api/external/roles",
         "/api/auth/profile",
     ] {
-        let request = Request::builder()
-            .method(Method::OPTIONS)
-            .uri(path)
-            .header(header::ORIGIN, "null")
-            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
-            .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "authorization")
-            .body(Body::empty())
-            .unwrap();
-        let response = app.clone().oneshot(request).await.unwrap();
-        assert_eq!(response.status(), axum::http::StatusCode::OK);
-        assert_eq!(
-            response
-                .headers()
-                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
-                .and_then(|value| value.to_str().ok()),
-            path.starts_with("/api/external/").then_some("null")
-        );
+        for origin in [host_origin, "null", "http://unapproved.example"] {
+            let request = Request::builder()
+                .method(Method::OPTIONS)
+                .uri(path)
+                .header(header::ORIGIN, origin)
+                .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "authorization")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), axum::http::StatusCode::OK);
+            assert_eq!(
+                response
+                    .headers()
+                    .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                    .and_then(|value| value.to_str().ok()),
+                (origin == host_origin).then_some(host_origin),
+                "unexpected CORS grant for {origin} on {path}"
+            );
+        }
     }
 }
 

@@ -28,8 +28,12 @@ use crate::state::AppState;
 use crate::util::hash;
 use crate::util::jwt::{self, Claims};
 
+mod database_upgrade;
 mod managed_gate;
+mod node_fixture;
 mod phase31;
+mod qiankun_only;
+mod url_entries;
 mod zip_registration;
 
 const ENVIRONMENT: &str = "development";
@@ -82,7 +86,9 @@ impl TestDatabase {
         let options = test_database_options()?;
         let admin = PgPoolOptions::new()
             .max_connections(1)
-            .connect_with(options.clone())
+            // Test credentials identify a server/account. The configured test
+            // database need not already exist: creation uses the maintenance DB.
+            .connect_with(options.clone().database("postgres"))
             .await
             .map_err(|error| database_error("release test administration connection", &error))?;
         let name = format!("release_test_{}", Uuid::new_v4().simple());
@@ -288,14 +294,13 @@ async fn user(pool: &PgPool, username: &str, org: Uuid, super_admin: bool) -> Re
     Ok(user)
 }
 
-async fn application(pool: &PgPool, code: &str, entry_type: &str, entry_url: &str) -> Result<Uuid> {
+async fn application(pool: &PgPool, code: &str, entry_url: &str) -> Result<Uuid> {
     sqlx::query_scalar(
-        "INSERT INTO applications (code, name, base_path, entry_type, entry_url) \
-         VALUES ($1, $1, $2, $3, $4) RETURNING id",
+        "INSERT INTO applications (code, name, base_path, entry_type, runtime_mode, entry_url) \
+         VALUES ($1, $1, $2, 'HTML', 'TRUSTED', $3) RETURNING id",
     )
     .bind(code)
     .bind(format!("/micro/{code}"))
-    .bind(entry_type)
     .bind(entry_url)
     .fetch_one(pool)
     .await
@@ -415,19 +420,17 @@ impl Harness {
         let platform_user = user(pool, "release-platform", platform_org, true).await?;
         let admin_a = user(pool, "release-admin-a", org_a, false).await?;
         let admin_b = user(pool, "release-admin-b", org_b, false).await?;
-        let main_app = application(
-            pool,
-            "release-app",
-            "HTML",
-            "/legacy/release-app/index.html",
-        )
-        .await?;
-        let other_app = application(pool, "release-other", "ESM", "/legacy/other.js").await?;
-        let system_app = application(pool, "release-system", "ESM", "").await?;
+        let main_app = application(pool, "release-app", "/legacy/release-app/index.html").await?;
+        let other_app = application(pool, "release-other", "/legacy/other/index.html").await?;
+        // Native management pages use the same metadata as micro apps, while
+        // their platform route has no remote execution entry.
+        let system_app: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url) VALUES('release-system','Release management','/system','HTML','TRUSTED','') RETURNING id")
+            .fetch_one(pool).await?;
         let tenant_only_app =
-            application(pool, "release-tenant-only", "ESM", "/legacy/tenant.js").await?;
-        let org_only_app = application(pool, "release-org-only", "ESM", "/legacy/org.js").await?;
-        let no_role_app = application(pool, "release-no-role", "ESM", "/legacy/no-role.js").await?;
+            application(pool, "release-tenant-only", "/legacy/tenant/index.html").await?;
+        let org_only_app = application(pool, "release-org-only", "/legacy/org/index.html").await?;
+        let no_role_app =
+            application(pool, "release-no-role", "/legacy/no-role/index.html").await?;
         let management_menu = menu(pool, system_app, "system:application").await?;
         grant_application(pool, platform_tenant, platform_org, system_app).await?;
         grant_menu(pool, platform_tenant, platform_org, None, management_menu).await?;
@@ -688,6 +691,7 @@ struct HttpFixture {
     cors_requests: OriginRequestLog,
     unavailable: Arc<Mutex<HashSet<String>>>,
     servers: Vec<JoinHandle<()>>,
+    node: Option<node_fixture::NodeHttp>,
 }
 
 impl Drop for HttpFixture {
@@ -987,10 +991,16 @@ async fn fixture_resource(
 
 impl HttpFixture {
     async fn start() -> Result<Self> {
+        if std::env::var_os("MICRO_PROXY_TEST_NODE").is_some() {
+            return node_fixture::start().await;
+        }
         Self::start_at("[::1]:0").await
     }
 
     async fn start_at(bind: &str) -> Result<Self> {
+        if std::env::var_os("MICRO_PROXY_TEST_NODE").is_some() {
+            return node_fixture::start().await;
+        }
         // IPv6 avoids inherited IPv4 proxy bypass assumptions. The release client must no_proxy().
         let denied_listener = TcpListener::bind(bind).await?;
         let denied_origin = format!("http://{}", denied_listener.local_addr()?);
@@ -1033,6 +1043,7 @@ impl HttpFixture {
             cors_requests,
             unavailable,
             servers: vec![server, denied_server],
+            node: None,
         })
     }
 
@@ -1046,6 +1057,9 @@ impl HttpFixture {
     }
 
     fn set_unavailable(&self, path: &str, unavailable: bool) -> Result<()> {
+        if let Some(node) = &self.node {
+            node.set_unavailable(path, unavailable)?;
+        }
         let mut paths = self
             .unavailable
             .lock()
@@ -1532,6 +1546,8 @@ async fn release_preflight_checks_entry_resources_health_and_redirects() -> Resu
         let http = HttpFixture::start().await?;
         let h = Harness::create(&database.pool, &http.origin).await?;
         let mut html = release_body("v1", "HTML");
+        // Absolute entries and gateway-relative resources share the same allowlist.
+        html["entryUrl"] = json!(format!("{}/micro/v1/index.html", http.origin));
         html["resources"] = json!([{"url":"/micro/v1/logo.png","kind":"ASSET"}]);
         let html_id = release_id(&h.register(html).await?)?;
         h.preflight(html_id, "PASSED").await?;
@@ -1539,32 +1555,17 @@ async fn release_preflight_checks_entry_resources_health_and_redirects() -> Resu
             "/micro/v1/logo.png", "/micro/v1/health"] {
             ensure!(http.requested(path)?, "HTML preflight did not request {path}");
         }
-        let mut esm = release_body("esm-v1", "ESM");
-        // Absolute and gateway-relative URLs must be checked against the same exact allowlist.
-        esm["entryUrl"] = json!(format!("{}/micro/esm-v1/entry.js", http.origin));
-        esm["resources"] = json!([
-            {"url":"/micro/esm-v1/dep.js","kind":"SCRIPT"},
-            {"url":"/micro/esm-v1/styles.css","kind":"STYLE"},
-            {"url":"/micro/esm-v1/logo.png","kind":"ASSET"},
-        ]);
-        let esm_id = release_id(&h.register(esm).await?)?;
-        h.preflight(esm_id, "PASSED").await?;
-        for path in ["/micro/esm-v1/entry.js", "/micro/esm-v1/dep.js", "/micro/esm-v1/styles.css",
-            "/micro/esm-v1/logo.png", "/micro/esm-v1/health"] {
-            ensure!(http.requested(path)?, "ESM preflight did not request {path}");
-        }
         let mut failures = vec![
             release_body("bad404", "HTML"), release_body("badmime", "HTML"),
             release_body("badresource404", "HTML"), release_body("badresourcemime", "HTML"),
             release_body("badstylemime", "HTML"), release_body("badhealth", "HTML"),
             release_body("badredirect", "HTML"), release_body("loopredirect", "HTML"),
-            release_body("badesm", "ESM"),
             release_body("basechange", "HTML"), release_body("directoryredirect", "HTML"),
         ];
-        let mut missing_asset = release_body("badasset404", "ESM");
+        let mut missing_asset = release_body("badasset404", "HTML");
         missing_asset["resources"] = json!([{"url":"/micro/badasset404/missing.bin","kind":"ASSET"}]);
         failures.push(missing_asset);
-        let mut outside_version = release_body("badresourcepath", "ESM");
+        let mut outside_version = release_body("badresourcepath", "HTML");
         outside_version["resources"] = json!([{"url":"/micro/latest/main.js","kind":"SCRIPT"}]);
         failures.push(outside_version);
         for body in failures {
@@ -1604,40 +1605,9 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
             vec![http.origin.clone(), http.other_origin.clone()],
         )
         .await?;
-        let mut iframe = release_body("iframe-no-cors", "HTML");
-        iframe["entryUrl"] = json!(format!(
-            "{}/micro/iframe-no-cors/index.html",
-            http.other_origin
-        ));
-        let iframe_id = release_id(&h.register(iframe).await?)?;
-        h.preflight(iframe_id, "PASSED").await?;
-        successful_call(
-            &h.app,
-            Method::PUT,
-            &format!("/api/applications/{}", h.main_app),
-            &h.platform,
-            Some(json!({"runtimeMode":"TRUSTED"})),
-        )
-        .await?;
-        // The result obtained for an iframe cannot bypass the new browser fetch requirements.
-        let (status, _) = call(
-            &h.app,
-            Method::POST,
-            &format!(
-                "/api/applications/{}/releases/{iframe_id}/activate",
-                h.main_app
-            ),
-            &h.platform,
-            None,
-        )
-        .await?;
-        ensure!(
-            status == StatusCode::CONFLICT,
-            "a cached iframe preflight bypassed TRUSTED CORS checking"
-        );
-        for version in ["trusted-no-cors", "trusted-wrong-cors"] {
-            let mut body = release_body(version, "ESM");
-            body["entryUrl"] = json!(format!("{}/micro/{version}/entry.js", http.other_origin));
+        for version in ["trusted-no-cors", "trusted-wrong-cors", "trusted-null-cors"] {
+            let mut body = release_body(version, "HTML");
+            body["entryUrl"] = json!(format!("{}/micro/{version}/index.html", http.other_origin));
             let id = release_id(&h.register(body).await?)?;
             h.preflight(id, "FAILED").await?;
             let (status, _) = call(
@@ -1650,7 +1620,7 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
             .await?;
             ensure!(
                 status == StatusCode::CONFLICT,
-                "a resource with missing/wrong gateway CORS was activated"
+                "an HTML entry with missing/wrong gateway CORS was activated for {version}"
             );
         }
         let mut cross_script = release_body("trusted-resource-no-cors", "HTML");
@@ -1660,8 +1630,8 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
         }]);
         let cross_script_id = release_id(&h.register(cross_script).await?)?;
         h.preflight(cross_script_id, "FAILED").await?;
-        let mut star = release_body("trusted-star-cors", "ESM");
-        let star_url = format!("{}/micro/trusted-star-cors/entry.js", http.other_origin);
+        let mut star = release_body("trusted-star-cors", "HTML");
+        let star_url = format!("{}/micro/trusted-star-cors/index.html", http.other_origin);
         star["entryUrl"] = json!(star_url);
         let star_id = release_id(&h.register(star).await?)?;
         h.preflight(star_id, "PASSED").await?;
@@ -1673,7 +1643,7 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
             None,
             ExpectedReleaseEntry {
                 version: "trusted-star-cors",
-                entry_type: "ESM",
+                entry_type: "HTML",
                 entry_url: &star_url,
             },
         )?;
@@ -1716,7 +1686,7 @@ async fn release_trusted_cross_origin_preflight_requires_gateway_cors() -> Resul
                 && requests
                     .iter()
                     .any(|(path, _)| path.ends_with("/trusted-gateway-cors/styles.css")),
-            "cross-origin HTML backend/scripts and styles were not checked"
+            "cross-origin HTML scripts and styles were not checked"
         );
         ensure!(
             requests
@@ -1745,23 +1715,18 @@ async fn release_html_runtime_checks_native_modules_and_frame_headers() -> Resul
         .await?;
         let classic = release_id(&h.register(release_body("classic-no-cors", "HTML")).await?)?;
         h.preflight(classic, "PASSED").await?;
+        // qiankun consumes classic/UMD scripts, so CORS cannot make native modules compatible.
         let native_cases = [
-            ("module-star-cors", "PASSED"),
-            ("module-null-cors", "PASSED"),
-            ("module-no-cors", "FAILED"),
-            ("module-gateway-cors", "FAILED"),
-            ("modulepreload-star-cors", "PASSED"),
-            ("modulepreload-null-cors", "PASSED"),
-            ("modulepreload-no-cors", "FAILED"),
-            ("modulepreload-gateway-cors", "FAILED"),
-            ("module-cdn-star-cors", "PASSED"),
-            ("module-cdn-null-cors", "PASSED"),
-            ("module-cdn-no-cors", "FAILED"),
-            ("module-cdn-gateway-cors", "FAILED"),
-            ("modulepreload-cdn-star-cors", "PASSED"),
-            ("modulepreload-cdn-no-cors", "FAILED"),
+            "module-star-cors",
+            "module-null-cors",
+            "module-gateway-cors",
+            "module-inline-trusted",
+            "modulepreload-star-cors",
+            "modulepreload-gateway-cors",
+            "module-cdn-star-cors",
+            "modulepreload-cdn-star-cors",
         ];
-        for (version, expected) in native_cases {
+        for version in native_cases {
             let mut body = release_body(version, "HTML");
             let script = if version.contains("-cdn-") {
                 format!("{}/micro/{version}/entry.js", http.other_origin)
@@ -1771,96 +1736,14 @@ async fn release_html_runtime_checks_native_modules_and_frame_headers() -> Resul
             // The ordinary manifest row must not hide the stronger module/modulepreload check.
             body["resources"] = json!([{"url":script,"kind":"SCRIPT"}]);
             let id = release_id(&h.register(body).await?)?;
-            h.preflight(id, expected).await?;
-        }
-        let local = http
-            .request_headers
-            .lock()
-            .map_err(|_| anyhow!("local HTTP request log poisoned"))?
-            .clone();
-        let remote = http
-            .cors_requests
-            .lock()
-            .map_err(|_| anyhow!("external HTTP request log poisoned"))?
-            .clone();
-        for (version, _) in native_cases {
-            let suffix = format!("/micro/{version}/entry.js");
-            let requests: Vec<_> = local
-                .iter()
-                .chain(remote.iter())
-                .filter(|(path, _)| path == &suffix)
-                .collect();
-            ensure!(
-                !requests.is_empty()
-                    && requests
-                        .iter()
-                        .all(|(_, origin)| origin.as_deref() == Some("null")),
-                "opaque iframe module/modulepreload did not use Origin:null for {version}"
-            );
-        }
-        let frame_cases = [
-            ("xfo-deny", false, "FAILED"),
-            ("xfo-sameorigin", false, "PASSED"),
-            ("xfo-sameorigin-remote", true, "FAILED"),
-            ("csp-none", false, "FAILED"),
-            ("csp-wrong", false, "FAILED"),
-            ("csp-self", false, "PASSED"),
-            ("csp-self-remote", true, "FAILED"),
-            ("csp-gateway-remote", true, "PASSED"),
-            ("csp-star-remote", true, "PASSED"),
-            ("csp-multiple-none", false, "FAILED"),
-            ("csp-combined-none", false, "FAILED"),
-        ];
-        let mut denied_html = None;
-        for (version, remote, expected) in frame_cases {
-            let mut body = release_body(version, "HTML");
-            if remote {
-                body["entryUrl"] =
-                    json!(format!("{}/micro/{version}/index.html", http.other_origin));
-            }
-            let id = release_id(&h.register(body).await?)?;
-            h.preflight(id, expected).await?;
-            if version == "xfo-deny" {
-                denied_html = Some(id);
-            }
-            if expected == "FAILED" {
-                let (status, _) = call(
-                    &h.app,
-                    Method::POST,
-                    &format!("/api/applications/{}/releases/{id}/activate", h.main_app),
-                    &h.platform,
-                    None,
-                )
-                .await?;
-                ensure!(
-                    status == StatusCode::CONFLICT,
-                    "an iframe-blocking response was activated for {version}"
-                );
-            }
-        }
-        successful_call(
-            &h.app,
-            Method::PUT,
-            &format!("/api/applications/{}", h.main_app),
-            &h.platform,
-            Some(json!({"runtimeMode":"TRUSTED"})),
-        )
-        .await?;
-        // XFO constrains iframe navigation, while a trusted classic HTML loader fetches the page.
-        h.preflight(
-            denied_html.ok_or_else(|| anyhow!("XFO fixture release missing"))?,
-            "PASSED",
-        )
-        .await?;
-        for version in ["module-trusted", "module-inline-trusted"] {
-            let id = release_id(&h.register(release_body(version, "HTML")).await?)?;
             let checked = h.preflight(id, "FAILED").await?;
             ensure!(
-                checked["validationResult"]
-                    .to_string()
-                    .to_ascii_lowercase()
-                    .contains("module"),
-                "TRUSTED native-module rejection did not explain its incompatible module entry"
+                checked["validationResult"]["checks"].as_array().is_some_and(|checks| {
+                    checks.iter().any(|check| check["kind"] == "HTML_MODULE"
+                        && check["passed"] == false
+                        && check["message"].as_str().is_some_and(|message| message.contains("qiankun")))
+                }),
+                "native-module rejection did not explain the qiankun incompatibility for {version}: {checked}"
             );
             let (status, _) = call(
                 &h.app,
@@ -1872,8 +1755,38 @@ async fn release_html_runtime_checks_native_modules_and_frame_headers() -> Resul
             .await?;
             ensure!(
                 status == StatusCode::CONFLICT,
-                "TRUSTED HTML with type=module was activated"
+                "qiankun HTML containing native module code was activated for {version}"
             );
+        }
+        let local = http
+            .request_headers
+            .lock()
+            .map_err(|_| anyhow!("local HTTP request log poisoned"))?
+            .clone();
+        let remote = http
+            .cors_requests
+            .lock()
+            .map_err(|_| anyhow!("external HTTP request log poisoned"))?
+            .clone();
+        for version in native_cases {
+            let suffix = format!("/micro/{version}/entry.js");
+            let requests: Vec<_> = local
+                .iter()
+                .chain(remote.iter())
+                .filter(|(path, _)| path == &suffix)
+                .collect();
+            ensure!(
+                !requests.is_empty()
+                    && requests
+                        .iter()
+                        .all(|(_, origin)| origin.as_deref() == Some(http.origin.as_str())),
+                "qiankun resource checks did not use the gateway Origin for {version}"
+            );
+        }
+        // qiankun fetches the HTML; frame navigation restrictions do not block that fetch.
+        for version in ["xfo-deny", "csp-none", "csp-multiple-none", "csp-combined-none"] {
+            let id = release_id(&h.register(release_body(version, "HTML")).await?)?;
+            h.preflight(id, "PASSED").await?;
         }
         Ok(())
     }
@@ -1888,10 +1801,6 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
     let result: Result<()> = async {
         let http = HttpFixture::start().await?;
         let h = Harness::create(&database.pool, &http.origin).await?;
-        let trusted = successful_call(&h.app, Method::PUT,
-            &format!("/api/applications/{}", h.main_app), &h.platform,
-            Some(json!({"runtimeMode":"TRUSTED"}))).await?;
-        ensure!(trusted["runtimeMode"] == "TRUSTED", "platform trust approval was not persisted");
         let initial_a = h.profile(&h.a).await?;
         let initial_b = h.profile(&h.b).await?;
         ensure!(profile_contains(&initial_a, h.main_app) && profile_contains(&initial_a, h.no_role_app),
@@ -1941,7 +1850,7 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         check_context_authorization(&initial_context, &context_v1)?;
         ensure!(snapshot == authorization_snapshot(&database.pool).await?, "v1 activation changed identity or grants");
 
-        let v2 = release_id(&h.register(release_body("v2", "ESM")).await?)?;
+        let v2 = release_id(&h.register(release_body("v2", "HTML")).await?)?;
         h.preflight(v2, "PASSED").await?;
         // Availability can change after preflight; activation must check again before moving pointers.
         http.set_unavailable("/micro/v2/health", true)?;
@@ -1956,10 +1865,10 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         h.preflight(v2, "PASSED").await?;
         let deployed_v2 = h.activate(v2).await?;
         check_deployment(&deployed_v2, h.main_app, ENVIRONMENT, v2, Some(v1),
-            ExpectedReleaseEntry { version: "v2", entry_type: "ESM", entry_url: "/micro/v2/entry.js" })?;
+            ExpectedReleaseEntry { version: "v2", entry_type: "HTML", entry_url: "/micro/v2/index.html" })?;
         for token in [&h.a, &h.b] {
             let profile = h.profile(token).await?;
-            check_profile_entry(&profile, h.main_app, v2, "v2", "ESM", "/micro/v2/entry.js")?;
+            check_profile_entry(&profile, h.main_app, v2, "v2", "HTML", "/micro/v2/index.html")?;
             let row = profile_application(&profile, h.main_app)?;
             for field in ["id", "code", "name", "icon", "basePath", "runtimeMode"] {
                 ensure!(row[field] == legacy[field], "v2 changed the application {field}");
@@ -1968,17 +1877,17 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         ensure!(snapshot == authorization_snapshot(&database.pool).await?, "v2 activation changed identity or grants");
         let context_v2 = successful_call(&h.app, Method::GET, "/api/apps/release-app/context", &app_token, None).await?;
         check_context_application(&context_v2, h.main_app, "TRUSTED", Some(v2), Some("v2"),
-            "ESM", "/micro/v2/entry.js")?;
+            "HTML", "/micro/v2/index.html")?;
         check_context_authorization(&initial_context, &context_v2)?;
 
-        let mut staging = release_body("staging-v1", "ESM");
+        let mut staging = release_body("staging-v1", "HTML");
         staging["environment"] = json!("staging");
         let staging_id = release_id(&h.register(staging).await?)?;
         h.preflight(staging_id, "PASSED").await?;
         let staging_deployment = h.activate(staging_id).await?;
         check_deployment(&staging_deployment, h.main_app, "staging", staging_id, None,
-            ExpectedReleaseEntry { version: "staging-v1", entry_type: "ESM", entry_url: "/micro/staging-v1/entry.js" })?;
-        check_profile_entry(&h.profile(&h.a).await?, h.main_app, v2, "v2", "ESM", "/micro/v2/entry.js")?;
+            ExpectedReleaseEntry { version: "staging-v1", entry_type: "HTML", entry_url: "/micro/staging-v1/index.html" })?;
+        check_profile_entry(&h.profile(&h.a).await?, h.main_app, v2, "v2", "HTML", "/micro/v2/index.html")?;
         let listed = successful_call(&h.app, Method::GET,
             &format!("/api/applications/{}/deployments", h.main_app), &h.platform, None).await?;
         let deployments = listed.as_array().ok_or_else(|| anyhow!("deployments response is not an array"))?;
@@ -1986,13 +1895,13 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
         let dev = deployments.iter().find(|row| row["environment"] == ENVIRONMENT)
             .ok_or_else(|| anyhow!("development deployment missing"))?;
         check_deployment(dev, h.main_app, ENVIRONMENT, v2, Some(v1),
-            ExpectedReleaseEntry { version: "v2", entry_type: "ESM", entry_url: "/micro/v2/entry.js" })?;
+            ExpectedReleaseEntry { version: "v2", entry_type: "HTML", entry_url: "/micro/v2/index.html" })?;
 
         http.set_unavailable("/micro/v1/main.js", true)?;
         let (status, _) = call(&h.app, Method::POST,
             &format!("/api/applications/{}/deployments/{ENVIRONMENT}/rollback", h.main_app), &h.platform, None).await?;
         ensure!(status == StatusCode::CONFLICT, "rollback ignored unavailable previous-version resources");
-        check_profile_entry(&h.profile(&h.a).await?, h.main_app, v2, "v2", "ESM", "/micro/v2/entry.js")?;
+        check_profile_entry(&h.profile(&h.a).await?, h.main_app, v2, "v2", "HTML", "/micro/v2/index.html")?;
         let failed_previous: String = sqlx::query_scalar("SELECT validation_status FROM application_releases WHERE id = $1")
             .bind(v1).fetch_one(&database.pool).await?;
         ensure!(failed_previous == "FAILED", "rollback's failed fresh preflight was not persisted");
@@ -2023,7 +1932,7 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
-async fn release_esm_activation_requires_explicit_platform_trust() -> Result<()> {
+async fn release_qiankun_defaults_and_reconfiguration_preserve_authorization() -> Result<()> {
     let database = TestDatabase::create().await?;
     let result: Result<()> = async {
         let http = HttpFixture::start().await?;
@@ -2035,108 +1944,30 @@ async fn release_esm_activation_requires_explicit_platform_trust() -> Result<()>
             &h.platform,
             Some(json!({
                 "code":"release-api-created", "name":"Release API created",
-                "entryType":"HTML", "entryUrl":"/legacy/api-created/index.html",
+                "entryUrl":"/legacy/api-created/index.html",
             })),
         )
         .await?;
         ensure!(
-            created["runtimeMode"] == "IFRAME",
-            "new applications did not default to IFRAME"
-        );
-        for token in [&h.a, &h.b] {
-            ensure!(
-                profile_application(&h.profile(token).await?, h.main_app)?["runtimeMode"]
-                    == "IFRAME",
-                "profile did not expose the default IFRAME mode"
-            );
-            let (status, _) = call(
-                &h.app,
-                Method::PUT,
-                &format!("/api/applications/{}", h.main_app),
-                token,
-                Some(json!({"runtimeMode":"TRUSTED"})),
-            )
-            .await?;
-            ensure!(
-                status == StatusCode::FORBIDDEN,
-                "a tenant administrator approved TRUSTED execution"
-            );
-        }
-        let persisted: String =
-            sqlx::query_scalar("SELECT runtime_mode FROM applications WHERE id = $1")
-                .bind(h.main_app)
-                .fetch_one(&database.pool)
-                .await?;
-        ensure!(
-            persisted == "IFRAME",
-            "a rejected tenant trust approval changed the application"
-        );
-        let (status, _) = call(
-            &h.app,
-            Method::PUT,
-            &format!("/api/applications/{}", h.main_app),
-            &h.platform,
-            Some(json!({"runtimeMode":"UNRESTRICTED"})),
-        )
-        .await?;
-        ensure!(
-            status == StatusCode::BAD_REQUEST,
-            "unknown runtime mode was accepted"
-        );
-        let esm = release_id(&h.register(release_body("esm-v1", "ESM")).await?)?;
-        h.preflight(esm, "PASSED").await?;
-        let (status, _) = call(
-            &h.app,
-            Method::POST,
-            &format!("/api/applications/{}/releases/{esm}/activate", h.main_app),
-            &h.platform,
-            None,
-        )
-        .await?;
-        ensure!(
-            status == StatusCode::CONFLICT,
-            "ESM activated while the application was IFRAME"
-        );
-        let deployments = successful_call(
-            &h.app,
-            Method::GET,
-            &format!("/api/applications/{}/deployments", h.main_app),
-            &h.platform,
-            None,
-        )
-        .await?;
-        ensure!(
-            deployments.as_array().is_some_and(Vec::is_empty),
-            "trust rejection created a deployment pointer"
+            created["entryType"] == "HTML"
+                && created["runtimeMode"] == "TRUSTED"
+                && created["basePath"] == "/micro/release-api-created",
+            "new applications did not default to qiankun"
         );
         oauth_client(&database.pool, h.main_app, "release-trust-client").await?;
         oauth_client(&database.pool, h.other_app, "release-other-trust-client").await?;
+        let original_token = h.app_token(&h.a, "release-app").await?;
         let unrelated_token = h.app_token(&h.b, "release-other").await?;
-        let mut before = authorization_snapshot(&database.pool).await?;
-        before.remove("applications");
-        let approved = successful_call(
-            &h.app,
-            Method::PUT,
-            &format!("/api/applications/{}", h.main_app),
-            &h.platform,
-            Some(json!({"runtimeMode":"TRUSTED"})),
-        )
-        .await?;
-        ensure!(
-            approved["runtimeMode"] == "TRUSTED",
-            "platform trust approval was not persisted"
-        );
-        let trusted_token = h.app_token(&h.a, "release-app").await?;
-        let trusted_context = successful_call(
+        let initial_context = successful_call(
             &h.app,
             Method::GET,
             "/api/apps/release-app/context",
-            &trusted_token,
+            &original_token,
             None,
         )
         .await?;
         check_context_application(
-            &trusted_context,
+            &initial_context,
             h.main_app,
             "TRUSTED",
             None,
@@ -2144,56 +1975,148 @@ async fn release_esm_activation_requires_explicit_platform_trust() -> Result<()>
             "HTML",
             "/legacy/release-app/index.html",
         )?;
-        let active = h.activate(esm).await?;
-        check_deployment(
-            &active,
-            h.main_app,
-            ENVIRONMENT,
-            esm,
-            None,
-            ExpectedReleaseEntry {
-                version: "esm-v1",
-                entry_type: "ESM",
-                entry_url: "/micro/esm-v1/entry.js",
-            },
-        )?;
+        let before_rejections = authorization_snapshot(&database.pool).await?;
+        let app_path = format!("/api/applications/{}", h.main_app);
         for token in [&h.a, &h.b] {
-            let profile = h.profile(token).await?;
-            check_profile_entry(
-                &profile,
-                h.main_app,
-                esm,
-                "esm-v1",
-                "ESM",
-                "/micro/esm-v1/entry.js",
-            )?;
             ensure!(
-                profile_application(&profile, h.main_app)?["runtimeMode"] == "TRUSTED",
-                "profile did not expose platform-approved TRUSTED mode"
+                profile_application(&h.profile(token).await?, h.main_app)?["runtimeMode"]
+                    == "TRUSTED",
+                "profile did not expose the default qiankun mode"
+            );
+            let (status, _) = call(
+                &h.app,
+                Method::PUT,
+                &app_path,
+                token,
+                Some(json!({"runtimeMode":"TRUSTED"})),
+            )
+            .await?;
+            ensure!(
+                status == StatusCode::FORBIDDEN,
+                "a tenant administrator changed platform execution configuration"
             );
         }
-        let activated_context = successful_call(
+        for patch in [
+            json!({"runtimeMode":"UNRESTRICTED"}),
+            json!({"runtimeMode":"IFRAME"}),
+            json!({"entryType":"ESM","runtimeMode":"TRUSTED"}),
+        ] {
+            let (status, _) =
+                call(&h.app, Method::PUT, &app_path, &h.platform, Some(patch)).await?;
+            ensure!(
+                status == StatusCode::BAD_REQUEST,
+                "an unsupported qiankun runtime or entry type was accepted"
+            );
+        }
+        ensure!(
+            before_rejections == authorization_snapshot(&database.pool).await?,
+            "rejected loader changes modified application metadata or authorization"
+        );
+        let unchanged_context = successful_call(
             &h.app,
             Method::GET,
             "/api/apps/release-app/context",
-            &trusted_token,
+            &original_token,
+            None,
+        )
+        .await?;
+        check_context_authorization(&initial_context, &unchanged_context)?;
+        let mut before = before_rejections;
+        before.remove("applications");
+
+        // Reconstruct a disabled pre-upgrade configuration. It must remain inert until
+        // a platform administrator explicitly supplies a complete qiankun configuration.
+        sqlx::query(
+            "UPDATE applications SET entry_type='ESM',runtime_mode='IFRAME',status='DISABLED', \
+             entry_url='/legacy/release-app/entry.js' WHERE id=$1",
+        )
+        .bind(h.main_app)
+        .execute(&database.pool)
+        .await?;
+        for token in [&h.a, &h.b] {
+            ensure!(
+                !profile_contains(&h.profile(token).await?, h.main_app),
+                "a disabled historical application remained in the profile"
+            );
+        }
+        for patch in [
+            json!({"status":"ENABLED"}),
+            json!({"entryType":"HTML"}),
+            json!({"runtimeMode":"TRUSTED"}),
+        ] {
+            let (status, _) =
+                call(&h.app, Method::PUT, &app_path, &h.platform, Some(patch)).await?;
+            ensure!(
+                status == StatusCode::BAD_REQUEST,
+                "an incomplete legacy reconfiguration was accepted"
+            );
+        }
+        let repaired = successful_call(
+            &h.app,
+            Method::PUT,
+            &app_path,
+            &h.platform,
+            Some(json!({
+                "entryType":"HTML", "runtimeMode":"TRUSTED",
+                "entryUrl":"/legacy/release-app/index.html", "status":"DISABLED",
+            })),
+        )
+        .await?;
+        ensure!(
+            repaired["entryType"] == "HTML"
+                && repaired["runtimeMode"] == "TRUSTED"
+                && repaired["status"] == "DISABLED",
+            "explicit qiankun reconfiguration implicitly enabled the application"
+        );
+        ensure!(
+            !profile_contains(&h.profile(&h.a).await?, h.main_app),
+            "reconfigured application appeared before explicit enablement"
+        );
+        successful_call(
+            &h.app,
+            Method::PUT,
+            &app_path,
+            &h.platform,
+            Some(json!({"status":"ENABLED"})),
+        )
+        .await?;
+        let fresh_token = h.app_token(&h.a, "release-app").await?;
+        let restored_context = successful_call(
+            &h.app,
+            Method::GET,
+            "/api/apps/release-app/context",
+            &fresh_token,
             None,
         )
         .await?;
         check_context_application(
-            &activated_context,
+            &restored_context,
             h.main_app,
             "TRUSTED",
-            Some(esm),
-            Some("esm-v1"),
-            "ESM",
-            "/micro/esm-v1/entry.js",
+            None,
+            None,
+            "HTML",
+            "/legacy/release-app/index.html",
         )?;
-        check_context_authorization(&trusted_context, &activated_context)?;
+        check_context_authorization(&initial_context, &restored_context)?;
+        let (status, _) = call(
+            &h.app,
+            Method::GET,
+            "/api/apps/release-app/context",
+            &original_token,
+            None,
+        )
+        .await?;
+        ensure!(
+            status == StatusCode::UNAUTHORIZED,
+            "reconfiguration revived the token revoked by historical application disablement"
+        );
+        // Idempotent configuration updates preserve the fresh token; revocation stays
+        // scoped to the changed application and preserves unrelated platform sessions.
         successful_call(
             &h.app,
             Method::PUT,
-            &format!("/api/applications/{}", h.main_app),
+            &app_path,
             &h.platform,
             Some(json!({"runtimeMode":"TRUSTED"})),
         )
@@ -2202,31 +2125,10 @@ async fn release_esm_activation_requires_explicit_platform_trust() -> Result<()>
             &h.app,
             Method::GET,
             "/api/apps/release-app/context",
-            &trusted_token,
+            &fresh_token,
             None,
         )
         .await?;
-        successful_call(
-            &h.app,
-            Method::PUT,
-            &format!("/api/applications/{}", h.main_app),
-            &h.platform,
-            Some(json!({"runtimeMode":"IFRAME"})),
-        )
-        .await?;
-        let (status, _) = call(
-            &h.app,
-            Method::GET,
-            "/api/apps/release-app/context",
-            &trusted_token,
-            None,
-        )
-        .await?;
-        ensure!(
-            status == StatusCode::UNAUTHORIZED,
-            "runtime mode change did not revoke the old app token"
-        );
-        // Revocation is scoped to the changed application and preserves all platform sessions.
         successful_call(
             &h.app,
             Method::GET,
@@ -2236,47 +2138,19 @@ async fn release_esm_activation_requires_explicit_platform_trust() -> Result<()>
         )
         .await?;
         h.profile(&h.platform).await?;
-        h.profile(&h.a).await?;
-        let fresh_token = h.app_token(&h.a, "release-app").await?;
-        let iframe_context = successful_call(
-            &h.app,
-            Method::GET,
-            "/api/apps/release-app/context",
-            &fresh_token,
-            None,
-        )
-        .await?;
-        check_context_application(
-            &iframe_context,
-            h.main_app,
-            "IFRAME",
-            Some(esm),
-            Some("esm-v1"),
-            "ESM",
-            "/micro/esm-v1/entry.js",
-        )?;
-        check_context_authorization(&trusted_context, &iframe_context)?;
-        successful_call(
-            &h.app,
-            Method::PUT,
-            &format!("/api/applications/{}", h.main_app),
-            &h.platform,
-            Some(json!({"runtimeMode":"IFRAME"})),
-        )
-        .await?;
-        successful_call(
-            &h.app,
-            Method::GET,
-            "/api/apps/release-app/context",
-            &fresh_token,
-            None,
-        )
-        .await?;
+        for token in [&h.a, &h.b] {
+            let profile = h.profile(token).await?;
+            let application = profile_application(&profile, h.main_app)?;
+            ensure!(
+                application["entryType"] == "HTML" && application["runtimeMode"] == "TRUSTED",
+                "restored profile did not expose qiankun configuration"
+            );
+        }
         let mut after = authorization_snapshot(&database.pool).await?;
         after.remove("applications");
         ensure!(
             before == after,
-            "platform trust approval or ESM activation changed existing authorization"
+            "qiankun reconfiguration changed existing identity or authorization"
         );
         Ok(())
     }

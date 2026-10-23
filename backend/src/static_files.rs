@@ -28,6 +28,7 @@ async fn navigation_fallback(request: Request, index: &std::path::Path) -> Respo
         "/sub",
         "/sub-apps",
         "/micro-assets",
+        "/micro-proxy",
         "/micro-releases",
         "/releases",
     ]
@@ -108,6 +109,11 @@ mod tests {
                 ("/%61pi/missing", "text/html", StatusCode::NOT_FOUND),
                 ("/oauth/missing", "text/html", StatusCode::NOT_FOUND),
                 ("/sub-apps/demo/v1/", "text/html", StatusCode::NOT_FOUND),
+                (
+                    "/micro-proxy/demo/unknown/missing",
+                    "text/html",
+                    StatusCode::NOT_FOUND,
+                ),
                 (
                     "/micro-assets/demo/v1/missing",
                     "text/html",

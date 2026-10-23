@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build from frontend/: docker build -t saas-platform-web .
-FROM node:24.18.0-alpine AS build
+FROM node:24.22.1-alpine AS build
 WORKDIR /app/frontend
 RUN npm install --global npm@11.16.0
 COPY package.json package-lock.json .npmrc ./

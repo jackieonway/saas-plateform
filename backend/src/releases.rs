@@ -754,7 +754,7 @@ async fn run(config: &Config, release: &ReleaseRow) -> Value {
             Ok(discovered) => {
                 native_module_document = discovered.native_module;
                 if native_module_document && release.runtime_mode == "TRUSTED" {
-                    checks.push(failure(&entry, "HTML_MODULE", "TRUSTED HTML 加载器不支持原生 module 脚本；请选择 IFRAME HTML 或 TRUSTED ESM 入口").check);
+                    checks.push(failure(&entry, "HTML_MODULE", "qiankun HTML 入口不支持原生 module 产物；请构建导出生命周期的 classic/UMD 入口").check);
                 }
                 resources.extend(discovered.resources);
             }

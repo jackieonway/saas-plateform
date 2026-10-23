@@ -446,9 +446,25 @@ impl Harness {
             let before = self.snapshot(op.preflight_commits).await?;
             let failures = crate::observability::audit_write_failures();
             let reply = self.call(&op).await?;
+            // Only release-upload errors need this fixture diagnostic. Keep
+            // successful payloads, request bodies and credentials out of it.
+            let upload_error = if op.action == "REGISTER_APPLICATION_RELEASE"
+                && op.raw.is_some()
+                && !reply.status.is_success()
+            {
+                let message: String = reply.body["message"]
+                    .as_str()
+                    .unwrap_or("missing API error message")
+                    .chars()
+                    .take(256)
+                    .collect();
+                format!("; release upload message: {message}")
+            } else {
+                String::new()
+            };
             ensure!(
                 reply.status == StatusCode::INTERNAL_SERVER_ERROR,
-                "{} audit fault {mode} returned {}, expected 500",
+                "{} audit fault {mode} returned {}, expected 500{upload_error}",
                 op.action,
                 reply.status
             );
@@ -1710,11 +1726,107 @@ impl Drop for ReleaseAuditTempRoot {
 
 struct ReleaseAuditServer {
     origin: String,
-    task: JoinHandle<()>,
+    task: Option<JoinHandle<()>>,
+    process: Option<std::process::Child>,
 }
 
 impl ReleaseAuditServer {
     async fn start(root: &std::path::Path) -> Result<Self> {
+        if let Some(node) = std::env::var_os("MICRO_PROXY_TEST_NODE") {
+            // Use an explicitly selected existing HTTP runtime when Windows
+            // blocks inbound connections to newly linked Rust test binaries.
+            // This remains real loopback HTTP and only serves the owned root.
+            let script = r#"
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+// Rust canonicalize() uses Windows extended-length paths (\\?\C:\...).
+// Node's native implementation accepts them and returns a normal root path.
+const root = fs.realpathSync.native(process.argv[1]);
+const html = JSON.parse(process.argv[2]);
+const types = {'.html':'text/html; charset=utf-8','.js':'application/javascript',
+  '.css':'text/css','.json':'application/json','.svg':'image/svg+xml',
+  '.png':'image/png','.jpg':'image/jpeg','.wasm':'application/wasm'};
+const server = http.createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.statusCode = 405; res.end(); return;
+  }
+  let pathname;
+  try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); }
+  catch { res.statusCode = 400; res.end(); return; }
+  if (/^\/micro\/audit-release\/v[12]\/index\.html$/.test(pathname)) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.end(req.method === 'HEAD' ? undefined : html); return;
+  }
+  if (!pathname.startsWith('/sub-apps/')) { res.statusCode = 404; res.end(); return; }
+  const candidate = path.resolve(root, pathname.slice('/sub-apps/'.length));
+  fs.realpath.native(candidate, (error, file) => {
+    if (error || !file.startsWith(root + path.sep)) {
+      res.statusCode = 404; res.end(); return;
+    }
+    fs.stat(file, (error, stat) => {
+      if (error || !stat.isFile()) { res.statusCode = 404; res.end(); return; }
+      res.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream');
+      res.setHeader('Content-Length', stat.size);
+      if (req.method === 'HEAD') { res.end(); return; }
+      fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
+    });
+  });
+});
+server.on('error', () => process.exit(1));
+server.listen(0, '127.0.0.1', () =>
+  process.stdout.write('http://127.0.0.1:' + server.address().port + '\n'));
+"#;
+            let mut command = std::process::Command::new(node);
+            command
+                .args(["-e", script])
+                .arg(root)
+                .arg(serde_json::to_string(RELEASE_AUDIT_HTML)?)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null());
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+            let mut fixture = Self {
+                origin: String::new(),
+                task: None,
+                process: Some(command.spawn()?),
+            };
+            let output = fixture
+                .process
+                .as_mut()
+                .and_then(|process| process.stdout.take())
+                .ok_or_else(|| anyhow!("owned release audit Node fixture stdout unavailable"))?;
+            let line = tokio::time::timeout(
+                Duration::from_secs(5),
+                tokio::task::spawn_blocking(move || {
+                    use std::io::BufRead;
+                    let mut line = String::new();
+                    std::io::BufReader::new(output).read_line(&mut line)?;
+                    Ok::<_, std::io::Error>(line)
+                }),
+            )
+            .await
+            .map_err(|_| anyhow!("owned release audit Node HTTP fixture startup timed out"))???;
+            let origin = line.trim();
+            let address = origin
+                .strip_prefix("http://")
+                .and_then(|address| address.parse::<SocketAddr>().ok())
+                .ok_or_else(|| {
+                    anyhow!("owned release audit Node fixture reported invalid origin")
+                })?;
+            ensure!(
+                address.ip() == std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+                    && address.port() != 0,
+                "owned release audit Node fixture must use IPv4 loopback"
+            );
+            fixture.origin = origin.into();
+            return Ok(fixture);
+        }
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let origin = format!("http://{}", listener.local_addr()?);
         let app = Router::new()
@@ -1730,22 +1842,42 @@ impl ReleaseAuditServer {
         let task = tokio::spawn(async move {
             let _ = axum::serve(listener, app).await;
         });
-        Ok(Self { origin, task })
+        Ok(Self {
+            origin,
+            task: Some(task),
+            process: None,
+        })
     }
 
     async fn stop(&mut self) -> Result<()> {
-        self.task.abort();
-        match (&mut self.task).await {
-            Err(error) if error.is_cancelled() => Ok(()),
-            Ok(()) => Ok(()),
-            Err(_) => Err(anyhow!("owned release audit HTTP fixture failed")),
+        if let Some(task) = self.task.take() {
+            task.abort();
+            match task.await {
+                Err(error) if error.is_cancelled() => {}
+                Ok(()) => {}
+                Err(_) => return Err(anyhow!("owned release audit HTTP fixture failed")),
+            }
         }
+        if let Some(process) = &mut self.process {
+            if process.try_wait()?.is_none() {
+                process.kill()?;
+            }
+            process.wait()?;
+            self.process = None;
+        }
+        Ok(())
     }
 }
 
 impl Drop for ReleaseAuditServer {
     fn drop(&mut self) {
-        self.task.abort();
+        if let Some(task) = &self.task {
+            task.abort();
+        }
+        if let Some(process) = &mut self.process {
+            let _ = process.kill();
+            let _ = process.wait();
+        }
     }
 }
 
@@ -1774,8 +1906,16 @@ async fn release_matrix(mut h: Harness) -> Result<()> {
     config.application_environment = "development".into();
     config.micro_gateway_origin = server.origin.clone();
     config.micro_allowed_origins = vec![server.origin.clone()];
-    config.micro_apps_dir = root
-        .path
+    // Configure the ordinary absolute path used by deployments and the other
+    // upload fixtures. Keep the canonical extended Windows path exclusively
+    // for ownership checks: its bare \\?\C: component cannot be inspected by
+    // the production directory-component safety checks.
+    let upload_root = std::env::temp_dir().join(&root.owner);
+    ensure!(
+        upload_root.is_absolute() && std::fs::canonicalize(&upload_root)? == root.path,
+        "owned release audit upload path no longer identifies its canonical root"
+    );
+    config.micro_apps_dir = upload_root
         .to_str()
         .ok_or_else(|| anyhow!("owned release audit temporary path is not UTF-8"))?
         .into();
@@ -1793,7 +1933,7 @@ async fn release_matrix(mut h: Harness) -> Result<()> {
         .with_state(h.state.clone());
     let application: Uuid = sqlx::query_scalar(
         "INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url) \
-         VALUES('audit-release','Owned audit release','/micro/audit-release','HTML','IFRAME', \
+         VALUES('audit-release','Owned audit release','/micro/audit-release','HTML','TRUSTED', \
                 '/micro/audit-release/v1/index.html') RETURNING id",
     )
     .fetch_one(&h.pool)

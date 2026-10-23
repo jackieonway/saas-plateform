@@ -26,6 +26,28 @@ const mapProxyHeaders = { "User-Agent": "SaaSPlatform/1.0 map-resource-proxy" };
 const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || "http://127.0.0.1:3001";
 const workOrdersProxyTarget = process.env.WORK_ORDERS_DEV_PROXY_TARGET || "http://127.0.0.1:3004";
 const storesProxyTarget = process.env.STORES_DEV_PROXY_TARGET || "http://127.0.0.1:3031";
+const oauthPlaygroundProxyTarget = process.env.OAUTH_PLAYGROUND_DEV_PROXY_TARGET || "http://127.0.0.1:3011";
+const oauthPlaygroundStaticProxyTarget = process.env.OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET || "http://127.0.0.1:3010";
+for (const [name, target] of [["OAUTH_PLAYGROUND_DEV_PROXY_TARGET", oauthPlaygroundProxyTarget], ["OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET", oauthPlaygroundStaticProxyTarget]]) {
+  const url = new URL(target);
+  if (!["http:", "https:"].includes(url.protocol) || url.origin !== target || url.username || url.password) {
+    throw new Error(`${name} must be an exact HTTP(S) origin without credentials or a path`);
+  }
+}
+const oauthPlaygroundCookies = (cookie: string | undefined) => (cookie || "").split(";").map(value => value.trim())
+  .filter(value => /^(?:oauth_playground|__Host-oauth_playground)=[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*$/.test(value)).join("; ");
+const isolateOAuthPlaygroundCredentials = (request: ClientRequest, incoming: { headers: { cookie?: string } }) => {
+  request.removeHeader("authorization");
+  const cookies = oauthPlaygroundCookies(incoming.headers.cookie);
+  if (cookies) request.setHeader("cookie", cookies);
+  else request.removeHeader("cookie");
+  request.removeHeader("upgrade");
+  request.removeHeader("connection");
+};
+const stripOAuthStaticCredentials = (request: ClientRequest) => {
+  request.removeHeader("authorization");
+  request.removeHeader("cookie");
+};
 const additionalAllowedHosts = [...new Set((process.env.DEV_ALLOWED_HOSTS || "")
   .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean))];
 if (additionalAllowedHosts.some((host) => host.length > 253 || host.split(".").some((label) =>
@@ -44,25 +66,22 @@ export default defineConfig({
           const pathname = req.url?.split("?", 1)[0] || "";
           if (!pathname.startsWith("/sub-apps/")) return next();
           const missing = () => { res.statusCode = 404; res.setHeader("Cache-Control", "no-store"); res.end(); };
-          const versioned = /^\/sub-apps\/[^/]+\/versions\//.test(pathname);
-          const match = versioned
-            ? /^\/sub-apps\/([a-z0-9-]+)\/versions\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(.+)$/.exec(pathname)
-            : /^\/sub-apps\/([a-z0-9-]+)\/(.+)$/.exec(pathname);
-          if (!match || (versioned && match[2].includes("..")) || !["GET", "HEAD"].includes(req.method || "")) return missing();
+          const match = /^\/sub-apps\/([a-z0-9-]+)\/versions\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(.+)$/.exec(pathname);
+          if (!match || match[2].includes("..") || !["GET", "HEAD"].includes(req.method || "")) return missing();
           let segments: string[];
-          try { segments = match[versioned ? 3 : 2].split("/").map(decodeURIComponent); } catch { return missing(); }
+          try { segments = match[3].split("/").map(decodeURIComponent); } catch { return missing(); }
           if (segments.some((segment) => !segment || segment === "." || segment === ".." ||
             segment.includes("/") || segment.includes("\\") || segment.includes(":") || /[\x00-\x1f]/.test(segment))) return missing();
           try {
             // The optional release store may not exist in a fresh checkout.
             // Resolve it only for a version request so dev can start and missing releases stay 404.
-            const root = realpathSync(versioned ? microAppsDevDir : path.resolve(__dirname, "public/sub-apps"));
-            const parts = versioned ? [match[1], "versions", match[2], ...segments] : [match[1], ...segments];
+            const root = realpathSync(microAppsDevDir);
+            const parts = [match[1], "versions", match[2], ...segments];
             const file = realpathSync(path.resolve(root, ...parts));
             if (!file.startsWith(root + path.sep) || !statSync(file).isFile()) return missing();
             res.setHeader("Content-Type", versionMimeTypes[path.extname(file).toLowerCase()] || "application/octet-stream");
             res.setHeader("Access-Control-Allow-Origin", "*");
-            res.setHeader("Cache-Control", versioned && path.extname(file).toLowerCase() !== ".html" ? "public, max-age=31536000, immutable" : "no-cache");
+            res.setHeader("Cache-Control", path.extname(file).toLowerCase() !== ".html" ? "public, max-age=31536000, immutable" : "no-cache");
             if (req.method === "HEAD") { res.end(); return; }
             createReadStream(file).on("error", () => {
               if (res.headersSent) res.destroy();
@@ -73,23 +92,27 @@ export default defineConfig({
       },
     },
     {
-      name: "opaque-microapp-api-preflight",
+      name: "oauth-playground-route-boundaries",
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
-          const pathname = req.url?.split("?", 1)[0];
-          const externalView = pathname === "/api/external/menus" || pathname === "/api/external/roles";
-          const workOrdersApi = pathname === "/work-orders-api" || pathname?.startsWith("/work-orders-api/");
-          const storesApi = pathname === "/stores-api" || pathname?.startsWith("/stores-api/");
-          if (req.method !== "OPTIONS" || req.headers.origin !== "null" || (!externalView && !workOrdersApi && !storesApi)) {
-            next();
-            return;
+          const pathname = req.url?.split("?", 1)[0] || "";
+          let decoded: string;
+          try { decoded = decodeURIComponent(pathname); } catch { decoded = pathname; }
+          if (/^\/oauth-playground-api\/(?:internal|metrics)(?:\/|$)/.test(decoded)) {
+            res.statusCode = 404; res.setHeader("Cache-Control", "no-store"); res.end(); return;
           }
-          res.statusCode = 204;
-          res.setHeader("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
-          res.setHeader("Access-Control-Allow-Origin", "null");
-          res.setHeader("Access-Control-Allow-Methods", externalView ? "GET" : "GET,POST,PATCH,DELETE");
-          res.setHeader("Access-Control-Allow-Headers", "authorization,content-type,x-request-id");
-          res.end();
+          const callback = pathname === "/callback";
+          const staticEntry = pathname === "/sub/oauth-playground" || pathname.startsWith("/sub/oauth-playground/");
+          if (!callback && !staticEntry) { next(); return; }
+          if (!["GET", "HEAD"].includes(req.method || "")) {
+            res.statusCode = 405; res.setHeader("Allow", "GET, HEAD"); res.setHeader("Cache-Control", "no-store"); res.end(); return;
+          }
+          if (pathname === "/sub/oauth-playground") {
+            res.statusCode = 308;
+            res.setHeader("Location", `/sub/oauth-playground/${req.url?.slice(pathname.length) || ""}`);
+            res.end(); return;
+          }
+          next();
         });
       },
     },
@@ -140,7 +163,35 @@ export default defineConfig({
         target: backendProxyTarget,
         changeOrigin: true,
       },
+      // Independent OAuth exercise API. It must precede /oauth and must never
+      // receive platform bearer tokens or any other platform session cookies.
+      "^/oauth-playground-api(?:/|\\?|$)": {
+        target: oauthPlaygroundProxyTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/oauth-playground-api(?=\/|\?|$)/, "/api"),
+        configure: (proxy) => proxy.on("proxyReq", isolateOAuthPlaygroundCredentials),
+      },
+      "^/callback(?:\\?|$)": {
+        target: oauthPlaygroundStaticProxyTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/callback(?=\?|$)/, "/callback.html"),
+        configure: (proxy) => {
+          proxy.on("proxyReq", stripOAuthStaticCredentials);
+          proxy.on("proxyRes", response => { response.headers["cache-control"] = "no-store"; });
+        },
+      },
+      "^/sub/oauth-playground/": {
+        target: oauthPlaygroundStaticProxyTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/sub\/oauth-playground/, ""),
+        configure: (proxy) => proxy.on("proxyReq", stripOAuthStaticCredentials),
+      },
       "/oauth": {
+        target: backendProxyTarget,
+        changeOrigin: true,
+      },
+      // Registered URL resources are resolved by Rust; /micro/* remains host SPA navigation.
+      "/micro-proxy": {
         target: backendProxyTarget,
         changeOrigin: true,
       },

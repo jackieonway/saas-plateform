@@ -192,7 +192,7 @@ impl Fixture {
         )
         .await?;
         let application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code,base_path,entry_type,runtime_mode,entry_url) VALUES('Setup demo','setup-demo','/micro/setup-demo','HTML','IFRAME','/sub-apps/setup-demo/unreleased/index.html') RETURNING id",
+            "INSERT INTO applications(name,code,base_path,entry_type,runtime_mode,entry_url) VALUES('Setup demo','setup-demo','/micro/setup-demo','HTML','TRUSTED','/sub-apps/setup-demo/unreleased/index.html') RETURNING id",
         ).fetch_one(pool).await?;
         let entry_menu: Uuid = sqlx::query_scalar(
             "INSERT INTO menus(application_id,title,type,path) VALUES($1,'Home','MENU','/micro/setup-demo') RETURNING id",

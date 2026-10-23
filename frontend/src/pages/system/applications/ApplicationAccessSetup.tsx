@@ -21,7 +21,7 @@ type Props = {
   application: ApplicationRecord
   environment: ApplicationEnvironment
   canConfigureAccess: boolean
-  /** Includes the host build's module registry, beyond server-side metadata. */
+  /** Validated qiankun entry readiness from the parent setup checks. */
   entryReady?: boolean
   initialTarget?: ApplicationAccessTarget | null
   onTargetChange?: (target: ApplicationAccessTarget | null) => void
@@ -214,7 +214,8 @@ function ApplicationAccessSetupContent({ application, environment, canConfigureA
 
   const queryError = [tenantsQuery, orgsQuery, rolesQuery, menusQuery].find(query => query.isError)
   const accessComplete = status?.access?.tenantAuthorized && status.access.organizationAuthorized && status.access.roleAuthorized
-  const ready = !!(entryReady && accessComplete && status?.applicationEnabled && status.releaseValidated && status.entryMenuCount > 0 && status.access!.assignedUserCount > 0)
+  const qiankunReady = status?.entryType === "HTML" && status.runtimeMode === "TRUSTED"
+  const ready = !!(qiankunReady && entryReady && accessComplete && status?.applicationEnabled && status.releaseValidated && status.entryMenuCount > 0 && status.access!.assignedUserCount > 0)
   return (
     <div className="space-y-5">
       <div><h3 className="text-base font-semibold">选择谁可以访问</h3><p className="mt-1 text-sm leading-relaxed text-muted-foreground">选择租户、组织和角色，再确认需要开放的菜单。已有授权会保留。</p></div>
@@ -263,8 +264,9 @@ function ApplicationAccessSetupContent({ application, environment, canConfigureA
         <div className="flex items-center gap-2 text-sm font-medium">{ready ? <CheckCircle2 className="size-4 text-primary" /> : <Circle className="size-4 text-muted-foreground" />}{ready ? "当前范围已具备访问条件" : saved ? "授权已保存，继续检查访问条件" : "当前范围检查"}</div>
         <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3"><span>租户授权：{status.access!.tenantAuthorized ? "已配置" : "待配置"}</span><span>组织授权：{status.access!.organizationAuthorized ? "已配置" : "待配置"}</span><span>角色入口：{status.access!.roleAuthorized ? "已配置" : "待配置"}</span></div>
         {!status.applicationEnabled && <p className="text-xs text-muted-foreground">应用当前已停用，需要先启用应用。</p>}
-        {!status.releaseValidated && <p className="text-xs text-muted-foreground">{status.releaseRequired ? "当前环境还没有通过检查的活动版本，请完成发布。" : "应用入口尚未就绪，请检查宿主模块配置。"}</p>}
-        {status.releaseValidated && !entryReady && <p className="text-xs text-muted-foreground">{status.entryType === "ESM" ? "当前宿主尚不能加载该模块，请先完成宿主发布。" : "入口检查尚未完成，请返回发布步骤核对。"}</p>}
+        {!qiankunReady && <p className="text-xs text-muted-foreground">此应用需重新配置 qiankun 入口，当前无法运行。</p>}
+        {qiankunReady && !status.releaseValidated && <p className="text-xs text-muted-foreground">当前环境尚无可用入口，请保存直接地址或发布版本。</p>}
+        {qiankunReady && status.releaseValidated && !entryReady && <p className="text-xs text-muted-foreground">入口检查尚未完成，请返回应用入口步骤核对。</p>}
         {status.entryMenuCount === 0 && <p className="text-xs text-muted-foreground">还需要配置可执行的页面入口菜单。</p>}
         <p className="text-xs text-muted-foreground">该组织中拥有此角色的有效成员：{status.access!.assignedUserCount} 人。{status.access!.assignedUserCount === 0 && <Link className="text-primary hover:underline" to={`/system/roles?tenantId=${encodeURIComponent(tenantId)}&organizationId=${encodeURIComponent(organizationId)}`}>前往角色管理分配成员</Link>}</p>
       </section>}

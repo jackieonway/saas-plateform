@@ -20,7 +20,7 @@ function clock() {
       time = end; await flush()
     } }
 }
-const application = { id: 'app', name: 'Orders', runtimeMode: 'IFRAME', entryType: 'HTML',
+const application = { id: 'app', name: 'Orders', runtimeMode: 'TRUSTED', entryType: 'HTML',
   entryUrl: '/sub-apps/orders/versions/v1/index.html', deploymentVersion: 'v1', entryVersionId: 'release-v1' }
 function context(extra = {}) {
   return { contractVersion: '1.0', contextVersion: 'auth-v1', expiresAt: new Date(61_000).toISOString(),
@@ -28,7 +28,7 @@ function context(extra = {}) {
     tenant: { id: 'tenant', name: 'Tenant', code: 't' }, organization: { id: 'org', name: 'Org', path: '/org/' },
     organizationScopeIds: ['org'], roles: [], permissions: ['order:read'], menus: [], dataGrants: [], ...extra }
 }
-const props = signal => { const { application: _entry, ...view } = context(); return ({ ...view, sdkVersion: '1.0.0', contractVersion: '2.0', contextEpoch: 1,
+const props = signal => { const { application: _entry, ...view } = context(); return ({ ...view, sdkVersion: '2.0.0', contractVersion: '2.0', contextEpoch: 1,
   token: 'app-token', tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
   expiresAt: new Date(Date.now() + 60_000).toISOString(), signal, theme: 'light', basePath: '/micro/orders', routePath: '/micro/orders',
   deploymentVersion: 'v1', entryVersionId: 'release-v1', onNavigate() {}, onNotify() {} }) }
@@ -73,7 +73,7 @@ test('an exactly unchanged authorization response preserves its epoch and lifeti
   s.service.stop()
 })
 
-test('legacy apps without update keep pure display changes but remount for route, signal or authorization replacement', () => {
+test('apps without the optional update lifecycle remount for route, signal or authorization replacement', () => {
   const scope = new AbortController(), initial = props(scope.signal), accepted = runtime.microPropsDelivery(initial)
   assert.equal(runtime.requiresMicroRemount(accepted, { ...initial, theme: 'dark' }), false)
   assert.equal(runtime.requiresMicroRemount(accepted, { ...initial, routePath: '/micro/orders/detail' }), true)
@@ -245,17 +245,26 @@ test('entry checks reject an activation or rollback between loading resources an
   const { resolveMicroEntry, assertMicroEntrySnapshot } = await import('../src/components/micro/entry.ts')
   const info = { id: 'app', code: 'orders', name: 'Orders', icon: 'Box' }, captured = resolveMicroEntry(context(), info)
   assertMicroEntrySnapshot(captured, context())
-  for (const change of [{ runtimeMode: 'TRUSTED' }, { entryType: 'ESM' }, { entryUrl: '/different/index.html' },
+  for (const change of [{ runtimeMode: 'IFRAME' }, { entryType: 'ESM' }, { entryUrl: '/different/index.html' },
     { deploymentVersion: 'v2' }, { entryVersionId: 'release-v2' }]) {
     assert.throws(() => assertMicroEntrySnapshot(captured, context({ application: { ...application, ...change } })),
       error => error.name === 'AbortError')
   }
 })
 
+test('archived or unknown entry metadata requires qiankun reconfiguration without a compatibility fallback', async () => {
+  const { resolveMicroEntry } = await import('../src/components/micro/entry.ts')
+  const identity = { id: 'app', code: 'orders', name: 'Orders', icon: 'Box' }
+  for (const legacy of [{ runtimeMode: 'IFRAME' }, { entryType: 'ESM' }, { runtimeMode: 'UNKNOWN' }, { entryType: 'UNKNOWN' }]) {
+    assert.throws(() => resolveMicroEntry(context({ application: { ...application, ...legacy } }), identity),
+      error => error.code === 'MICRO_ENTRY_RECONFIGURATION_REQUIRED' && error.message.includes('重新配置'))
+  }
+})
+
 test('invalid entry contracts and a different application binding are explicit permanent failures', async () => {
   const { resolveMicroEntry } = await import('../src/components/micro/entry.ts')
   const info = { id: 'app', code: 'orders', name: 'Orders', icon: 'Box' }
-  for (const patch of [{ id: 'another' }, { runtimeMode: 'UNKNOWN' }, { entryType: 'UNKNOWN' },
+  for (const patch of [{ id: 'another' },
     { entryUrl: '' }, { entryUrl: 'javascript:alert(1)' }, { entryUrl: 'https://user:secret@host.test/app' }]) {
     assert.throws(() => resolveMicroEntry(context({ application: { ...application, ...patch } }), info),
       error => error.code === 'INVALID_APPLICATION_ENTRY' && !error.message.includes('secret'))

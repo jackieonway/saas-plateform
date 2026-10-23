@@ -11,7 +11,7 @@ assert(['chromium', 'chrome', 'msedge', 'firefox', 'webkit'].includes(browser), 
 const suites = [
   'notification-frontend', 'platform-settings', 'phase9-navigation', 'region-location',
   'entity-types', 'department-context', 'route-permissions',
-  'trusted-sandbox',
+  'micro-qiankun',
 ]
 const environment = { ...process.env, SAAS_TEST_BROWSER: browser }
 // Diagnostic selectors must not silently reduce the full suite.

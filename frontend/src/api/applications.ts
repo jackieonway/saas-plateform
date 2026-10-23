@@ -6,6 +6,8 @@ import type {
   ApplicationRecord,
   ApplicationReleasePayload,
   ApplicationReleaseRecord,
+  ApplicationUrlEntryPayload,
+  ApplicationUrlEntryRecord,
 } from "./types"
 
 export const applicationsApi = {
@@ -13,6 +15,14 @@ export const applicationsApi = {
   create: (body: ApplicationPayload) => api.post<ApplicationRecord>("/api/applications", body),
   update: (id: string, body: ApplicationPayload) => api.put(`/api/applications/${id}`, body),
   remove: (id: string) => api.del(`/api/applications/${id}`),
+  urlEntry: (id: string, environment: ApplicationEnvironment) =>
+    api.get<ApplicationUrlEntryRecord | null>(`/api/applications/${encodeURIComponent(id)}/url-entry${qs({ environment })}`),
+  setUrlEntry: (id: string, environment: ApplicationEnvironment, body: ApplicationUrlEntryPayload) =>
+    api.put<ApplicationUrlEntryRecord>(`/api/applications/${encodeURIComponent(id)}/url-entry${qs({ environment })}`, {
+      entryUrl: body.entryUrl, proxyEnabled: body.proxyEnabled,
+    }),
+  removeUrlEntry: (id: string, environment: ApplicationEnvironment) =>
+    api.del(`/api/applications/${encodeURIComponent(id)}/url-entry${qs({ environment })}`),
   releases: (id: string, environment?: ApplicationEnvironment) =>
     api.get<ApplicationReleaseRecord[]>(`/api/applications/${id}/releases${qs({ environment })}`),
   registerRelease: (id: string, body: ApplicationReleasePayload) =>
@@ -21,10 +31,10 @@ export const applicationsApi = {
       entryUrl: body.entryUrl, healthUrl: body.healthUrl,
       resources: body.resources.map(({ url, kind }) => ({ url, kind })),
     }),
-  uploadRelease: (id: string, environment: ApplicationEnvironment, version: string, entryType: "HTML" | "ESM", file: File) => {
+  uploadRelease: (id: string, environment: ApplicationEnvironment, version: string, file: File) => {
     const format = file.name.toLowerCase().endsWith(".tar.gz") ? "tar.gz" : "zip"
     return api.postRaw<ApplicationReleaseRecord>(
-      `/api/applications/${id}/releases/upload${qs({ environment, version, entryType, format })}`,
+      `/api/applications/${id}/releases/upload${qs({ environment, version, entryType: "HTML", format })}`,
       file,
       format === "zip" ? "application/zip" : "application/gzip",
     )

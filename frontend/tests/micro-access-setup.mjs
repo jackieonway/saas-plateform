@@ -22,7 +22,7 @@ const menus = [
 const target = { tenantId: tenant.id, organizationId: organization.id, roleId: role.id }
 const props = { application, environment: 'development', canConfigureAccess: true }
 const setup = overrides => ({
-  applicationId: application.id, environment: 'development', applicationEnabled: true, entryType: 'HTML', runtimeMode: 'IFRAME',
+  applicationId: application.id, environment: 'development', applicationEnabled: true, entryType: 'HTML', runtimeMode: 'TRUSTED',
   releaseRequired: true, activeVersion: null, releaseValidated: false, menuCount: 2, entryMenuCount: 1, canConfigureAccess: true,
   access: { ...target, tenantAuthorized: false, organizationAuthorized: false, roleAuthorized: false, assignedUserCount: 0 }, ...overrides,
 })
@@ -86,7 +86,7 @@ test('grant writes the exact confirmed target and selected menus, then reads rea
   tree = context.render()
   assert.equal(context.configured.length, 1)
   assert.match(JSON.stringify(tree), /授权已保存，继续检查访问条件/)
-  assert.match(JSON.stringify(tree), /还没有通过检查的活动版本/)
+  assert.match(JSON.stringify(tree), /尚无可用入口/)
   assert.match(JSON.stringify(tree), /前往角色管理分配成员/)
   assert.doesNotMatch(JSON.stringify(tree), /当前范围已具备访问条件/)
 })
@@ -241,7 +241,7 @@ test('target status rejects an application, environment or role mismatch', async
   }
 })
 
-test('an ESM entry missing from the current host build cannot be reported as accessible', () => {
+test('a legacy incompatible entry cannot be reported as accessible', () => {
   const context = fixture()
   context.currentProps.application = { ...application, entryType: 'ESM' }
   context.currentProps.entryReady = false
@@ -251,10 +251,10 @@ test('an ESM entry missing from the current host build cannot be reported as acc
   })))
   let tree = chooseAll(context)
   assert.doesNotMatch(JSON.stringify(tree), /当前范围已具备访问条件/)
-  assert.match(JSON.stringify(tree), /当前宿主尚不能加载该模块/)
+  assert.match(JSON.stringify(tree), /重新配置 qiankun/)
   context.currentProps.entryReady = true
   tree = context.render()
-  assert.match(JSON.stringify(tree), /当前范围已具备访问条件/)
+  assert.doesNotMatch(JSON.stringify(tree), /当前范围已具备访问条件/)
 })
 
 test('application setup transport forwards only an explicit target and additive menu payload', async () => {

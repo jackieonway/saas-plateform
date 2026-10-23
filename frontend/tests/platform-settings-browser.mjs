@@ -24,7 +24,8 @@ const port = process.env.PLATFORM_BROWSER_PORT ? Number(process.env.PLATFORM_BRO
 assert(Number.isInteger(port) && port > 0 && port <= 65535, "PLATFORM_BROWSER_PORT must be a valid port.")
 const origin = `http://${bindHost.includes(":") ? `[${bindHost}]` : bindHost}:${port}`
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-const application = { id: "platform-browser-system", code: "system", name: "系统管理", icon: "Settings2", basePath: "/system" }
+const application = { id: "platform-browser-system", code: "system", name: "系统管理", icon: "Settings2", basePath: "/system",
+  entryType: "HTML", runtimeMode: "TRUSTED" }
 const originalSettings = {
   platformName: "星河管理平台", platformDescription: "星河企业统一工作空间",
   logoUrl: "/__branding/logo.svg", loginTitle: "欢迎登录星河",

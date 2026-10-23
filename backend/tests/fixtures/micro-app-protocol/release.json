@@ -1,33 +1,29 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "1.0.0",
+  "sdkVersion": "2.0.0",
   "status": "REPOSITORY_CANDIDATE",
   "contracts": {
     "context": "1.0",
     "microProps": "2.0",
-    "iframe": "2.0",
     "notification": "1.0"
   },
-  "supportedSdkVersions": ["1.0.0"],
+  "supportedSdkVersions": [
+    "2.0.0"
+  ],
   "limits": {
     "maxJsonResponseBytes": 1048576,
     "maxResponseBytes": 4194304,
     "maxOrganizationScopeIds": 10000
   },
-  "legacy": [{
-    "id": "legacy-iframe-2.0",
-    "path": "compat/legacy-iframe-2.0.js",
-    "sha256": "fb041923bbcff457b4d8b559f42637c5ee74ebc9c34824a901ba87d60e74b42a",
-    "iframeContract": "2.0",
-    "meaning": "Actual unversioned bridge captured at Phase 6 start; retained compatibility baseline, not a fabricated SDK release"
-  }],
   "requiredSecurityCapabilities": [
-    "explicit-host-origin", "parent-source", "nonce", "exclusive-message-port",
-    "context-epoch", "abort-signal", "expiry", "organization-ceiling", "download-broker"
+    "context-epoch",
+    "abort-signal",
+    "expiry",
+    "organization-ceiling",
+    "authorized-http"
   ],
   "compatibility": {
-    "breakingChangeCandidateDays": 90,
-    "retirementDate": null,
-    "policy": "Only registered versions and the captured legacy baseline are supported; missing isolation is never a compatibility fallback"
+    "previousRelease": "1.0.0",
+    "policy": "Version 2 uses qiankun props and the authorization client only. Release 1.0.0 remains an immutable archive and is not an active compatibility runtime."
   }
 }

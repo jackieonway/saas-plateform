@@ -83,10 +83,6 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         "production bootstrap password does not satisfy requirements"
     );
     password::validate_for_config(admin_password, config)?;
-    // Historical migrations contain examples. Only on the first empty-user
-    // bootstrap, quarantine those exact artifacts; never grant them to production.
-    sqlx::query("UPDATE applications SET status='DISABLED' WHERE code IN ('vue-workshop','legacy-jquery','report-center')")
-        .execute(&mut *tx).await?;
     let hashes: Vec<String> = DEMO_CLIENT_SECRETS
         .iter()
         .map(|secret| hash::sha256_hex(secret))

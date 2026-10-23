@@ -81,7 +81,7 @@ fn validate_definition(value: &Definition, known: KnownApp) -> Result<(), SafeEr
     let client = &value.oauth_client;
     if value.schema_version != "1.0"
         || app.code != known.code()
-        || app.runtime_mode != "IFRAME"
+        || app.runtime_mode != "TRUSTED"
         || app.entry_type != "HTML"
         || app.base_path != known.base_path()
         || app.entry_url != known.entry_url()
@@ -124,7 +124,7 @@ fn verify_app(row: &Value, expected: Option<&str>, known: KnownApp) -> Result<()
     let id = uuid_field(row, "id", "APPLICATION_CONFLICT")?;
     if row["code"] != known.code()
         || expected.is_some_and(|expected| expected != id)
-        || row["runtimeMode"] != "IFRAME"
+        || row["runtimeMode"] != "TRUSTED"
         || row["entryType"] != "HTML"
         || row["basePath"] != known.base_path()
         || !matches!(row["status"].as_str(), Some("ENABLED" | "DISABLED"))
@@ -493,6 +493,34 @@ mod tests {
     }
 
     #[test]
+    fn qiankun_bootstrap_and_existing_apps_reject_legacy_runtime_modes() {
+        for known in [KnownApp::WorkOrders, KnownApp::Stores] {
+            for runtime in ["IFRAME", "SANDBOX"] {
+                let mut definition = load(known).unwrap();
+                definition.application.runtime_mode = runtime.into();
+                assert!(validate_definition(&definition, known).is_err());
+            }
+            let mut definition = load(known).unwrap();
+            definition.application.entry_type = "ESM".into();
+            assert!(validate_definition(&definition, known).is_err());
+
+            // Existing registrations may use an administrator-configured URL.
+            // Inspect and repeat bootstrap must validate the runtime without
+            // replacing that URL with the local development default.
+            let mut app = json!({"id":uuid(1),"code":known.code(),"runtimeMode":"TRUSTED","entryType":"HTML",
+                "entryUrl":"https://apps.example.com/index.html","basePath":known.base_path(),"status":"ENABLED"});
+            verify_app(&app, None, known).unwrap();
+            for runtime in ["IFRAME", "SANDBOX"] {
+                app["runtimeMode"] = json!(runtime);
+                assert!(verify_app(&app, None, known).is_err());
+            }
+            app["runtimeMode"] = json!("TRUSTED");
+            app["entryType"] = json!("ESM");
+            assert!(verify_app(&app, None, known).is_err());
+        }
+    }
+
+    #[test]
     fn stores_report_menus_share_permission_but_match_independent_paths() {
         let definition = load(KnownApp::Stores).unwrap();
         let root = uuid(1);
@@ -553,7 +581,7 @@ mod tests {
         client["applicationId"] = Value::Null;
         client["clientType"] = json!("PUBLIC");
         assert!(verify_client(&client, Some(&id), KnownApp::Stores).is_err());
-        let app = json!({"id":id,"code":"work-orders","runtimeMode":"IFRAME","entryType":"HTML","basePath":"/micro/work-orders","status":"ENABLED"});
+        let app = json!({"id":id,"code":"work-orders","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/work-orders","status":"ENABLED"});
         assert!(verify_app(&app, None, KnownApp::Stores).is_err());
     }
 }

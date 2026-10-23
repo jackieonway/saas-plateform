@@ -1,111 +1,61 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import fs from 'node:fs'
-import vm from 'node:vm'
-import { createRequire } from 'node:module'
-import { componentFixture, elements } from './helpers/component-fixture.mjs'
+import { componentFixture, elements, button } from './helpers/component-fixture.mjs'
 
-const require = createRequire(import.meta.url)
-const ts = require('typescript')
-const moduleEntries = [{ code: 'report-center', entryUrl: '/src/micro-apps/report-center.tsx' }]
-const record = { id: 'application-id', name: '客户管理', code: 'crm', basePath: '/micro/crm', entryType: 'HTML', runtimeMode: 'IFRAME' }
+const record = { id: 'application-id', name: '客户管理', code: 'crm', basePath: '/micro/crm', entryType: 'HTML', runtimeMode: 'TRUSTED' }
 
 function editorFixture() {
-  const writes = [], created = [], errors = {}
+  const writes = [], created = []
   let values
   const form = {
-    control: {},
-    formState: { errors: {} },
-    watch: key => values[key],
-    reset: next => { values = { ...next } },
-    setValue: (key, value) => { values[key] = value },
-    setError: (key, error) => { errors[key] = error.message },
-    clearErrors: key => { delete errors[key] },
+    control: {}, formState: { errors: {} }, watch: key => values[key],
+    reset: next => { values = { ...next } }, setValue: (key, value) => { values[key] = value },
     handleSubmit: callback => event => { event?.preventDefault?.(); return callback({ ...values }) },
   }
-  const f = componentFixture('src/pages/system/applications/use-application-editor.ts', ['useApplicationEditor', 'isMicroApp', 'isHostEsm'], {
+  const f = componentFixture('src/pages/system/applications/use-application-editor.ts', ['useApplicationEditor', 'isMicroApp'], {
     'react-hook-form': { useForm: options => { values ??= { ...options.defaultValues }; return form } },
     '@/lib/form': { zResolver: () => undefined },
-    '@/micro-apps/registry': {
-      listHostEsmModules: () => moduleEntries,
-      hostEsmEntryForCode: code => moduleEntries.find(item => item.code === code)?.entryUrl ?? null,
-    },
     '@/api/applications': { applicationsApi: {
       create: async payload => { writes.push(['create', payload]); return { ...record, ...payload } },
       update: async (...args) => { writes.push(['update', ...args]) },
     } },
   })
-  const onCreated = application => { created.push(application) }
-  return { ...f, writes, created, errors, form, values: () => values, editor: () => f.render('useApplicationEditor', onCreated) }
+  const onCreated = application => created.push(application)
+  const dialog = editor => componentFixture('src/pages/system/applications/ApplicationEditorDialog.tsx', ['ApplicationEditorDialog'], {
+    './use-application-editor': f.exports,
+  }).render('ApplicationEditorDialog', { editor })
+  return { ...f, writes, created, form, values: () => values, dialog, editor: () => f.render('useApplicationEditor', onCreated) }
 }
 
-test('simple application creation keeps safe HTML defaults and continues with the created record', async () => {
+test('application creation always sends qiankun HTML and continues with the created record', async () => {
   const f = editorFixture()
-  let editor = f.editor()
-  editor.openCreate()
-  editor = f.editor()
+  f.editor().openCreate()
   f.form.setValue('name', '客户管理')
   f.form.setValue('code', 'crm')
-  assert.equal(editor.quickSetup, true)
-  assert.equal(f.values().entryType, 'HTML')
-  editor.submit({ preventDefault() {} })
+  f.form.setValue('entryType', 'ESM')
+  f.form.setValue('runtimeMode', 'IFRAME')
+  f.form.setValue('entryUrl', '/src/obsolete.tsx')
+  f.editor().submit({ preventDefault() {} })
   await f.mutations[0].promise
-  assert.equal(f.writes[0][0], 'create')
-  assert.deepEqual(f.writes[0][1], {
+  assert.deepEqual(f.writes[0], ['create', {
     name: '客户管理', code: 'crm', icon: 'LayoutGrid', basePath: '/micro/crm', description: '',
-    sortOrder: 0, status: 'ENABLED', entryType: 'HTML', runtimeMode: 'IFRAME',
+    sortOrder: 0, status: 'ENABLED', entryType: 'HTML', runtimeMode: 'TRUSTED',
     entryUrl: '/sub-apps/crm/unreleased/index.html', autoCreateMenu: true,
-  })
-  assert.equal(f.created.length, 1)
+  }])
   assert.equal(f.created[0].id, record.id)
   assert.equal(f.editor().dialogOpen, false)
 })
 
-test('built host module selection determines the code and continues through the same onboarding callback', async () => {
+test('metadata editing preserves the code and never changes entry or execution mode', async () => {
   const f = editorFixture()
-  let editor = f.editor()
-  f.form.setValue('name', '报表中心')
-  f.form.setValue('entryType', 'ESM')
-  editor = f.editor()
-  editor.selectHostEsmModule('report-center')
-  assert.equal(f.values().code, 'report-center')
-  assert.equal(f.values().entryUrl, '/src/micro-apps/report-center.tsx')
-  editor = f.editor()
-  editor.submit({ preventDefault() {} })
-  await f.mutations[0].promise
-  assert.equal(f.writes[0][1].runtimeMode, 'TRUSTED')
-  assert.equal(f.writes[0][1].basePath, '/micro/report-center')
-  assert.equal(f.writes[0][1].autoCreateMenu, false)
-  assert.equal(f.created[0].entryType, 'ESM')
-})
-
-test('unbuilt modules cannot be selected or sent even when the mutation is invoked directly', async () => {
-  const f = editorFixture()
-  let editor = f.editor()
-  editor.selectHostEsmModule('not-in-build')
-  assert.match(f.errors.code, /已构建/)
-  assert.equal(f.values().code, '')
-  f.form.setValue('entryType', 'ESM')
-  f.form.setValue('code', 'not-in-build')
-  editor = f.editor()
-  editor.submit({ preventDefault() {} })
-  assert.equal(f.writes.length, 0)
-  await assert.rejects(f.mutations[0].options.mutationFn(f.values()), /已构建/)
-  assert.equal(f.writes.length, 0)
-})
-
-test('metadata editing preserves the original code and never rewrites entry or runtime trust', async () => {
-  const f = editorFixture()
-  let editor = f.editor()
-  editor.openEdit({ ...record, entryType: 'HTML', runtimeMode: undefined, entryUrl: '/existing/version/index.html' })
-  editor = f.editor()
+  f.editor().openEdit({ ...record, entryUrl: '/existing/version/index.html' })
   f.form.setValue('name', '新名称')
   f.form.setValue('code', 'attempted-change')
   f.form.setValue('entryType', 'ESM')
-  f.form.setValue('entryUrl', '/src/micro-apps/report-center.tsx')
-  editor.submit({ preventDefault() {} })
+  f.form.setValue('runtimeMode', 'IFRAME')
+  f.form.setValue('entryUrl', '/src/obsolete.tsx')
+  f.editor().submit({ preventDefault() {} })
   await f.mutations[0].promise
-  assert.equal(f.writes[0][0], 'update')
   const payload = f.writes[0][2]
   assert.equal(payload.code, record.code)
   assert.equal(payload.name, '新名称')
@@ -113,56 +63,41 @@ test('metadata editing preserves the original code and never rewrites entry or r
   assert.equal(f.created.length, 0)
 })
 
-test('simple dialog folds optional settings and exposes only name and code before them', () => {
+test('built-in React pages use the same HTML metadata and preserve their empty external entry', async () => {
+  for (const code of ['system', 'hermes']) {
+    const f = editorFixture()
+    f.editor().openEdit({ ...record, code, basePath: `/${code}`, entryUrl: '' })
+    f.form.setValue('name', `${code} updated`)
+    f.editor().submit({ preventDefault() {} })
+    await f.mutations[0].promise
+    assert.equal(f.writes[0][2].basePath, `/${code}`)
+    for (const key of ['entryType', 'runtimeMode', 'entryUrl']) assert.equal(key in f.writes[0][2], false)
+    assert.doesNotMatch(JSON.stringify(f.dialog(f.editor())), /iframe|ESM|宿主模块|选择第一方模块/)
+  }
+})
+
+test('creation offers metadata only and does not expose legacy loader or module choices', () => {
   const f = editorFixture()
   f.editor().openCreate()
-  const editor = f.editor()
-  const ui = componentFixture('src/pages/system/applications/ApplicationEditorDialog.tsx', ['ApplicationEditorDialog'], {
-    './use-application-editor': f.exports,
-  })
-  const tree = ui.render('ApplicationEditorDialog', { editor })
+  const editor = f.editor(), tree = f.dialog(editor)
   const details = elements(tree, item => item.type === 'details')[0]
-  assert.ok(details)
   assert.equal(Boolean(details.props.open), false)
   const optionalNames = elements(details, item => item.type === 'FormField').map(item => item.props.name)
-  assert.deepEqual(optionalNames, ['entryType', 'basePath', 'icon', 'description', 'sortOrder', 'status'])
-  const primaryNames = elements(tree, item => item.type === 'FormField').map(item => item.props.name).filter(name => !optionalNames.includes(name))
-  assert.deepEqual(primaryNames, ['name', 'code'])
-  assert.match(JSON.stringify(tree), /\/micro\/\{code\}/)
+  assert.deepEqual(optionalNames, ['basePath', 'icon', 'description', 'sortOrder', 'status'])
+  assert.deepEqual(elements(tree, item => item.type === 'FormField').map(item => item.props.name).filter(name => !optionalNames.includes(name)), ['name', 'code'])
+  assert.match(JSON.stringify(tree), /qiankun/)
+  assert.doesNotMatch(JSON.stringify(tree), /iframe|ESM|选择第一方模块|接入方式|加载方式/)
   editor.saveMutation.isPending = true
   tree.props.onOpenChange(false)
   assert.equal(f.editor().dialogOpen, true)
 })
 
-test('ESM dialog selects a built module and keeps the derived code read-only', () => {
-  const f = editorFixture()
-  f.editor()
-  f.form.setValue('entryType', 'ESM')
-  const editor = f.editor()
-  const ui = componentFixture('src/pages/system/applications/ApplicationEditorDialog.tsx', ['ApplicationEditorDialog'], {
-    './use-application-editor': f.exports,
-  })
-  const tree = ui.render('ApplicationEditorDialog', { editor })
-  const picker = elements(tree, item => item.type === 'Select')[0]
-  picker.props.onValueChange('report-center')
-  assert.equal(f.values().code, 'report-center')
-  const codeField = elements(tree, item => item.type === 'FormField' && item.props.name === 'code')[0]
-  const codeControl = codeField.props.render({ field: { value: f.values().code } })
-  assert.equal(elements(codeControl, item => item.type === 'Input')[0].props.readOnly, true)
-  assert.match(JSON.stringify(tree), /共享运行环境/)
-})
-
-test('host registry lists only valid built modules in stable code order', () => {
-  const source = fs.readFileSync(new URL('../src/micro-apps/registry.ts', import.meta.url), 'utf8')
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
-    .replace('import.meta.glob("./*.tsx")', '__modules')
-  const exported = {}
-  vm.runInThisContext(`(function(exports,__modules){${compiled}\n})`)(exported, {
-    './z-module.tsx': () => {}, './report-center.tsx': () => {}, './Bad_Module.tsx': () => {}, './nested/module.tsx': () => {},
-  })
-  assert.deepEqual(exported.listHostEsmModules(), [
-    { code: 'report-center', entryUrl: '/src/micro-apps/report-center.tsx' },
-    { code: 'z-module', entryUrl: '/src/micro-apps/z-module.tsx' },
-  ])
-  assert.equal(exported.hostEsmEntryForCode('../outside'), null)
+test('legacy incompatible entries require explicit reconfiguration before metadata saving or enabling', () => {
+  for (const legacy of [{ entryType: 'ESM', runtimeMode: 'TRUSTED' }, { entryType: 'HTML', runtimeMode: 'IFRAME' }]) {
+    const f = editorFixture()
+    f.editor().openEdit({ ...record, ...legacy, status: 'DISABLED' })
+    const tree = f.dialog(f.editor())
+    assert.equal(button(tree, '保存更改').props.disabled, true)
+    assert.match(JSON.stringify(tree), /先在应用入口中明确重新配置为 qiankun/)
+  }
 })

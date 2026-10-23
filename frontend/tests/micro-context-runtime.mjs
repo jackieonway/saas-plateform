@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { MicroContextRuntime, MicroLifecycleSession, microPropsSignature } from '../src/components/micro/runtime.ts'
-import { createContextClient } from '../vendor/micro-app-sdk/context-client.mjs'
-import { detectBrowserCapabilities, assertBrowserCapabilities } from '../vendor/micro-app-sdk/releases/1.0.0/index.mjs'
+import { createContextClient } from '../vendor/micro-app-sdk/index.mjs'
+import { detectBrowserCapabilities, assertBrowserCapabilities } from '../vendor/micro-app-sdk/index.mjs'
+import { assertQiankunCapabilities } from '../src/components/micro/capabilities.ts'
 
 const deferred = () => {
   let resolve, reject
@@ -133,33 +134,43 @@ test('unknown context contract versions are rejected before publishing any autho
   }
 })
 
-test('capability modes require only their actual client or browser APIs and never weaken isolation', () => {
+test('SDK capabilities require client APIs and reject removed loader modes', () => {
   const client = { fetch() {}, Headers, URL, AbortController, DOMException, TextEncoder, TextDecoder,
     ReadableStream, Response, crypto }
   assert.deepEqual(detectBrowserCapabilities('client', client), { mode: 'client', supported: true, missing: [] })
-  const iframe = { ...client, MessageChannel, postMessage() {}, addEventListener() {}, removeEventListener() {} }
-  assert.equal(detectBrowserCapabilities('iframe', iframe).supported, true)
-  class Frame {}
-  Frame.prototype.sandbox = {}
-  const host = { ...client, AbortSignal, MessageChannel, MutationObserver: class {}, HTMLIFrameElement: Frame,
-    document: { createElement() {} }, Blob, URL }
-  assert.equal(assertBrowserCapabilities('host', host).supported, true)
-  for (const [api, replacement] of [['MessageChannel', undefined], ['HTMLIFrameElement', class {}],
-    ['AbortSignal', { timeout: AbortSignal.timeout }], ['crypto', {}], ['Response', class {}]]) {
-    assert.throws(() => assertBrowserCapabilities('host', { ...host, [api]: replacement }),
+  for (const mode of ['iframe', 'host']) {
+    assert.throws(() => detectBrowserCapabilities(mode, client), TypeError)
+  }
+  for (const [api, replacement] of [['AbortController', undefined], ['crypto', {}], ['Response', class {}]]) {
+    assert.throws(() => assertBrowserCapabilities('client', { ...client, [api]: replacement }),
       (error) => error.code === 'BROWSER_CAPABILITIES_UNSUPPORTED' && error.missing.length > 0)
   }
   assert.equal(detectBrowserCapabilities('client', client).supported, true,
-    'A client requires no DOM or MessageChannel, while host isolation still fails closed.')
+    'A client requires no DOM or message bridge.')
 })
 
 test('capability diagnostics contain fixed API names and ignore hostile environment details', () => {
   const environment = new Proxy({}, { get() { throw new Error('application-token-secret') } })
-  assert.throws(() => assertBrowserCapabilities('iframe', environment),
+  assert.throws(() => assertBrowserCapabilities('client', environment),
     (error) => error.code === 'BROWSER_CAPABILITIES_UNSUPPORTED' &&
-      !error.message.includes('secret') && error.missing.includes('MessageChannel'))
+      !error.message.includes('secret') && error.missing.includes('fetch'))
   assert.throws(() => detectBrowserCapabilities('application-token-secret', {}),
     (error) => error instanceof TypeError && !error.message.includes('secret'))
+})
+
+test('the qiankun host requires its actual APIs without requiring iframe or MessageChannel support', () => {
+  const environment = { fetch() {}, Headers, URL, AbortController, AbortSignal, DOMException, TextEncoder, TextDecoder,
+    ReadableStream, Response, Request, crypto, Proxy, DOMParser: class {}, MutationObserver: class {},
+    document: { createElement() {} }, Blob }
+  assert.deepEqual(assertQiankunCapabilities(environment), { supported: true, mode: 'qiankun' })
+  for (const patch of [{ Proxy: undefined }, { DOMParser: undefined }, { Request: undefined },
+    { AbortSignal: { timeout: AbortSignal.timeout } }]) {
+    assert.throws(() => assertQiankunCapabilities({ ...environment, ...patch }),
+      error => error.code === 'BROWSER_CAPABILITIES_UNSUPPORTED' && error.missing.length > 0)
+  }
+  const hostile = new globalThis.Proxy({}, { get() { throw new Error('private-application-token') } })
+  assert.throws(() => assertQiankunCapabilities(hostile),
+    error => error.code === 'BROWSER_CAPABILITIES_UNSUPPORTED' && !error.message.includes('private'))
 })
 
 test('late asynchronous mount is followed by final unmount and queued updates are dropped', async () => {

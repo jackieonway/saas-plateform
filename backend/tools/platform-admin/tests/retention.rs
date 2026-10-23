@@ -45,7 +45,7 @@ fn remote_preview_uses_only_get_and_projects_safe_fields() {
                 format!("GET {expected} HTTP/1.1")
             );
             let body = if index == 0 {
-                serde_json::json!([{"id":id,"code":"work-orders","basePath":"/micro/work-orders","entryType":"HTML","runtimeMode":"IFRAME","status":"ENABLED"}])
+                serde_json::json!([{"id":id,"code":"work-orders","basePath":"/micro/work-orders","entryType":"HTML","runtimeMode":"TRUSTED","status":"ENABLED"}])
             } else {
                 serde_json::json!({"applicationId":id,"mode":"DRY_RUN","applyAvailable":false,"deletionPermitted":false,"policy":{"minimumAgeDays":60,"keepLatest":8},"total":1,"protected":1,"manualReview":0,"records":[{"releaseId":"22222222-2222-4222-8222-222222222222","version":"v1","environment":"production","artifactKind":"ZIP","disposition":"PROTECTED","reasons":["ACTIVE"],"privatePath":"SECRET_SERVER_FIELD"}],"secret":"SECRET_SERVER_FIELD"})
             }.to_string();

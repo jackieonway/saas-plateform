@@ -167,8 +167,8 @@ impl KnownApp {
     }
     pub(crate) fn entry_url(self) -> &'static str {
         match self {
-            Self::WorkOrders => "/sub-apps/work-orders/unreleased/index.html",
-            Self::Stores => "/sub-apps/stores/unreleased/index.html",
+            Self::WorkOrders => "http://127.0.0.1:3013/index.html",
+            Self::Stores => "http://127.0.0.1:3014/index.html",
         }
     }
     pub(crate) fn permissions(self) -> &'static [&'static str] {

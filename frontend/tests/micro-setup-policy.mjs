@@ -15,11 +15,11 @@ const policy = {}
 vm.runInThisContext(`(function(exports){${compiled}\n})`)(policy)
 const app = { id: 'app-a', name: 'CRM', code: 'crm', entryType: 'HTML', entryUrl: '/sub-apps/crm/unreleased/index.html' }
 const status = changes => ({ applicationId: 'app-a', environment: 'development', applicationEnabled: true,
-  entryType: 'HTML', runtimeMode: 'IFRAME', releaseRequired: true, activeVersion: null, releaseValidated: false,
+  entryType: 'HTML', runtimeMode: 'TRUSTED', releaseRequired: true, activeVersion: null, releaseValidated: false,
   menuCount: 2, entryMenuCount: 1, canConfigureAccess: true, access: null, ...changes })
 const target = changes => ({ tenantId: 'tenant-a', organizationId: 'org-a', roleId: 'role-a', tenantAuthorized: true,
   organizationAuthorized: true, roleAuthorized: true, assignedUserCount: 1, ...changes })
-const checks = changes => policy.applicationSetupChecks(app, status(changes), false)
+const checks = changes => policy.applicationSetupChecks(app, status(changes))
 const check = (items, id) => items.find(item => item.id === id)
 
 test('setup links normalize unknown steps and environments to safe defaults', () => {
@@ -57,11 +57,21 @@ test('one selected audience must have the complete same-entry grant chain and ef
   assert.equal(check(checks({ access: target({}) }), 'access').complete, true)
 })
 
-test('ESM requires both server validation and the actual module available in this host build', () => {
-  const esm = status({ entryType: 'ESM', runtimeMode: 'TRUSTED', releaseRequired: false, releaseValidated: true })
-  assert.equal(check(policy.applicationSetupChecks(app, esm, false), 'release').complete, false)
-  assert.equal(check(policy.applicationSetupChecks(app, esm, true), 'release').complete, true)
-  assert.equal(check(policy.applicationSetupChecks(app, { ...esm, releaseValidated: false }, true), 'release').complete, false)
+test('legacy incompatible modes never become ready even with an active version or direct address', () => {
+  for (const legacy of [{ entryType: 'ESM', runtimeMode: 'TRUSTED' }, { entryType: 'HTML', runtimeMode: 'IFRAME' }]) {
+    const result = checks({ ...legacy, releaseRequired: false, releaseValidated: true, activeVersion: '1.0.0', entrySource: 'URL' })
+    assert.equal(check(result, 'release').complete, false)
+    assert.match(check(result, 'release').description, /重新配置 qiankun/)
+  }
+})
+
+test('a validated direct URL is ready without an active version and still requires audience grants', () => {
+  const live = checks({ entrySource: 'URL', urlEntryConfigured: true, releaseRequired: false, releaseValidated: true,
+    runtimeMode: 'TRUSTED', proxyEnabled: true })
+  assert.equal(check(live, 'release').complete, true)
+  assert.match(check(live, 'release').description, /直接地址.*代理/)
+  assert.equal(check(live, 'access').complete, false)
+  assert.equal(check(checks({ entrySource: 'URL', releaseRequired: false, releaseValidated: false }), 'release').complete, false)
 })
 
 test('a disabled application remains a visible incomplete prerequisite', () => {

@@ -53,6 +53,30 @@ fn default_and_unapplied_commands_are_offline_even_with_invalid_secrets() {
         assert!(!output.to_string().contains("CANARY"));
     }
 }
+
+#[test]
+fn offline_bootstrap_plans_show_qiankun_entry_defaults_for_both_apps() {
+    let invalid_environment = BTreeMap::from([
+        ("PLATFORM_API_ORIGIN".into(), "not a remote origin".into()),
+        ("PLATFORM_ADMIN_BEARER".into(), "SECRET_CANARY".into()),
+    ]);
+    for (app, entry) in [
+        ("work-orders", "http://127.0.0.1:3013/index.html"),
+        ("stores", "http://127.0.0.1:3014/index.html"),
+    ] {
+        for command in ["plan", "bootstrap"] {
+            let output = run(args(&[command, "--app-code", app]), &invalid_environment).unwrap();
+            assert_eq!(output["mode"], "PLAN");
+            assert_eq!(output["externalWrites"], false);
+            assert_eq!(output["runtimeMode"], "TRUSTED");
+            assert_eq!(output["entryType"], "HTML");
+            assert_eq!(output["entryUrl"], entry);
+            assert_eq!(output["basePath"], format!("/micro/{app}"));
+            assert_eq!(output["grants"], json!([]));
+            assert!(!output.to_string().contains("CANARY"));
+        }
+    }
+}
 #[test]
 fn register_is_strict_offline_and_needs_no_zip() {
     let path = temp_json(&release());
@@ -291,7 +315,7 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
     let root = "00000000-0000-4000-8000-00000000000a";
     let bootstrap: Value =
         serde_json::from_str(include_str!("../manifests/stores-bootstrap.manifest.json")).unwrap();
-    let app = json!({"id":app_id,"code":"stores","runtimeMode":"IFRAME","entryType":"HTML","basePath":"/micro/stores","status":"ENABLED"});
+    let app = json!({"id":app_id,"code":"stores","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/stores","status":"ENABLED"});
     let client = json!({"id":"22222222-2222-4222-8222-222222222222","clientId":"owned-client","clientName":"stores-client",
         "clientType":"CONFIDENTIAL","status":"ENABLED","grantTypes":["client_credentials"],"scopes":["openid"],"redirectUris":[],
         "accessTokenValidity":300,"refreshTokenValidity":300,"applicationId":app_id,"clientSecret":"REMOTE_SECRET_CANARY"});

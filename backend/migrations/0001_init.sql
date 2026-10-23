@@ -47,9 +47,9 @@ CREATE TABLE public."applications" (
   "status" character varying(20) DEFAULT 'ENABLED'::character varying NOT NULL,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-  "entry_type" character varying(10) DEFAULT 'ESM'::character varying NOT NULL,
+  "entry_type" character varying(10) DEFAULT 'HTML'::character varying NOT NULL,
   "entry_url" character varying(500) DEFAULT ''::character varying NOT NULL,
-  "runtime_mode" character varying(10) DEFAULT 'IFRAME'::character varying NOT NULL
+  "runtime_mode" character varying(10) DEFAULT 'TRUSTED'::character varying NOT NULL
 );
 
 CREATE TABLE public."audit_logs" (
@@ -737,7 +737,7 @@ ALTER TABLE public."application_deployments" ADD CONSTRAINT "application_deploym
 ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_application_id_environment_id_key" UNIQUE (application_id, environment, id);
 ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_application_id_environment_version_key" UNIQUE (application_id, environment, version);
 ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_check" CHECK (((((validation_status)::text = 'DRAFT'::text) AND (checked_at IS NULL)) OR (((validation_status)::text = ANY (ARRAY[('PASSED'::character varying)::text, ('FAILED'::character varying)::text])) AND (checked_at IS NOT NULL))));
-ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_entry_type_check" CHECK (((entry_type)::text = ANY (ARRAY[('HTML'::character varying)::text, ('ESM'::character varying)::text])));
+ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_entry_type_check" CHECK (entry_type = 'HTML');
 ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_environment_check" CHECK (((environment)::text ~ '^[a-z0-9][a-z0-9_-]{0,31}$'::text));
 ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_pkey" PRIMARY KEY (id);
 ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_resources_check" CHECK ((jsonb_typeof(resources) = 'array'::text));
@@ -745,7 +745,7 @@ ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_v
 ALTER TABLE public."application_releases" ADD CONSTRAINT "application_releases_version_check" CHECK ((((version)::text ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'::text) AND ((version)::text !~~ '%..%'::text)));
 ALTER TABLE public."applications" ADD CONSTRAINT "applications_code_key" UNIQUE (code);
 ALTER TABLE public."applications" ADD CONSTRAINT "applications_pkey" PRIMARY KEY (id);
-ALTER TABLE public."applications" ADD CONSTRAINT "applications_runtime_mode_check" CHECK (((runtime_mode)::text = ANY (ARRAY[('IFRAME'::character varying)::text, ('TRUSTED'::character varying)::text])));
+ALTER TABLE public."applications" ADD CONSTRAINT "applications_runtime_mode_check" CHECK (rtrim(base_path, '/') <> '/micro/' || code OR status <> 'ENABLED' OR (entry_type = 'HTML' AND runtime_mode = 'TRUSTED'));
 ALTER TABLE public."audit_logs" ADD CONSTRAINT "audit_logs_pkey" PRIMARY KEY (id);
 ALTER TABLE public."departments" ADD CONSTRAINT "departments_pkey" PRIMARY KEY (id);
 ALTER TABLE public."membership_data_grants" ADD CONSTRAINT "ck_membership_data_grants_resource" CHECK (((length(TRIM(BOTH FROM resource_code)) > 0) AND (length(TRIM(BOTH FROM action_code)) > 0)));
@@ -969,16 +969,6 @@ COMMENT ON COLUMN public."regions"."created_at" IS '创建时间';
 COMMENT ON COLUMN public."regions"."updated_at" IS '更新时间';
 COMMENT ON COLUMN public."tenants"."township" IS '乡镇、街道地区名称';
 COMMENT ON COLUMN public."tenants"."village" IS '村、社区地区名称';
-
--- Built-in micro applications; identities are created per installation.
-INSERT INTO public.applications ("code", "name", "icon", "base_path", "description", "sort_order", "status", "entry_type", "entry_url", "runtime_mode") VALUES ('vue-workshop', 'Vue 工作台', 'Sparkles', '/micro/vue-workshop', '微前端演示: Vue 3 子应用(HTML 入口+沙箱)', '1', 'ENABLED', 'HTML', '/sub/vue/', 'IFRAME');
-INSERT INTO public.applications ("code", "name", "icon", "base_path", "description", "sort_order", "status", "entry_type", "entry_url", "runtime_mode") VALUES ('legacy-jquery', '遗留工单(jQuery)', 'Wrench', '/micro/legacy-jquery', '微前端演示: jQuery 遗留系统子应用', '2', 'ENABLED', 'HTML', '/sub/jquery/', 'IFRAME');
-INSERT INTO public.applications ("code", "name", "icon", "base_path", "description", "sort_order", "status", "entry_type", "entry_url", "runtime_mode") VALUES ('report-center', '报表中心', 'BarChart3', '/micro/report-center', '第一方 ESM 报表中心；随宿主构建并直挂', '3', 'ENABLED', 'ESM', '/src/micro-apps/report-center.tsx', 'TRUSTED');
-INSERT INTO public.menus (application_id, "parent_id", "type", "title", "path", "component", "icon", "permission", "sort_order", "visible", "status", "link_url", "link_target") SELECT id, NULL, 'MENU', '工单列表', '/micro/legacy-jquery', '', '', '', '1', 'true', 'ENABLED', '', 'MICRO' FROM public.applications WHERE code = 'legacy-jquery';
-INSERT INTO public.menus (application_id, "parent_id", "type", "title", "path", "component", "icon", "permission", "sort_order", "visible", "status", "link_url", "link_target") SELECT id, NULL, 'MENU', '数据总览', '/micro/report-center', '', '', '', '1', 'true', 'ENABLED', '', 'MICRO' FROM public.applications WHERE code = 'report-center';
-INSERT INTO public.menus (application_id, "parent_id", "type", "title", "path", "component", "icon", "permission", "sort_order", "visible", "status", "link_url", "link_target") SELECT id, NULL, 'MENU', '共享运行时', '/micro/report-center/shared', '', '', '', '2', 'true', 'ENABLED', '', 'MICRO' FROM public.applications WHERE code = 'report-center';
-INSERT INTO public.menus (application_id, "parent_id", "type", "title", "path", "component", "icon", "permission", "sort_order", "visible", "status", "link_url", "link_target") SELECT id, NULL, 'MENU', '总览', '/micro/vue-workshop', '', '', '', '1', 'true', 'ENABLED', '', 'MICRO' FROM public.applications WHERE code = 'vue-workshop';
-INSERT INTO public.menus (application_id, "parent_id", "type", "title", "path", "component", "icon", "permission", "sort_order", "visible", "status", "link_url", "link_target") SELECT id, NULL, 'MENU', '权限与沙箱', '/micro/vue-workshop/security', '', '', '', '2', 'true', 'ENABLED', '', 'MICRO' FROM public.applications WHERE code = 'vue-workshop';
 
 -- One global branding record; tenant identity remains separate.
 INSERT INTO public.platform_settings (singleton) VALUES (true);

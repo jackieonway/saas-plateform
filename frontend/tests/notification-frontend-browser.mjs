@@ -37,7 +37,8 @@ async function waitState(predicate, message, timeout = 10_000) {
   assert(predicate(), message)
 }
 
-const systemApplication = { id: "notification-test-system", code: "system", name: "系统管理", icon: "Bell", basePath: "/system" }
+const systemApplication = { id: "notification-test-system", code: "system", name: "系统管理", icon: "Bell", basePath: "/system",
+  entryType: "HTML", runtimeMode: "TRUSTED" }
 const user = { id: "notification-user", username: "notification-browser", realName: "通知浏览器用户",
   email: "", phone: "", avatar: "", gender: "UNKNOWN", isSuperAdmin: false }
 const owner = (group) => ({ userId: group === "C" ? "other-notification-user" : user.id,

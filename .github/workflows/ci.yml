@@ -28,6 +28,7 @@ jobs:
       - run: npm install --global npm@11.16.0
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run sdk:check
+      - run: npm run qiankun:check
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -90,6 +91,12 @@ jobs:
         run: 'cargo test --locked --bin saas-platform-backend region_catalog_mutations_rollback_when_audit_is_rejected -- --ignored --test-threads=1'
       - name: Historical managed version readiness and cleanup
         run: 'cargo test --locked --bin saas-platform-backend release_tests::managed_gate:: -- --ignored --test-threads=1'
+      - name: Canonical initialization and historical baseline upgrades
+        run: 'cargo test --locked --bin saas-platform-backend release_tests::database_upgrade:: -- --ignored --test-threads=1'
+      - name: Qiankun admission and historical release archives
+        run: 'cargo test --locked --bin saas-platform-backend release_tests::qiankun_only:: -- --ignored --test-threads=1'
+      - name: Environment URL entries and proxy configuration
+        run: 'cargo test --locked --bin saas-platform-backend release_tests::url_entries:: -- --ignored --test-threads=1'
       - name: Data grant changes and isolation
         run: 'cargo test --locked --bin saas-platform-backend data_grant_tests:: -- --ignored --test-threads=2'
       - name: Data grant discovery boundaries

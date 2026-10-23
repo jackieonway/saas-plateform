@@ -1,19 +1,18 @@
 import * as React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { ArrowRight, Check, CheckCircle2, Circle, FileCheck2, ListTree, Loader2, PackageOpen, RefreshCw, Rocket, ShieldCheck } from "lucide-react"
+import { ArrowRight, CheckCircle2, Circle, FileCheck2, ListTree, Loader2, PackageOpen, RefreshCw, Rocket, ShieldCheck } from "lucide-react"
 import { applicationSetupApi, type ApplicationAccessTarget } from "@/api/application-setup"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ErrorState } from "@/components/states"
-import { hostEsmEntryForCode } from "@/micro-apps/registry"
 import { cn } from "@/lib/utils"
 import type { ApplicationEnvironment, ApplicationRecord } from "@/api/types"
 import { ApplicationAccessSetup } from "./ApplicationAccessSetup"
 import { ApplicationReleasesPanel } from "./ApplicationReleasesPanel"
-import { applicationSetupChecks, type ApplicationSetupStep } from "./application-setup-policy"
+import { applicationSetupChecks, isQiankunApp, type ApplicationSetupStep } from "./application-setup-policy"
 
 type Props = {
   application: ApplicationRecord
@@ -37,7 +36,7 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
   const [selectedTarget, setSelectedTarget] = React.useState<ApplicationAccessTarget | null>(null)
   const busy = releaseBusy || accessBusy
   const statusQuery = useQuery({
-    queryKey: ["application-setup", application.id, environment, application.status, application.entryType, application.entryUrl],
+    queryKey: ["application-setup", application.id, environment, application.status, application.entryType, application.runtimeMode, application.entryUrl],
     queryFn: () => applicationSetupApi.status(application.id, environment),
     retry: 1,
     staleTime: 0,
@@ -56,17 +55,14 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
     && targetStatusQuery.data.access?.tenantId === selectedTarget.tenantId
     && targetStatusQuery.data.access.organizationId === selectedTarget.organizationId
     && targetStatusQuery.data.access.roleId === selectedTarget.roleId ? targetStatusQuery.data : null
-  const hostEntry = hostEsmEntryForCode(application.code)
-  const hostModuleAvailable = !!hostEntry && application.entryUrl?.trim() === hostEntry
-  const checks = status ? applicationSetupChecks(application, { ...status, access: targetStatus?.access ?? null }, hostModuleAvailable)
+  const checks = status ? applicationSetupChecks(application, { ...status, access: targetStatus?.access ?? null })
     .map(check => check.id === "access" && selectedTarget && !targetStatus
       ? { ...check, complete: false, description: !status.canConfigureAccess ? "请由授权管理员核对所选访问范围。" : targetStatusQuery.isError ? "当前访问范围检查失败，请刷新后重试。" : "正在检查所选租户、组织和角色的实际授权…" }
       : check) : []
   const entryReady = checks.find(check => check.id === "release")?.complete ?? false
-  const html = application.entryType === "HTML"
   const steps = [
     { id: "overview" as const, title: "接入检查", detail: "查看还缺哪些配置", icon: FileCheck2 },
-    { id: "release" as const, title: html ? "发布版本" : "宿主模块", detail: html ? "上传包或使用已有地址" : "检查已构建的模块", icon: PackageOpen },
+    { id: "release" as const, title: "应用入口", detail: "直接地址或固定版本", icon: PackageOpen },
     { id: "access" as const, title: "访问范围", detail: "选择组织、角色与菜单", icon: ShieldCheck },
   ]
   const refresh = React.useCallback(() => {
@@ -86,9 +82,9 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
         <SheetHeader className="shrink-0 border-b p-5 pr-12">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Rocket className="size-4" />微应用接入</div>
           <SheetTitle className="mt-1 text-xl">{application.name}</SheetTitle>
-          <SheetDescription>发布应用，检查页面，再明确谁可以访问。所有步骤都可稍后继续。</SheetDescription>
+          <SheetDescription>配置入口，检查页面，再明确谁可以访问。所有步骤都可稍后继续。</SheetDescription>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2"><Badge variant="outline" className="font-mono">{application.code}</Badge><Badge variant="secondary">{html ? "独立 HTML 应用" : "第一方宿主模块"}</Badge></div>
+            <div className="flex items-center gap-2"><Badge variant="outline" className="font-mono">{application.code}</Badge><Badge variant={isQiankunApp(application) ? "secondary" : "destructive"}>{isQiankunApp(application) ? "qiankun 微应用" : "需重新配置 qiankun 入口"}</Badge></div>
             <Select value={environment} onValueChange={value => { if (!busy) onEnvironmentChange(value as ApplicationEnvironment) }} disabled={busy}>
               <SelectTrigger className="w-36" aria-label="接入环境"><SelectValue /></SelectTrigger>
               <SelectContent>{environments.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
@@ -123,16 +119,10 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
                 : "先配置一个可访问的首页，再按需增加子页面或操作按钮。返回本页可继续接入。"}</p>
               <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={editMenus} disabled={busy}>管理应用菜单</Button><Button size="sm" variant="ghost" onClick={onEdit} disabled={busy}>编辑应用信息</Button></div>
             </div>
-            <div className="flex justify-end"><Button disabled={busy} onClick={() => go(entryReady ? "access" : "release")}>{entryReady ? "配置访问范围" : html ? "继续发布版本" : "检查宿主模块"}<ArrowRight className="size-4" /></Button></div>
+            <div className="flex justify-end"><Button disabled={busy} onClick={() => go(entryReady ? "access" : "release")}>{entryReady ? "配置访问范围" : "继续配置入口"}<ArrowRight className="size-4" /></Button></div>
           </div>}
-          {step === "release" && (html ? <ApplicationReleasesPanel application={application} open onOpenChange={() => {}} embedded environment={environment}
-            onEnvironmentChange={onEnvironmentChange} onBusyChange={setReleaseBusy} onDeploymentChanged={refresh} onContinue={() => go("access")} /> : <div className="space-y-5">
-            <div className="rounded-xl border p-5"><p className="flex items-center gap-2 font-medium"><Check className="size-5 text-primary" />第一方模块随宿主发布</p>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">此应用无需上传独立版本包。当前宿主需要包含已选择的模块，更新模块时发布宿主版本。</p>
-              <p className="mt-3 rounded-md bg-muted px-3 py-2 font-mono text-xs">{hostEsmEntryForCode(application.code) ?? "当前宿主未包含此模块"}</p>
-              <p className={cn("mt-3 text-sm", entryReady ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground")}>{statusQuery.isError ? "模块检查未完成，请返回接入检查后重试。" : entryReady ? "当前模块和入口检查通过，可以继续配置访问范围。" : "请先确认模块已随当前宿主构建，且应用入口配置有效。"}</p>
-            </div><div className="flex justify-end"><Button onClick={() => go("access")} disabled={busy}>继续配置访问范围<ArrowRight className="size-4" /></Button></div>
-          </div>)}
+          {step === "release" && <ApplicationReleasesPanel application={application} open onOpenChange={() => {}} embedded environment={environment}
+            onEnvironmentChange={onEnvironmentChange} onBusyChange={setReleaseBusy} onDeploymentChanged={refresh} onContinue={() => go("access")} />}
           {step === "access" && (statusQuery.isError ? <ErrorState message={statusQuery.error.message} onRetry={() => statusQuery.refetch()} /> : !status ? <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取配置权限…</div> : <ApplicationAccessSetup key={`${application.id}:${environment}`} application={application} environment={environment} canConfigureAccess={status.canConfigureAccess}
             entryReady={entryReady} initialTarget={selectedTarget} onTargetChange={updateTarget} onConfigured={refresh} onBusyChange={setAccessBusy} />)}
         </div>

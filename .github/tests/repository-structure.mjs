@@ -1,14 +1,44 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertApplicationStructure } from '../scripts/repository-delivery.mjs'
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
-test('application checkout exposes only frontend and backend beside Git automation', () => {
- const visible = readdirSync(root, { withFileTypes: true }).filter(entry => entry.isDirectory() && !entry.name.startsWith('.')).map(entry => entry.name).sort()
- assert.deepEqual(visible, ['backend', 'frontend'])
- assert.equal(existsSync(path.join(root, 'package.json')), false)
+test('the delivered application source exposes only frontend and backend beside Git automation', () => {
+ assertApplicationStructure(root)
+})
+
+test('structure checks exclude ignored local tools but reject tracked and new unexpected source', t => {
+ const directory = mkdtempSync(path.join(os.tmpdir(), 'saas-repository-structure-'))
+ const git = (...args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', windowsHide: true })
+ const write = (name, content = 'fixture') => {
+  const file = path.join(directory, name)
+  mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, content)
+ }
+ t.after(() => {
+  assert.equal(path.dirname(directory), path.resolve(os.tmpdir()))
+  assert(path.basename(directory).startsWith('saas-repository-structure-'))
+  rmSync(directory, { recursive: true, force: true })
+ })
+ git('init', '--quiet')
+ write('.gitignore', 'local-*/\n')
+ write('frontend/src/main.ts'); write('backend/src/main.rs')
+ write('local-application-rebuild/package.json')
+ git('add', '.gitignore', 'frontend', 'backend')
+ assertApplicationStructure(directory)
+ write('unexpected/source.rs')
+ assert.throws(() => assertApplicationStructure(directory), /Only frontend and backend/)
+ git('add', 'unexpected/source.rs')
+ assert.throws(() => assertApplicationStructure(directory), /Only frontend and backend/)
+ // Tracking a path explicitly overrides its ignored status: it becomes delivery.
+ git('rm', '--cached', 'unexpected/source.rs')
+ rmSync(path.join(directory, 'unexpected/source.rs'))
+ git('add', '-f', 'local-application-rebuild/package.json')
+ assert.throws(() => assertApplicationStructure(directory), /Only frontend and backend/)
 })
 
 test('each Dockerfile reads source only from its own frontend or backend context', () => {

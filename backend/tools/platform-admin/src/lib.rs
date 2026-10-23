@@ -57,7 +57,7 @@ pub fn run(
         )?;
     }
     if options.is_plan() {
-        let mut result = json!({"ok":true,"mode":"PLAN","command":options.command,"applicationCode":options.app().code(),"runtimeMode":"IFRAME","entryType":"HTML","environment":options.environment,"externalWrites":false,"permissions":options.app().permissions(),"grants":[],"clientProvisioning":"MANUAL_PLATFORM_UI","activation":"SEPARATE_EXPLICIT_COMMAND"});
+        let mut result = json!({"ok":true,"mode":"PLAN","command":options.command,"applicationCode":options.app().code(),"basePath":options.app().base_path(),"entryUrl":options.app().entry_url(),"runtimeMode":"TRUSTED","entryType":"HTML","environment":options.environment,"externalWrites":false,"permissions":options.app().permissions(),"grants":[],"clientProvisioning":"MANUAL_PLATFORM_UI","activation":"SEPARATE_EXPLICIT_COMMAND"});
         if let Some(artifact) = artifact {
             result["version"] = artifact["version"].clone();
         }

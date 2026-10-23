@@ -1,0 +1,6 @@
+{
+  "sourcePath": "frontend/src/api/applications.ts",
+  "baselineInputsSha256": "178ffd6ed48417df5769fc9126c5afad4013e9d2aa2f5f631d20a3c1b7c98b43",
+  "sha256": "5e729854cb91568f3b13dbc6db22f2a93b814958735a42291e5c62a5fdfe9cc8",
+  "scope": "Exact Phase30 host release API adapter with injected HTTP transport; not browser or session-coordinator acceptance"
+}

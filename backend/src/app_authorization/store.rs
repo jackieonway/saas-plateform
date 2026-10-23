@@ -77,11 +77,7 @@ WITH identity_row AS (
       WHERE child.tenant_id=$3 AND child.status='ENABLED' AND (child.expires_at IS NULL OR child.expires_at>now())
     ) SELECT id FROM descendants ORDER BY id
 ), runtime AS (
-    SELECT a.runtime_mode,COALESCE(r.entry_type,a.entry_type) AS entry_type,
-      COALESCE(r.entry_url,a.entry_url) AS entry_url,r.version,r.id
-    FROM applications a LEFT JOIN application_deployments d ON d.application_id=a.id AND d.environment=$5
-      LEFT JOIN application_releases r ON r.application_id=a.id AND r.environment=d.environment AND r.id=d.active_release_id
-    WHERE a.id=$4
+    SELECT runtime_mode,entry_type,entry_url,version,id FROM application_effective_entry($4,$5)
 )
 SELECT jsonb_build_object(
  'identity',(SELECT jsonb_build_array(username,real_name,code,tenant_name,org_name,org_path,app_name,is_super_admin) FROM identity_row),

@@ -5,16 +5,14 @@
  *  1. 按 appCode 从用户已授权应用列表(profile.applications, GET /api/auth/profile)发现应用；
  *     可执行完整入口统一取实时 context — 不走 GET /api/applications(需 system:application
  *     管理权限, 普通用户 403); 未授权应用在此直接得到「未知微应用」空态。
- *  2. 缺省 IFRAME: opaque sandbox + MessageChannel；TRUSTED 才允许 HTML 沙箱或 ESM
- *     在宿主页执行。每次获取应用上下文重新校验服务端实时运行模式。
+ *  2. 微应用统一由 qiankun 加载可信 HTML 入口，每次取上下文重新校验服务端配置。
  *  3. 先取得应用 token 与受众限定的完整上下文，再挂载；定时刷新上下文并续期 token。
  *  4. MicroProps 2.0 完整授权内容变化走 update；没有 update 时串行卸载后重挂。
  *  5. 成功挂载仅显示业务内容；加载与错误恢复由宿主提供。
- *  6. 卸载: lifecycle.unmount() → sandbox.teardown()(StrictMode 双挂载用挂载序号防竞态)
+ *  6. 卸载: 撤销授权 → lifecycle.unmount() → 移除容器(StrictMode 双挂载用挂载序号防竞态)
  */
 
 import * as React from "react"
-import { loadHostEsm } from "@/micro-apps/registry"
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
 import {
   ChevronRight,
@@ -23,7 +21,6 @@ import {
   ShieldQuestion,
 } from "lucide-react"
 import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -43,18 +40,13 @@ import { MicroContextRuntime, MicroLifecycleSession, isMicroRuntimeFault, microP
   trustedMicroRuntimeDomain } from "./runtime"
 import type { MicroContextSnapshot, MicroRuntimeFault } from "./runtime"
 import { EmptyState } from "@/components/states"
-import { MicroSandbox } from "./sandbox"
-import { loadHtmlEntry, markEntryFailed } from "./loader"
-import { createIframeLifecycle } from "./iframe"
+import { createQiankunLifecycle } from "./qiankun"
+import { assertQiankunCapabilities } from "./capabilities"
 import { resolveMicroEntry, microEntrySignature, assertMicroEntrySnapshot } from "./entry"
-import { SDK_VERSION, MICRO_PROPS_CONTRACT_VERSION } from "../../../vendor/micro-app-sdk/generated/protocol.mjs"
-import { assertBrowserCapabilities } from "../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs"
-import { MICRO_APP_GLOBAL } from "./types"
+import { SDK_VERSION, MICRO_PROPS_CONTRACT_VERSION } from "../../../vendor/micro-app-sdk/protocol.mjs"
 import type {
   ApplicationEntryInfo,
   AppAuthorizationContext,
-  MicroEsmModule,
-  MicroLifecycle,
   MicroNotifyVariant,
   MicroProps,
   MicroStatus,
@@ -113,7 +105,10 @@ export default function MicroAppContainer() {
     )
   }
 
-  const entryType = app.entryType === "ESM" ? "ESM" : "HTML"
+  if (app.entryType !== "HTML" || app.runtimeMode !== "TRUSTED") {
+    return <EmptyState className="py-20" title="应用需要重新配置"
+      description="平台已统一使用 qiankun，请管理员将此应用重新配置为 HTML 入口与可信运行模式" />
+  }
   const entryUrl = (app.entryUrl ?? "").trim()
 
   const entryInfo: ApplicationEntryInfo = {
@@ -121,14 +116,14 @@ export default function MicroAppContainer() {
     code: app.code,
     name: app.name,
     icon: app.icon || "LayoutGrid",
-    entryType,
+    entryType: "HTML",
     entryUrl,
-    runtimeMode: app.runtimeMode === "TRUSTED" ? "TRUSTED" : "IFRAME",
+    runtimeMode: "TRUSTED",
     deploymentVersion: app.deploymentVersion,
     entryVersionId: app.entryVersionId,
   }
 
-  // 组织、应用或信任模式改变时重新取得 token；版本变化只替换挂载实例。
+  // 组织或应用改变时重新取得 token；版本变化只替换挂载实例。
   return <MicroMountZone key={`${contextEpoch}:${app.code}:${entryInfo.runtimeMode}`} entryInfo={entryInfo} />
 }
 
@@ -136,8 +131,6 @@ export default function MicroAppContainer() {
 
 interface ActiveEntry {
   entry: ApplicationEntryInfo
-  runtimeMode: ApplicationEntryInfo["runtimeMode"]
-  sandbox: MicroSandbox | null
   session: MicroLifecycleSession
   controller: AbortController
   node: HTMLElement
@@ -145,15 +138,15 @@ interface ActiveEntry {
   propsSignal?: AbortSignal
 }
 
-// 同页可信代码必须先完成最终卸载，才能复用 ESM 单例及 document 记账；iframe 有自己的可销毁边界。
+// 同页应用必须先完成最终卸载，才能开始下一个 qiankun 生命周期。
 let trustedDisposalBarrier: Promise<void> = Promise.resolve()
 
 function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryInfo }) {
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const navigateRef = React.useRef(navigate)
   navigateRef.current = navigate
-  const { pathname: routePath } = useLocation()
+  const { pathname, search = "", hash = "" } = useLocation()
+  const routePath = `${pathname}${search}${hash}`
   const profile = useAuthStore((s) => s.profile)
   const sessionId = useAuthStore((s) => s.sessionId)
   const contextEpoch = useAuthStore((s) => s.contextEpoch)
@@ -165,7 +158,6 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   const profileEntrySignature = microEntrySignature(discovery)
   const observedProfileEntry = React.useRef(profileEntrySignature)
   const basePath = `/micro/${appCode}`
-  const isTrusted = discovery.runtimeMode === "TRUSTED"
 
   /* ---------- 授权上下文与生命周期 ---------- */
   const containerRef = React.useRef<HTMLDivElement>(null)
@@ -175,7 +167,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   const lastPushSigRef = React.useRef<string | null>(null)
   const lastDeliveryRef = React.useRef<ReturnType<typeof microPropsDelivery> | null>(null)
   const aliveRef = React.useRef(true)
-  const faultRef = React.useRef<MicroRuntimeFault | null>(isTrusted ? trustedMicroRuntimeDomain.fault : null)
+  const faultRef = React.useRef<MicroRuntimeFault | null>(trustedMicroRuntimeDomain.fault)
   const [runtimeFault, setRuntimeFault] = React.useState<MicroRuntimeFault | null>(faultRef.current)
   const [snapshot, setSnapshot] = React.useState<MicroContextSnapshot | null>(null)
   const snapshotRef = React.useRef(snapshot)
@@ -186,6 +178,10 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   entryInfoRef.current = entryInfo
   const routeRef = React.useRef(routePath)
   routeRef.current = routePath
+  // Menu grants authorize the pathname. Query and fragment are application
+  // state, delivered intact without changing the route's permission identity.
+  const pathnameRef = React.useRef(pathname)
+  pathnameRef.current = pathname
   const [status, setStatus] = React.useState<MicroStatus>(faultRef.current ? "error" : "loading")
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = React.useState(0)
@@ -211,12 +207,13 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
 
   const disposeEntry = React.useCallback((entry: ActiveEntry) => {
     entry.controller.abort()
-    entry.node.remove()
+    // Revoke interaction immediately, but keep qiankun's container available
+    // until its unmount lifecycle and sandbox cleanup have finished.
+    entry.node.hidden = true
+    entry.node.inert = true
     // Session faults carry fixed diagnostics; never log arbitrary lifecycle error objects.
-    const disposal = entry.session.stop().catch(() => {})
-    if (entry.runtimeMode === "TRUSTED") {
-      trustedDisposalBarrier = Promise.all([trustedDisposalBarrier, disposal]).then(() => {})
-    }
+    const disposal = entry.session.stop().catch(() => {}).finally(() => entry.node.remove())
+    trustedDisposalBarrier = Promise.all([trustedDisposalBarrier, disposal]).then(() => {})
     return disposal
   }, [])
 
@@ -242,11 +239,10 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   }, [disposeEntry])
 
   React.useEffect(() => {
-    if (!isTrusted) return
     const unsubscribe = trustedMicroRuntimeDomain.subscribe(latchTrustedFault)
     if (trustedMicroRuntimeDomain.fault) latchTrustedFault(trustedMicroRuntimeDomain.fault)
     return unsubscribe
-  }, [isTrusted, latchTrustedFault])
+  }, [latchTrustedFault])
 
   const buildProps = React.useCallback((path: string): MicroProps => {
     const value = snapshotRef.current
@@ -262,7 +258,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     const signal = active.propsSignal!
     const context = value.context
     assertMicroEntrySnapshot(active.entry, context)
-    if (!microRouteAccess(context.menus, appCode, path).allowed) {
+    if (!microRouteAccess(context.menus, appCode, pathnameRef.current).allowed) {
       throw new ApiError("当前组织未授权访问此应用菜单", "FORBIDDEN", 403)
     }
     return {
@@ -305,7 +301,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     // Bind issuance to the identity that rendered this zone. Token-only
     // rotation uses the latest pair without disposing the mounted application.
     const sessionFence = { sessionId, version: useAuthStore.getState().sessionVersion }
-    if (isTrusted && trustedMicroRuntimeDomain.fault) {
+    if (trustedMicroRuntimeDomain.fault) {
       latchTrustedFault(trustedMicroRuntimeDomain.fault)
       return
     }
@@ -318,14 +314,13 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     setSnapshot(null)
     setStatus("loading")
     setErrorMessage(null)
-    try { assertBrowserCapabilities("host") }
+    try { assertQiankunCapabilities() }
     catch (error) {
       const message = error instanceof Error ? error.message : "Required browser capabilities are unavailable"
       setStatus("error")
       setErrorMessage(message)
       return
     }
-    let modeRefreshRequested = false
     const runtime = new MicroContextRuntime({
       appCode,
       issue: (signal) => {
@@ -346,22 +341,14 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
             context.organization.id !== profile?.organization.id) {
           throw new Error("应用授权上下文与平台会话不一致")
         }
-        const currentEntry = resolveMicroEntry(context, discoveryRef.current)
-        if (currentEntry.runtimeMode !== discovery.runtimeMode) {
-          // 签发新 token 后必须重新核对信任边界，不能用缓存 profile 决定宿主执行。
-          if (!modeRefreshRequested) {
-            modeRefreshRequested = true
-            void queryClient.invalidateQueries({ queryKey: ["profile"] })
-          }
-          throw Object.assign(new Error("应用运行模式已变更，请确认最新配置后重试"), { code: "MODE_MISMATCH" })
-        }
-        if (!microRouteAccess(context.menus, appCode, routeRef.current).allowed) {
+        resolveMicroEntry(context, discoveryRef.current)
+        if (!microRouteAccess(context.menus, appCode, pathnameRef.current).allowed) {
           throw new ApiError("当前组织未授权访问此应用菜单", "FORBIDDEN", 403)
         }
         return context
       },
       onChange: (value) => {
-        if (faultRef.current || (isTrusted && trustedMicroRuntimeDomain.fault)) {
+        if (faultRef.current || trustedMicroRuntimeDomain.fault) {
           runtimeRef.current?.stop()
           return
         }
@@ -382,11 +369,11 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
         if (!value) setStatus("loading")
       },
       onRecovery: (state) => {
-        if (faultRef.current || (isTrusted && trustedMicroRuntimeDomain.fault)) return
+        if (faultRef.current || trustedMicroRuntimeDomain.fault) return
         if (state) setStatus("loading")
       },
       onError: (error) => {
-        if (faultRef.current || (isTrusted && trustedMicroRuntimeDomain.fault)) return
+        if (faultRef.current || trustedMicroRuntimeDomain.fault) return
         const message = error instanceof Error ? error.message : "应用授权上下文获取失败"
         setStatus("error")
         setErrorMessage(message)
@@ -403,26 +390,26 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
       if (runtimeRef.current === runtime) runtimeRef.current = null
     }
   }, [appCode, sessionId, contextEpoch, reloadNonce, profile?.user.id, profile?.tenant.id,
-    profile?.organization.id, discovery.id, discovery.runtimeMode, queryClient, isTrusted, latchTrustedFault, disposeEntry])
+    profile?.organization.id, discovery.id, latchTrustedFault, disposeEntry])
 
   React.useEffect(() => {
     if (observedProfileEntry.current === profileEntrySignature) return
     observedProfileEntry.current = profileEntrySignature
-    if (!faultRef.current && !(isTrusted && trustedMicroRuntimeDomain.fault)) void runtimeRef.current?.refresh()
-  }, [profileEntrySignature, isTrusted])
+    if (!faultRef.current && !trustedMicroRuntimeDomain.fault) void runtimeRef.current?.refresh()
+  }, [profileEntrySignature])
 
   const hasSnapshot = !faultRef.current && !!snapshot && !snapshot.signal.aborted &&
     Date.parse(snapshot.context.expiresAt) > Date.now() && Date.parse(snapshot.tokenExpiresAt) > Date.now() &&
-    microRouteAccess(snapshot.context.menus, appCode, routePath).allowed
+    microRouteAccess(snapshot.context.menus, appCode, pathname).allowed
   React.useEffect(() => {
-    if (snapshot && !snapshot.signal.aborted && !microRouteAccess(snapshot.context.menus, appCode, routePath).allowed) {
+    if (snapshot && !snapshot.signal.aborted && !microRouteAccess(snapshot.context.menus, appCode, pathname).allowed) {
       void runtimeRef.current?.refresh()
     }
-  }, [snapshot, appCode, routePath])
+  }, [snapshot, appCode, pathname])
   React.useEffect(() => {
     if (!hasSnapshot || faultRef.current) return
     const entryInfo = entryInfoRef.current
-    if (isTrusted && trustedMicroRuntimeDomain.fault) {
+    if (trustedMicroRuntimeDomain.fault) {
       latchTrustedFault(trustedMicroRuntimeDomain.fault)
       return
     }
@@ -431,17 +418,15 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
     const sequence = ++seqRef.current
     const controller = new AbortController()
     const node = document.createElement("div")
-    container.replaceChildren(node)
     const titleSnapshot = document.title
-    const previous = isTrusted ? trustedDisposalBarrier : null
-    let sandbox: MicroSandbox | null = null
+    const previous = trustedDisposalBarrier
     const session = new MicroLifecycleSession(
-      () => { sandbox?.teardown(); node.remove() },
-      (callback) => sandbox ? sandbox.run(callback) : callback(),
-      isTrusted ? { domain: trustedMicroRuntimeDomain, signal: controller.signal,
-        abort: () => controller.abort(), onFault: latchTrustedFault } : undefined,
+      () => { node.remove() },
+      undefined,
+      { domain: trustedMicroRuntimeDomain, signal: controller.signal,
+        abort: () => controller.abort(), onFault: latchTrustedFault },
     )
-    const active: ActiveEntry = { entry: entryInfo, runtimeMode: entryInfo.runtimeMode, sandbox: null, session, controller, node }
+    const active: ActiveEntry = { entry: entryInfo, session, controller, node }
     activeRef.current = active
     lastPushSigRef.current = null
     setStatus("loading")
@@ -457,74 +442,27 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
       const current = snapshotRef.current
       if (!current || current.signal.aborted) throw new DOMException("应用授权上下文不可用", "AbortError")
       assertMicroEntrySnapshot(active.entry, current.context)
-      if (!microRouteAccess(current.context.menus, appCode, routeRef.current).allowed) {
+      if (!microRouteAccess(current.context.menus, appCode, pathnameRef.current).allowed) {
         throw new ApiError("当前组织未授权访问此应用菜单", "FORBIDDEN", 403)
       }
-    }
-    const handleIframeFailure = (error: Error) => {
-      if (stale() || activeRef.current !== active) return
-      reportRuntimeFailure("LIFECYCLE_FAILED", "update")
-      runtimeRef.current?.stop()
-      setStatus("error")
-      setErrorMessage(error.message)
-      void disposeEntry(active)
     }
     let mountedProps: MicroProps | null = null
 
     void (async () => {
-      if (isTrusted) {
-        trustedMicroRuntimeDomain.assertHealthy()
-        // Wait outside the domain operation: final unmount also needs that operation queue.
-        await previous
-        trustedMicroRuntimeDomain.assertHealthy()
-      }
+      trustedMicroRuntimeDomain.assertHealthy()
+      // Wait outside the domain operation: final unmount also needs that operation queue.
+      await previous
+      trustedMicroRuntimeDomain.assertHealthy()
       check()
+      // A new trusted application must not detach the previous container while
+      // that application's asynchronous unmount is still using it.
+      container.replaceChildren(node)
       return session.mount(async () => {
         check()
-        assertBrowserCapabilities("host")
-        if (!isTrusted) {
-          if (entryInfo.entryType !== "HTML") throw new Error("隔离 iframe 应用需要 HTML 入口，请联系平台管理员配置")
-          return createIframeLifecycle({ entryUrl: entryInfo.entryUrl, appCode, signal: controller.signal,
-            onError: handleIframeFailure,
-            timing: (stage, durationMs) => {
-              const value = snapshotRef.current
-              if (!value || value.signal.aborted || controller.signal.aborted) return
-              const application = appCode === "work-orders" || appCode === "stores" ? appCode : "other"
-                performance.clearMeasures(`saas.micro.${stage}`)
-              performance.measure(`saas.micro.${stage}`, { start: Math.max(0, performance.now() - durationMs), duration: durationMs })
-              window.dispatchEvent(new CustomEvent("saas:micro-timing", { detail: { application, stage, durationMs } }))
-              void fetch(`/api/apps/${encodeURIComponent(appCode)}/runtime-events`, {
-                method: "POST", credentials: "omit", keepalive: true,
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${value.token}` },
-                body: JSON.stringify({ kind: "TIMING", stage, duration_ms: durationMs }), signal: AbortSignal.timeout(3000),
-              }).catch(() => {})
-            } })
-        }
+        assertQiankunCapabilities()
         trustedMicroRuntimeDomain.assertHealthy()
-        if (entryInfo.entryType === "HTML") {
-          sandbox = new MicroSandbox(appCode)
-          active.sandbox = sandbox
-          const entry = await loadHtmlEntry(entryInfo.entryUrl, { signal: controller.signal,
-            beforeScript: () => sandbox!.beginScriptScope() })
-          check()
-          node.innerHTML = entry.templateProcessed
-          await entry.execScripts(sandbox.proxy)
-          check()
-          const lifecycle = (sandbox.proxy as Record<string, unknown>)[MICRO_APP_GLOBAL] as MicroLifecycle | undefined
-          if (!lifecycle || typeof lifecycle.mount !== "function" || typeof lifecycle.unmount !== "function") {
-            throw new Error("子应用缺少 mount/unmount 生命周期")
-          }
-          return lifecycle
-        }
-        // Code-bundled ESM shares the host's React and UI module instances.
-        const mod = (!entryInfo.entryVersionId
-          ? await loadHostEsm(entryInfo.entryUrl)
-          : await import(/* @vite-ignore */ entryInfo.entryUrl)) as MicroEsmModule
-        check()
-        const lifecycle = mod.__MICRO_APP__ ??
-          (mod.mount && mod.unmount ? { name: entryInfo.name, mount: mod.mount, unmount: mod.unmount, update: mod.update } : null)
-        if (!lifecycle) throw new Error("ESM 模块缺少 mount/unmount 生命周期")
-        return lifecycle
+        return createQiankunLifecycle({ entryUrl: entryInfo.entryUrl, appCode,
+          signal: controller.signal, check })
       }, node, () => {
         const props = propsBuilderRef.current(routeRef.current)
         mountedProps = props
@@ -533,35 +471,34 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
         return props
       })
     })().then(() => {
-      if (stale() || (isTrusted && trustedMicroRuntimeDomain.fault)) return
+      if (stale() || trustedMicroRuntimeDomain.fault) return
       try { check() } catch { return }
       setStatus("mounted")
     }).catch((error) => {
-      if (isTrusted && isMicroRuntimeFault(error)) { latchTrustedFault(error); return }
+      if (isMicroRuntimeFault(error)) { latchTrustedFault(error); return }
       if (stale()) return
       if (error instanceof Error && error.name === "AbortError" &&
           (!mountedProps || mountedProps.signal.aborted)) {
-        // 续期可能取消初次握手；用最新有效上下文重建实例。
+        // 续期可能取消初次加载；用最新有效上下文重建实例。
         setMountNonce((value) => value + 1)
         return
       }
-      if (entryInfo.runtimeMode === "TRUSTED" && entryInfo.entryType === "HTML") markEntryFailed(entryInfo.entryUrl)
       reportRuntimeFailure("LOAD_FAILED", "mount")
       runtimeRef.current?.stop()
       setStatus("error")
-      setErrorMessage(isTrusted ? "可信应用加载或挂载失败，请重试" : error instanceof Error ? error.message : String(error))
+      setErrorMessage("可信应用加载或挂载失败，请重试")
       void disposeEntry(active)
     })
 
     return () => {
-      seqRef.current++
+      seqRef.current = sequence + 1
       if (activeRef.current === active) activeRef.current = null
       void disposeEntry(active)
       if (document.title !== titleSnapshot) document.title = titleSnapshot
     }
   }, [hasSnapshot, appCode, entryInfo.runtimeMode, entryInfo.entryType, entryInfo.entryUrl,
     entryInfo.entryVersionId, entryInfo.deploymentVersion, reloadNonce, mountNonce, disposeEntry,
-    reportRuntimeFailure, isTrusted, latchTrustedFault])
+    reportRuntimeFailure, latchTrustedFault])
 
   React.useEffect(() => {
     if (status !== "mounted" || !hasSnapshot) return
@@ -582,20 +519,20 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
       return
     }
     void active.session.update(props).catch((error) => {
-      if (active.runtimeMode === "TRUSTED" && isMicroRuntimeFault(error)) { latchTrustedFault(error); return }
+      if (isMicroRuntimeFault(error)) { latchTrustedFault(error); return }
       if (faultRef.current) return
       if (active.controller.signal.aborted || (props.signal.aborted && error instanceof Error && error.name === "AbortError")) return
       reportRuntimeFailure("LIFECYCLE_FAILED", "update")
       runtimeRef.current?.stop()
       setStatus("error")
-      setErrorMessage(active.runtimeMode === "TRUSTED" ? "可信应用运行时更新失败，请重试" : error instanceof Error ? error.message : String(error))
+      setErrorMessage("可信应用运行时更新失败，请重试")
       void disposeEntry(active)
     })
   }, [snapshot, routePath, resolvedTheme, status, buildProps, hasSnapshot, disposeEntry, reportRuntimeFailure, latchTrustedFault])
 
-  const fault = runtimeFault ?? (isTrusted ? trustedMicroRuntimeDomain.fault : null)
+  const fault = runtimeFault ?? trustedMicroRuntimeDomain.fault
   const handleReload = () => {
-    if (isTrusted && trustedMicroRuntimeDomain.fault) {
+    if (trustedMicroRuntimeDomain.fault) {
       latchTrustedFault(trustedMicroRuntimeDomain.fault)
       return
     }
@@ -642,7 +579,7 @@ function TrustedRuntimeFaultCard({ fault, hasRuntimeToken }: { fault: MicroRunti
         <AlertTitle className="text-sm font-semibold">可信应用运行故障，需要重新加载宿主</AlertTitle>
         <AlertDescription className="space-y-2 text-xs leading-relaxed">
           <p>{stages[fault.stage]}未能安全完成，当前授权与挂载内容已停用。</p>
-          <p>本页暂停运行其他可信应用。可以继续使用宿主菜单和隔离 iframe 应用；恢复可信应用需要重新加载整个宿主页面。</p>
+          <p>本页暂停运行微应用。可以继续使用平台菜单；恢复微应用需要重新加载整个宿主页面。</p>
         </AlertDescription>
         <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
           <RotateCw className="size-3.5" />

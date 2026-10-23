@@ -1,6 +1,6 @@
-import type { AppAuthorizationContext, MicroLifecycle, MicroProps } from "./types"
-import { CONTEXT_CONTRACT_VERSION } from "../../../vendor/micro-app-sdk/generated/protocol.mjs"
-import { authorizationContextSignature } from "../../../vendor/micro-app-sdk/releases/1.0.0/index.mjs"
+import type { AppAuthorizationContext, MicroApplicationHandle, MicroProps } from "./types"
+import { CONTEXT_CONTRACT_VERSION } from "../../../vendor/micro-app-sdk/protocol.mjs"
+import { authorizationContextSignature } from "../../../vendor/micro-app-sdk/index.mjs"
 
 export interface MicroContextSnapshot {
   token: string
@@ -309,7 +309,7 @@ export interface MicroLifecycleSessionOptions {
 /** Normal operations remain serial; a trusted timeout permanently prevents domain reuse. */
 export class MicroLifecycleSession {
   private chain: Promise<void> = Promise.resolve()
-  private lifecycle: MicroLifecycle | null = null
+  private lifecycle: MicroApplicationHandle | null = null
   private mounted = false
   private stopped = false
   private disposal: Promise<void> | null = null
@@ -426,7 +426,7 @@ export class MicroLifecycleSession {
     }
   }
 
-  mount(load: () => Promise<MicroLifecycle>, container: HTMLElement, props: MicroProps | (() => MicroProps)): Promise<void> {
+  mount(load: () => Promise<MicroApplicationHandle>, container: HTMLElement, props: MicroProps | (() => MicroProps)): Promise<void> {
     return this.enqueue(async () => {
       if (this.stopped) return
       const lifecycle = await this.stage("load", load)
@@ -494,7 +494,7 @@ export function microPropsDelivery(props: MicroProps) {
   return { authorizationKey: authorizationContextSignature(props), signal: props.signal, routePath: props.routePath }
 }
 
-/** Legacy apps without update may keep their current display; navigation or authorization still remounts. */
+/** Apps without the optional update lifecycle remount for navigation or authorization changes. */
 export function requiresMicroRemount(previous: ReturnType<typeof microPropsDelivery> | null, props: MicroProps): boolean {
   const key = authorizationContextSignature(props)
   return !previous || key === null || key !== previous.authorizationKey || previous.signal !== props.signal ||

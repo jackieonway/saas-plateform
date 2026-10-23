@@ -311,9 +311,9 @@ async fn upload_inner(
     if base_path.trim_end_matches('/') != format!("/micro/{code}") {
         return Err(AppError::bad_request("只有独立微应用可以上传前端压缩包"));
     }
-    if query.entry_type != "HTML" || app_entry_type != "HTML" || runtime_mode != "IFRAME" {
+    if query.entry_type != "HTML" || app_entry_type != "HTML" || runtime_mode != "TRUSTED" {
         return Err(AppError::bad_request(
-            "仅 HTML iframe 微应用支持上传版本包；ESM 随宿主构建发布",
+            "仅 qiankun（HTML + TRUSTED）微应用支持上传版本包",
         ));
     }
     let environment = releases::validate_environment(&query.environment)?;
@@ -390,8 +390,10 @@ async fn register_definition(
 ) -> Result<Json<Value>, AppError> {
     let environment = releases::validate_environment(&body.environment)?;
     let version = releases::validate_version(&body.version)?;
-    if !["HTML", "ESM"].contains(&body.entry_type.as_str()) {
-        return Err(AppError::bad_request("entryType 仅支持 HTML / ESM"));
+    if body.entry_type != "HTML" {
+        return Err(AppError::bad_request(
+            "新发布仅支持 qiankun HTML 入口；历史 ESM 版本只读存档",
+        ));
     }
     if body.resources.len() > 48 {
         return Err(AppError::bad_request("显式 resources 清单最多 48 个资源"));
@@ -432,12 +434,20 @@ async fn register_definition(
     // URL registration and ZIP promotion use the same lock so a URL-only row
     // cannot enter an already bound ZIP version while its artifact is adopted.
     // No filesystem or network work happens inside this short transaction.
-    let current: (String, String) =
-        sqlx::query_as("SELECT entry_type,runtime_mode FROM applications WHERE id=$1 FOR UPDATE")
+    let current: (String, String, String, String) =
+        sqlx::query_as("SELECT entry_type,runtime_mode,code,COALESCE(base_path,'') FROM applications WHERE id=$1 FOR UPDATE")
             .bind(app)
             .fetch_optional(&mut *tx)
             .await?
             .ok_or_else(|| AppError::not_found("应用不存在"))?;
+    if current.0 != "HTML"
+        || current.1 != "TRUSTED"
+        || current.3.trim_end_matches('/') != format!("/micro/{}", current.2)
+    {
+        return Err(AppError::conflict(
+            "请先将独立微应用明确配置为 qiankun（HTML + TRUSTED），内置平台页面不支持微应用发布",
+        ));
+    }
     // Cleanup fences new references until the remote engine operation finishes.
     // The application lock serializes this check with cleanup submission.
     let canonical_entry = crate::managed_deployments::canonical_entry(&entry);
@@ -460,11 +470,6 @@ async fn register_definition(
         return Err(AppError::conflict("该版本已绑定静态产物，请上传相同版本包以提升到其他环境"));
     }
     if let Some(artifact) = &artifact {
-        if current != ("HTML".into(), "IFRAME".into()) {
-            return Err(AppError::conflict(
-                "应用入口配置已变化，请确认 HTML iframe 配置后重试",
-            ));
-        }
         sqlx::query("INSERT INTO application_release_artifacts(application_id,version,artifact_digest,manifest) \
             VALUES($1,$2,$3,$4) ON CONFLICT(application_id,version) DO NOTHING")
             .bind(app).bind(&version).bind(&artifact.digest).bind(&artifact.manifest).execute(&mut *tx).await?;
@@ -628,6 +633,13 @@ async fn check_and_save(
     id: Uuid,
 ) -> Result<ReleaseRow, AppError> {
     let mut row = release(state, app, id).await?;
+    let compatible: bool = sqlx::query_scalar("SELECT entry_type='HTML' AND runtime_mode='TRUSTED' AND rtrim(base_path,'/')='/micro/' || code FROM applications WHERE id=$1")
+        .bind(app).fetch_one(&state.pool).await?;
+    if row.entry_type != "HTML" || row.runtime_mode != "TRUSTED" || !compatible {
+        return Err(AppError::conflict(
+            "历史 iframe/ESM 版本只读存档，不能预检、激活或回滚；请重新发布 qiankun HTML 入口",
+        ));
+    }
     crate::artifact_distribution::verify_nodes(state, &row).await?;
     let result = if verify_release_artifact(state, &row).await? {
         releases::preflight(&state.config, &row).await
@@ -641,11 +653,16 @@ async fn check_and_save(
     // Resource/network checks stay outside locks. Persist this observation and
     // its audit atomically, independently of any later deployment-pointer tx.
     let mut tx = state.pool.begin().await?;
-    sqlx::query_scalar::<_, Uuid>("SELECT id FROM applications WHERE id=$1 FOR UPDATE")
+    let still_compatible = sqlx::query_scalar::<_, bool>("SELECT entry_type='HTML' AND runtime_mode='TRUSTED' AND rtrim(base_path,'/')='/micro/' || code FROM applications WHERE id=$1 FOR UPDATE")
         .bind(app)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| AppError::not_found("应用不存在"))?;
+    if !still_compatible {
+        return Err(AppError::conflict(
+            "预检期间应用已改为历史或内置入口，不能更新发布状态",
+        ));
+    }
     let before = release_audit_snapshot(&mut tx, app, id).await?;
     let checked_at: DateTime<Utc> = sqlx::query_scalar(
         "UPDATE application_releases \
@@ -848,6 +865,8 @@ async fn activate_inner(
         )));
     }
     let deployment = current_deployment(&mut tx, app, &row.environment).await?;
+    crate::application_entries::clear_override(&mut tx, &user, &headers, app, &row.environment)
+        .await?;
     let before = before
         .as_ref()
         .map(deployment_audit_summary)
@@ -935,6 +954,7 @@ async fn rollback_inner(
         )));
     }
     let deployment = current_deployment(&mut tx, app, &environment).await?;
+    crate::application_entries::clear_override(&mut tx, &user, &headers, app, &environment).await?;
     let detail = audit::change_detail(
         "application_deployment",
         app,
@@ -960,12 +980,13 @@ async fn lock_application(
     entry_type: &str,
     checked_runtime_mode: &str,
 ) -> Result<(), AppError> {
-    let row: Option<(String, String)> =
-        sqlx::query_as("SELECT status,runtime_mode FROM applications WHERE id=$1 FOR UPDATE")
+    let row: Option<(String, String, String, String, String)> =
+        sqlx::query_as("SELECT status,runtime_mode,entry_type,code,COALESCE(base_path,'') FROM applications WHERE id=$1 FOR UPDATE")
             .bind(app)
             .fetch_optional(&mut **tx)
             .await?;
-    let (status, runtime_mode) = row.ok_or_else(|| AppError::not_found("应用不存在"))?;
+    let (status, runtime_mode, app_entry_type, code, base_path) =
+        row.ok_or_else(|| AppError::not_found("应用不存在"))?;
     if status != "ENABLED" {
         return Err(AppError::conflict("停用应用不能启用或回滚部署"));
     }
@@ -974,9 +995,13 @@ async fn lock_application(
             "预检期间应用运行模式发生变化，请重新执行预检和部署",
         ));
     }
-    if entry_type == "ESM" && runtime_mode != "TRUSTED" {
+    if entry_type != "HTML"
+        || app_entry_type != "HTML"
+        || runtime_mode != "TRUSTED"
+        || base_path.trim_end_matches('/') != format!("/micro/{code}")
+    {
         return Err(AppError::conflict(
-            "IFRAME 应用仅允许 HTML 入口；ESM 必须由平台管理员明确标记为 TRUSTED",
+            "仅 qiankun（HTML + TRUSTED）独立微应用可激活或回滚；历史 iframe/ESM 版本只读存档",
         ));
     }
     Ok(())

@@ -1,10 +1,32 @@
 # 放入宿主机 /etc/nginx/conf.d/saas.conf，由 nginx.conf 的 http 块包含。
 # 全局替换 saas.example.com 和证书路径。上游端口与 Compose 保持一致。
 # 工单、门店、通知均为可选；未部署时将对应 location 改为 return 404。
+# OAuth 演练默认关闭；启用方法见 ../existing-nginx.md 的可选 OAuth 演练。
 
 map $http_upgrade $saas_connection_upgrade {
     default upgrade;
     ''      '';
+}
+
+# 仅允许两个名称准确匹配的演练会话，禁止把平台会话转给独立 API。
+map $http_cookie $oauth_playground_cookie {
+    default "";
+    "~(?:^|;[[:space:]]*)oauth_playground=(?<oauth_playground_cookie_value>[^;]*)" "oauth_playground=$oauth_playground_cookie_value";
+}
+map $http_cookie $oauth_playground_host_cookie {
+    default "";
+    "~(?:^|;[[:space:]]*)__Host-oauth_playground=(?<oauth_pg_host_cookie_value>[^;]*)" "__Host-oauth_playground=$oauth_pg_host_cookie_value";
+}
+map "$oauth_playground_cookie|$oauth_playground_host_cookie" $oauth_playground_cookies {
+    default "$oauth_playground_cookie; $oauth_playground_host_cookie";
+    "|" "";
+    "~^[|]" $oauth_playground_host_cookie;
+    "~[|]$" $oauth_playground_cookie;
+}
+map $request_method $oauth_playground_static_allow {
+    default "GET, HEAD";
+    GET "";
+    HEAD "";
 }
 
 upstream saas_platform_api {
@@ -55,7 +77,7 @@ server {
     proxy_read_timeout 65s;
 
     # 私有指标和内部事件不得通过公共入口开放。
-    location ~ ^/(?:internal|metrics|api/internal|work-orders-api/(?:internal|metrics)|stores-api/(?:internal|metrics)|socket\.io/metrics|notification-api/metrics)(?:/|$) {
+    location ~ ^/(?:internal|metrics|api/internal|work-orders-api/(?:internal|metrics)|stores-api/(?:internal|metrics)|oauth-playground-api/(?:internal|metrics)|socket\.io/metrics|notification-api/metrics)(?:/|$) {
         return 404;
     }
 
@@ -64,6 +86,22 @@ server {
     location /api/ { proxy_pass http://saas_platform_api; }
     location = /oauth { proxy_pass http://saas_platform_api; }
     location /oauth/ { proxy_pass http://saas_platform_api; }
+
+    # 可选 OAuth 演练默认关闭，独立命名空间不能落入平台 /oauth 或 SPA。
+    # 部署后按 existing-nginx.md 的生成步骤替换这五条，不放宽上面的私有路径门禁。
+    location = /oauth-playground-api { return 404; }
+    location ^~ /oauth-playground-api/ { return 404; }
+    location = /callback { return 404; }
+    location = /sub/oauth-playground { return 404; }
+    location ^~ /sub/oauth-playground/ { return 404; }
+
+    # URL 微应用静态代理；保留完整路径，/micro/* 仍交给平台 SPA。
+    location = /micro-proxy { return 404; }
+    location ^~ /micro-proxy/ {
+        proxy_set_header Upgrade "";
+        proxy_set_header Connection "";
+        proxy_pass http://saas_platform_api;
+    }
 
     # 可选业务 API：保持原请求前缀，不改写为根路径。
     location = /work-orders-api { proxy_pass http://saas_work_orders_api; }
@@ -88,6 +126,17 @@ server {
     location = /sub-apps { return 404; }
     location /sub-apps/ { return 404; }
 
+    # qiankun 仅执行管理员批准的 HTML/UMD；unsafe-eval 是其宿主脚本加载所需。
+    # 外部资源仍须逐项批准准确来源，不能放宽为 https:、通配符或 unsafe-inline 脚本。
+    # 宿主 CSP 由此入口统一返回，避免叠加上游旧策略阻断 qiankun。
     # SPA 导航与静态 404 由前端镜像内的静态服务处理。
-    location / { proxy_pass http://saas_platform_web; }
+    location / {
+        proxy_pass http://saas_platform_web;
+        proxy_hide_header Content-Security-Policy;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header X-Content-Type-Options;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://saas.example.com wss://saas.example.com; frame-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
 }

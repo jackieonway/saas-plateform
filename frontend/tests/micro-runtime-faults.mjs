@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { Script } from 'node:vm'
 import ts from '../node_modules/typescript/lib/typescript.js'
 import * as runtime from '../src/components/micro/runtime.ts'
@@ -32,7 +31,7 @@ function clock() {
   }
 }
 function props(controller = new AbortController(), epoch = 1) {
-  return { contractVersion: '2.0', sdkVersion: '1.0.0', contextVersion: 'context-' + epoch,
+  return { contractVersion: '2.0', sdkVersion: '2.0.0', contextVersion: 'context-' + epoch,
     contextEpoch: epoch, expiresAt: new Date(Date.now() + 60_000).toISOString(),
     tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(), token: 'application-token',
     signal: controller.signal, appCode: 'probe', basePath: '/micro/probe', routePath: '/micro/probe',
@@ -110,37 +109,16 @@ test('a timed out load cannot late-mount or unmount after it finally supplies a 
   assert.equal(s.faults.length, 1)
 })
 
-test('the real HTML execution promise stays tracked after abort when an exported thenable never settles', async () => {
-  const require = createRequire(import.meta.url), time = clock(), scope = new AbortController(), gate = deferred()
-  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  const browserWindow = { fetch: async () => { throw new Error('No network is used by this test') }, frames: [],
-    location: { origin: 'https://host.test', href: 'https://host.test/' }, setTimeout: time.setTimer, clearTimeout: time.clearTimer }
-  Object.defineProperty(globalThis, 'window', { configurable: true, writable: true, value: browserWindow })
+test('a trusted load thenable remains tracked after abort until its deadline or actual settlement', async () => {
+  const time = clock(), scope = new AbortController(), gate = deferred()
   let assimilated = false
-  const proxy = { pendingThen(resolve, reject) { assimilated = true; gate.promise.then(resolve, reject) } }
-  const script = '<script>Object.defineProperty(window,"__MICRO_APP__",{enumerable:true,configurable:true,value:{name:"thenable",mount(){},unmount(){},then:window.pendingThen}})</script>'
+  const exported = { then(resolve, reject) { assimilated = true; gate.promise.then(resolve, reject) } }
   const s = fixture({ time, signal: scope.signal })
   try {
-    // Keep parsing/network outside this narrow test, but use the actual locked
-    // dependency for evaluation, export discovery and thenable assimilation.
-    const realEntry = require('../node_modules/import-html-entry/lib/index.js')
-    const compiled = ts.transpileModule(readFileSync(new URL('../src/components/micro/loader.ts', import.meta.url), 'utf8'),
-      { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
-    const exports = {}
-    new Script(compiled).runInNewContext({ exports, URL, AbortController, DOMException, fetch: browserWindow.fetch,
-      window: browserWindow, require(name) {
-        assert.equal(name, 'import-html-entry')
-        return { importEntry: async () => ({ template: '<main></main>',
-          execScripts: (target, strictGlobal, options) => realEntry.execScripts(script, [script], target, { ...options, strictGlobal }) }) }
-      } })
     let outcome = 'pending'
-    const loading = s.session.mount(async () => {
-      const entry = await exports.loadHtmlEntry('/thenable-probe', { signal: scope.signal })
-      await entry.execScripts(proxy)
-      return proxy.__MICRO_APP__
-    }, {}, props())
+    const loading = s.session.mount(() => Promise.resolve(exported), {}, props())
     loading.then(() => { outcome = 'resolved' }, () => { outcome = 'rejected' })
-    await flush(); assert.ok(assimilated, 'The real dependency must have begun assimilating the exported thenable.')
+    await flush(); assert.ok(assimilated, 'The real load promise must have begun assimilating the thenable.')
     scope.abort(); await flush()
     assert.equal(outcome, 'pending', 'Abort is not proof that already executing trusted code has settled.')
     await time.advance(10)
@@ -150,8 +128,6 @@ test('the real HTML execution promise stays tracked after abort when an exported
     assert.deepEqual(s.events, ['cleanup'])
   } finally {
     gate.resolve()
-    if (oldWindow) Object.defineProperty(globalThis, 'window', oldWindow)
-    else delete globalThis.window
   }
 })
 
@@ -182,7 +158,7 @@ test('load and mount receive separate execution budgets after their operations a
   await rejected(s.session.stop())
 })
 
-test('a queued or newly requested trusted session cannot bypass poison while an iframe session remains independent', async () => {
+test('queued and newly requested trusted sessions cannot bypass the page fault', async () => {
   const s = fixture(), second = fixture({ time: s.time, domain: s.domain }), gate = deferred()
   const mounting = rejected(s.session.mount(async () => ({ ...s.lifecycle, mount: () => gate.promise }), {}, props()))
   const queued = rejected(second.session.mount(async () => second.lifecycle, {}, props()))
@@ -193,10 +169,6 @@ test('a queued or newly requested trusted session cannot bypass poison while an 
   assert.equal(await rejected(third.session.mount(async () => third.lifecycle, {}, props())), firstFault)
   assert.deepEqual(second.events.filter(Array.isArray), [])
   assert.deepEqual(third.events.filter(Array.isArray), [])
-  const iframeEvents = [], iframe = new runtime.MicroLifecycleSession(() => iframeEvents.push('cleanup'))
-  await iframe.mount(async () => ({ name: 'iframe', mount: () => iframeEvents.push('mount'), unmount: () => iframeEvents.push('unmount') }), {}, props())
-  await iframe.stop()
-  assert.deepEqual(iframeEvents, ['mount', 'unmount', 'cleanup'])
   gate.resolve(); await flush()
   assert.equal(s.domain.fault, firstFault)
   await Promise.all([s, second, third].map(value => rejected(value.session.stop())))

@@ -11,9 +11,10 @@ const symbols = new Proxy({}, { get: (_target, key) => key === '__esModule' ? tr
 const jsx = (type, props, key) => ({ type, props, key })
 
 /** Execute real component callbacks with deterministic hook state and query results. */
-export function componentFixture(relative, names, dependencies = {}) {
+export function componentFixture(relative, names, dependencies = {}, { stableCallbacks = false } = {}) {
   const states = [], refs = [], effectDeps = [], effectCleanups = [], effects = [], mutations = []
-  let stateIndex = 0, refIndex = 0, effectIndex = 0, mutationIndex = 0, dirty = false
+  const callbacks = []
+  let stateIndex = 0, refIndex = 0, effectIndex = 0, mutationIndex = 0, callbackIndex = 0, dirty = false
   const queries = new Map(), queryOptions = new Map()
   const react = {
     useState(initial) {
@@ -25,7 +26,13 @@ export function componentFixture(relative, names, dependencies = {}) {
       }]
     },
     useMemo: callback => callback(),
-    useCallback: callback => callback,
+    useCallback(callback, deps) {
+      if (!stableCallbacks) return callback
+      const slot = callbackIndex++, previous = callbacks[slot]
+      if (!previous || !deps || !previous.deps || deps.length !== previous.deps.length ||
+          deps.some((value, index) => !Object.is(value, previous.deps[index]))) callbacks[slot] = { callback, deps }
+      return callbacks[slot].callback
+    },
     useRef(initial) {
       const slot = refIndex++
       return refs[slot] ??= { current: initial }
@@ -95,7 +102,7 @@ export function componentFixture(relative, names, dependencies = {}) {
     render(name, props = {}, flush = true) {
       let tree
       for (let pass = 0; pass < 10; pass++) {
-        stateIndex = 0; refIndex = 0; effectIndex = 0; mutationIndex = 0; dirty = false
+        stateIndex = 0; refIndex = 0; effectIndex = 0; mutationIndex = 0; callbackIndex = 0; dirty = false
         tree = exports[name](props)
         if (!flush) return tree
         while (effects.length) effects.shift()()

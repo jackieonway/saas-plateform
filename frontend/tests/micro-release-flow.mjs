@@ -12,7 +12,7 @@ const require = createRequire(path.join(root, 'package.json'))
 const ts = require('typescript')
 const jsx = (type, props, key) => ({ type, props, key })
 const symbols = new Proxy({}, { get: (_object, name) => name === '__esModule' ? true : String(name) })
-const app = { id: 'app-a', code: 'sample', name: '示例应用', status: 'ENABLED', entryType: 'HTML', runtimeMode: 'IFRAME' }
+const app = { id: 'app-a', code: 'sample', name: '示例应用', status: 'ENABLED', entryType: 'HTML', runtimeMode: 'TRUSTED' }
 const release = { id: 'release-a', applicationId: app.id, environment: 'development', version: '1.0.0',
   entryType: 'HTML', entryUrl: '/sub-apps/sample/versions/1.0.0/index.html', resources: [],
   validationStatus: 'PASSED', checkedAt: '2026-10-22T00:00:00Z', createdAt: '2026-10-22T00:00:00Z', active: false }
@@ -26,7 +26,7 @@ const byLabel = (tree, label) => elements(tree, item => item.props?.['aria-label
 function fixture(relative = 'ApplicationReleasesPanel.tsx', names = ['ApplicationReleasesPanelContent'], apiOverrides = {}) {
   const state = [], refs = [], dependencies = [], effects = [], forms = [], mutations = [], calls = [], toasts = []
   let stateIndex = 0, refIndex = 0, effectIndex = 0, formIndex = 0, mutationIndex = 0, dirty = false
-  const queries = new Map([['application-releases', success([release])], ['application-deployments', success([])]])
+  const queries = new Map([['application-releases', success([release])], ['application-deployments', success([])], ['application-url-entry', success(null)]])
   const react = {
     useState(initial) {
       const index = stateIndex++
@@ -90,6 +90,8 @@ function fixture(relative = 'ApplicationReleasesPanel.tsx', names = ['Applicatio
     '@/hooks/use-auth-data': { usePermissionsQuery: () => queries.get('permissions') ?? success({ permissions: ['system:distribution:read', 'system:deployment:read'] }) },
     sonner: { toast: { success: (...values) => toasts.push(values), error: (...values) => toasts.push(values) } },
     './ExternalReleaseForm': { ExternalReleaseForm: 'ExternalReleaseForm' },
+    './ApplicationUrlEntryForm': { ApplicationUrlEntryForm: 'ApplicationUrlEntryForm' },
+    './application-setup-policy': { isQiankunApp: app => app.entryType === 'HTML' && app.runtimeMode === 'TRUSTED' },
     './ZipDistributionPanel': { ZipDistributionPanel: 'ZipDistributionPanel' },
     './ManagedDeploymentPanel': { ManagedDeploymentPanel: 'ManagedDeploymentPanel' },
     './external-release-policy': { externalReleaseSchema: {}, externalReleasePayload: (_environment, value) => value },
@@ -138,6 +140,44 @@ test('release source defaults to the archive and renders one selected form at a 
   tree = f.render()
   assert.equal(byLabel(tree, '上传新版本').length, 1)
   assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm').length, 0)
+})
+
+test('a direct URL overrides the displayed deployment while the retained version can be reactivated', () => {
+  const f = fixture()
+  f.queries.set('application-url-entry', success({ applicationId: app.id, environment: 'development',
+    entryUrl: 'http://localhost:3100/', proxyEnabled: true, browserEntryUrl: '/micro-proxy/sample/', updatedAt: '' }))
+  f.queries.set('application-deployments', success([{ ...release, activeReleaseId: release.id }]))
+  const tree = f.render()
+  const current = byLabel(tree, '当前环境部署')[0]
+  assert.match(text(current), /直接地址.*http:\/\/localhost:3100\//)
+  assert.equal(findButton(tree, '激活').props.disabled, false)
+  const direct = elements(tree, item => item.type === 'ApplicationUrlEntryForm')[0]
+  assert.equal(direct.props.ready, true)
+  assert.equal(direct.props.entry.proxyEnabled, true)
+})
+
+test('failed or mismatched direct entry reads cannot make an editable current entry', () => {
+  for (const snapshot of [{ isSuccess: false, isError: true, error: new Error('unavailable') },
+    success({ applicationId: app.id, environment: 'production', entryUrl: 'https://wrong.example/' })]) {
+    const f = fixture()
+    f.queries.set('application-url-entry', snapshot)
+    const tree = f.render()
+    const direct = elements(tree, item => item.type === 'ApplicationUrlEntryForm')[0]
+    assert.equal(direct.props.ready, false)
+    assert.equal(direct.props.entry, null)
+  }
+})
+
+test('saving a direct URL blocks source and environment changes in the enclosing release editor', () => {
+  const f = fixture()
+  let tree = f.render()
+  elements(tree, item => item.type === 'ApplicationUrlEntryForm')[0].props.onBusyChange(true)
+  tree = f.render()
+  assert.equal(findButton(tree, '上传构建包').props.disabled, true)
+  const environment = elements(tree, item => item.type === 'Select')[0]
+  assert.equal(environment.props.disabled, true)
+  environment.props.onValueChange('production')
+  assert.equal(elements(f.render(), item => item.type === 'ApplicationUrlEntryForm')[0].props.environment, 'development')
 })
 
 test('publishing requires the explicit confirmation action before activating a validated release', async () => {

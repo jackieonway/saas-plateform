@@ -197,7 +197,7 @@ impl Fake {
         if path.starts_with("/api/applications/") {
             return Ok(
                 json!({"id":self.manifest.application_id,"code":self.manifest.application_code,"status":"ENABLED",
-                "basePath":self.manifest.application_code.base_path(),"runtimeMode":"IFRAME","entryType":"HTML"}),
+                "basePath":self.manifest.application_code.base_path(),"runtimeMode":"TRUSTED","entryType":"HTML"}),
             );
         }
         if path.starts_with("/api/menus/tree?") {
@@ -432,6 +432,31 @@ fn preflight_rejects_cross_application_menu_or_wrong_direct_membership_without_w
         fake.bad_membership = !corrupt_menu;
         assert_eq!(fake.run().unwrap_err().category(), PRECONDITION);
         assert!(fake.writes().is_empty());
+    }
+}
+
+#[test]
+fn preflight_rejects_legacy_runtime_before_any_grant_write() {
+    for app in [KnownApp::WorkOrders, KnownApp::Stores] {
+        let manifest = validate(manifest_value_for(app)).unwrap();
+        for (runtime, entry) in [("IFRAME", "HTML"), ("SANDBOX", "HTML"), ("TRUSTED", "ESM")] {
+            let mut requests = Vec::new();
+            let error = apply_with(&manifest, &mut |method, path, _| {
+                requests.push((method.to_owned(), path.to_owned()));
+                assert_eq!(method, "GET");
+                assert_eq!(
+                    path,
+                    format!("/api/applications/{}", manifest.application_id)
+                );
+                Ok(
+                    json!({"id":manifest.application_id,"code":app.code(),"status":"ENABLED",
+                    "basePath":app.base_path(),"runtimeMode":runtime,"entryType":entry}),
+                )
+            })
+            .unwrap_err();
+            assert_eq!(error.category(), PRECONDITION);
+            assert_eq!(requests.len(), 1);
+        }
     }
 }
 

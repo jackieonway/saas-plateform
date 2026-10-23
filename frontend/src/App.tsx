@@ -98,7 +98,7 @@ export default function App() {
           <Route path="/hermes/inbox" element={<HermesInboxPage />} />
           <Route path="/hermes/notifications" element={<HermesNotificationsPage />} />
 
-          {/* 微前端容器(MICRO 菜单落地路由): /micro/{appCode}/* 由沙箱加载子应用 */}
+          {/* /micro/{appCode}/* 由 qiankun 加载独立 HTML 应用；内置页面沿用上方 React 路由。 */}
           <Route path="/micro/:appCode/*" element={<MicroAppContainer />} />
 
           <Route path="*" element={<NotFound />} />

@@ -572,7 +572,7 @@ fn platform_fixture(
                 serde_json::from_slice(&bytes).unwrap()
             };
             let response = if first.contains("GET /api/applications ") {
-                json!([{"id":"11111111-1111-4111-8111-111111111111","code":"work-orders","entryType":"HTML","runtimeMode":"IFRAME","basePath":"/micro/work-orders","status":"ENABLED"}])
+                json!([{"id":"11111111-1111-4111-8111-111111111111","code":"work-orders","entryType":"HTML","runtimeMode":"TRUSTED","basePath":"/micro/work-orders","status":"ENABLED"}])
             } else if first.starts_with("POST ") {
                 let mut row = body.clone();
                 row["id"] = json!("22222222-2222-4222-8222-222222222222");

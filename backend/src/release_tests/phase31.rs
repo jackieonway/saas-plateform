@@ -160,24 +160,40 @@ async fn phase31_preview_preserves_database_zip_and_online_urls() -> Result<()> 
 }
 
 async fn old_client(h: &Harness) -> Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let origin = format!("http://{}", listener.local_addr()?);
-    let app = h.app.clone();
-    let server = tokio::spawn(async move { axum::serve(listener, app).await });
-    let output = tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        tokio::process::Command::new("node")
-            .arg("../tests/phase31/old-host.mjs")
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .env("PHASE31_ORIGIN", origin)
-            .env("PHASE31_TOKEN", &h.platform)
-            .env("PHASE31_APP", h.main_app.to_string())
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await;
-    server.abort();
-    let _ = server.await;
+    let (origin, native_server, node_server) =
+        if std::env::var_os("MICRO_PROXY_TEST_NODE").is_some() {
+            let server = node_fixture::start_router(h.app.clone()).await?;
+            (server.origin.clone(), None, Some(server))
+        } else {
+            let listener = TcpListener::bind("127.0.0.1:0").await?;
+            let origin = format!("http://{}", listener.local_addr()?);
+            let app = h.app.clone();
+            let server = tokio::spawn(async move { axum::serve(listener, app).await });
+            (origin, Some(server), None)
+        };
+    let executable = std::env::var_os("MICRO_PROXY_TEST_NODE").unwrap_or_else(|| "node".into());
+    // Exact historical adapter and its provenance live beside this test rather
+    // than in the removed pre-split repository-level tests directory.
+    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/release_tests/fixtures/phase31/old-host.mjs");
+    let mut command = tokio::process::Command::new(executable);
+    command
+        .arg(script)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("PHASE31_ORIGIN", origin)
+        .env("PHASE31_TOKEN", &h.platform)
+        .env("PHASE31_APP", h.main_app.to_string())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    let output = tokio::time::timeout(std::time::Duration::from_secs(30), command.output()).await;
+    if let Some(server) = native_server {
+        server.abort();
+        let _ = server.await;
+    }
+    if let Some(server) = node_server {
+        server.close().await?;
+    }
     let output = output.map_err(|_| anyhow!("old client timeout"))??;
     ensure!(
         output.status.success(),

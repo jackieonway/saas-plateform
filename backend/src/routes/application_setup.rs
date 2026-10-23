@@ -177,7 +177,6 @@ struct Application {
     base_path: String,
     entry_type: String,
     runtime_mode: String,
-    entry_url: String,
     status: String,
 }
 
@@ -189,7 +188,7 @@ async fn application(
     let suffix = if lock { " FOR NO KEY UPDATE" } else { "" };
     sqlx::query_as(&format!(
         "SELECT code,COALESCE(base_path,'') AS base_path,entry_type,runtime_mode, \
-         COALESCE(entry_url,'') AS entry_url,status FROM applications WHERE id=$1{suffix}"
+         status FROM applications WHERE id=$1{suffix}"
     ))
     .bind(id)
     .fetch_optional(&mut **tx)
@@ -199,7 +198,7 @@ async fn application(
 
 /// Read fresh permissions through the same transaction after any lock waits.
 /// A super administrator only bypasses role membership, never tenant/org caps.
-async fn actor_permissions(
+pub(crate) async fn actor_permissions(
     tx: &mut Transaction<'_, Postgres>,
     actor: &CurrentUser,
 ) -> Result<HashSet<String>, AppError> {
@@ -377,21 +376,28 @@ async fn read(
     }
     let app = application(&mut tx, id, false).await?;
     let micro = app.base_path.trim_end_matches('/') == format!("/micro/{}", app.code);
-    let release_required = micro && app.entry_type == "HTML";
+    let (entry_source, proxy_enabled): (String, bool) =
+        sqlx::query_as("SELECT source,proxy_enabled FROM application_effective_entry($1,$2)")
+            .bind(id)
+            .bind(&query.environment)
+            .fetch_one(&mut *tx)
+            .await?;
+    let url_entry_configured = entry_source == "URL";
+    let qiankun = !micro || (app.entry_type == "HTML" && app.runtime_mode == "TRUSTED");
+    let release_required = micro && app.entry_type == "HTML" && !url_entry_configured;
     let deployment: Option<(String, String, String)> = sqlx::query_as(
         "SELECT r.version,r.validation_status,r.entry_type FROM application_deployments d \
          JOIN application_releases r ON r.id=d.active_release_id AND r.application_id=d.application_id AND r.environment=d.environment \
          WHERE d.application_id=$1 AND d.environment=$2",
     ).bind(id).bind(&query.environment).fetch_optional(&mut *tx).await?;
-    let release_validated = if release_required {
+    let release_validated = if !qiankun {
+        false
+    } else if release_required {
         deployment
             .as_ref()
             .is_some_and(|(_, status, kind)| status == "PASSED" && kind == "HTML")
     } else {
-        !micro
-            || (app.entry_type == "ESM"
-                && app.runtime_mode == "TRUSTED"
-                && !app.entry_url.trim().is_empty())
+        url_entry_configured || !micro
     };
     let (menu_count, entry_menu_count): (i64, i64) = sqlx::query_as(&format!(
         "SELECT count(*),count(*) FILTER(WHERE {ENTRY_MENU}) FROM menus m WHERE m.application_id=$1"
@@ -407,7 +413,8 @@ async fn read(
     Ok(Json(
         json!({"applicationId":id,"environment":query.environment,"applicationEnabled":app.status=="ENABLED",
         "entryType":app.entry_type,"runtimeMode":app.runtime_mode,"releaseRequired":release_required,
-        "activeVersion":deployment.map(|value|value.0),"releaseValidated":release_validated,
+        "activeVersion":if url_entry_configured { None } else { deployment.map(|value|value.0) },"releaseValidated":release_validated,
+        "urlEntryConfigured":url_entry_configured,"entrySource":entry_source,"proxyEnabled":proxy_enabled,
         "menuCount":menu_count,"entryMenuCount":entry_menu_count,"canConfigureAccess":can_configure_access,"access":access}),
     ))
 }
