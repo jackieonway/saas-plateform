@@ -315,6 +315,7 @@ fn validate_organization_type(organization_type: &str) -> Result<(), AppError> {
         "COMPANY",
         "SUBSIDIARY",
         "BRANCH",
+        "STORE",
         "PUBLIC_INSTITUTION",
         "GOVERNMENT",
         "OTHER",
@@ -324,7 +325,7 @@ fn validate_organization_type(organization_type: &str) -> Result<(), AppError> {
         Ok(())
     } else {
         Err(AppError::bad_request(
-            "组织类型仅支持公司、子公司、分公司、事业单位、政府或其他",
+            "组织类型仅支持公司、子公司、分公司、门店、事业单位、政府或其他",
         ))
     }
 }
@@ -560,6 +561,7 @@ mod location_contract_tests {
             "COMPANY",
             "SUBSIDIARY",
             "BRANCH",
+            "STORE",
             "PUBLIC_INSTITUTION",
             "GOVERNMENT",
             "OTHER",

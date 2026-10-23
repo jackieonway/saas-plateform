@@ -1,4 +1,5 @@
 mod app_authorization;
+mod app_organizations;
 mod app_token;
 mod application_entries;
 mod artifact_distribution;
@@ -82,6 +83,9 @@ mod organization_subtree_reporting_tests;
 
 #[cfg(test)]
 mod public_contract_tests;
+
+#[cfg(test)]
+mod app_organizations_tests;
 
 #[cfg(test)]
 use bootstrap::normalize_client_ip;

@@ -127,7 +127,7 @@ fn app_selection_is_closed_and_each_release_prefix_belongs_to_the_selected_app()
     );
     let plan = run(args(&["bootstrap", "--app-code", "stores"]), &environment).unwrap();
     assert_eq!(plan["applicationCode"], "stores");
-    assert_eq!(plan["permissions"].as_array().unwrap().len(), 9);
+    assert_eq!(plan["permissions"].as_array().unwrap().len(), 7);
     assert_eq!(
         run(args(&[]), &environment).unwrap()["permissions"]
             .as_array()
@@ -412,7 +412,7 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
         )
         .unwrap();
         assert_eq!(output["created"], json!([]));
-        assert_eq!(output["menuIds"].as_object().unwrap().len(), 11);
+        assert_eq!(output["menuIds"].as_object().unwrap().len(), 9);
         assert!(!output.to_string().contains("CANARY"));
     }
     let requests = handle.join().unwrap();

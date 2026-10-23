@@ -15,13 +15,11 @@ pub(crate) const PERMISSIONS: [&str; 6] = [
     "ticket:export",
     "notification:publish",
 ];
-const STORES_PERMISSIONS: [&str; 9] = [
+const STORES_PERMISSIONS: [&str; 7] = [
     "store:read",
     "store:create",
     "store:update",
     "store-staff:read",
-    "store-staff:assign",
-    "store-staff:unassign",
     "store-daily-report:read",
     "store-daily-report:create",
     "store-daily-report:update",
@@ -91,7 +89,7 @@ const WORK_ORDERS_MENUS: [MenuContract; 7] = [
     menu!("ticket:export"),
     menu!("notification:publish"),
 ];
-const STORES_MENUS: [MenuContract; 11] = [
+const STORES_MENUS: [MenuContract; 9] = [
     menu!("root", "/micro/stores", "", true),
     menu!(
         "store:read",
@@ -112,13 +110,6 @@ const STORES_MENUS: [MenuContract; 11] = [
         "store-staff:read",
         true
     ),
-    menu!(
-        "store-staff:assign",
-        "/micro/stores/staff-assign",
-        "store-staff:assign",
-        true
-    ),
-    menu!("store-staff:unassign"),
     menu!(
         "store-daily-report:read",
         "/micro/stores/reports",

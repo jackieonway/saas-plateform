@@ -69,6 +69,17 @@ pub(crate) struct ApplicationPolicy {
     /// It does not grant directory access to every data-grant capability.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) member_lookups: Vec<MemberLookup>,
+    /// Organization discovery is a separate, explicitly registered purpose.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) organization_lookups: Vec<OrganizationLookup>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct OrganizationLookup {
+    resource: String,
+    action: String,
+    organization_type: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -170,6 +181,21 @@ impl Policy {
             app.member_lookups.sort_unstable_by(|left, right| {
                 (&left.resource, &left.action).cmp(&(&right.resource, &right.action))
             });
+            anyhow::ensure!(
+                app.organization_lookups.len() <= MAX_MEMBER_LOOKUPS,
+                "DATA_GRANT_POLICY permits at most 128 organization lookups per application"
+            );
+            let mut organization_lookups = HashSet::new();
+            for lookup in &app.organization_lookups {
+                anyhow::ensure!(lookup.organization_type == "STORE"
+                    && valid_identifier(&lookup.resource) && valid_identifier(&lookup.action)
+                    && organization_lookups.insert((lookup.resource.as_str(),lookup.action.as_str()))
+                    && app.capabilities.iter().any(|capability| capability.resource == lookup.resource && capability.action == lookup.action),
+                    "DATA_GRANT_POLICY organization lookups require unique same-application capabilities and STORE type");
+            }
+            app.organization_lookups.sort_unstable_by(|left, right| {
+                (&left.resource, &left.action).cmp(&(&right.resource, &right.action))
+            });
         }
         let mut boundaries = HashSet::new();
         for boundary in &policy.management_scopes {
@@ -224,6 +250,29 @@ impl Policy {
             .iter()
             .any(|lookup| lookup.resource == resource && lookup.action == action)
         {
+            return None;
+        }
+        app.capabilities
+            .iter()
+            .find(|capability| capability.resource == resource && capability.action == action)
+    }
+
+    /// Metadata lookup never grants access to a business row or its owner.
+    pub(crate) fn organization_lookup(
+        &self,
+        application: Uuid,
+        resource: &str,
+        action: &str,
+    ) -> Option<&Capability> {
+        let app = self
+            .applications
+            .iter()
+            .find(|app| app.application_id == application)?;
+        if !app.organization_lookups.iter().any(|lookup| {
+            lookup.resource == resource
+                && lookup.action == action
+                && lookup.organization_type == "STORE"
+        }) {
             return None;
         }
         app.capabilities
@@ -299,6 +348,43 @@ mod tests {
             .assignment_members(Uuid::from_u128(1), "ticket", "create")
             .is_none());
         assert_ne!(serde_json::to_string(&parsed).unwrap(), old);
+    }
+
+    #[test]
+    fn organization_lookups_are_independent_strict_and_bound_to_registered_store_purposes() {
+        let mut value = fixture();
+        let original = serde_json::to_string(&parse(&value).unwrap()).unwrap();
+        assert!(!original.contains("organizationLookups"));
+        assert!(parse(&value)
+            .unwrap()
+            .organization_lookup(Uuid::from_u128(1), "ticket", "read")
+            .is_none());
+        value["applications"][0]["organizationLookups"] = json!([]);
+        assert_eq!(
+            serde_json::to_string(&parse(&value).unwrap()).unwrap(),
+            original
+        );
+        let valid = json!({"resource":"ticket","action":"read","organizationType":"STORE"});
+        value["applications"][0]["organizationLookups"] = json!([valid]);
+        assert!(parse(&value)
+            .unwrap()
+            .organization_lookup(Uuid::from_u128(1), "ticket", "read")
+            .is_some());
+        assert!(parse(&value)
+            .unwrap()
+            .assignment_members(Uuid::from_u128(1), "ticket", "read")
+            .is_none());
+        for invalid in [
+            json!([{"resource":"ticket","action":"read"}]),
+            json!([{"resource":"ticket","action":"read","organizationType":"COMPANY"}]),
+            json!([{"resource":"ticket","action":"update","organizationType":"STORE"}]),
+            json!([{"resource":"ticket","action":"read","organizationType":"STORE","tenantId":"anything"}]),
+            json!([valid, valid]),
+            json!(null),
+        ] {
+            value["applications"][0]["organizationLookups"] = invalid;
+            assert!(parse(&value).is_err());
+        }
     }
 
     #[test]

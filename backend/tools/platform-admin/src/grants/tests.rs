@@ -52,6 +52,8 @@ fn closed_apps_reject_cross_app_permissions_pairs_and_menu_keys() {
     assert_eq!(validate(bad).err().unwrap().category(), INVALID);
     for (resource, action) in [
         ("store", "delete"),
+        ("store-staff", "assign"),
+        ("store-staff", "unassign"),
         ("store-staff", "update"),
         ("store-daily-report", "summary"),
         ("store-daily-report", "delete"),
@@ -59,6 +61,14 @@ fn closed_apps_reject_cross_app_permissions_pairs_and_menu_keys() {
         let mut bad = manifest_value_for(KnownApp::Stores);
         bad["targets"][0]["dataGrants"] =
             json!([{"resource":resource,"action":action,"scope":"ORG"}]);
+        assert_eq!(validate(bad).err().unwrap().category(), INVALID);
+    }
+    for retired in ["store-staff:assign", "store-staff:unassign"] {
+        let mut bad = manifest_value_for(KnownApp::Stores);
+        bad["targets"][0]["permissions"] = json!([retired]);
+        assert_eq!(validate(bad).err().unwrap().category(), INVALID);
+        let mut bad = manifest_value_for(KnownApp::Stores);
+        bad["menuIds"][retired] = json!(uuid(500));
         assert_eq!(validate(bad).err().unwrap().category(), INVALID);
     }
 }
@@ -77,12 +87,17 @@ fn stores_read_permission_selects_both_report_menus_without_inventing_an_action(
             manifest.menu_ids["store-daily-report:detail"].clone(),
         ])
     );
-    assert_eq!(manifest.application_code.permissions().len(), 9);
+    assert_eq!(manifest.application_code.permissions().len(), 7);
 }
 
 #[test]
 fn stores_menu_validation_rejects_cross_app_paths_permissions_and_order() {
     let manifest = validate(manifest_value_for(KnownApp::Stores)).unwrap();
+    let report_detail = KnownApp::Stores
+        .menus()
+        .iter()
+        .position(|menu| menu.key == "store-daily-report:detail")
+        .unwrap();
     let mut fake = Fake::new(manifest.clone());
     let response = fake
         .call("GET", "/api/menus/tree?applicationId=fixture", None)
@@ -95,7 +110,7 @@ fn stores_menu_validation_rejects_cross_app_paths_permissions_and_order() {
         ("sortOrder", json!(99)),
     ] {
         let mut bad = response.clone();
-        bad["menus"][8][field] = value;
+        bad["menus"][report_detail][field] = value;
         assert_eq!(
             check_menus(&manifest, &bad["menus"])
                 .unwrap_err()

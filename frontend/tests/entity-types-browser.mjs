@@ -28,7 +28,7 @@ async function waitState(predicate, message, timeout = 12_000) {
 
 const types = {
   tenant: [["PERSONAL", "个人"], ["COMPANY", "公司"], ["PUBLIC_INSTITUTION", "事业单位"], ["GOVERNMENT", "政府"], ["OTHER", "其他"]],
-  organization: [["COMPANY", "公司"], ["SUBSIDIARY", "子公司"], ["BRANCH", "分公司"], ["PUBLIC_INSTITUTION", "事业单位"], ["GOVERNMENT", "政府"], ["OTHER", "其他"]],
+  organization: [["COMPANY", "公司"], ["SUBSIDIARY", "子公司"], ["BRANCH", "分公司"], ["STORE", "门店"], ["PUBLIC_INSTITUTION", "事业单位"], ["GOVERNMENT", "政府"], ["OTHER", "其他"]],
 }
 const tenant = { id: "type-tenant", name: "类型验收租户", code: "type-tenant", tenantType: "GOVERNMENT",
   contactName: "既有联系人", contactPhone: "13800138000", contactEmail: "existing@example.com",
@@ -63,12 +63,13 @@ async function startServer() {
   }, `Vite did not become ready: ${startupOutput}`, 30_000)
 }
 
-async function fixture(kind, legacy = false) {
+async function fixture(kind, legacy = false, organizationType) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } })
   const page = await context.newPage()
   page.setDefaultTimeout(12_000)
   const state = { requests: [], saves: [], errors: [], unexpected: [] }
   const tenantRecord = { ...tenant }, childRecord = { ...childOrganization }
+  if (organizationType) childRecord.organizationType = organizationType
   if (legacy) { delete tenantRecord.tenantType; delete childRecord.organizationType }
   page.on("pageerror", (error) => state.errors.push(error.message))
   await context.addInitScript(() => {
@@ -152,8 +153,8 @@ async function fixture(kind, legacy = false) {
   }
 }
 
-async function withFixture(kind, legacy, run) {
-  const f = await fixture(kind, legacy)
+async function withFixture(kind, legacy, run, organizationType) {
+  const f = await fixture(kind, legacy, organizationType)
   try {
     await run(f)
     assert.deepEqual(f.state.errors, [], "Production pages should have no uncaught browser errors.")
@@ -314,6 +315,25 @@ async function verifyContactAlternatives(kind) {
   console.log(`PASS ${kind}: email-only contact creates credentials; reused account keeps original password`)
 }
 
+async function verifyStoreOrganization() {
+  await withFixture("organization", false, async (f) => {
+    await f.page.getByRole("treeitem").filter({ hasText: childOrganization.name }).click()
+    await f.page.locator("section").getByRole("heading", { name: childOrganization.name, exact: true }).waitFor()
+    await f.page.locator("section").getByText("门店", { exact: true }).waitFor()
+    await openEdit(f)
+    assert.equal((await typeControl(f).innerText()).trim(), "门店", "A persisted store hydrates its organization type.")
+    await f.form.locator('input[name="name"]').fill("门店资料已更新")
+    const payload = await save(f, true)
+    assert.equal(payload.organizationType, "STORE", "Unchanged store type survives an ordinary organization edit.")
+    assert.equal(payload.tenantId, tenant.id)
+    assert.equal(payload.parentId, rootOrganization.id, "Store edits keep the ordinary organization hierarchy.")
+    assert.equal(payload.contactName, childOrganization.contactName)
+    assert.equal(payload.contactPhone, childOrganization.contactPhone)
+    assert.equal(payload.contactEmail, childOrganization.contactEmail)
+  }, "STORE")
+  console.log("PASS organization STORE: persisted store label, edit hydration and save preserve hierarchy and contacts")
+}
+
 async function verifyExplicitInitialization(kind) {
   await withFixture(kind, false, async (f) => {
     const button = (kind === "organization" ? f.page.locator("section") : f.page).getByRole("button", { name: "初始化首位管理员", exact: true })
@@ -440,10 +460,11 @@ try {
     await verifyContactAlternatives(kind)
     await verifyExplicitInitialization(kind)
   }
+  await verifyStoreOrganization()
   await verifyLoginIdentitySelection(false)
   await verifyLoginIdentitySelection(true)
   await verifyLoginIdentitySelection(false, true)
-  console.log("Entity contacts/types/login browser integration passed (25 scenarios); HTTP fixtures do not assert database/backend behavior.")
+  console.log("Entity contacts/types/login browser integration passed (27 scenarios); HTTP fixtures do not assert database/backend behavior.")
 } finally {
   await browser?.close()
   if (vite && vite.exitCode === null) {

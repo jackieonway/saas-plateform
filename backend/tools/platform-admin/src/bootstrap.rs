@@ -482,10 +482,15 @@ mod tests {
         }
         let mut stores = load(KnownApp::Stores).unwrap();
         assert!(validate_definition(&stores, KnownApp::WorkOrders).is_err());
-        stores.menus[8].permission = "store-daily-report:detail".into();
+        let report_detail = stores
+            .menus
+            .iter()
+            .position(|menu| menu.key == "store-daily-report:detail")
+            .unwrap();
+        stores.menus[report_detail].permission = "store-daily-report:detail".into();
         assert!(validate_definition(&stores, KnownApp::Stores).is_err());
         let mut stores = load(KnownApp::Stores).unwrap();
-        stores.menus[8].sort_order = 7;
+        stores.menus[report_detail].sort_order -= 1;
         assert!(validate_definition(&stores, KnownApp::Stores).is_err());
         let mut stores = load(KnownApp::Stores).unwrap();
         stores.oauth_client.client_name = "work-orders-client".into();
@@ -523,6 +528,11 @@ mod tests {
     #[test]
     fn stores_report_menus_share_permission_but_match_independent_paths() {
         let definition = load(KnownApp::Stores).unwrap();
+        let report_detail = definition
+            .menus
+            .iter()
+            .position(|menu| menu.key == "store-daily-report:detail")
+            .unwrap();
         let root = uuid(1);
         let rows = definition.menus.iter().enumerate().map(|(index, menu)| {
             json!({"id":uuid(index as u32 + 2),"applicationId":uuid(40),"parentId":if index == 0 { None } else { Some(&root) },
@@ -542,15 +552,31 @@ mod tests {
             );
         }
         let mut bad = rows.clone();
-        bad[8]["path"] = json!("/micro/work-orders/tickets/:id");
-        bad[8]["applicationId"] = json!(uuid(41));
+        bad[report_detail]["path"] = json!("/micro/work-orders/tickets/:id");
+        bad[report_detail]["applicationId"] = json!(uuid(41));
         assert!(flatten(&json!({"menus":bad}), &uuid(40)).is_err());
         let mut bad = rows.clone();
-        bad[8]["sortOrder"] = json!(7);
-        assert!(existing(&bad, &definition.menus[8], Some(&root), KnownApp::Stores).is_err());
+        bad[report_detail]["sortOrder"] = json!(definition.menus[report_detail].sort_order - 1);
+        assert!(
+            existing(
+                &bad,
+                &definition.menus[report_detail],
+                Some(&root),
+                KnownApp::Stores
+            )
+            .is_err()
+        );
         let mut bad = rows.clone();
-        bad[8]["path"] = json!("/micro/work-orders/tickets/:id");
-        assert!(existing(&bad, &definition.menus[8], Some(&root), KnownApp::Stores).is_err());
+        bad[report_detail]["path"] = json!("/micro/work-orders/tickets/:id");
+        assert!(
+            existing(
+                &bad,
+                &definition.menus[report_detail],
+                Some(&root),
+                KnownApp::Stores
+            )
+            .is_err()
+        );
         let work_orders = load(KnownApp::WorkOrders).unwrap();
         let bad_work = json!({"type":"MENU","parentId":root,"path":"/micro/work-orders/wrong","permission":"ticket:read","visible":false,"linkTarget":"MICRO","linkUrl":""});
         assert!(

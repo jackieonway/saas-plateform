@@ -67,11 +67,17 @@ token=<application-access-token>&resource=ticket&action=read
 
 除平台租户根组织外，即使数据库中配置 `TENANT`，投影也收窄为 `ORG_SUBTREE`。非平台根的 `SELF` 同样携带组织子树作为硬上限。范围名称不是可按大小排序的权限等级，不能根据某范围“更大”推导另一范围已获准。
 
-## 成员分配查询
+## 受控成员查询
 
 `GET /api/apps/{appCode}/members` 和 `GET /api/apps/{appCode}/members/{userId}` 使用应用 Bearer 令牌。必须提供 `resource`、`action`、`organizationId`，且该资源动作还要登记在同一应用的 `memberLookups` 中。普通 capability 不自动开放成员目录。
 
 列表另接受 `page`（1–1000000，默认 1）、`size`（1–50，默认 20）和 `q`（最多 100 字）；单成员校验不接受分页或搜索参数。服务端将数据授权与组织硬边界相交，并检查目标组织、成员和两级应用授权。`SELF` 在成员选择场景仅约束可选组织，不会把被选成员变成业务记录所有者。返回前再次校验授权变化，调用方只能使用接口提供的最小成员信息。
+
+成员目录可用于经登记的联系人选择或只读成员查看。门店使用 `store/create`、`store/update` 校验营业联系人，使用 `store-staff/read` 读取平台门店成员；这些查询不会建立或修改组织成员关系。
+
+## 受控组织查询
+
+平台组织管理维护 STORE 门店身份；应用通过独立用途控制的 `/api/apps/{appCode}/organizations` 与单项端点读取新鲜组织元数据，不复用平台管理树，也不扩充 MicroProps。目录证明不代替业务 SELF owner 校验。完整 DTO、3 秒绝对窗口和总部范围规则见[应用受控组织目录](application-organization-directory.md)。
 
 ## 失败处理与验证
 

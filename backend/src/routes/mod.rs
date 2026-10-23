@@ -1,6 +1,7 @@
 mod app_authorize;
 pub mod app_context;
 pub mod app_members;
+mod app_organizations;
 pub mod application_releases;
 mod application_setup;
 pub(crate) use application_setup::actor_permissions as platform_application_permissions;
@@ -54,6 +55,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(retention::routes())
         .merge(app_context::routes())
         .merge(app_members::routes())
+        .merge(app_organizations::routes())
         .merge(data_grants::routes())
         .merge(menus::routes())
         .merge(maps::routes())

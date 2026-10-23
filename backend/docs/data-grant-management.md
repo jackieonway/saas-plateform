@@ -35,9 +35,11 @@
 
 两个顶层数组都必须存在；未知字段、重复应用、重复资源动作、重复 scope、重复租户组织边界和空 UUID 会被拒绝。资源及动作匹配 `[a-z][a-z0-9_-]{0,99}`。scope 只接受 `SELF`、`ORG`、`ORG_SUBTREE`、`TENANT`，没有隐含大小顺序。
 
-`capabilities` 还必须与目标应用当前有效、启用的菜单权限登记相交；只在环境变量写一个资源动作不能绕过应用登记。`memberLookups` 可省略，默认不开放成员分配用途；它只能引用同一应用已登记的 capability，具体接口见[应用授权契约](application-authorization-contract.md)。
+`capabilities` 还必须与目标应用当前有效、启用的菜单权限登记相交；只在环境变量写一个资源动作不能绕过应用登记。`memberLookups` 可省略，默认不开放受控成员目录；它只能引用同一应用已登记的 capability，用于联系人选择或只读成员查看，具体接口见[应用授权契约](application-authorization-contract.md)。
 
 配置上限为 4 MiB、64 个应用、每应用 128 个 capability 和 128 个 member lookup、128 个管理边界。策略在进程启动时解析；修改后需要重启相关平台进程。
+
+`organizationLookups` 独立登记应用的组织目录用途，最多 128 项，每项包含 `resource`、`action`、`organizationType`，当前类型只接受 STORE，并且必须引用同应用 capability。省略时不开放组织目录，不会因已经配置 memberLookups 自动开放；契约见[应用受控组织目录](application-organization-directory.md)。
 
 ## 发现可管理目标
 
