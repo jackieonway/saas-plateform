@@ -1,8 +1,8 @@
 # 员工、客户身份与统一认证中心方案
 
-> 状态：版本 v1.6，2026-10-25。Phase 1～12 已完成成员生命周期、具体凭据证明、准入管理、员工授权／目录／通知／管理 UI 隔离、客户最小资源、同进程认证边界、全局 SSO 会话、标准 OIDC、平台 BFF、独立客户门户与独立认证部署／最小数据库权限，真实结果见[Phase 1](validation/phase-01.md)、[Phase 2](validation/phase-02.md)、[Phase 3](validation/phase-03.md)、[Phase 4](validation/phase-04.md)、[Phase 5](validation/phase-05.md)、[Phase 6](validation/phase-06.md)、[Phase 7](validation/phase-07.md)、[Phase 8](validation/phase-08.md)、[Phase 9](validation/phase-09.md)、[Phase 10](validation/phase-10.md)、[Phase 11](validation/phase-11.md)和[Phase 12](validation/phase-12.md)。当前阶段为 Phase 13 多客户端灰度、恢复与退役验收（IN_PROGRESS），阶段状态和指针以[实施台账](task-ledger.md)为准。创建、SSO、OIDC 与 BFF 开关默认仍关闭；任务自有 development 新库已完成真实安全门禁、独立收缩、receipt 启动及 30 项 HTTP 验收，生产尚未开放。客户门户已通过真实双 RP 验收，独立认证服务已通过 [Phase 12 验收](validation/phase-12.md)，容量、双库身份感知恢复与最终灰度按 Phase 13 执行，预览三库 UUID 专项独立维护。
+> 状态：版本 v1.7，2026-10-25。Phase 1～13 已完成成员生命周期、具体凭据证明、准入管理、员工授权／目录／通知／管理 UI 隔离、客户最小资源、同进程认证边界、全局 SSO 会话、标准 OIDC、平台 BFF、独立客户门户与独立认证部署／最小数据库权限，真实结果见[Phase 1](validation/phase-01.md)、[Phase 2](validation/phase-02.md)、[Phase 3](validation/phase-03.md)、[Phase 4](validation/phase-04.md)、[Phase 5](validation/phase-05.md)、[Phase 6](validation/phase-06.md)、[Phase 7](validation/phase-07.md)、[Phase 8](validation/phase-08.md)、[Phase 9](validation/phase-09.md)、[Phase 10](validation/phase-10.md)、[Phase 11](validation/phase-11.md)和[Phase 12](validation/phase-12.md)。[Phase 13](validation/phase-13.md)多客户端灰度、容量、双库恢复与退役范围验收已完成，当前指针为 DONE；阶段状态和证据以[实施台账](task-ledger.md)为准。创建、SSO、OIDC 与 BFF 开关默认仍关闭；任务自有 development 新库已完成真实安全门禁、独立收缩、receipt 启动及 30 项 HTTP 验收，生产尚未开放。客户门户已通过真实双 RP 验收，独立认证服务已通过 [Phase 12 验收](validation/phase-12.md)，容量、双库身份感知恢复与灰度已按 Phase 13 的任务范围完成；按用户要求分轮复用成功项、只补失败项，不宣称同轮连续35分钟或当前UI重跑全部阶段通过。预览三库 UUID 专项独立维护。
 
-配套执行依据为[实施台账](task-ledger.md)。Phase 1 接口、配置和扩展迁移见[成员生命周期 API](phase-01-api.md)及[写路径审查](phase-01-membership-path-audit.md)；Phase 2 见[凭据绑定](phase-02-credential-binding.md)及[策略管理](phase-02-policy-api.md)。Phase 5 的管理端 proof、选择项、能力开关与缓存规则见[控制台成员证明](phase-05-console-identity.md)。Phase 6 见[客户本人资料](phase-06-customer-profile.md)、[独立收缩／启用](phase-06-rollout.md)及[写入器清单](phase-06-writer-readiness.md)。Phase 7 的端口、同库事务和数据归属见[账号认证边界](phase-07-authentication-boundary.md)及[验收](validation/phase-07.md)。Phase 8～12 的全局会话、OIDC、两客户端和独立认证部署已按各自阶段交付，入口汇总于[文档导航](../README.md)；当前仅 Phase 13 的最终运行与验收仍在进行。现行业务合同仍以[平台架构](../architecture.md)、[OAuth 签发](../oauth-issuance.md)、[应用授权契约](../application-authorization-contract.md)和源码为准。
+配套执行依据为[实施台账](task-ledger.md)。Phase 1 接口、配置和扩展迁移见[成员生命周期 API](phase-01-api.md)及[写路径审查](phase-01-membership-path-audit.md)；Phase 2 见[凭据绑定](phase-02-credential-binding.md)及[策略管理](phase-02-policy-api.md)。Phase 5 的管理端 proof、选择项、能力开关与缓存规则见[控制台成员证明](phase-05-console-identity.md)。Phase 6 见[客户本人资料](phase-06-customer-profile.md)、[独立收缩／启用](phase-06-rollout.md)及[写入器清单](phase-06-writer-readiness.md)。Phase 7 的端口、同库事务和数据归属见[账号认证边界](phase-07-authentication-boundary.md)及[验收](validation/phase-07.md)。Phase 8～12 的全局会话、OIDC、两客户端和独立认证部署已按各自阶段交付，入口汇总于[文档导航](../README.md)；Phase 13 的任务范围最终分轮验收已完成。现行业务合同仍以[平台架构](../architecture.md)、[OAuth 签发](../oauth-issuance.md)、[应用授权契约](../application-authorization-contract.md)和源码为准。
 
 开放问题的具体建议见[新库实施建议](open-question-recommendations.md)。本身份功能使用新库，无历史账号分类、旧 ID 映射或凭据迁入；真实空库迁移、seed 和活动消费者验证见[空库 v7 基线](validation/fresh-v7-baseline.md)。预览库审查与保数据重建见[UUID v7 审查与方案](uuid-v7-audit.md)、[只读聚合证据](uuid-v7-inventory.json)及[UUID 专项台账](uuid-v7-task-ledger.md)。其实际状态与动态指针独立维护，不作为身份新库的历史搬迁前置。
 
@@ -22,7 +22,7 @@ Phase 8 已验收的五个账号认证入口、独立 HTTPS 主机、Cookie／CS
 
 “不增加另外的表”在本方案中指不另建员工、客户身份关系表。SSO 会话、OIDC 一次性凭据、客户端、令牌及可靠撤销等认证基础设施允许按职责增加表，不能把这些不同生命周期的数据都塞进 `memberships`。
 
-已交付 Phase 1～12 的成员与准入扩展、生命周期、精确凭据与撤销、员工授权／目录／通知／管理 UI 隔离、客户最小 DTO、开发库收缩／receipt 启动、认证边界、全局 SSO、标准 OIDC／独立密钥、平台 BFF、独立客户门户和独立身份服务／最小数据库权限。两个新工程均已存在并通过任务自有部署验收；没有执行生产部署。身份路线保留13阶段，当前 Phase 13 实施容量、请求灰度／安全回退、双库身份感知恢复及活动消费者验收。预览库 UUID 保数据专项保持独立范围。
+已交付 Phase 1～12 的成员与准入扩展、生命周期、精确凭据与撤销、员工授权／目录／通知／管理 UI 隔离、客户最小 DTO、开发库收缩／receipt 启动、认证边界、全局 SSO、标准 OIDC／独立密钥、平台 BFF、独立客户门户和独立身份服务／最小数据库权限。两个新工程均已存在并通过任务自有部署验收；没有执行生产部署。身份路线13阶段均已交付，Phase 13 的分轮容量、请求灰度／安全回退、双库身份感知恢复及活动消费者验收见[最终记录](validation/phase-13.md)。预览库 UUID 保数据专项保持独立范围。
 
 ### 1.1 已确定的设计决策
 
@@ -550,7 +550,7 @@ Q6 首轮隔离测试建议为 100 个并发会话，登录／换码／刷新合
 
 ### 12.2 安全发布顺序
 
-[空库 UUID v7 基线](validation/fresh-v7-baseline.md)及 Phase 1～12 的成员隔离、凭据绑定、两客户端与独立认证部署已按[台账](task-ledger.md)及各阶段证据验收。下列是仍适用的发布顺序与环境门禁，不表示这些已交付步骤尚未实施。当前 Phase 13 为 IN_PROGRESS，完整容量、灰度、身份感知恢复及最终聚合尚未验收；任务隔离测试不构成生产开放，UUID 预览保数据专项继续独立执行。
+[空库 UUID v7 基线](validation/fresh-v7-baseline.md)及 Phase 1～12 的成员隔离、凭据绑定、两客户端与独立认证部署已按[台账](task-ledger.md)及各阶段证据验收。下列是仍适用的发布顺序与环境门禁，不表示这些已交付步骤尚未实施。Phase 13 的任务范围容量、灰度、身份感知恢复及分轮聚合已完成；任务隔离测试不构成生产开放，UUID 预览保数据专项继续独立执行。
 
 1. 登记隔离新目标并验收空库 v7 基线；使用明确标注的账号、成员和应用 fixtures，不读取、转换或导入预览库业务数据。历史迁移、固定 SDK 发行字节及 v4 负例保留原义。
 2. 追加成员与准入扩展迁移；新建成员显式类型，先加三元唯一、暂留二元唯一。阶段 1～5 的客户、第二身份及新增生命周期入口仅在隔离环境验证，实际部署开关默认关闭；不做历史成员回填。
@@ -571,7 +571,7 @@ Q6 首轮隔离测试建议为 100 个并发会话，登录／换码／刷新合
 
 ## 13. 验收矩阵
 
-每个阶段应将适用用例实现为与变更相称的单元、数据库、协议或浏览器测试。下表是完整路线验收要求；Phase 1～12 的适用项与实际结果见[文档导航中的阶段验收](../README.md)，各记录只证明自己的环境与范围。Phase 13 仍为 IN_PROGRESS，不能因下表列出了预期结果或早期子流程通过就标为最终验收。
+每个阶段应将适用用例实现为与变更相称的单元、数据库、协议或浏览器测试。下表是完整路线验收要求；Phase 1～12 的适用项与实际结果见[文档导航中的阶段验收](../README.md)，各记录只证明自己的环境与范围。Phase 13 的最终结果见[实际验收](validation/phase-13.md)，下表继续作为后续变更与实际部署的验收要求；分轮通过只证明各自已登记范围。
 
 | 编号 | 场景 | 必须达到的结果 |
 | --- | --- | --- |
@@ -620,9 +620,9 @@ Q6 首轮隔离测试建议为 100 个并发会话，登录／换码／刷新合
 | M2 同进程统一认证 | 7～11 | 认证边界、全局会话、OIDC 完整；员工控制台与独立客户门户作为两个客户端接入 |
 | M3 独立认证部署 | 12～13 | SSO 独立发布、共库权限与迁移归属明确；灰度、撤销、故障与恢复通过 |
 
-Phase 1～12 已交付成员安全基线、全局 SSO、标准 OIDC、两个独立客户端和独立认证服务／最小数据库权限。当前执行入口为 Phase 13 的容量、指定客户端灰度、安全回退、身份感知双库恢复与活动消费者最终验收，状态保持 IN_PROGRESS。Phase 6 已在任务自有 development 新库完成独立收缩和 receipt 启动；客户、同组织第二身份及生命周期开关的生产默认仍关闭，不因任务 fixture 或阶段交付自动开放。
+Phase 1～12 已交付成员安全基线、全局 SSO、标准 OIDC、两个独立客户端和独立认证服务／最小数据库权限。Phase 13 的容量、指定客户端灰度、安全回退、身份感知双库恢复与活动消费者最终验收已按分轮策略完成，台账指针为 DONE。Phase 6 已在任务自有 development 新库完成独立收缩和 receipt 启动；客户、同组织第二身份及生命周期开关的生产默认仍关闭，不因任务 fixture 或阶段交付自动开放。
 
-现有证据包括[空库基线](validation/fresh-v7-baseline.md)、[Phase 1～12 阶段导航](../README.md)、[独立认证验收](validation/phase-12.md)和[当前活动消费者与 SQL 审查](phase13-consumer-audit.md)。[Phase 13 验收记录](validation/phase-13.md)继续登记实际命令、环境、原始失败、通过／未运行与限制，完整最终结果尚待取得。预览 UUID 专项不接管本身份新库，其进度仍以独立台账为准；真实客户业务、生产域名和运维承诺按实际部署确定。
+现有证据包括[空库基线](validation/fresh-v7-baseline.md)、[Phase 1～12 阶段导航](../README.md)、[独立认证验收](validation/phase-12.md)和[当前活动消费者与 SQL 审查](phase13-consumer-audit.md)。[Phase 13 验收记录](validation/phase-13.md)继续登记实际命令、环境、原始失败、通过／未运行与限制，最终分轮聚合、门户两次只读核对修复和私有材料清理均已记录。预览 UUID 专项不接管本身份新库，其进度仍以独立台账为准；真实客户业务、生产域名和运维承诺按实际部署确定。
 
 ## 15. 开放问题的范围结论与建议
 
@@ -642,7 +642,7 @@ Q1／Q11 已由用户“新库、新功能、旧数据不涉及”的说明解�
 | Q10 | 同账号同组织同时作为员工和客户（已确认） | 2026-10-24 用户要求纳入：采用两条独立成员关系、三元唯一、单请求单 context；不再作为实施待确认项 |
 | Q11 | UUID 旧库重建／映射是否是本身份前置 | 已解决：本身份新库不涉及旧 ID／外部旧主体映射、凭据迁移或保数据导入，改为真实空库 v7 基线验收；预览三库专项独立保留原范围与状态 |
 
-Phase 1～12 已按各自证据验收，Phase 13 最终验收仍在进行；建议中的生产域名、容量与恢复承诺不因此视为已落实。已有任务恢复子演练记录对应环境的实测 RPO／RTO 及边界，但不能替代本阶段完整链路、生产目标或持续 WAL／PITR；24h 备份年龄门槛本身也不证明恢复目标达成。恢复覆盖账号、成员、认证与策略版本、客户端配置、签名密钥和必要库外材料，密钥分别托管；恢复后推进不会随备份倒退的失效边界，拒绝旧会话后再开放流量。运维、认证、平台与发布职责分别登记，实际生产人员在部署前确定。
+Phase 1～13 已按各自证据与任务范围验收；建议中的生产域名、容量与恢复承诺不因此视为已落实。Phase 13 双库／库外材料完整恢复实测 RPO 5.805 秒、RTO 21.443394 秒，包含旧凭据拒绝和新双 RP 业务；该本地任务结果不能替代生产目标或持续 WAL／PITR；24h 备份年龄门槛本身也不证明恢复目标达成。恢复覆盖账号、成员、认证与策略版本、客户端配置、签名密钥和必要库外材料，密钥分别托管；恢复后推进不会随备份倒退的失效边界，拒绝旧会话后再开放流量。运维、认证、平台与发布职责分别登记，实际生产人员在部署前确定。
 
 ## 16. 设计变更记录
 
