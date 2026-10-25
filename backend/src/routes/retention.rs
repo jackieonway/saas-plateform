@@ -1,4 +1,5 @@
 //! Static-release impact preview; deliberately no apply/delete route.
+use crate::util::uuid7::ParseUuid7;
 use crate::{
     error::AppError,
     extractors::{CurrentUser, RequirePermission},
@@ -56,7 +57,7 @@ async fn preview(
         .await?;
     state.require_platform(&user).await?;
     let app: Uuid = raw
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID格式错误"))?;
     let age = options.minimum_age_days.unwrap_or(30);
     let keep = options.keep_latest.unwrap_or(5);

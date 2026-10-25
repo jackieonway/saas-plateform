@@ -136,6 +136,23 @@ test('URL microapp resources reach the backend without stealing host micro navig
   assert.match(frontend, /system\|athena\|hermes\|micro/)
 })
 
+test('BFF namespace reaches its cookie owner with exact host and safe callback diagnostics', () => {
+  const config = renderGateway(gateway)
+  for (const prefix of ['= /auth', '/auth/']) {
+    const start = config.indexOf(`location ${prefix} {`)
+    assert.ok(start >= 0)
+    const block = config.slice(start, config.indexOf('\n        }', start))
+    assert.match(block, /proxy_pass http:\/\/\$platform\$request_uri;/)
+    assert.match(block, /proxy_set_header Host "platform\.example\.test";/)
+    assert.match(block, /error_log \/dev\/null crit;/)
+    assert.match(block, /Referrer-Policy "no-referrer" always;/)
+    assert.ok(!block.includes('proxy_set_header Cookie'))
+    assert.ok(!block.includes('proxy_hide_header Set-Cookie'))
+  }
+  assert.match(config, /log_format gateway '[^']*\$uri[^']*';/)
+  assert.ok(!/log_format[^;]*\$(?:request_uri|request|args)\b/.test(config))
+})
+
 test('OAuth playground upstreams use the same explicit private allowlist as platform services', () => {
   for (const field of ['oauthPlayground', 'oauthPlaygroundStatic']) {
     for (const target of ['https://oauth.example.test', 'oauth-api:3011', '8.8.8.8:3011', '10.20.0.9:3011', '127.0.0.1:3011/path', '127.0.0.1:3011;return 200']) {
@@ -285,6 +302,7 @@ test('real generated Nginx serves the trusted qiankun host and isolates OAuth cr
   const upstream = async (requests, responseHeaders = {}, fixtures = {}) => {
     const server = http.createServer((req, res) => {
       requests.push({ url: req.url, method: req.method, headers: req.headers })
+      if (req.url.startsWith('/auth/callback?code=owned-bff-error')) { req.socket.destroy(); return }
       const fixture = fixtures[req.url]
       if (fixture) {
         res.writeHead(200, { 'Content-Type': fixture.type, ...responseHeaders })
@@ -388,6 +406,22 @@ test('real generated Nginx serves the trusted qiankun host and isolates OAuth cr
   assert.equal(hostResponse.status, 200)
   assert.match(hostResponse.headers['content-security-policy'], /script-src 'self' 'unsafe-eval';/)
   assert.equal(hostResponse.headers['content-security-policy'].includes(','), false, 'upstream CSP must not be appended')
+  for (const target of ['/auth/config', '/auth/callback?code=owned-bff-code&state=owned-bff-state']) {
+    const result = await request(target, { headers: { Cookie: '__Host-saas_console=owned-bff-cookie', Origin: origin } })
+    assert.equal(result.status, 200)
+    const forwarded = platformRequests.at(-1)
+    assert.equal(forwarded.url, target)
+    assert.equal(forwarded.headers.host, `localhost:${tlsPort}`)
+    assert.equal(forwarded.headers.cookie, '__Host-saas_console=owned-bff-cookie')
+    assert.equal(forwarded.headers.origin, origin)
+    assert.equal(result.headers['cache-control'], 'no-store')
+    assert.equal(result.headers['referrer-policy'], 'no-referrer')
+  }
+  assert.ok(!readFileSync(`${root}/access.log`, 'utf8').includes('owned-bff-code'))
+  assert.equal((await request('/auth/callback?code=owned-bff-error&state=owned-bff-error-state')).status, 502)
+  for (const name of ['access.log', 'error.log']) {
+    assert.ok(!readFileSync(`${root}/${name}`, 'utf8').includes('owned-bff-error'), `${name} must omit failed callback query`)
+  }
   await t.test('browser mounts, updates and unmounts real qiankun under the sample HTTPS CSP', {
     skip: !process.env.PLATFORM_TEST_BROWSER_PACKAGE,
   }, async () => {

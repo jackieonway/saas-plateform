@@ -91,7 +91,10 @@ fn public_contract_sources_and_pinned_rust_are_exact() {
         protocol::MICRO_PROPS_VERSION
     );
     assert!(release["contracts"].get("iframe").is_none());
-    assert_eq!(release["supportedSdkVersions"], json!(["2.0.0"]));
+    assert_eq!(
+        release["supportedSdkVersions"],
+        json!([protocol::SDK_VERSION])
+    );
     assert_eq!(
         release["contracts"]["notification"],
         protocol::NOTIFICATION_VERSION
@@ -194,6 +197,58 @@ fn public_contract_unknown_versions_fail_without_disclosing_payloads() {
 }
 
 #[test]
+fn public_contract_rejects_old_uuid_epochs_in_nested_identity_fields() {
+    for invalid in [
+        "019c0000-0000-4000-8000-000000000002",
+        "00000000-0000-0000-0000-000000000000",
+        "019c0000-0000-7000-c000-000000000002",
+    ] {
+        for pointer in [
+            "/application/id",
+            "/application/entryVersionId",
+            "/user/id",
+            "/tenant/id",
+            "/organization/id",
+            "/organizationScopeIds/0",
+            "/roles/0/id",
+            "/dataGrants/0/subjectUserId",
+            "/dataGrants/0/tenantId",
+            "/dataGrants/0/organizationIds/0",
+            "/menus/0/id",
+            "/menus/0/parentId",
+        ] {
+            let mut value = context();
+            *value
+                .pointer_mut(pointer)
+                .expect("registered fixture identity") = json!(invalid);
+            assert!(protocol::AppAuthorizationContext::from_json(&bytes(&value)).is_err());
+            assert!(
+                independent_consumer::AppAuthorizationContext::from_json(&bytes(&value)).is_err()
+            );
+        }
+        for pointer in ["/user/id", "/roles/0/id", "/menus/0/parentId"] {
+            let mut value = props();
+            *value
+                .pointer_mut(pointer)
+                .expect("registered props identity") = json!(invalid);
+            assert!(protocol::MicroPropsWire::from_json(&bytes(&value)).is_err());
+        }
+        let mut value = fixtures()["notificationPublish"].clone();
+        value["target"]["userId"] = json!(invalid);
+        assert!(protocol::NotificationPublishBody::from_json(&bytes(&value)).is_err());
+        let mut value = fixtures()["realtimeNotification"].clone();
+        value["publicationId"] = json!(invalid);
+        let event: protocol::RealtimeNotification = serde_json::from_value(value).expect("event");
+        assert!(event.validate().is_err());
+    }
+    for version in ["1.0.0", "2.0.0", "2.0.1"] {
+        let mut value = props();
+        value["sdkVersion"] = json!(version);
+        assert!(protocol::MicroPropsWire::from_json(&bytes(&value)).is_err());
+    }
+}
+
+#[test]
 fn public_contract_missing_null_and_bounded_organization_scopes_stay_distinct() {
     let mut old = context();
     old.as_object_mut()
@@ -207,7 +262,7 @@ fn public_contract_missing_null_and_bounded_organization_scopes_stay_distinct() 
     ));
     assert_eq!(
         parsed.organization_ceiling().expect("safe fallback"),
-        Some(vec!["fixture-organization"])
+        Some(vec!["019c0000-0000-7000-8000-000000000004"])
     );
     assert_eq!(serde_json::to_value(parsed).expect("wire"), old);
 
@@ -226,7 +281,10 @@ fn public_contract_missing_null_and_bounded_organization_scopes_stay_distinct() 
         protocol::AppAuthorizationContext::from_json(&bytes(&context())).expect("bounded scope");
     assert_eq!(
         parsed.organization_ceiling().expect("bounded"),
-        Some(vec!["fixture-organization", "fixture-child"])
+        Some(vec![
+            "019c0000-0000-7000-8000-000000000004",
+            "019c0000-0000-7000-8000-000000000005"
+        ])
     );
 }
 
@@ -235,10 +293,10 @@ fn public_contract_invalid_or_over_limit_organization_scopes_fail_closed() {
     for scope in [
         json!([]),
         json!(["other-organization"]),
-        json!(["fixture-organization", ""]),
+        json!(["019c0000-0000-7000-8000-000000000004", ""]),
         json!("unbounded"),
         json!(vec![
-            "fixture-organization";
+            "019c0000-0000-7000-8000-000000000004";
             protocol::ORGANIZATION_LIMIT + 1
         ]),
     ] {
@@ -248,7 +306,7 @@ fn public_contract_invalid_or_over_limit_organization_scopes_fail_closed() {
     }
     let mut value = context();
     value["dataGrants"][0]["organizationIds"] = json!(vec![
-        "fixture-organization";
+        "019c0000-0000-7000-8000-000000000004";
         protocol::ORGANIZATION_LIMIT + 1
     ]);
     assert!(protocol::AppAuthorizationContext::from_json(&bytes(&value)).is_err());
@@ -286,8 +344,8 @@ fn public_contract_props_require_safe_epoch_ceiling_and_unchanged_application_bo
 fn public_contract_notification_publish_targets_limits_and_unknown_fields_are_checked() {
     let body = fixtures()["notificationPublish"].clone();
     for target in [
-        json!({"kind":"USER","userId":"fixture-user","organizationId":"fixture-organization"}),
-        json!({"kind":"ORGANIZATION","organizationId":"fixture-organization"}),
+        json!({"kind":"USER","userId":"019c0000-0000-7000-8000-000000000002","organizationId":"019c0000-0000-7000-8000-000000000004"}),
+        json!({"kind":"ORGANIZATION","organizationId":"019c0000-0000-7000-8000-000000000004"}),
         json!({"kind":"TENANT"}),
     ] {
         let mut value = body.clone();
@@ -301,7 +359,10 @@ fn public_contract_notification_publish_targets_limits_and_unknown_fields_are_ch
             "target",
             json!({"kind":"TENANT","organizationId":"untrusted"}),
         ),
-        ("target", json!({"kind":"USER","userId":"fixture-user"})),
+        (
+            "target",
+            json!({"kind":"USER","userId":"019c0000-0000-7000-8000-000000000002"}),
+        ),
         ("type", json!("UNKNOWN")),
         ("idempotencyKey", json!("bad key")),
         ("title", json!(" ")),
@@ -329,7 +390,7 @@ fn public_contract_notification_wire_keeps_public_ack_and_publication_ownership_
         value["notificationSocketContext"]
     );
     let mut platform = value["notificationSocketContext"].clone();
-    platform["sessionId"] = json!("fixture-session-internal-only");
+    platform["sessionId"] = json!("019c0000-0000-7000-8000-000000000010");
     let internal: protocol::NotificationPlatformSocketContext =
         serde_json::from_value(platform.clone()).expect("platform socket identity");
     assert_eq!(serde_json::to_value(internal).expect("wire"), platform);
@@ -346,9 +407,17 @@ fn public_contract_notification_wire_keeps_public_ack_and_publication_ownership_
         value["notificationPublication"]
     );
     for (application, publication, valid) in [
-        (json!("app"), json!("publication"), true),
+        (
+            json!("019c0000-0000-7000-8000-000000000001"),
+            json!("019c0000-0000-7000-8000-000000000008"),
+            true,
+        ),
         (Value::Null, Value::Null, true),
-        (json!("app"), Value::Null, false),
+        (
+            json!("019c0000-0000-7000-8000-000000000001"),
+            Value::Null,
+            false,
+        ),
     ] {
         let mut event = value["realtimeNotification"].clone();
         event["applicationId"] = application;
@@ -358,9 +427,19 @@ fn public_contract_notification_wire_keeps_public_ack_and_publication_ownership_
         assert_eq!(dto.validate().is_ok(), valid);
     }
     for (kind, application, publication, valid) in [
-        ("APP", json!("app"), json!("publication"), true),
+        (
+            "APP",
+            json!("019c0000-0000-7000-8000-000000000001"),
+            json!("019c0000-0000-7000-8000-000000000008"),
+            true,
+        ),
         ("SYSTEM", Value::Null, Value::Null, true),
-        ("SYSTEM", json!("app"), json!("publication"), false),
+        (
+            "SYSTEM",
+            json!("019c0000-0000-7000-8000-000000000001"),
+            json!("019c0000-0000-7000-8000-000000000008"),
+            false,
+        ),
     ] {
         let mut row = value["notificationRecord"].clone();
         row["sourceKind"] = json!(kind);

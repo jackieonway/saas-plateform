@@ -16,7 +16,9 @@ use crate::{error::AppError, extractors::CurrentUser, state::AppState};
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct OptionsQuery {
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     application_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     user_id: Option<Uuid>,
     keyword: Option<String>,
     page: Option<i64>,
@@ -36,8 +38,12 @@ impl TryFrom<OptionsQuery> for Search {
     type Error = AppError;
 
     fn try_from(query: OptionsQuery) -> Result<Self, Self::Error> {
-        if query.application_id.is_some_and(|id| id.is_nil())
-            || query.user_id.is_some_and(|id| id.is_nil())
+        if query
+            .application_id
+            .is_some_and(|id| !crate::util::uuid7::is_uuid_v7(id))
+            || query
+                .user_id
+                .is_some_and(|id| !crate::util::uuid7::is_uuid_v7(id))
         {
             return Err(AppError::bad_request("筛选标识不能是空 UUID"));
         }
@@ -73,6 +79,7 @@ impl TryFrom<OptionsQuery> for Search {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ApplicationOption {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     id: Uuid,
     code: String,
     name: String,
@@ -101,9 +108,13 @@ pub(crate) struct OptionsResponse {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MemberRow {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     tenant_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     organization_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     user_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     membership_id: Uuid,
     username: String,
     display_name: String,
@@ -143,13 +154,15 @@ const OPTIONS_SQL: &str = "WITH RECURSIVE managed_tree AS ( \
     SELECT m.id AS membership_id,m.user_id,m.organization_id,o.tenant_id,u.username, \
     COALESCE(NULLIF(btrim(u.real_name),''),u.username) AS display_name,o.tenant_name,o.organization_name \
     FROM memberships m JOIN readable_organizations o ON o.id=m.organization_id \
-    JOIN users u ON u.id=m.user_id AND u.status='ENABLED' WHERE ($8::uuid IS NULL OR u.id=$8) \
+    JOIN users u ON u.id=m.user_id AND u.status='ENABLED' \
+    WHERE m.member_type='EMPLOYEE' AND m.status='ENABLED' AND ($8::uuid IS NULL OR u.id=$8) \
     AND EXISTS(SELECT 1 FROM tenant_applications ta \
     JOIN organization_applications oa ON oa.application_id=ta.application_id AND oa.organization_id=o.id \
-    JOIN applications a ON a.id=ta.application_id AND a.status='ENABLED' \
+    JOIN applications a ON a.id=ta.application_id AND a.status='ENABLED' AND 'EMPLOYEE'=ANY(a.allowed_member_types) \
     WHERE ta.tenant_id=o.tenant_id AND ta.application_id=ANY($7::uuid[]))), \
     available_applications AS MATERIALIZED ( \
     SELECT a.id,a.code,a.name FROM applications a WHERE a.id=ANY($7::uuid[]) AND a.status='ENABLED' \
+    AND 'EMPLOYEE'=ANY(a.allowed_member_types) \
     AND EXISTS (SELECT 1 FROM eligible_members m \
     JOIN tenant_applications ta ON ta.tenant_id=m.tenant_id AND ta.application_id=a.id \
     JOIN organization_applications oa ON oa.organization_id=m.organization_id AND oa.application_id=a.id)), \
@@ -236,7 +249,8 @@ pub(super) async fn options(
     // boundary moved, return no previously collected names from the old scope.
     let current = store::actor_runtime(&mut tx, actor).await?;
     require_read(&current)?;
-    if initial.platform_root != current.platform_root
+    if initial.identity != current.identity
+        || initial.platform_root != current.platform_root
         || initial.subtree != current.subtree
         || initial.ancestors != current.ancestors
     {

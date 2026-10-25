@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
@@ -109,7 +110,7 @@ fn parse_parent_id(raw: Option<&str>) -> Result<Option<Uuid>, AppError> {
         .filter(|value| !value.is_empty())
         .map(|value| {
             value
-                .parse()
+                .parse_uuid7()
                 .map_err(|_| AppError::bad_request("parentId 格式错误"))
         })
         .transpose()
@@ -198,7 +199,7 @@ async fn tree_handler(
     state.require_platform(&user).await?;
     let app_id: Uuid = params
         .get("applicationId")
-        .and_then(|v| Uuid::parse_str(v).ok())
+        .and_then(|v| crate::util::uuid7::parse_uuid(v).ok())
         .ok_or_else(|| AppError::bad_request("缺少 applicationId 参数"))?;
     let rows: Vec<MenuRowTuple> = sqlx::query_as(&format!(
         "{MENU_SELECT} FROM menus m WHERE m.application_id = $1 ORDER BY m.sort_order, m.created_at"
@@ -265,7 +266,7 @@ async fn create(
     state.require_platform(&user).await?;
     let app_id: Uuid = body
         .application_id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("applicationId 格式错误"))?;
     let parent_id = parse_parent_id(body.parent_id.as_deref())?;
     let title = body.title.trim().to_string();
@@ -279,8 +280,8 @@ async fn create(
     lock_menu_application(&mut tx, app_id).await?;
     validate_parent(&mut tx, app_id, None, parent_id).await?;
     let row: MenuRowTuple = sqlx::query_as(
-        "INSERT INTO menus (application_id, parent_id, type, title, path, icon, component, permission, sort_order, visible, link_url, link_target) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
+        "INSERT INTO menus (application_id, parent_id, type, title, path, icon, component, permission, sort_order, visible, link_url, link_target, id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) \
          RETURNING id, application_id, parent_id, type, title, COALESCE(path,'') AS path, \
          COALESCE(icon,'') AS icon, COALESCE(component,'') AS component, COALESCE(permission,'') AS permission, \
          sort_order, visible, link_url, link_target",
@@ -297,7 +298,7 @@ async fn create(
     .bind(body.visible)
     .bind(&link_url)
     .bind(&link_target)
-    .fetch_one(&mut *tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
@@ -360,7 +361,7 @@ async fn update(
         .await?;
     state.require_platform(&user).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(t) = &body.r#type {
         parse_menu_type(t)?;
@@ -470,7 +471,7 @@ async fn delete(
         .await?;
     state.require_platform(&user).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before = lock_menu(&mut tx, id).await?;
@@ -515,7 +516,7 @@ mod tests {
             parse_parent_id(empty.parent_id.unwrap().as_deref()).unwrap(),
             None
         );
-        let id = Uuid::from_u128(1);
+        let id = crate::util::uuid7::fixture_uuid(1);
         let selected: MenuUpdate =
             serde_json::from_value(json!({"parentId": format!(" {id} ")})).unwrap();
         assert_eq!(

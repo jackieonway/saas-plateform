@@ -19,12 +19,62 @@ async fn snapshot(pool: &PgPool) -> Result<BTreeMap<String, Value>> {
     Ok(result)
 }
 
+/// An additive migration may extend a row, but must preserve every original
+/// column and every occurrence of that row. Match as a multiset because adding
+/// columns can also change PostgreSQL's to_jsonb(text) snapshot ordering.
+fn assert_original_fields_preserved(table: &str, before: &Value, after: &Value) -> Result<()> {
+    let old_rows = before
+        .as_array()
+        .ok_or_else(|| anyhow!("original {table} snapshot is not an array"))?;
+    let mut current_rows: Vec<&Value> = after
+        .as_array()
+        .ok_or_else(|| anyhow!("current {table} snapshot is not an array"))?
+        .iter()
+        .collect();
+    ensure!(
+        old_rows.len() == current_rows.len(),
+        "upgrade changed {table} row count"
+    );
+    for original in old_rows {
+        let original = original
+            .as_object()
+            .ok_or_else(|| anyhow!("original {table} row is not an object"))?;
+        let matching = current_rows.iter().position(|current| {
+            current.as_object().is_some_and(|current| {
+                original
+                    .iter()
+                    .all(|(column, value)| current.get(column) == Some(value))
+            })
+        });
+        let matching =
+            matching.ok_or_else(|| anyhow!("upgrade changed an original {table} row or column"))?;
+        current_rows.remove(matching);
+    }
+    ensure!(
+        current_rows.is_empty(),
+        "upgrade added an unexpected {table} row"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 #[ignore = "requires owned disposable PostgreSQL"]
 async fn phase31_platform_upgrade_preserves_every_old_row_and_checksum() -> Result<()> {
     let database = TestDatabase::create_through(3).await?;
     let result = async {
         let _h = Harness::create(&database.pool, "http://127.0.0.1:7777").await?;
+        // Real pre-expansion client rows exercise purpose classification while
+        // the original CSV, credentials, identity and timestamps stay intact.
+        for (client_id, grants) in [
+            ("upgrade-user", "authorization_code,refresh_token"),
+            ("upgrade-machine", "client_credentials"),
+            ("upgrade-mixed", "authorization_code,client_credentials"),
+        ] {
+            sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,client_secret_hash,grant_types) VALUES($1,$2,$2,'CONFIDENTIAL',$3,$4)")
+                .bind(crate::util::uuid7::new_uuid()).bind(client_id)
+                .bind(hash::sha256_hex("owned-upgrade-fixture-only")).bind(grants)
+                .execute(&database.pool).await?;
+        }
         let before = snapshot(&database.pool).await?;
         ensure!(before["membership_data_grants"].as_array().is_some_and(|v| !v.is_empty()));
         sqlx::migrate!("./migrations").run(&database.pool).await?;
@@ -36,7 +86,64 @@ async fn phase31_platform_upgrade_preserves_every_old_row_and_checksum() -> Resu
                 let current = after[table].as_array().unwrap();
                 ensure!(old.len() == 3 && current.len() == sqlx::migrate!("./migrations").iter().count());
                 for row in old { ensure!(current.contains(row), "historical migration record changed"); }
-            } else { ensure!(after.get(table) == Some(rows), "upgrade changed {table}"); }
+            } else {
+                let current = after.get(table)
+                    .ok_or_else(|| anyhow!("upgrade removed {table}"))?;
+                if table == "platform_sessions" {
+                    let previous = rows.as_array().ok_or_else(|| anyhow!("session snapshot is not an array"))?;
+                    let sessions = current.as_array().ok_or_else(|| anyhow!("upgraded session snapshot is not an array"))?;
+                    ensure!(previous.len() == sessions.len(), "upgrade changed session row count");
+                    for old in previous {
+                        let session = sessions.iter().find(|row| row["id"] == old["id"])
+                            .ok_or_else(|| anyhow!("upgrade removed an old session"))?;
+                        ensure!(old["revoked_at"].is_null() && session["revoked_at"].is_string(),
+                            "binding migration failed to revoke an unprovable historical session");
+                        for (column, value) in old.as_object().unwrap() {
+                            if column != "revoked_at" {
+                                ensure!(session[column] == *value, "upgrade changed old session {column}");
+                            }
+                        }
+                        for column in ["account_version", "membership_id", "member_type", "identity_version",
+                            "origin_issuer", "origin_client_ref", "origin_client_policy_version"] {
+                            ensure!(session[column].is_null(), "upgrade fabricated old session {column}");
+                        }
+                    }
+                } else if table == "oauth_clients" {
+                    let historical = Value::Array(current.as_array().ok_or_else(|| anyhow!("upgraded clients are not an array"))?
+                        .iter().filter(|row| row["client_id"] != "platform-console-legacy").cloned().collect());
+                    assert_original_fields_preserved(table, rows, &historical)?;
+                } else {
+                    assert_original_fields_preserved(table, rows, current)?;
+                }
+            }
+        }
+        ensure!(after["memberships"].as_array().is_some_and(|rows| rows.iter().all(|row|
+            row["member_type"] == "EMPLOYEE" && row["status"] == "ENABLED"
+                && row["identity_version"] == 1 && row["updated_at"].is_string())),
+            "identity expansion did not safely initialize historical employees");
+        ensure!(after["applications"].as_array().is_some_and(|rows| rows.iter().all(|row|
+            row["allowed_member_types"] == json!(["EMPLOYEE"]) && row["access_policy_version"] == 1)),
+            "identity expansion widened historical application admission");
+        let clients = after["oauth_clients"].as_array()
+            .ok_or_else(|| anyhow!("upgraded client snapshot is not an array"))?;
+        ensure!(clients.len() == 4, "upgrade did not retain the three historical clients and one fixed console origin");
+        let console = clients.iter().find(|row| row["client_id"] == "platform-console-legacy")
+            .ok_or_else(|| anyhow!("upgrade omitted the registered console origin"))?;
+        ensure!(console["subject_mode"] == "USER" && console["allowed_member_types"] == json!(["EMPLOYEE"])
+            && console["access_policy_version"] == 1 && console["application_id"].is_null()
+            && console["grant_types"] == "authorization_code" && console["require_pkce"] == true
+            && console["redirect_uris"] == "", "upgrade widened the fixed console origin");
+        for (client_id, mode, members) in [
+            ("upgrade-user", "USER", vec!["EMPLOYEE"]),
+            ("upgrade-machine", "MACHINE", vec![]),
+            ("upgrade-mixed", "LEGACY_MIXED", vec!["EMPLOYEE"]),
+        ] {
+            let client = clients.iter().find(|row| row["client_id"] == client_id)
+                .ok_or_else(|| anyhow!("upgrade removed {client_id}"))?;
+            ensure!(client["subject_mode"] == mode
+                && client["allowed_member_types"] == json!(members)
+                && client["access_policy_version"] == 1,
+                "identity expansion misclassified or widened {client_id}");
         }
         ensure!(after["application_release_operations"] == json!([]));
         // A corrupt checksum is rejected, never repaired or adopted.

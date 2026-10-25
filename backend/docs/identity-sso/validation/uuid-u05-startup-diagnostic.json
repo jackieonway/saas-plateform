@@ -1,0 +1,145 @@
+{
+  "format": "saas-uuid-u05-startup-diagnostic/1",
+  "recorded_date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "status": "READ_ONLY_DIAGNOSTIC_COMPLETE_SERVICE_STARTUP_NOT_TESTED",
+  "scope": "Local WSL Ubuntu PostgreSQL 18.6, fixed U04 targets, three fresh runtime LOGIN identities",
+  "conclusion": {
+    "database_or_driver_failure_observed": false,
+    "correct_receipt_comparisons": 3,
+    "expected_marker_rejections": 3,
+    "expected_schema_rejections": 3,
+    "unexpected_results": 0,
+    "service_startup_acceptance": "PENDING_SEPARATE_POSITIVE_RUNTIME_EVIDENCE",
+    "explanation": "The fixed platform stderr message is an outer sanitized error mapping. It does not identify the underlying ImportedDatabaseError category. All actual read-only SQL and the independent typed SQLx diagnostic succeeded with the correct handoff."
+  },
+  "outer_error_mapping": {
+    "source": "saas-plateform/backend/src/bootstrap.rs",
+    "line": 96,
+    "operation": "tokio::time::timeout(Duration::from_secs(30), imported.verify(&pool))",
+    "mapping": "Every result other than Ok(Ok(())) becomes IMPORTED_DATABASE_VERIFICATION_FAILED at lines 97-99",
+    "includes": ["identity rejection", "history rejection", "schema rejection", "database error", "timeout"],
+    "original_service_negative_runs": 6,
+    "original_negative_exit_codes": [1, 1, 1, 1, 1, 1],
+    "original_negative_run_interpretation": "Retain the six frozen-service rejections. Their opaque errors alone do not prove a particular validation branch or a database failure; pair them with independent diagnostics and separate successful startup using the correct handoff."
+  },
+  "native_read_only_checks": {
+    "identity": "Each service's own fresh runtime TCP identity, with credentials kept in private material",
+    "transaction": "REPEATABLE READ READ ONLY",
+    "search_path": "pg_catalog",
+    "timezone": "UTC",
+    "row_security": "off",
+    "admission_source_constants": [
+      {"service": "platform", "source": "saas-plateform/backend/src/database/imported.rs", "constant": "ADMISSION_SQL", "psql_exit": 0},
+      {"service": "stores", "source": "saas-stores/backend/src/imported_database.rs", "constant": "ADMISSION_SQL", "psql_exit": 0},
+      {"service": "work_orders", "source": "saas-work-orders/backend/src/imported.rs", "constant": "ADMISSION", "psql_exit": 0}
+    ],
+    "admission_sql_matches_protected_binary_strings": true,
+    "schema_queries": [
+      {"service": "platform", "source": "saas-plateform/backend/src/database/schema_material.sql", "schema_items": 1541, "raw_schema_sha256_matches_receipt": true, "sqlx_history_count": 12, "all_history_success": true},
+      {"service": "stores", "source": "saas-stores/backend/src/imported_schema.sql", "schema_items": 228, "raw_schema_sha256_matches_receipt": true, "sqlx_history_count": 3, "all_history_success": true},
+      {"service": "work_orders", "source": "saas-work-orders/backend/src/imported_schema.sql", "schema_items": 165, "raw_schema_sha256_matches_receipt": true, "sqlx_history_count": 4, "all_history_success": true}
+    ]
+  },
+  "independent_harness": {
+    "package": "uuid-u05-sqlx-diagnostic 0.0.0",
+    "sqlx_version": "0.8.6",
+    "sqlx_features": ["runtime-tokio", "postgres", "uuid", "chrono", "migrate", "macros", "derive"],
+    "source_sha256": "3a523e4d7dfe0c44d769135a100830837b5e79dfd7c129c2937247be03b060d2",
+    "binary_sha256": "f579bf43693ff98e4efee4f3186001bb33195b83c763a608453d891f4023fee4",
+    "private_summary_sha256": "ca8d427e58255baf05f78fdcacfcd52e1155030f5f404750ce93b7cb0e111c81",
+    "build": "Offline independent Cargo package and target, using the platform lockfile dependency versions; no service package or migration macro was included",
+    "steps": [
+      "Connect with the service's generated private database URL using a pool limited to one connection",
+      "pool.begin",
+      "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
+      "Set pg_catalog search_path, UTC timezone and row_security=off",
+      "Execute the platform's actual ADMISSION_SQL using query_as<Admission>",
+      "Compare the actual database, marker and all runtime-role guard booleans",
+      "Fetch typed SQLx history tuples and compare ordered versions, success and SHA384 with the corresponding formal SQL file bytes",
+      "Fetch each service's actual complete schema SQL as serde_json::Value, serialize canonically and compare SHA256",
+      "ROLLBACK and close the pool"
+    ],
+    "error_output": "A driver failure would create a new mode-0600 private file. No such file was created in the nine final cases.",
+    "exit_code_semantics": "The diagnostic exits zero when it completes the requested comparison. Expected marker/schema REJECTED results below are comparison outcomes, not successful service startups."
+  },
+  "cases": [
+    {
+      "service": "platform", "case": "correct", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "PASS", "typed_history": "PASS",
+      "history_sha384_matches_real_files": 12, "typed_schema_material": "PASS", "schema_items": 1541,
+      "receipt_schema": "PASS", "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "platform", "case": "wrong_marker", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "REJECTED",
+      "history_and_schema": "NOT_REACHED", "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "platform", "case": "wrong_schema", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "PASS", "typed_history": "PASS",
+      "typed_schema_material": "PASS", "receipt_schema": "REJECTED",
+      "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "stores", "case": "correct", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "PASS", "typed_history": "PASS",
+      "history_sha384_matches_real_files": 3, "typed_schema_material": "PASS", "schema_items": 228,
+      "receipt_schema": "PASS", "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "stores", "case": "wrong_marker", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "REJECTED",
+      "history_and_schema": "NOT_REACHED", "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "stores", "case": "wrong_schema", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "PASS", "typed_history": "PASS",
+      "typed_schema_material": "PASS", "receipt_schema": "REJECTED",
+      "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "work_orders", "case": "correct", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "PASS", "typed_history": "PASS",
+      "history_sha384_matches_real_files": 4, "typed_schema_material": "PASS", "schema_items": 165,
+      "receipt_schema": "PASS", "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "work_orders", "case": "wrong_marker", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "REJECTED",
+      "history_and_schema": "NOT_REACHED", "rollback": "PASS", "private_driver_error_created": false
+    },
+    {
+      "service": "work_orders", "case": "wrong_schema", "diagnostic_exit": 0,
+      "typed_admission": "PASS", "receipt_identity": "PASS", "typed_history": "PASS",
+      "typed_schema_material": "PASS", "receipt_schema": "REJECTED",
+      "rollback": "PASS", "private_driver_error_created": false
+    }
+  ],
+  "limitations": [
+    "The typed harness uses the platform's strict admission query for all three targets. It does not claim to invoke each complete service verifier. Each service's original admission SQL was separately executed successfully with its actual runtime identity through psql.",
+    "The harness verifies ordered SQLx version/success/SHA384 history. It does not separately execute the stores fingerprint chain verifier, the work-orders legacy SHA256 verifier, or the platform compatible_migrator implementation.",
+    "All schema queries are each service's actual complete imported schema SQL. Their typed JSON and canonical digest are checked without business-row scans.",
+    "No HTTP listener, worker or service startup is exercised by this diagnostic. Positive startup with the unchanged frozen service binaries and correct private handoff is separate evidence.",
+    "This record does not prove browser login, credential invalidation, OAuth exchange, notification delivery, business DML, or completion of UUID-U05.",
+    "The original six service exit-1 negatives alone are insufficient to establish the rejection stage. The independent diagnostic explains their opaque output and verifies the read-only receipt comparisons."
+  ],
+  "side_effects": {
+    "database_writes": 0,
+    "schema_changes": 0,
+    "role_or_acl_changes": 0,
+    "expected_hash_changes": 0,
+    "source_database_changes": 0,
+    "http_listeners_started": 0,
+    "existing_services_started_or_stopped": 0,
+    "production_source_changes": 0,
+    "ledger_changes": 0
+  },
+  "redaction": {
+    "database_urls": "OMITTED",
+    "credentials_and_secrets": "OMITTED",
+    "raw_import_markers_and_batch_ids": "OMITTED",
+    "subject_ids_and_business_rows": "OMITTED",
+    "private_material_paths": "OMITTED"
+  }
+}

@@ -88,50 +88,68 @@ struct Harness {
     tenant: Uuid,
     parent: Uuid,
     org: Uuid,
+    membership: Uuid,
 }
 
 impl Harness {
     async fn create(pool: &PgPool) -> Result<Self> {
-        let suffix = Uuid::new_v4().simple().to_string();
+        Self::create_with_user(pool, crate::util::uuid7::new_uuid()).await
+    }
+
+    async fn create_machine(pool: &PgPool) -> Result<Self> {
+        let harness = Self::create(pool).await?;
+        // This fixture starts with no credentials; the registration is made
+        // single-purpose before the first protocol request.
+        sqlx::query("UPDATE oauth_clients SET subject_mode='MACHINE',allowed_member_types=ARRAY[]::text[],grant_types='client_credentials' WHERE client_id=$1")
+            .bind(&harness.client).execute(pool).await?;
+        Ok(harness)
+    }
+
+    async fn create_with_user(pool: &PgPool, user_id: Uuid) -> Result<Self> {
+        let suffix = crate::util::uuid7::new_uuid().simple().to_string();
         let tenant = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code) VALUES('OAuth test tenant',$1) RETURNING id",
+            "INSERT INTO tenants(name,code,id) VALUES('OAuth test tenant',$1,$2) RETURNING id",
         )
         .bind(format!("oauth-{suffix}"))
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
         let parent = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,name) VALUES($1,'OAuth ancestor') RETURNING id",
+            "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'OAuth ancestor',$2) RETURNING id",
         )
         .bind(tenant)
-        .fetch_one(pool)
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
         .await?;
         let org = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,parent_id,name) VALUES($1,$2,'OAuth organization') RETURNING id",
+            "INSERT INTO organizations(tenant_id,parent_id,name,id) VALUES($1,$2,'OAuth organization',$3) RETURNING id",
         )
         .bind(tenant)
         .bind(parent)
-        .fetch_one(pool)
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
         .await?;
         let user = sqlx::query_scalar(
-            "INSERT INTO users(username,password_hash) VALUES($1,'unused') RETURNING id",
+            "INSERT INTO users(username,password_hash,id) VALUES($1,'unused',$2) RETURNING id",
         )
         .bind(format!("oauth-user-{suffix}"))
+        .bind(user_id)
         .fetch_one(pool)
         .await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+        let membership = crate::util::uuid7::new_uuid();
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(user)
             .bind(org)
+            .bind(membership)
             .execute(pool)
             .await?;
         let client = format!("oauth-client-{suffix}");
         sqlx::query(
-            "INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,redirect_uris,grant_types,scopes,access_token_validity,refresh_token_validity) \
-             VALUES($1,$2,'OAuth test client',$3,'authorization_code,refresh_token,client_credentials,password,urn:ietf:params:oauth:grant-type:device_code','profile,email',3600,86400)",
+            "INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,redirect_uris,grant_types,scopes,access_token_validity,refresh_token_validity,id) \
+             VALUES($1,$2,'OAuth test client',$3,'authorization_code,refresh_token,password,urn:ietf:params:oauth:grant-type:device_code','profile,email',3600,86400,$4)",
         )
         .bind(&client)
         .bind(hash::sha256_hex(CLIENT_SECRET))
         .bind(REDIRECT)
-        .execute(pool)
+        .bind(crate::util::uuid7::new_uuid()).execute(pool)
         .await?;
         let config = Config::from_values(&HashMap::from([
             ("APPLICATION_ENVIRONMENT".into(), "development".into()),
@@ -151,6 +169,7 @@ impl Harness {
             tenant,
             parent,
             org,
+            membership,
         })
     }
 
@@ -163,18 +182,35 @@ impl Harness {
         request(&self.app, Method::POST, path, None, &form).await
     }
 
-    async fn seed_refresh(&self, pool: &PgPool) -> Result<String> {
+    async fn seed_unbound_refresh(&self, pool: &PgPool) -> Result<String> {
         let token = hash::random_token(43);
         sqlx::query(
-            "INSERT INTO oauth_tokens(token_hash,token_type,user_id,client_id,tenant_id,organization_id,scope,expires_at) \
-             VALUES($1,'refresh',$2,$3,$4,$5,'profile email',now()+interval '1 day')",
+            "INSERT INTO oauth_tokens(token_hash,token_type,user_id,client_id,tenant_id,organization_id,scope,expires_at,id) \
+             VALUES($1,'refresh',$2,$3,$4,$5,'profile email',now()+interval '1 day',$6)",
         )
         .bind(hash::sha256_hex(&token))
         .bind(self.user)
         .bind(&self.client)
         .bind(self.tenant)
         .bind(self.org)
-        .execute(pool)
+        .bind(crate::util::uuid7::new_uuid()).execute(pool)
+        .await?;
+        Ok(token)
+    }
+
+    async fn seed_refresh(&self, pool: &PgPool) -> Result<String> {
+        let token = hash::random_token(43);
+        sqlx::query(
+            "INSERT INTO oauth_tokens(token_hash,token_type,user_id,client_id,tenant_id,organization_id,scope,expires_at,id,account_version,membership_id,member_type,identity_version,client_policy_version) \
+             SELECT $1,'refresh',$2,$3,$4,$5,'profile email',now()+interval '1 day',$6,u.session_version,$7,'EMPLOYEE',1,c.access_policy_version \
+             FROM users u CROSS JOIN oauth_clients c WHERE u.id=$2 AND c.client_id=$3",
+        )
+        .bind(hash::sha256_hex(&token))
+        .bind(self.user)
+        .bind(&self.client)
+        .bind(self.tenant)
+        .bind(self.org)
+        .bind(crate::util::uuid7::new_uuid()).bind(self.membership).execute(pool)
         .await?;
         Ok(token)
     }
@@ -182,8 +218,9 @@ impl Harness {
     async fn seed_code(&self, pool: &PgPool) -> Result<String> {
         let code = hash::random_token(43);
         sqlx::query(
-            "INSERT INTO oauth_authorization_codes(code_hash,client_id,user_id,tenant_id,organization_id,redirect_uri,scope,expires_at) \
-             VALUES($1,$2,$3,$4,$5,$6,'profile email',now()+interval '5 minutes')",
+            "INSERT INTO oauth_authorization_codes(code_hash,client_id,user_id,tenant_id,organization_id,redirect_uri,scope,expires_at,id,account_version,membership_id,member_type,identity_version,client_policy_version) \
+             SELECT $1,$2,$3,$4,$5,$6,'profile email',now()+interval '5 minutes',$7,u.session_version,$8,'EMPLOYEE',1,c.access_policy_version \
+             FROM users u CROSS JOIN oauth_clients c WHERE u.id=$3 AND c.client_id=$2",
         )
         .bind(hash::sha256_hex(&code))
         .bind(&self.client)
@@ -191,7 +228,7 @@ impl Harness {
         .bind(self.tenant)
         .bind(self.org)
         .bind(REDIRECT)
-        .execute(pool)
+        .bind(crate::util::uuid7::new_uuid()).bind(self.membership).execute(pool)
         .await?;
         Ok(code)
     }
@@ -199,16 +236,17 @@ impl Harness {
     async fn seed_device(&self, pool: &PgPool) -> Result<String> {
         let code = hash::random_token(43);
         sqlx::query(
-            "INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,user_id,tenant_id,organization_id,scope,status,interval_seconds,expires_at) \
-             VALUES($1,$2,$3,$4,$5,$6,'profile email','APPROVED',0,now()+interval '5 minutes')",
+            "INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,user_id,tenant_id,organization_id,scope,status,interval_seconds,expires_at,id,account_version,membership_id,member_type,identity_version,client_policy_version) \
+             SELECT $1,$2,$3,$4,$5,$6,'profile email','APPROVED',0,now()+interval '5 minutes',$7,u.session_version,$8,'EMPLOYEE',1,c.access_policy_version \
+             FROM users u CROSS JOIN oauth_clients c WHERE u.id=$4 AND c.client_id=$3",
         )
         .bind(hash::sha256_hex(&code))
-        .bind(Uuid::new_v4().simple().to_string()[..16].to_owned())
+        .bind(crate::util::uuid7::new_uuid().simple().to_string()[..16].to_owned())
         .bind(&self.client)
         .bind(self.user)
         .bind(self.tenant)
         .bind(self.org)
-        .execute(pool)
+        .bind(crate::util::uuid7::new_uuid()).bind(self.membership).execute(pool)
         .await?;
         Ok(code)
     }
@@ -285,7 +323,7 @@ impl Harness {
 async fn legacy_null_client_scopes_issue_and_refresh_an_empty_scope() -> Result<()> {
     let db = database().await?;
     let assertions = async {
-        let h = Harness::create(&db.pool).await?;
+        let h = Harness::create_machine(&db.pool).await?;
         sqlx::query("UPDATE oauth_clients SET scopes=NULL WHERE client_id=$1")
             .bind(&h.client)
             .execute(&db.pool)
@@ -303,7 +341,26 @@ async fn legacy_null_client_scopes_issue_and_refresh_an_empty_scope() -> Result<
         );
         let access = field(&pair, "access_token")?;
         ensure!(jwt::verify(access, SECRET)?.scope.as_deref() == Some(""));
-        let (status, refreshed) = h.refresh(field(&pair, "refresh_token")?).await?;
+        ensure!(
+            pair.get("refresh_token").is_none(),
+            "machine client issued an unregistered refresh credential"
+        );
+        let (status, rejected) = h.refresh("synthetic-unregistered-machine-refresh").await?;
+        ensure!(
+            status == StatusCode::BAD_REQUEST && rejected["error"] == "unauthorized_client",
+            "machine client acquired an unregistered refresh grant"
+        );
+        let user = Harness::create(&db.pool).await?;
+        sqlx::query("UPDATE oauth_clients SET scopes=NULL WHERE client_id=$1")
+            .bind(&user.client)
+            .execute(&db.pool)
+            .await?;
+        let refresh = user.seed_refresh(&db.pool).await?;
+        sqlx::query("UPDATE oauth_tokens SET scope=NULL WHERE token_hash=$1")
+            .bind(hash::sha256_hex(&refresh))
+            .execute(&db.pool)
+            .await?;
+        let (status, refreshed) = user.refresh(&refresh).await?;
         ensure!(
             status == StatusCode::OK,
             "legacy NULL scopes prevented rotation"
@@ -312,6 +369,51 @@ async fn legacy_null_client_scopes_issue_and_refresh_an_empty_scope() -> Result<
         Ok(())
     }
     .await;
+    db.finish(assertions).await
+}
+
+#[tokio::test]
+#[ignore = "creates and drops a pre-UUID-cutover PostgreSQL database using TEST_DATABASE_URL"]
+async fn legacy_v4_subject_cannot_exchange_or_use_oauth_credentials() -> Result<()> {
+    let db = database().await?;
+    let assertions = async {
+        // Only this disposable malformed-row fixture removes UUID input gates;
+        // current readers must independently reject a legacy v4 account.
+        for table in ["memberships","oauth_tokens","oauth_authorization_codes","oauth_device_codes"] {
+            sqlx::query(&format!("ALTER TABLE {table} DROP CONSTRAINT uuid_v7_user_id"))
+                .execute(&db.pool).await?;
+        }
+        sqlx::query("ALTER TABLE users DROP CONSTRAINT uuid_v7_id").execute(&db.pool).await?;
+        // Intentional negative source fixture. Every other identity is v7, so
+        // rejection must also cover a legacy user behind a current OAuth client.
+        let h = Harness::create_with_user(&db.pool, Uuid::new_v4()).await?;
+        let refresh = h.seed_refresh(&db.pool).await?;
+        let code = h.seed_code(&db.pool).await?;
+        let device = h.seed_device(&db.pool).await?;
+        let jti = crate::util::uuid7::new_uuid();
+        let now = Utc::now().timestamp();
+        let old_access = jwt::sign(&jwt::Claims {
+            sub: h.user.to_string(), typ: "access".into(),
+            tenant: Some(h.tenant.to_string()), org: Some(h.org.to_string()),
+            cid: Some(h.client.clone()), scope: Some("profile email".into()),
+            sid: None, ver: None, aud: None, jti: Some(jti.to_string()),
+            iat: now, exp: now + 3600,
+        }, SECRET)?;
+        sqlx::query("INSERT INTO oauth_tokens(id,token_hash,token_type,user_id,client_id,tenant_id,organization_id,scope,expires_at,jti) VALUES($1,$2,'access',$3,$4,$5,$6,'profile email',now()+interval '1 hour',$7)")
+            .bind(crate::util::uuid7::new_uuid()).bind(hash::sha256_hex(&old_access))
+            .bind(h.user).bind(&h.client).bind(h.tenant).bind(h.org).bind(jti)
+            .execute(&db.pool).await?;
+        let before = h.tokens(&db.pool).await?;
+        for (kind, credential) in [("refresh", refresh), ("code", code), ("device", device)] {
+            let (status, body) = h.exchange(kind, &credential).await?;
+            ensure!(status == StatusCode::BAD_REQUEST && body["error"] == "invalid_grant",
+                "legacy v4 subject exchanged {kind}: {status}");
+            ensure!(body.get("access_token").is_none(), "legacy v4 subject received new credentials");
+        }
+        h.assert_identity(&old_access, false).await?;
+        ensure!(before == h.tokens(&db.pool).await?, "rejected legacy subject produced OAuth token rows");
+        Ok(())
+    }.await;
     db.finish(assertions).await
 }
 
@@ -658,7 +760,7 @@ async fn current_user_context_state_is_consistent_across_three_oauth_endpoints()
 async fn client_credentials_survive_unrelated_user_context_invalidation() -> Result<()> {
     let db = database().await?;
     let assertions = async {
-        let h = Harness::create(&db.pool).await?;
+        let h = Harness::create_machine(&db.pool).await?;
         sqlx::query("UPDATE users SET status='DISABLED' WHERE id=$1")
             .bind(h.user)
             .execute(&db.pool)
@@ -696,12 +798,10 @@ async fn client_credentials_survive_unrelated_user_context_invalidation() -> Res
                 == StatusCode::UNAUTHORIZED,
             "machine token exposed a user identity"
         );
-        if let Some(refresh) = pair["refresh_token"].as_str() {
-            ensure!(
-                h.refresh(refresh).await?.0 == StatusCode::OK,
-                "machine refresh acquired user requirements"
-            );
-        }
+        ensure!(
+            pair.get("refresh_token").is_none(),
+            "machine client issued an unregistered refresh credential"
+        );
         Ok(())
     }
     .await;
@@ -711,24 +811,41 @@ async fn client_credentials_survive_unrelated_user_context_invalidation() -> Res
 #[tokio::test]
 #[ignore = "requires explicitly configured disposable PostgreSQL server"]
 async fn public_clients_cannot_issue_or_refresh_machine_credentials() -> Result<()> {
-    let db = database().await?;
+    let db = crate::release_tests::TestDatabase::create_through(12).await?;
     let assertions = async {
-        let h = Harness::create(&db.pool).await?;
-        let (status, machine) = h
+        // A registered pre-expansion mixed client can have machine refresh
+        // credentials. Create it before 0013 rather than bypassing the new
+        // single-purpose registration constraints in the target schema.
+        let machine_client = Harness::create(&db.pool).await?;
+        sqlx::query("UPDATE oauth_clients SET grant_types='client_credentials,refresh_token' WHERE client_id=$1")
+            .bind(&machine_client.client).execute(&db.pool).await?;
+        sqlx::raw_sql(include_str!("../migrations/0013_membership_identity_policy.sql"))
+            .execute(&db.pool).await?;
+        sqlx::raw_sql(include_str!("../migrations/0014_credential_identity_binding.sql"))
+            .execute(&db.pool).await?;
+        let migrated_mode: String = sqlx::query_scalar("SELECT subject_mode FROM oauth_clients WHERE client_id=$1")
+            .bind(&machine_client.client).fetch_one(&db.pool).await?;
+        ensure!(migrated_mode == "LEGACY_MIXED", "pre-expansion mixed client lost its registered legacy purpose");
+        let (status, machine) = machine_client
             .post("/oauth/token", &[("grant_type", "client_credentials")])
             .await?;
         ensure!(status == StatusCode::OK, "confidential fixture grant failed");
         let refresh = field(&machine, "refresh_token")?;
+        let illegal_conversion = sqlx::query("UPDATE oauth_clients SET client_type='PUBLIC',client_secret_hash=NULL WHERE client_id=$1")
+            .bind(&machine_client.client).execute(&db.pool).await;
+        ensure!(matches!(illegal_conversion, Err(ref error) if error.as_database_error().and_then(|e| e.code()).as_deref()==Some("23514")),
+            "database allowed a public machine registration");
+        let h = Harness::create(&db.pool).await?;
         sqlx::query("UPDATE oauth_clients SET client_type='PUBLIC',client_secret_hash=NULL WHERE client_id=$1")
             .bind(&h.client).execute(&db.pool).await?;
         let original_count = h.tokens(&db.pool).await?;
-        for fields in [
-            vec![("client_id", h.client.as_str()), ("grant_type", "client_credentials")],
-            vec![("client_id", h.client.as_str()), ("grant_type", "refresh_token"), ("refresh_token", refresh)],
+        for (fields, expected_error) in [
+            (vec![("client_id", h.client.as_str()), ("grant_type", "client_credentials")], "unauthorized_client"),
+            (vec![("client_id", h.client.as_str()), ("grant_type", "refresh_token"), ("refresh_token", refresh)], "invalid_grant"),
         ] {
             let (status, body) = request(&h.app, Method::POST, "/oauth/token", None, &fields).await?;
             ensure!(
-                status == StatusCode::BAD_REQUEST && body["error"] == "unauthorized_client",
+                status == StatusCode::BAD_REQUEST && body["error"] == expected_error,
                 "public identifier obtained a machine credential"
             );
             ensure!(h.tokens(&db.pool).await? == original_count, "rejected public grant persisted credentials");
@@ -752,7 +869,8 @@ async fn password_reset_retires_oauth_tokens_codes_and_devices_but_keeps_machine
         let refresh = field(&pair, "refresh_token")?;
         let code = h.seed_code(&db.pool).await?;
         let device = h.seed_device(&db.pool).await?;
-        let (status, machine) = h
+        let machine_client = Harness::create_machine(&db.pool).await?;
+        let (status, machine) = machine_client
             .post("/oauth/token", &[("grant_type", "client_credentials")])
             .await?;
         ensure!(status == StatusCode::OK, "machine fixture grant failed");
@@ -779,7 +897,7 @@ async fn password_reset_retires_oauth_tokens_codes_and_devices_but_keeps_machine
         .fetch_one(&db.pool)
         .await?;
         ensure!(active == 0, "user credentials remained active after reset");
-        let (status, info) = h
+        let (status, info) = machine_client
             .post(
                 "/oauth/introspect",
                 &[("token", field(&machine, "access_token")?)],
@@ -790,8 +908,8 @@ async fn password_reset_retires_oauth_tokens_codes_and_devices_but_keeps_machine
             "unrelated machine credential was revoked"
         );
         ensure!(
-            h.refresh(field(&machine, "refresh_token")?).await?.0 == StatusCode::OK,
-            "unrelated machine refresh was revoked"
+            machine.get("refresh_token").is_none(),
+            "machine client issued an unregistered refresh credential"
         );
         Ok(())
     }
@@ -808,8 +926,11 @@ async fn credential_approval_waiting_on_password_reset_rechecks_the_platform_ses
         for kind in ["consent", "device"] {
             let h = Harness::create(&db.pool).await?;
             let session: Uuid = sqlx::query_scalar(
-                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
-            ).bind(h.user).bind(h.tenant).bind(h.org).fetch_one(&db.pool).await?;
+                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
+            ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
             let now = Utc::now().timestamp();
             let access = jwt::sign(&jwt::Claims {
                 sub: h.user.to_string(), typ: "session".into(), tenant: Some(h.tenant.to_string()),
@@ -818,14 +939,16 @@ async fn credential_approval_waiting_on_password_reset_rechecks_the_platform_ses
             }, SECRET)?;
             let path = if kind == "consent" {
                 let id: Uuid = sqlx::query_scalar(
-                    "INSERT INTO oauth_authorization_requests(client_id,redirect_uri,scope,expires_at) VALUES($1,$2,'profile',now()+interval '5 minutes') RETURNING id",
-                ).bind(&h.client).bind(REDIRECT).fetch_one(&db.pool).await?;
+                    "INSERT INTO oauth_authorization_requests(client_id,redirect_uri,scope,expires_at,id,client_policy_version) \
+                     SELECT $1,$2,'profile',now()+interval '5 minutes',$3,access_policy_version FROM oauth_clients WHERE client_id=$1 RETURNING id",
+                ).bind(&h.client).bind(REDIRECT).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
                 format!("/api/oauth/consent/{id}/decision")
             } else {
-                let user_code = Uuid::new_v4().simple().to_string()[..16].to_string();
+                let user_code = crate::util::uuid7::new_uuid().simple().to_string()[..16].to_string();
                 sqlx::query(
-                    "INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,scope,expires_at) VALUES($1,$2,$3,'profile',now()+interval '5 minutes')",
-                ).bind(hash::sha256_hex(&hash::random_token(43))).bind(&user_code).bind(&h.client).execute(&db.pool).await?;
+                    "INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,scope,expires_at,id,client_policy_version) \
+                     SELECT $1,$2,$3,'profile',now()+interval '5 minutes',$4,access_policy_version FROM oauth_clients WHERE client_id=$3",
+                ).bind(hash::sha256_hex(&hash::random_token(43))).bind(&user_code).bind(&h.client).bind(crate::util::uuid7::new_uuid()).execute(&db.pool).await?;
                 format!("/api/device/{user_code}/decision")
             };
             let mut blocker = db.pool.begin().await?;
@@ -881,10 +1004,13 @@ async fn new_tokens_store_digests_have_random_jti_and_revoke_independently() -> 
     let db = database().await?;
     let assertions = async {
         let h = Harness::create(&db.pool).await?;
-        // Concurrent identical grants exercise the former second-resolution JWT collision.
+        let left_code = h.seed_code(&db.pool).await?;
+        let right_code = h.seed_code(&db.pool).await?;
+        // Concurrent code grants for the same user/context exercise the former
+        // second-resolution JWT collision while retaining real refresh pairs.
         let (left, right) = tokio::join!(
-            h.post("/oauth/token", &[("grant_type", "client_credentials")]),
-            h.post("/oauth/token", &[("grant_type", "client_credentials")])
+            h.exchange("code", &left_code),
+            h.exchange("code", &right_code)
         );
         let (left, right) = (left?, right?);
         ensure!(
@@ -903,9 +1029,9 @@ async fn new_tokens_store_digests_have_random_jti_and_revoke_independently() -> 
         ensure!(
             first != second
                 && a_jti != b_jti
-                && Uuid::parse_str(&a_jti)?.get_version_num() == 4
-                && Uuid::parse_str(&b_jti)?.get_version_num() == 4,
-            "access JWT identity is not independently randomized"
+                && crate::util::uuid7::is_uuid_v7(Uuid::parse_str(&a_jti)?)
+                && crate::util::uuid7::is_uuid_v7(Uuid::parse_str(&b_jti)?),
+            "access JWT identity is not distinct RFC UUID v7"
         );
         let rows: Vec<(String, String, Option<String>, Option<Uuid>)> = sqlx::query_as(
             "SELECT token_hash,token_type,jwt,jti FROM oauth_tokens WHERE client_id=$1",
@@ -954,7 +1080,7 @@ async fn new_tokens_store_digests_have_random_jti_and_revoke_independently() -> 
 
 #[tokio::test]
 #[ignore = "requires explicitly configured disposable PostgreSQL server"]
-async fn legacy_access_without_jti_remains_usable_and_refresh_scope_cannot_expand() -> Result<()> {
+async fn legacy_unbound_access_is_rejected_and_bound_refresh_scope_cannot_expand() -> Result<()> {
     let db = database().await?;
     let assertions = async {
         let h = Harness::create(&db.pool).await?;
@@ -964,9 +1090,9 @@ async fn legacy_access_without_jti_remains_usable_and_refresh_scope_cannot_expan
             org: Some(h.org.to_string()), cid: Some(h.client.clone()), scope: Some("profile email".into()),
             sid: None, ver: None, aud: None, jti: None, iat: now, exp: now+3600,
         }, SECRET)?;
-        sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,user_id,client_id,tenant_id,organization_id,scope,expires_at,storage_version) VALUES($1,'access',$2,$3,$4,$5,$6,'profile email',now()+interval '1 hour',1)")
-            .bind(hash::sha256_hex(&legacy)).bind(&legacy).bind(h.user).bind(&h.client).bind(h.tenant).bind(h.org).execute(&db.pool).await?;
-        h.assert_identity(&legacy, true).await?;
+        sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,user_id,client_id,tenant_id,organization_id,scope,expires_at,storage_version,id) VALUES($1,'access',$2,$3,$4,$5,$6,'profile email',now()+interval '1 hour',1,$7)")
+            .bind(hash::sha256_hex(&legacy)).bind(&legacy).bind(h.user).bind(&h.client).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).execute(&db.pool).await?;
+        h.assert_identity(&legacy, false).await?;
         let refresh = h.seed_refresh(&db.pool).await?;
         let (status, narrow) = h.post("/oauth/token", &[("grant_type","refresh_token"),("refresh_token",&refresh),("scope","profile")]).await?;
         ensure!(status == StatusCode::OK && narrow["scope"] == "profile", "refresh scope could not narrow");
@@ -975,26 +1101,30 @@ async fn legacy_access_without_jti_remains_usable_and_refresh_scope_cannot_expan
         ensure!(status == StatusCode::BAD_REQUEST && body["error"] == "invalid_scope", "refresh enlarged original scope");
         sqlx::query("UPDATE oauth_clients SET scopes='email' WHERE client_id=$1").bind(&h.client).execute(&db.pool).await?;
         let (status, body) = h.refresh(next).await?;
-        ensure!(status == StatusCode::BAD_REQUEST && body["error"] == "invalid_scope", "omitted refresh scope bypassed current client scopes");
+        ensure!(status == StatusCode::BAD_REQUEST && body["error"] == "invalid_grant", "withdrawn policy permitted an old refresh grant");
         // The compatibility window preserves historical rows; only newly issued rows omit plaintext.
         let stored: Option<String> = sqlx::query_scalar("SELECT jwt FROM oauth_tokens WHERE token_hash=$1")
             .bind(hash::sha256_hex(&legacy)).fetch_one(&db.pool).await?;
         ensure!(stored.as_deref() == Some(legacy.as_str()), "issuance destructively cleaned historical JWT storage");
         let (expiry, revoked): (DateTime<Utc>, bool) = sqlx::query_as("SELECT expires_at,revoked FROM oauth_tokens WHERE token_hash=$1")
             .bind(hash::sha256_hex(next)).fetch_one(&db.pool).await?;
-        ensure!(expiry > Utc::now() && !revoked, "scope failure burned a valid refresh credential");
+        ensure!(expiry > Utc::now() && revoked, "withdrawn client policy failed to retire the old refresh generation");
         Ok(())
     }.await;
     db.finish(assertions).await
 }
 
 async fn approve_consent(h: &Harness, token: &str, id: Uuid) -> Result<StatusCode> {
+    approve_decision(h, token, &format!("/api/oauth/consent/{id}/decision")).await
+}
+
+async fn approve_decision(h: &Harness, token: &str, path: &str) -> Result<StatusCode> {
     let response = tokio::time::timeout(
         Duration::from_secs(30),
         h.app.clone().oneshot(
             Request::builder()
                 .method(Method::POST)
-                .uri(format!("/api/oauth/consent/{id}/decision"))
+                .uri(path)
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(r#"{"approve":true}"#))?,
@@ -1007,8 +1137,11 @@ async fn approve_consent(h: &Harness, token: &str, id: Uuid) -> Result<StatusCod
 
 async fn consent_session(h: &Harness, pool: &PgPool) -> Result<String> {
     let session: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
-    ).bind(h.user).bind(h.tenant).bind(h.org).fetch_one(pool).await?;
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
+    ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let now = Utc::now().timestamp();
     jwt::sign(
         &jwt::Claims {
@@ -1250,7 +1383,7 @@ async fn pkce_policy_tightening_invalidates_legacy_pending_consent_and_codes() -
                 "legacy pending consent remained visible after S256 became required"
             );
             ensure!(
-                approve_consent(&h, &session, pending_id).await? == StatusCode::BAD_REQUEST,
+                approve_consent(&h, &session, pending_id).await? == StatusCode::NOT_FOUND,
                 "legacy pending consent was approved after S256 became required"
             );
             let mut form = vec![
@@ -1278,8 +1411,8 @@ async fn pkce_policy_tightening_invalidates_legacy_pending_consent_and_codes() -
                     .fetch_one(&db.pool)
                     .await?;
             ensure!(
-                !consumed && !pending_consumed && h.tokens(&db.pool).await? == 0,
-                "tightened-policy rejection consumed credentials or persisted tokens"
+                consumed && pending_consumed && h.tokens(&db.pool).await? == 0,
+                "tightened policy failed to retire old grants or issued replacement tokens"
             );
         }
         Ok(())
@@ -1357,8 +1490,8 @@ async fn pkce_policy_tightening_during_client_lock_wait_rejects_legacy_code() ->
                 .fetch_one(&db.pool)
                 .await?;
         ensure!(
-            !consumed && h.tokens(&db.pool).await? == 0,
-            "PKCE policy race consumed a legacy code or persisted tokens"
+            consumed && h.tokens(&db.pool).await? == 0,
+            "PKCE policy race failed to retire the old code or persisted replacement tokens"
         );
         Ok(())
     }
@@ -1374,8 +1507,11 @@ async fn pending_consent_rechecks_current_redirect_grant_and_scopes() -> Result<
         for change in ["redirect", "grant", "scope"] {
             let h = Harness::create(&db.pool).await?;
             let session: Uuid = sqlx::query_scalar(
-                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
-            ).bind(h.user).bind(h.tenant).bind(h.org).fetch_one(&db.pool).await?;
+                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
+            ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
             let now = Utc::now().timestamp();
             let access = jwt::sign(&jwt::Claims {
                 sub: h.user.to_string(), typ: "session".into(), tenant: Some(h.tenant.to_string()),
@@ -1383,8 +1519,9 @@ async fn pending_consent_rechecks_current_redirect_grant_and_scopes() -> Result<
                 sid: Some(session.to_string()), ver: Some(0), aud: None, jti: None, iat: now, exp: now+3600,
             }, SECRET)?;
             let request_id: Uuid = sqlx::query_scalar(
-                "INSERT INTO oauth_authorization_requests(client_id,redirect_uri,scope,expires_at) VALUES($1,$2,'profile',now()+interval '5 minutes') RETURNING id",
-            ).bind(&h.client).bind(REDIRECT).fetch_one(&db.pool).await?;
+                "INSERT INTO oauth_authorization_requests(client_id,redirect_uri,scope,expires_at,id,client_policy_version) \
+                     SELECT $1,$2,'profile',now()+interval '5 minutes',$3,access_policy_version FROM oauth_clients WHERE client_id=$1 RETURNING id",
+            ).bind(&h.client).bind(REDIRECT).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
             let path = format!("/api/oauth/consent/{request_id}");
             ensure!(request(&h.app, Method::GET, &path, Some(&access), &[]).await?.0 == StatusCode::OK,
                 "valid pending consent is unavailable");
@@ -1396,13 +1533,13 @@ async fn pending_consent_rechecks_current_redirect_grant_and_scopes() -> Result<
             sqlx::query(statement).bind(&h.client).execute(&db.pool).await?;
             ensure!(request(&h.app, Method::GET, &path, Some(&access), &[]).await?.0 == StatusCode::NOT_FOUND,
                 "pending consent remained visible after {change} was withdrawn");
-            ensure!(approve_consent(&h, &access, request_id).await? == StatusCode::BAD_REQUEST,
+            ensure!(approve_consent(&h, &access, request_id).await? == StatusCode::NOT_FOUND,
                 "consent approved after {change} was withdrawn");
             let consumed: bool = sqlx::query_scalar("SELECT consumed FROM oauth_authorization_requests WHERE id=$1")
                 .bind(request_id).fetch_one(&db.pool).await?;
             let codes: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_authorization_codes WHERE client_id=$1")
                 .bind(&h.client).fetch_one(&db.pool).await?;
-            ensure!(!consumed && codes == 0, "invalid consent consumed its request or issued a code");
+            ensure!(consumed && codes == 0, "withdrawn policy failed to retire pending consent or issued a code");
         }
         Ok(())
     }.await;
@@ -1423,8 +1560,8 @@ async fn authorization_code_cannot_exchange_after_its_redirect_is_removed() -> R
             "authorization code accepted a removed redirect registration");
         let consumed: bool = sqlx::query_scalar("SELECT consumed FROM oauth_authorization_codes WHERE code_hash=$1")
             .bind(hash::sha256_hex(&code)).fetch_one(&db.pool).await?;
-        ensure!(!consumed && h.tokens(&db.pool).await? == 0,
-            "redirect rejection consumed the code or persisted tokens");
+        ensure!(consumed && h.tokens(&db.pool).await? == 0,
+            "redirect withdrawal failed to retire its code or issued replacement tokens");
         Ok(())
     }.await;
     db.finish(assertions).await
@@ -1438,8 +1575,11 @@ async fn consent_request_and_authorization_code_insert_commit_together() -> Resu
         for stage in ["error", "skip"] {
             let h = Harness::create(&db.pool).await?;
             let session: Uuid = sqlx::query_scalar(
-                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
-            ).bind(h.user).bind(h.tenant).bind(h.org).fetch_one(&db.pool).await?;
+                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
+            ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
             let now = Utc::now().timestamp();
             let access = jwt::sign(&jwt::Claims {
                 sub: h.user.to_string(), typ: "session".into(), tenant: Some(h.tenant.to_string()),
@@ -1447,8 +1587,9 @@ async fn consent_request_and_authorization_code_insert_commit_together() -> Resu
                 sid: Some(session.to_string()), ver: Some(0), aud: None, jti: None, iat: now, exp: now+3600,
             }, SECRET)?;
             let request_id: Uuid = sqlx::query_scalar(
-                "INSERT INTO oauth_authorization_requests(client_id,redirect_uri,scope,expires_at) VALUES($1,$2,'profile',now()+interval '5 minutes') RETURNING id",
-            ).bind(&h.client).bind(REDIRECT).fetch_one(&db.pool).await?;
+                "INSERT INTO oauth_authorization_requests(client_id,redirect_uri,scope,expires_at,id,client_policy_version) \
+                     SELECT $1,$2,'profile',now()+interval '5 minutes',$3,access_policy_version FROM oauth_clients WHERE client_id=$1 RETURNING id",
+            ).bind(&h.client).bind(REDIRECT).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
             let body = if stage == "error" {
                 "RAISE EXCEPTION 'synthetic authorization code insert failure';"
             } else {
@@ -1582,13 +1723,13 @@ async fn password_grant_selects_an_active_membership_after_an_inactive_one() -> 
             sqlx::query("UPDATE memberships SET created_at=now()-interval '1 day' WHERE user_id=$1")
                 .bind(h.user).execute(&db.pool).await?;
             let fallback_tenant: Uuid = sqlx::query_scalar(
-                "INSERT INTO tenants(name,code) VALUES('Active password context',$1) RETURNING id",
-            ).bind(format!("active-{}", Uuid::new_v4().simple())).fetch_one(&db.pool).await?;
+                "INSERT INTO tenants(name,code,id) VALUES('Active password context',$1,$2) RETURNING id",
+            ).bind(format!("active-{}", crate::util::uuid7::new_uuid().simple())).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
             let fallback_org: Uuid = sqlx::query_scalar(
-                "INSERT INTO organizations(tenant_id,name) VALUES($1,'Active password organization') RETURNING id",
-            ).bind(fallback_tenant).fetch_one(&db.pool).await?;
-            sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
-                .bind(h.user).bind(fallback_org).execute(&db.pool).await?;
+                "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'Active password organization',$2) RETURNING id",
+            ).bind(fallback_tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
+            sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
+                .bind(h.user).bind(fallback_org).bind(crate::util::uuid7::new_uuid()).execute(&db.pool).await?;
             let (statement, id) = match state {
                 "organization_disabled" => ("UPDATE organizations SET status='DISABLED' WHERE id=$1", h.org),
                 "ancestor_expired" => ("UPDATE organizations SET expires_at=now()-interval '1 hour' WHERE id=$1", h.parent),
@@ -1616,10 +1757,10 @@ async fn password_grant_selects_an_active_membership_after_an_inactive_one() -> 
 
 #[tokio::test]
 #[ignore = "requires explicitly configured disposable PostgreSQL server"]
-async fn pre_migration_plaintext_and_no_jti_tokens_upgrade_without_revocation() -> Result<()> {
+async fn pre_migration_plaintext_is_retained_but_requires_new_authentication() -> Result<()> {
     let db = database().await?;
     let assertions = async {
-        let name = format!("oauth_legacy_upgrade_{}", Uuid::new_v4().simple());
+        let name = format!("oauth_legacy_upgrade_{}", crate::util::uuid7::new_uuid().simple());
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&db.pool).await?;
         let options = PgConnectOptions::from_str(&std::env::var("TEST_DATABASE_URL")?)
@@ -1634,31 +1775,39 @@ async fn pre_migration_plaintext_and_no_jti_tokens_upgrade_without_revocation() 
             let h = Harness::create(&pool).await?;
             // A historical PUBLIC client must keep compatibility after the
             // opt-in PKCE migration, independently of managed creation defaults.
-            let public_client = format!("legacy-public-{}", Uuid::new_v4().simple());
-            sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,grant_types,scopes,redirect_uris) VALUES($1,'Historical public client','PUBLIC','authorization_code,refresh_token','profile',$2)")
-                .bind(&public_client).bind(REDIRECT).execute(&pool).await?;
+            let public_client = format!("legacy-public-{}", crate::util::uuid7::new_uuid().simple());
+            sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,grant_types,scopes,redirect_uris,id) VALUES($1,'Historical public client','PUBLIC','authorization_code,refresh_token','profile',$2,$3)")
+                .bind(&public_client).bind(REDIRECT).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
             let now = Utc::now().timestamp();
             let legacy = jwt::sign(&jwt::Claims {
                 sub: h.user.to_string(), typ: "access".into(), tenant: Some(h.tenant.to_string()),
                 org: Some(h.org.to_string()), cid: Some(h.client.clone()), scope: Some("profile email".into()),
                 sid: None, ver: None, aud: None, jti: None, iat: now, exp: now+3600,
             }, SECRET)?;
-            sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,user_id,client_id,tenant_id,organization_id,scope,expires_at) VALUES($1,'access',$2,$3,$4,$5,$6,'profile email',now()+interval '1 hour')")
-                .bind(hash::sha256_hex(&legacy)).bind(&legacy).bind(h.user).bind(&h.client).bind(h.tenant).bind(h.org).execute(&pool).await?;
-            let refresh = h.seed_refresh(&pool).await?;
+            sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,user_id,client_id,tenant_id,organization_id,scope,expires_at,id) VALUES($1,'access',$2,$3,$4,$5,$6,'profile email',now()+interval '1 hour',$7)")
+                .bind(hash::sha256_hex(&legacy)).bind(&legacy).bind(h.user).bind(&h.client).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
+            let refresh = h.seed_unbound_refresh(&pool).await?;
             sqlx::raw_sql(include_str!("../migrations/0003_oauth_issuance.sql")).execute(&pool).await?;
-            // The current route adapter reads the additive client policy column;
-            // this does not alter the 0003 token upgrade under test.
-            sqlx::raw_sql(include_str!("../migrations/0007_oauth_pkce_policy.sql")).execute(&pool).await?;
-            let public_requires_pkce: bool = sqlx::query_scalar("SELECT require_pkce FROM oauth_clients WHERE client_id=$1")
-                .bind(&public_client).fetch_one(&pool).await?;
-            ensure!(!public_requires_pkce, "PKCE migration forced a historical PUBLIC client into strict mode");
             let versions: Vec<i16> = sqlx::query_scalar("SELECT storage_version FROM oauth_tokens")
                 .fetch_all(&pool).await?;
             ensure!(versions == vec![1,1], "migration did not mark both existing credentials as legacy");
-            h.assert_identity(&legacy, true).await?;
-            let (status, pair) = h.refresh(&refresh).await?;
-            ensure!(status == StatusCode::OK, "legacy refresh cannot rotate after migration");
+            // Exercise current routes only after upgrading the fixture through
+            // the real remaining migrations, including employee identity gates.
+            for migration in sqlx::migrate!("./migrations").iter().filter(|migration| migration.version > 3) {
+                sqlx::raw_sql(&migration.sql).execute(&pool).await?;
+            }
+            let public_requires_pkce: bool = sqlx::query_scalar("SELECT require_pkce FROM oauth_clients WHERE client_id=$1")
+                .bind(&public_client).fetch_one(&pool).await?;
+            ensure!(!public_requires_pkce, "PKCE migration forced a historical PUBLIC client into strict mode");
+            h.assert_identity(&legacy, false).await?;
+            let (status,rejected)=h.refresh(&refresh).await?;
+            ensure!(status==StatusCode::BAD_REQUEST && rejected["error"]=="invalid_grant", "migration restored an unbound refresh credential");
+            let password="Owned-reauthenticated-migration-password9!";
+            let password_hash=crate::util::password::hash_password(password)?;
+            let username:String=sqlx::query_scalar("UPDATE users SET password_hash=$2 WHERE id=$1 RETURNING username")
+                .bind(h.user).bind(password_hash).fetch_one(&pool).await?;
+            let (status,pair)=h.post("/oauth/token",&[("grant_type","password"),("username",&username),("password",password)]).await?;
+            ensure!(status==StatusCode::OK,"new password authentication failed after migration");
             let new_version: i16 = sqlx::query_scalar("SELECT storage_version FROM oauth_tokens WHERE token_hash=$1")
                 .bind(hash::sha256_hex(field(&pair,"access_token")?)).fetch_one(&pool).await?;
             ensure!(new_version == 2, "new issuance retained legacy storage semantics");
@@ -1668,8 +1817,8 @@ async fn pre_migration_plaintext_and_no_jti_tokens_upgrade_without_revocation() 
             let retained: (Option<String>, bool, i16) = sqlx::query_as("SELECT jwt,revoked,storage_version FROM oauth_tokens WHERE token_hash=$1")
                 .bind(hash::sha256_hex(&legacy)).fetch_one(&pool).await?;
             ensure!(retained == (Some(legacy),true,1), "migration deleted or rewrote historical token material");
-            let invalid = sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,client_id,expires_at) VALUES($1,'access','new plaintext forbidden',$2,now()+interval '1 hour')")
-                .bind(hash::sha256_hex("synthetic-invalid-new-token")).bind(&h.client).execute(&pool).await;
+            let invalid = sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,client_id,expires_at,id) VALUES($1,'access','new plaintext forbidden',$2,now()+interval '1 hour',$3)")
+                .bind(hash::sha256_hex("synthetic-invalid-new-token")).bind(&h.client).bind(crate::util::uuid7::new_uuid()).execute(&pool).await;
             ensure!(matches!(invalid, Err(ref error) if error.as_database_error().and_then(|e| e.code()).as_deref()==Some("23514")),
                 "new ordinary OAuth JWT plaintext was accepted by the database");
             Ok(())
@@ -1680,6 +1829,93 @@ async fn pre_migration_plaintext_and_no_jti_tokens_upgrade_without_revocation() 
             .execute(&db.pool).await;
         upgrade?;
         cleanup?;
+        Ok(())
+    }.await;
+    db.finish(assertions).await
+}
+
+#[tokio::test]
+#[ignore = "requires explicitly configured disposable PostgreSQL server"]
+async fn real_http_approval_keeps_parent_proof_through_exchange_and_revocation() -> Result<()> {
+    let db = database().await?;
+    let assertions=async {
+        for retirement in ["parent_logout","source_policy"] {
+            let h=Harness::create(&db.pool).await?;
+            let password="Owned-independent-password-proof-9!";
+            let password_hash=crate::util::password::hash_password(password)?;
+            let username:String=sqlx::query_scalar("UPDATE users SET password_hash=$2 WHERE id=$1 RETURNING username")
+                .bind(h.user).bind(password_hash).fetch_one(&db.pool).await?;
+            let parent=consent_session(&h,&db.pool).await?;
+            let parent_id=Uuid::parse_str(jwt::verify(&parent,SECRET)?.sid.as_deref()
+                .ok_or_else(||anyhow!("owned parent session omitted its ID"))?)?;
+            let target_version:i64=sqlx::query_scalar("SELECT access_policy_version FROM oauth_clients WHERE client_id=$1")
+                .bind(&h.client).fetch_one(&db.pool).await?;
+            let mut codes=Vec::new();
+            for _ in 0..2 {
+                let (status,pending)=pkce_authorize(&h,None).await?;
+                ensure!(status==StatusCode::FOUND,"owned HTTP authorization request failed");
+                let request_id=Uuid::parse_str(field(&pending,"requestId")?)?;
+                codes.push(consent_code(&h,&parent,request_id).await?);
+            }
+            let (status,device)=h.post("/oauth/device/authorization",&[("scope","profile")]).await?;
+            ensure!(status==StatusCode::OK,"owned HTTP device authorization failed");
+            let device_secret=field(&device,"device_code")?;
+            let user_code=field(&device,"user_code")?;
+            ensure!(approve_decision(&h,&parent,&format!("/api/device/{user_code}/decision")).await?==StatusCode::OK,
+                "owned HTTP device approval failed");
+            type Proof=(i64,Uuid,String,i64,i64,Option<Uuid>,Option<i64>,Option<Uuid>);
+            let expected:Proof=(0,h.membership,"EMPLOYEE".into(),1,target_version,None,None,Some(parent_id));
+            let code_proofs:Vec<Proof>=sqlx::query_as(
+                "SELECT account_version,membership_id,member_type,identity_version,client_policy_version,application_id,application_policy_version,platform_session_id \
+                 FROM oauth_authorization_codes WHERE client_id=$1 ORDER BY id",
+            ).bind(&h.client).fetch_all(&db.pool).await?;
+            ensure!(code_proofs.len()==2 && code_proofs.iter().all(|proof|proof==&expected),
+                "real consent failed to preserve its original account, member, policy and parent proof");
+            let device_proof:Proof=sqlx::query_as(
+                "SELECT account_version,membership_id,member_type,identity_version,client_policy_version,application_id,application_policy_version,platform_session_id \
+                 FROM oauth_device_codes WHERE device_code_hash=$1 AND status='APPROVED'",
+            ).bind(hash::sha256_hex(device_secret)).fetch_one(&db.pool).await?;
+            ensure!(device_proof==expected,"real device approval failed to preserve its original proof");
+            let (status,pair)=h.exchange("code",&codes[0]).await?;
+            ensure!(status==StatusCode::OK,"real HTTP approved code could not exchange");
+            let access=field(&pair,"access_token")?;
+            let refresh=field(&pair,"refresh_token")?;
+            let token_proofs:Vec<Proof>=sqlx::query_as(
+                "SELECT account_version,membership_id,member_type,identity_version,client_policy_version,application_id,application_policy_version,platform_session_id \
+                 FROM oauth_tokens WHERE client_id=$1 ORDER BY id",
+            ).bind(&h.client).fetch_all(&db.pool).await?;
+            ensure!(token_proofs.len()==2 && token_proofs.iter().all(|proof|proof==&expected),
+                "code exchange changed or discarded the original grant proof");
+            h.assert_identity(access,true).await?;
+            // A separately proved password grant has no dependency on the parent
+            // console session or its source client. It must remain usable.
+            let (status,direct)=h.post("/oauth/token",&[("grant_type","password"),("username",&username),("password",password)]).await?;
+            ensure!(status==StatusCode::OK,"independent password proof failed issuance");
+            let direct_access=field(&direct,"access_token")?;
+            let direct_parent:Option<Uuid>=sqlx::query_scalar("SELECT platform_session_id FROM oauth_tokens WHERE token_hash=$1")
+                .bind(hash::sha256_hex(direct_access)).fetch_one(&db.pool).await?;
+            ensure!(direct_parent.is_none(),"direct password grant inherited an unrelated parent");
+            match retirement {
+                "parent_logout"=>ensure!(request(&h.app,Method::POST,"/api/auth/logout",Some(&parent),&[]).await?.0==StatusCode::OK,
+                    "owned parent logout failed"),
+                _=>{sqlx::query("UPDATE oauth_clients SET status='DISABLED' WHERE client_id='platform-console-legacy'")
+                    .execute(&db.pool).await?;}
+            }
+            let unchanged:(String,i64)=sqlx::query_as("SELECT status,access_policy_version FROM oauth_clients WHERE client_id=$1")
+                .bind(&h.client).fetch_one(&db.pool).await?;
+            ensure!(unchanged==("ENABLED".into(),target_version),"parent retirement unexpectedly changed the target client");
+            h.assert_identity(access,false).await?;
+            let (status,rejected)=h.refresh(refresh).await?;
+            ensure!(status==StatusCode::BAD_REQUEST && rejected["error"]=="invalid_grant",
+                "retired parent was repaired during refresh");
+            ensure!(h.exchange("code",&codes[1]).await?.0==StatusCode::BAD_REQUEST,
+                "unconsumed HTTP code survived its original parent retirement");
+            ensure!(h.exchange("device",device_secret).await?.0==StatusCode::BAD_REQUEST,
+                "approved HTTP device survived its original parent retirement");
+            h.assert_identity(direct_access,true).await?;
+            ensure!(h.refresh(field(&direct,"refresh_token")?).await?.0==StatusCode::OK,
+                "parent retirement revoked the independent password grant");
+        }
         Ok(())
     }.await;
     db.finish(assertions).await

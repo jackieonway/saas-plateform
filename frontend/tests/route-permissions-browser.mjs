@@ -5,6 +5,7 @@ import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
+import { fixtureUuid, identityForProfile, installLegacyAuthMode, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.ROUTE_PERMISSIONS_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -40,16 +41,16 @@ async function startServer() {
   }, "Vite did not become ready", 30_000)
 }
 
-const profile = {
-  user: { id: "guard-user", username: "guard", realName: "权限验收", email: "guard@example.test",
+const profile = profileWithIdentity({
+  user: { id: fixtureUuid("guard-user"), username: "guard", realName: "权限验收", email: "guard@example.test",
     phone: "", gender: "UNKNOWN", avatar: "", isSuperAdmin: true },
-  tenant: { id: "guard-tenant", name: "权限验收租户", code: "guard-tenant", isPlatform: true },
-  organization: { id: "guard-org", name: "权限验收组织", path: "权限验收组织" },
+  tenant: { id: fixtureUuid("guard-tenant"), name: "权限验收租户", code: "guard-tenant", isPlatform: true },
+  organization: { id: fixtureUuid("guard-org"), name: "权限验收组织", path: "权限验收组织" },
   applications: [{ id: "guard-system", code: "system", name: "系统管理", icon: "LayoutGrid", basePath: "/system",
     entryType: "HTML", runtimeMode: "TRUSTED" }],
-  memberships: [{ userId: "guard-user", tenantId: "guard-tenant", tenantName: "权限验收租户",
-    organizationId: "guard-org", organizationName: "权限验收组织", organizationPath: "权限验收组织" }],
-}
+  memberships: [{ userId: fixtureUuid("guard-user"), tenantId: fixtureUuid("guard-tenant"), tenantName: "权限验收租户",
+    organizationId: fixtureUuid("guard-org"), organizationName: "权限验收组织", organizationPath: "权限验收组织" }],
+})
 const tenant = { id: "private-tenant", name: "先前租户的私有数据", code: "private-tenant", tenantType: "COMPANY",
   contactName: "联系人", contactPhone: "13800138000", contactEmail: "contact@example.test", status: "ENABLED",
   isPlatform: false, description: "", organizationCount: 1, userCount: 1, authorizedAppCount: 1,
@@ -84,10 +85,11 @@ async function fixture(pathname, options = {}) {
   const menusGate = options.loadingMenus ? new Promise((resolve) => { releaseMenus = resolve }) : Promise.resolve()
   state.releaseMenus = () => releaseMenus?.()
   page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.addInitScript((authenticated) => {
-    if (authenticated) if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "guard-session", refreshToken: null }))
+  if (options.authenticated !== false) await installSession(context, "guard-session", identityForProfile(state.profile))
+  else await installLegacyAuthMode(context)
+  await context.addInitScript(() => {
     localStorage.setItem("platform-theme", "light")
-  }, options.authenticated !== false)
+  })
   await context.routeWebSocket(() => true, () => {})
   await context.route((url) => url.origin === origin && url.pathname === "/src/main.tsx", async (route) => {
     const response = await route.fetch()
@@ -311,7 +313,7 @@ try {
     assert.equal(await page.getByText(tenant.name, { exact: true }).count(), 0)
     const before = state.requests.filter((request) => request.pathname === "/api/tenants").length
     state.permissions = []
-    await page.evaluate(() => window.__permissionAuth.getState().setSession("new-guard-session", "new-guard-refresh"))
+    await page.evaluate((proof) => window.__permissionAuth.getState().setSession("new-guard-session", "new-guard-refresh", undefined, proof), identityForProfile(state.profile))
     await page.getByText("无访问权限", { exact: true }).waitFor()
     assert.equal(await page.getByText(tenant.name, { exact: true }).count(), 0)
     assert.equal(state.requests.filter((request) => request.pathname === "/api/tenants").length, before)
@@ -497,19 +499,28 @@ try {
     await child.waitFor({ state: "hidden" })
     noBusinessRequests(state)
   })
-  await check("directory preference is isolated by user tenant organization app scope", "/profile", { menus: sidebarMenus, permissions: ["system:organization"] }, async ({ page, state }) => {
+  await check("directory preference is isolated by complete member generation and app scope", "/profile", { menus: sidebarMenus, permissions: ["system:organization"] }, async ({ page, state }) => {
     const root = page.getByRole("complementary", { name: "菜单导航", exact: true }).getByRole("button", { name: "组织机构", exact: true })
     await root.waitFor()
     await root.click()
     assert.equal(await root.getAttribute("aria-expanded"), "false")
-    state.profile.organization.id = "another-guard-org"
-    await page.evaluate(() => window.__permissionAuth.getState().setSession("other-menu-context"))
-    await root.waitFor()
-    assert.equal(await root.getAttribute("aria-expanded"), "true", "New organization uses its own fold preferences")
-    state.profile.organization.id = profile.organization.id
-    await page.evaluate(() => window.__permissionAuth.getState().setSession("restored-menu-context"))
-    await root.waitFor()
-    assert.equal(await root.getAttribute("aria-expanded"), "false", "Original context restores its own fold preferences")
+    for (const [index, patch] of [
+      { organization: { ...profile.organization, id: fixtureUuid("another-guard-org") }, membershipId: fixtureUuid("another-guard-org-member") },
+      { membershipId: fixtureUuid("same-org-other-member") },
+      { identityVersion: "2" },
+      { accountVersion: "1" },
+    ].entries()) {
+      state.profile = profileWithIdentity({ ...structuredClone(profile), ...patch })
+      await page.evaluate(({ proof, token }) => window.__permissionAuth.getState().setSession(token, null, undefined, proof),
+        { proof: identityForProfile(state.profile), token: `other-menu-context-${index}` })
+      await root.waitFor()
+      assert.equal(await root.getAttribute("aria-expanded"), "true", "Another concrete member or generation uses its own fold preferences")
+      state.profile = structuredClone(profile)
+      await page.evaluate(({ proof, token }) => window.__permissionAuth.getState().setSession(token, null, undefined, proof),
+        { proof: identityForProfile(state.profile), token: `restored-menu-context-${index}` })
+      await root.waitFor()
+      assert.equal(await root.getAttribute("aria-expanded"), "false", "Original concrete identity restores its own fold preferences")
+    }
     noBusinessRequests(state)
   })
   await check("mobile drawer works independently of desktop collapse", "/profile", { menus: sidebarMenus, permissions: ["system:organization"],

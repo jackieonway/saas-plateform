@@ -13,6 +13,7 @@ pub(super) struct ContextRows {
     pub menu_rows: Vec<Value>,
     pub roles: Vec<(Uuid, String, String)>,
     pub grants: Vec<(String, String, String)>,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize_vec")]
     pub subtree: Vec<Uuid>,
     pub can_manage_platform: bool,
     pub runtime: (String, String, String, Option<String>, Option<Uuid>),
@@ -24,6 +25,9 @@ pub(super) async fn load(
     binding: &AppTokenInfo,
     environment: &str,
 ) -> Result<ContextRows, AppError> {
+    if binding.member_type != "EMPLOYEE" {
+        return Err(AppError::forbidden("客户身份不能读取员工授权投影"));
+    }
     let timer = crate::observability::stages().timer(operational_telemetry::Stage::BusinessSql);
     let result = load_inner(pool, binding, environment).await;
     timer.finish(crate::observability::outcome(&result));
@@ -51,14 +55,18 @@ WITH identity_row AS (
     SELECT u.username,COALESCE(u.real_name,'') AS real_name,t.code,t.name AS tenant_name,
       o.name AS org_name,COALESCE(org_path(o.id),'') AS org_path,a.name AS app_name,u.is_super_admin
     FROM users u JOIN tenants t ON t.id=$3
-      JOIN organizations o ON o.id=$1 AND o.tenant_id=t.id JOIN applications a ON a.id=$4 WHERE u.id=$2
+      JOIN organizations o ON o.id=$1 AND o.tenant_id=t.id JOIN applications a ON a.id=$4
+      JOIN platform_sessions s ON s.id=$9 AND s.user_id=u.id AND s.tenant_id=t.id
+        AND s.organization_id=o.id AND s.membership_id=$6 AND s.member_type='EMPLOYEE'
+        AND s.identity_version=$7 AND s.account_version=$8 AND platform_session_active(s.id)
+    WHERE u.id=$2 AND a.status='ENABLED' AND 'EMPLOYEE'=ANY(a.allowed_member_types)
 ), menu_rows(id,parent_id,type,title,path,icon,permission,link_url,link_target,sort_order,visible,created_at) AS (
     SELECT * FROM ({effective}) ordinary WHERE NOT (SELECT is_super_admin FROM identity_row)
     UNION ALL
     SELECT * FROM ({granted}) administrator WHERE (SELECT is_super_admin FROM identity_row)
 ), role_rows(id,name,code) AS (
     {ORG_ANCESTORS_SQL} SELECT DISTINCT r.id,r.name,COALESCE(r.code,'')
-    FROM user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='ENABLED'
+    FROM user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='ENABLED' AND r.tenant_id=$3
       JOIN anc ON anc.id=r.organization_id JOIN role_menus rm ON rm.role_id=r.id
       JOIN menus m ON m.id=rm.menu_id AND m.application_id=$4 AND m.status='ENABLED'
       JOIN tenant_menus tm ON tm.menu_id=m.id AND tm.tenant_id=$3
@@ -67,7 +75,9 @@ WITH identity_row AS (
 ), grant_rows(resource,action,scope) AS (
     SELECT g.resource_code,g.action_code,g.scope_type FROM membership_data_grants g
       JOIN memberships member ON member.id=g.membership_id
-    WHERE member.user_id=$2 AND member.organization_id=$1 AND g.application_id=$4
+        AND member.member_type='EMPLOYEE' AND member.status='ENABLED'
+    WHERE member.id=$6 AND member.user_id=$2 AND member.organization_id=$1
+      AND member.identity_version=$7 AND g.application_id=$4
     ORDER BY g.resource_code,g.action_code
 ), subtree AS (
     WITH RECURSIVE descendants AS (
@@ -89,6 +99,7 @@ SELECT jsonb_build_object(
  'subtree',COALESCE((SELECT jsonb_agg(id ORDER BY id) FROM subtree),'[]'::jsonb),
  'can_manage_platform',EXISTS(SELECT 1 FROM organizations o JOIN tenants t ON t.id=o.tenant_id WHERE o.id=$1 AND t.id=$3 AND t.is_platform AND o.parent_id IS NULL),
  'runtime',(SELECT jsonb_build_array(runtime_mode,entry_type,entry_url,version,id) FROM runtime))
+ FROM identity_row
 "#
     );
     let mut connection = crate::observability::acquire(pool).await?;
@@ -98,8 +109,13 @@ SELECT jsonb_build_object(
         .bind(binding.tenant_id)
         .bind(binding.application_id)
         .bind(environment)
-        .fetch_one(&mut *connection)
-        .await?;
+        .bind(binding.membership_id)
+        .bind(binding.identity_version)
+        .bind(binding.account_version)
+        .bind(binding.session_id)
+        .fetch_optional(&mut *connection)
+        .await?
+        .ok_or_else(|| AppError::unauthorized("应用成员身份已在授权计算期间失效"))?;
     drop(connection);
     serde_json::from_value(value)
         .map_err(|_| AppError::Server(anyhow::anyhow!("AUTHORIZATION_SNAPSHOT_INVALID")))

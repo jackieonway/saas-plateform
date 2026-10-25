@@ -10,6 +10,7 @@ import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
+import { fixtureUuid, identityForProfile, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.REGION_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -49,11 +50,14 @@ const resolution = (codes = []) => {
 }
 const existingLocation = { province: "浙江省", city: "杭州市", district: "西湖区", address: "旧地址 1 号",
   township: "西湖街道", village: "杭州社区", longitude: 120.123456, latitude: 30.123456 }
-const tenant = { id: "region-tenant", name: "地区验收租户", code: "region-tenant", status: "ENABLED", isPlatform: false,
+const tenant = { id: fixtureUuid("region-tenant"), name: "地区验收租户", code: "region-tenant", status: "ENABLED", isPlatform: false,
   description: "", expiresAt: null, organizationCount: 1, userCount: 1, authorizedAppCount: 0,
   createdAt: "2026-10-01T00:00:00Z", ...existingLocation }
-const organization = { id: "region-org", name: "地区验收组织", code: "region-org", status: "ENABLED", parentId: null,
+const organization = { id: fixtureUuid("region-org"), name: "地区验收组织", code: "region-org", status: "ENABLED", parentId: null,
   tenantId: tenant.id, sortOrder: 0, description: "", expiresAt: null, children: [], ...existingLocation }
+const fixtureProfile = profileWithIdentity({ user: { id: fixtureUuid("region-user"), username: "region-fixture", realName: "地区验收管理员" },
+  tenant: { ...tenant, isPlatform: true }, organization: { ...organization, path: organization.name },
+  platformContext: true, applications: [], memberships: [] })
 const canonicalRaw = { address: { state: "广东", city: "深圳", city_district: "南山区", town: "粤海街道", village: "深圳社区", road: "科技路", house_number: "8号" } }
 const searchItem = { display_name: "浙江旧搜索结果", lat: "30.2", lon: "120.2",
   address: { state: "浙江", city: "杭州", city_district: "西湖区", town: "西湖街道", village: "杭州社区", road: "旧搜索路" } }
@@ -89,7 +93,8 @@ async function fixture(kind, options = {}) {
     reverseStatus: 200, resolved: resolution(["440000", "440300", "440305", "440305001", "440305001001"]), resolveStatus: 200,
     holdSearch: false, heldSearch: [], legacy: false, ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.addInitScript(() => { if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "test-region-session", refreshToken: null })); localStorage.setItem("platform-theme", "light") })
+  await installSession(context, "test-region-session", identityForProfile(fixtureProfile))
+  await context.addInitScript(() => { localStorage.setItem("platform-theme", "light") })
   // The fixture entry is intentionally fixed while developers may edit files.
   // A Vite HMR reload would restore its original App dependency graph.
   await context.routeWebSocket(() => true, () => {})
@@ -98,7 +103,7 @@ async function fixture(kind, options = {}) {
     let body = await response.text()
     assert.match(body, /import App from ["']\/src\/App\.tsx(?:\?[^"']*)?["']/, "Mount the actual production pages from the real Vite entry.")
     body = body.replace(/import App from ["']\/src\/App\.tsx(?:\?[^"']*)?["']/, `import App from "/src/pages/system/${kind === "tenant" ? "tenants/TenantsPage" : "organizations/OrganizationsPage"}.tsx"`)
-    body = body.replace("ReactDOM.createRoot", `import { authStore } from "/src/stores/auth.ts";\nauthStore.setState({ profile: { tenant: { id: "region-tenant", isPlatform: true } } });\nReactDOM.createRoot`)
+    body = body.replace("ReactDOM.createRoot", `import { authStore } from "/src/stores/auth.ts";\nawait authStore.getState().initializeSessionCoordination();\nauthStore.getState().setProfile(${JSON.stringify(fixtureProfile)});\nReactDOM.createRoot`)
     await route.fulfill({ response, body })
   })
   const fulfill = async (route, value, status = 200) => {

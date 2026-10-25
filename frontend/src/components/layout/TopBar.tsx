@@ -42,6 +42,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog"
 import { useAuthStore } from "@/stores/auth"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { useMenusQuery, useSwitchContext } from "@/hooks/use-auth-data"
@@ -59,7 +61,8 @@ import { formatRelative } from "@/lib/format"
 import { routeTitle } from "@/lib/routes"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import type { MenuNode, NotificationRecord, NotificationType } from "@/api/types"
+import { canSelectConsoleMembership, membershipSelectionDisabledReason, membershipSelectionKey } from "@/lib/context-identity"
+import type { Membership, MenuNode, NotificationRecord, NotificationType } from "@/api/types"
 
 export function TopBar({
   onOpenMobileNav,
@@ -99,8 +102,6 @@ export function TopBar({
     }
     return titles
   }, [menusQuery.data, pathname])
-
-  const user = profile?.user
 
   /* 实时通知 socket —— 整个应用只挂载一次 (TopBar 常驻) */
   const { connected: liveConnected, lastNotificationAt, prefs } = useNotificationSocket()
@@ -525,8 +526,8 @@ function OrgContextChip() {
   const switchContext = useSwitchContext()
   const { navigateTo: navigate, access } = useApplicationNavigation()
   const mutation = useMutation({
-    mutationFn: (orgId: string) => switchContext(orgId),
-    onSuccess: () => toast.success("已切换组织上下文"),
+    mutationFn: (member: Membership) => switchContext(member.organizationId, member.membershipId),
+    onSuccess: () => toast.success("已切换成员身份"),
     onError: (e: Error) => toast.error(e.message || "切换失败"),
   })
 
@@ -542,8 +543,8 @@ function OrgContextChip() {
         <button
           type="button"
           className="hidden max-w-[11rem] items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring md:flex"
-          aria-label="切换组织上下文"
-          title={`${profile.tenant.name} / ${profile.organization.name}`}
+          aria-label="切换组织与成员身份"
+          title={`${profile.tenant.name} / ${profile.organization.name} · ${profile.memberType === "EMPLOYEE" ? "员工" : "客户"}`}
         >
           <Building2 className="size-3.5 shrink-0 text-primary" />
           <span className="flex min-w-0 items-center gap-1">
@@ -561,12 +562,12 @@ function OrgContextChip() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="border-b px-3 py-2.5">
-          <p className="text-sm font-semibold">组织上下文</p>
+          <p className="text-sm font-semibold">组织与成员身份</p>
           <p
             className="mt-0.5 truncate text-xs text-muted-foreground"
             title={`当前:${profile.tenant.name} · ${profile.organization.path}`}
           >
-            当前:{profile.tenant.name} · {profile.organization.path}
+            当前:{profile.tenant.name} · {profile.organization.path} · {profile.memberType === "EMPLOYEE" ? "员工" : "客户"}
           </p>
         </div>
         <div className="max-h-64 overflow-y-auto scroll-area p-1.5">
@@ -574,15 +575,17 @@ function OrgContextChip() {
             我的成员关系
           </p>
           {profile.memberships.map((m) => {
-            const active = m.organizationId === profile.organization.id
+            const active = m.membershipId === profile.membershipId && m.memberType === profile.memberType &&
+              m.identityVersion === profile.identityVersion
+            const disabledReason = membershipSelectionDisabledReason(m)
             return (
               <button
-                key={m.organizationId}
+                key={membershipSelectionKey(m)}
                 type="button"
-                disabled={active || mutation.isPending}
-                onClick={() => mutation.mutate(m.organizationId)}
+                disabled={active || mutation.isPending || !canSelectConsoleMembership(m)}
+                onClick={() => mutation.mutate(m)}
                 className={cn(
-                  "flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm transition-colors",
+                  "flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm transition-colors disabled:cursor-default disabled:opacity-70",
                   active ? "bg-primary/10" : "hover:bg-accent"
                 )}
               >
@@ -597,15 +600,16 @@ function OrgContextChip() {
                 <span className="min-w-0 flex-1">
                   <span className={cn("block truncate text-xs font-medium", active && "text-primary")}>
                     {m.organizationName}
-                    {m.departmentName ? ` · ${m.departmentName}` : ""}
+                    {m.memberType === "EMPLOYEE" && m.departmentName ? ` · ${m.departmentName}` : ""}
                   </span>
                   <span className="block truncate text-[11px] text-muted-foreground">
-                    {m.tenantName} · {m.organizationPath}
+                    {m.tenantName} · {m.organizationPath} · {m.memberType === "EMPLOYEE" ? "员工" : "客户"} · {m.status === "ENABLED" ? "有效" : "已停用"}
                   </span>
+                  {disabledReason && <span className="mt-0.5 block text-[11px] text-muted-foreground">{disabledReason}</span>}
                 </span>
                 {active ? (
                   <Check className="size-4 shrink-0 text-primary" />
-                ) : mutation.isPending && mutation.variables === m.organizationId ? (
+                ) : mutation.isPending && mutation.variables?.membershipId === m.membershipId ? (
                   <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
                 ) : null}
               </button>
@@ -631,6 +635,9 @@ function OrgContextChip() {
 
 function UserMenu() {
   const profile = useAuthStore((s) => s.profile)
+  const bff = useAuthStore((s) => s.authMode === "BFF")
+  const [confirmGlobal, setConfirmGlobal] = React.useState(false)
+  const [globalPending, setGlobalPending] = React.useState(false)
   const navigate = useNavigate()
   const { navigateTo } = useApplicationNavigation()
   const queryClient = useQueryClient()
@@ -642,14 +649,28 @@ function UserMenu() {
     try {
       if (!await logoutPlatformSession()) return
       queryClient.clear()
-      toast.success("已退出登录")
-      navigate("/login", { replace: true })
+      toast.success("已退出本平台")
+      navigate("/login?signedOut=1", { replace: true })
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "退出结果尚未确认，请重新登录")
     }
   }
 
+  const handleGlobalLogout = async () => {
+    if (globalPending) return
+    setGlobalPending(true)
+    try {
+      if (!await logoutPlatformSession(undefined, "GLOBAL")) return
+      queryClient.clear()
+      toast.success("已退出所有应用")
+      navigate("/login?signedOut=1", { replace: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "退出所有应用的结果尚未确认，请重新检查登录状态")
+    } finally { setGlobalPending(false) }
+  }
+
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
@@ -688,9 +709,26 @@ function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={handleLogout}>
           <LogOut className="size-4" />
-          退出登录
+          退出本平台
         </DropdownMenuItem>
+        {bff && <DropdownMenuItem variant="destructive" onClick={() => setConfirmGlobal(true)}>
+          <LogOut className="size-4" />
+          退出所有应用
+        </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
+    <AlertDialog open={confirmGlobal} onOpenChange={setConfirmGlobal}>
+      <AlertDialogContent>
+        <AlertDialogHeader><AlertDialogTitle>退出所有应用？</AlertDialogTitle>
+          <AlertDialogDescription>当前账号在所有应用中的登录状态都会失效。其他设备和浏览器也需要重新登录。</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel disabled={globalPending}>取消</AlertDialogCancel>
+          <Button variant="destructive" disabled={globalPending} onClick={() => { void handleGlobalLogout() }}>
+            {globalPending ? "正在退出…" : "退出所有应用"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

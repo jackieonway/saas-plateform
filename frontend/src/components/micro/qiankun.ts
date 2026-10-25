@@ -1,3 +1,4 @@
+import { newUuid } from "@/lib/uuid"
 import type { FrameworkConfiguration, FrameworkLifeCycles, LoadableApp, MicroApp } from "qiankun"
 import type { MicroApplicationHandle, MicroProps } from "./types"
 import { createMicroServices } from "./services"
@@ -58,7 +59,7 @@ function resourceLease(scope: Scope): string {
   checkScope(scope)
   if (scope.resourceSignal !== scope.currentProps.signal) {
     scope.resourceSignal = scope.currentProps.signal
-    scope.resourceLease = crypto.randomUUID()
+    scope.resourceLease = newUuid()
   }
   return scope.resourceLease!
 }
@@ -120,7 +121,7 @@ function executionFor(appCode: string, entry: URL): Execution {
   const key = JSON.stringify([appCode, entry.href])
   const cached = executions.get(key)
   if (cached && !cached.scope) return cached
-  const id = crypto.randomUUID()
+  const id = newUuid()
   const salted = (value: string) => {
     const url = new URL(value, entry)
     if (/^https?:$/.test(url.protocol)) url.searchParams.set("__saas_execution", id)

@@ -67,7 +67,7 @@ export function AppSidebar({
   isError: boolean
   onRetry: () => void
   onCollapse?: () => void
-  /** Persist directory preferences only within the same user/tenant/org/app. */
+  /** Persist directory preferences within a proven concrete member/generation and app. */
   navigationScope?: string
   userDisplayName: string
   className?: string
@@ -170,7 +170,7 @@ export function AppSidebar({
           />
         ) : (
           <MenuList key={navigationScope ?? "unscoped"} nodes={filtered} pathname={pathname} onNavigate={openMenu}
-            forceExpanded={!!keyword.trim()} storageKey={navigationScope ? `platform-menu-folds:${navigationScope}` : null} />
+            forceExpanded={!!keyword.trim()} storageKey={navigationScope ? `platform-menu-folds-v2:${navigationScope}` : null} />
         )}
       </nav>
 

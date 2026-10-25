@@ -9,7 +9,7 @@ const browser = args[1] || 'chromium'
 assert(['chromium', 'chrome', 'msedge', 'firefox', 'webkit'].includes(browser), 'Unknown browser')
 
 const suites = [
-  'notification-frontend', 'platform-settings', 'phase9-navigation', 'region-location',
+  'notification-frontend', 'platform-settings', 'phase9-navigation', 'login-session', 'region-location',
   'entity-types', 'department-context', 'route-permissions',
   'micro-qiankun',
 ]

@@ -8,7 +8,7 @@ import { verifySdk } from '../../frontend/scripts/check-sdk.mjs'
 const root = path.resolve(import.meta.dirname, '../..')
 test('platform consumes a verified fixed SDK delivery and matching public Rust DTO', async () => {
   const release = verifySdk()
-  assert.equal(release.sdkVersion, '2.0.0')
+  assert.equal(release.sdkVersion, '3.0.0')
   assert.equal(readFileSync(path.join(root, 'backend/src/public_contract.rs'), 'utf8'), readFileSync(path.join(root, 'frontend/vendor/micro-app-sdk/protocol.rs'), 'utf8'))
 })
 test('consumer verification rejects modified SDK bytes without regenerating them', async () => {

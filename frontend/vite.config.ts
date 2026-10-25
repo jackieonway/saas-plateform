@@ -163,6 +163,12 @@ export default defineConfig({
         target: backendProxyTarget,
         changeOrigin: true,
       },
+      // Cookie/Origin-bound BFF routes must reach the backend under the public
+      // console authority; they are never host SPA navigation or legacy OAuth.
+      "^/auth(?:/|\\?|$)": {
+        target: backendProxyTarget,
+        changeOrigin: false,
+      },
       // Independent OAuth exercise API. It must precede /oauth and must never
       // receive platform bearer tokens or any other platform session cookies.
       "^/oauth-playground-api(?:/|\\?|$)": {

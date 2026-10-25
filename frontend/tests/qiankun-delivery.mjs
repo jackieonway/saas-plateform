@@ -13,7 +13,7 @@ function fixture(t) {
     rmSync(root, { recursive: true, force: true })
   })
   const write = (name, text) => { const file = path.join(root, name); mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, text) }
-  write('vendor/micro-app-sdk/package.json', '{"name":"@saas-platform/micro-app-sdk","version":"2.0.0"}')
+  write('vendor/micro-app-sdk/package.json', '{"name":"@saas-platform/micro-app-sdk","version":"3.0.0"}')
   write('src/main.tsx', 'export const host = true')
   write('dist/index.html', '<script type="module" src="/assets/host.js"></script>')
   write('dist/assets/host.js', 'console.log("qiankun host")')

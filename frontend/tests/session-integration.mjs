@@ -5,6 +5,8 @@ import path from 'node:path'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { identity, targetIdentity, contextResponse } from './helpers/session-fixture.mjs'
+import { canSelectConsoleMembership, membershipSelectionDisabledReason, membershipSelectionKey, requireContextIdentity, contextIdentityKey } from '../src/lib/context-identity.ts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sourceRoot = process.env.SESSION_INTEGRATION_SOURCE_ROOT ? path.resolve(root, process.env.SESSION_INTEGRATION_SOURCE_ROOT) : root
@@ -38,18 +40,20 @@ function expression(relative, name, bindings = {}, kind = 'variable') {
 test('context selection delegates the whole operation to the locked platform transaction', async () => {
   const calls = [], expected = { accessToken: 'organization-b', refreshToken: 'refresh-b' }
   const useSwitch = expression('src/hooks/use-auth-data.ts', 'useSwitchContext', {
-    switchPlatformContext: async id => { calls.push(id); return expected },
+    switchPlatformContext: async (...ids) => { calls.push(ids); return expected },
     useQueryClient: () => { throw new Error('Consumer must not create a second switching transaction') },
   }, 'function')
-  assert.equal(await useSwitch()('org-b'), expected)
-  assert.deepEqual(calls, ['org-b'])
+  assert.equal(await useSwitch()(targetIdentity.organizationId, targetIdentity.membershipId), expected)
+  assert.deepEqual(calls, [[targetIdentity.organizationId, targetIdentity.membershipId]])
 })
 
 function loginFixture(committed) {
-  const events = [], pair = { accessToken: 'new-access', refreshToken: 'new-refresh', user: { username: 'new-user' } }
-  const fence = { sessionId: 'previous-session', version: 4 }
+  const events = [], pair = contextResponse('new-access', 'new-refresh')
+  const fence = { sessionId: 'previous-session', version: 4, contextKey: contextIdentityKey(identity()) }
+  const member = { ...targetIdentity, status: 'ENABLED', consoleSelectable: true, selectionDisabledReason: null }
   const action = expression('src/pages/login/LoginPage.tsx', 'selectContext', {
     captureSessionFence: () => fence,
+    canSelectConsoleMembership, membershipSelectionDisabledReason, membershipSelectionKey, requireContextIdentity,
     authApi: { selectContext: async () => pair },
     setSelecting: () => {}, setError: value => events.push(['error', value]), setStep: () => {}, setLoginData: () => {}, setSelectedTenantId: () => {},
     queryClient: { cancelQueries: async () => events.push(['cancel']), clear: () => events.push(['clear']) },
@@ -57,12 +61,12 @@ function loginFixture(committed) {
     toast: { success: message => events.push(['welcome', message]) }, navigate: destination => events.push(['navigate', destination]), returnTo: '/dashboard',
     ApiError: class extends Error {},
   })
-  return { action, events, fence, data: { ticket: 'credential-ticket', sessionFence: fence } }
+  return { action, events, fence, member, data: { ticket: 'credential-ticket', sessionFence: fence } }
 }
 
 test('login waits for the atomic session commit before navigation and welcome', async () => {
   const committed = deferred(), f = loginFixture(committed)
-  const pending = f.action('org-b', f.data)
+  const pending = f.action(f.member, f.data)
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(f.events.some(([event]) => event === 'navigate' || event === 'welcome'), false)
   committed.resolve(true); await pending
@@ -72,7 +76,7 @@ test('login waits for the atomic session commit before navigation and welcome', 
 
 test('a superseded login selection cannot navigate or clear the replacement session', async () => {
   const committed = deferred(), f = loginFixture(committed)
-  const pending = f.action('org-b', f.data)
+  const pending = f.action(f.member, f.data)
   committed.resolve(false); await pending
   assert.equal(f.events.some(([event]) => ['navigate', 'welcome', 'clear'].includes(event)), false)
   assert.ok(f.events.some(([event, message]) => event === 'error' && message))
@@ -157,14 +161,15 @@ test('profile/menu/permission platform bearers opt into session fencing while lo
   f.authApi.permissions('platform-access')
   for (const call of f.calls) assert.equal(call.args.at(-1).sessionFence, f.fence)
   assert.deepEqual(f.captured, ['platform-access', 'platform-access', 'platform-access'])
-  f.authApi.selectContext('organization', 'credential-ticket')
+  f.authApi.selectContext('organization', 'membership', 'credential-ticket')
   assert.equal(f.calls.at(-1).args.at(-1).sessionFence, undefined)
   assert.equal(f.captured.length, 3)
   f.authApi.profile()
   assert.equal(f.calls.at(-1).args.at(-1).sessionFence, undefined)
-  f.authApi.switchContext('organization-b', 'platform-access')
+  f.authApi.switchContext('organization-b', 'membership-b', 'platform-access')
   assert.equal(f.calls.at(-1).method, 'switch')
-  assert.equal(f.calls.at(-1).args[1], f.fence)
+  assert.equal(f.calls.at(-1).args[2], f.fence)
+  assert.deepEqual(f.calls.at(-1).args.slice(0, 2), ['organization-b', 'membership-b'])
   assert.equal(f.captured.at(-1), 'platform-access')
 })
 
@@ -189,10 +194,11 @@ test('session-token and platform settings consumers fence their captured platfor
 })
 
 test('micro application-token issuance fences the platform bearer at its existing request boundary', async () => {
-  const fence = { sessionId: 'session-a', version: 4 }, calls = [], signal = new AbortController().signal
+  const contextKey = contextIdentityKey(identity())
+  const fence = { sessionId: 'session-a', version: 4, contextKey }, calls = [], signal = new AbortController().signal
   const issue = expression('src/components/micro/MicroAppContainer.tsx', 'issue', {
-    appCode: 'work-orders', sessionId: 'session-a', contextEpoch: 3, sessionFence: fence,
-    reconcileSessionSync() {}, useAuthStore: { getState: () => ({ token: 'platform-access', sessionId: 'session-a', contextEpoch: 3, contextSwitching: false }) },
+    appCode: 'work-orders', sessionId: 'session-a', contextEpoch: 3, contextKey, sessionFence: fence,
+    reconcileSessionSync() {}, useAuthStore: { getState: () => ({ token: 'platform-access', sessionId: 'session-a', contextEpoch: 3, contextKey, contextSwitching: false }) },
     api: { post: (...args) => calls.push(args) },
   }, 'property')
   await issue(signal)
@@ -203,11 +209,12 @@ test('micro application-token issuance fences the platform bearer at its existin
 })
 
 test('the actual authorization effect accepts token rotation before React renders and rejects another logical context', async () => {
-  const state = { token: 'old-access', sessionId: 'session-a', sessionVersion: 4, contextEpoch: 3, contextSwitching: false }, calls = []
+  const contextKey = contextIdentityKey(identity())
+  const state = { token: 'old-access', sessionId: 'session-a', sessionVersion: 4, contextEpoch: 3, contextKey, contextSwitching: false }, calls = []
   let captured
   const ref = () => ({ current: null }), setter = () => {}
   const effect = expression('src/components/micro/MicroAppContainer.tsx', 'authorization effect', {
-    sessionId: 'session-a', contextEpoch: 3, sessionToken: 'old-access',
+    sessionId: 'session-a', contextEpoch: 3, contextKey, sessionToken: 'old-access',
     useAuthStore: { getState: () => state }, reconcileSessionSync() {}, appCode: 'work-orders',
     trustedMicroRuntimeDomain: { fault: null }, faultRef: ref(),
     snapshotRef: ref(), activeRef: ref(), lastPushSigRef: ref(), lastDeliveryRef: ref(), runtimeRef: ref(),
@@ -221,9 +228,13 @@ test('the actual authorization effect accepts token rotation before React render
   assert.equal(calls[0].latestToken, 'rotated-access')
   assert.equal(calls[0].args[2].bearer, undefined, 'A render-time bearer must not survive a rotation')
   assert.equal(calls[0].args[2].sessionFence.sessionId, 'session-a')
+  assert.equal(calls[0].args[2].sessionFence.contextKey, contextKey)
   state.sessionId = 'session-b'
   assert.throws(() => captured.issue(new AbortController().signal), error => error.name === 'AbortError')
   state.sessionId = 'session-a'; state.contextEpoch++
+  assert.throws(() => captured.issue(new AbortController().signal), error => error.name === 'AbortError')
+  state.contextEpoch = 3
+  state.contextKey = contextIdentityKey(identity({ identityVersion: '2' }))
   assert.throws(() => captured.issue(new AbortController().signal), error => error.name === 'AbortError')
   assert.equal(calls.length, 1)
   cleanup()
@@ -261,8 +272,8 @@ test('notification requests retain both their context lifetime and their capture
   assert.equal(result.signal.aborted, true)
 })
 
-function gateFixture(status, pathname = '/system/users') {
-  const state = { sessionStatus: status, coordinationError: '会话状态待确认', sessionId: 'session-a', contextEpoch: 3 }, exports = {}
+function gateFixture(status, pathname = '/system/users', authMode = 'LEGACY') {
+  const state = { sessionStatus: status, coordinationError: '会话状态待确认', sessionId: 'session-a', contextEpoch: 3, authMode }, exports = {}
   const text = source('src/components/session-status.tsx')
   const output = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
   const jsx = (type, props, key) => ({ type, props, key })
@@ -281,11 +292,18 @@ test('missing coordination capabilities show a clear blocking prompt before priv
   assert.match(text, /浏览器|存储|安全/)
 })
 
+test('BFF recovery failures block private children without asking for local coordination capabilities', () => {
+  const gate = gateFixture('unavailable', '/system/users', 'BFF'), text = JSON.stringify(gate.render())
+  assert.equal(text.includes('private-view'), false)
+  assert.match(text, /暂时无法恢复登录/)
+  assert.doesNotMatch(text, /Web Locks|本地存储|本地数据|当前浏览器无法安全共享登录/)
+})
+
 test('switching retires private children without mounting their anonymous-login redirect', () => {
   const result = gateFixture('switching').render(), text = JSON.stringify(result)
   assert.equal(text.includes('private-view'), false)
   assert.equal(text.includes('/login'), false)
-  assert.match(text, /正在同步登录与组织/)
+  assert.match(text, /正在同步登录与成员身份/)
 })
 
 test('unknown outcomes hide private views and allow an explicit login recovery page', () => {
@@ -303,7 +321,8 @@ test('the session boundary retires all old host drafts on epoch change but prese
 })
 
 test('a socket callback reconciles shared state and synchronously aborts its old notification lifetime', () => {
-  let state = { token: 'old', contextEpoch: 3, contextSwitching: false, profile: { user: { id: 'user' }, tenant: { id: 'tenant' }, organization: { id: 'org-a' } } }
+  const original = identity()
+  let state = { token: 'old', contextEpoch: 3, contextSwitching: false, identity: original, contextKey: contextIdentityKey(original), profile: contextResponse('old', null, original) }
   let shared = state
   const listeners = new Set(), cache = new Map(), sandbox = vm.createContext({ DOMException, AbortController })
   const useAuthStore = { getState: () => state, subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener) } }
@@ -317,6 +336,7 @@ test('a socket callback reconciles shared state and synchronously aborts its old
       if (name === '@/stores/auth') return { useAuthStore, reconcileSessionSync }
       if (name === 'react') return { useSyncExternalStore() {} }
       if (name === '@/lib/notification-context') return load('src/lib/notification-context.ts')
+      if (name === './context-identity.ts') return load('src/lib/context-identity.ts')
       throw new Error(`Unexpected notification boundary dependency ${name}`)
     }, exports)
     return exports
@@ -324,29 +344,35 @@ test('a socket callback reconciles shared state and synchronously aborts its old
   const boundary = load('src/hooks/use-notification-context.ts'), old = boundary.getNotificationContext()
   let stopped = false
   old.signal.addEventListener('abort', () => { stopped = true })
-  shared = { ...state, token: 'new', contextEpoch: 4, profile: { ...state.profile, organization: { id: 'org-b' } } }
+  const replacement = identity({ organizationId: targetIdentity.organizationId, membershipId: targetIdentity.membershipId })
+  shared = { ...state, token: 'new', contextEpoch: 4, identity: replacement, contextKey: contextIdentityKey(replacement), profile: contextResponse('new', null, replacement) }
   // No storage/BC event has been delivered. The old callback itself checks.
   assert.equal(stopped, false)
   assert.equal(old.current(), false)
   assert.equal(stopped, true)
   assert.equal(old.signal.aborted, true)
-  assert.equal(boundary.getNotificationContext().organizationId, 'org-b')
+  assert.equal(boundary.getNotificationContext().organizationId, replacement.organizationId)
 })
 
-test('bootstrap initializes coordination before render and clears cache synchronously on epoch changes', () => {
+test('bootstrap keeps the router outside session resets and clears cache synchronously on epoch changes', () => {
   const events = [], exports = {}, text = source('src/main.tsx')
-  let listener
+  let listener, tree
   const output = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
   const jsx = (type, props, key) => ({ type, props, key })
   vm.runInNewContext(`(function(require,exports){${output}\n})`, { document: { getElementById: () => ({}) } })(name => {
     if (name === '@/stores/auth') return { authStore: { subscribe: value => { listener = value }, getState: () => ({ initializeSessionCoordination: () => { events.push('initialize'); return Promise.resolve() } }) } }
     if (name === 'react') return { default: { StrictMode: 'StrictMode' } }
-    if (name === 'react-dom/client') return { default: { createRoot: () => ({ render: () => events.push('render') }) } }
+    if (name === 'react-dom/client') return { default: { createRoot: () => ({ render: value => { tree = value; events.push('render') } }) } }
+    if (name === 'react-router-dom') return { BrowserRouter: 'BrowserRouter' }
+    if (name === '@/components/session-status') return { SessionStatusGate: 'SessionStatusGate' }
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx }
     if (name === '@tanstack/react-query') return { QueryClient: class { cancelQueries() { events.push('cancel'); return Promise.resolve() } clear() { events.push('clear') } }, QueryClientProvider: 'QueryClientProvider' }
     return {}
   }, exports)
   assert.deepEqual(events, ['initialize', 'render'])
+  assert.equal(tree.props.children.type, 'BrowserRouter', 'Navigation survives session subtree retirement')
+  assert.equal(tree.props.children.props.children.type, 'SessionStatusGate', 'Private components remain inside the session boundary')
+  assert.equal(tree.props.children.props.children.props.children.type, 'QueryClientProvider')
   listener({ contextEpoch: 4 }, { contextEpoch: 3 })
   assert.deepEqual(events.slice(-2), ['cancel', 'clear'])
   const count = events.length

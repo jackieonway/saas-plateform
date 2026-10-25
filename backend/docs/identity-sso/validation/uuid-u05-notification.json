@@ -1,0 +1,113 @@
+{
+  "format": "saas-uuid-u05-notification-public-summary/1",
+  "validation_date": "2026-10-24",
+  "scope": "Real local HTTP publication, PostgreSQL delivery and Rust Socket.IO notification service using an explicitly authorized temporary SELF grant",
+  "status": "PASS",
+  "fixture_services_used": false,
+  "direct_database_writes": false,
+  "grant_changes_used_formal_http_api_only": true,
+  "role_menu_directory_or_other_subject_changes": false,
+  "shared_hq_session_switched_or_refreshed": false,
+  "user_authorization": "The user explicitly selected a temporary minimum notification authorization for the test subject, to be removed after validation.",
+  "scripts": [
+    {
+      "name": "prepare-uuid-u05-notification-scope.py",
+      "sha256": "e33e7a1ac38cded60adab8b42e6275ebda74032475fa2744e08f4767098ad20f",
+      "syntax_check": "PASS"
+    },
+    {
+      "name": "validate-uuid-u05-notification.mjs",
+      "sha256": "7f797150c6bbd4e3eea87f5a229b6decd6bd666038ca97d2116b3aa599a96bfb",
+      "modern_node_syntax_check": "PASS"
+    }
+  ],
+  "temporary_policy_extension": {
+    "application_code": "work-orders",
+    "added_capability": {
+      "resource": "notification",
+      "action": "publish",
+      "scopes": ["SELF"]
+    },
+    "other_capabilities_preserved": true,
+    "management_scopes_preserved": true,
+    "member_and_organization_lookups_preserved": true,
+    "original_authenticated_policy_bytes_preserved": true,
+    "original_runtime_environment_bytes_preserved": true,
+    "original_policy_sha256": "32a7b7552902f904029125948ed5e32cb2b6bdcabc7828df20be9fcf24c43a0a",
+    "original_policy_summary_sha256": "30655e179971d2de959a73e328d47b2351c840ce0248819e3cfb8b675f7b197a",
+    "original_policy_authenticated_manifest_sha256": "ebac0beadde0cdf7bd02695c9f2125d90b16355f8cec8943042fe73e22d0bc76",
+    "extension_policy_sha256": "219282c126bfed42ece186ecf70f36a35286cd095963ec8eefd22ab1d20a0ae0",
+    "extension_environment_sha256": "95f98ba4a24f0d6fbcae50df148da65ea59bda36d33c186419455c3fae91c04f",
+    "owner_extension_evidence_sha256": "a7866f865e9df722a61fc63240a6578df8a0f730fbdb3246124a63aad8d15402",
+    "frozen_platform_binary_sha256": "45049fa89b9272920448e49a5ac3af9e78d59c741dc6b65d68cfe9d33f8e03f0",
+    "platform_restart_performed_by_root_task": true,
+    "identity_migration_0013_used": false
+  },
+  "evidence": [
+    {
+      "attempt": "notification-validation-01",
+      "artifact": "report.private.json",
+      "sha256": "26f1f69dc1522974cb1067eacb89c541e7cdba452875789572dd925dbbc5b385",
+      "status": "FAIL",
+      "failure_stage": "live_token_observes_self_grant_without_rebinding_identity",
+      "cause": "The validator initially assumed the app context response was always wrapped; the real endpoint returns the context directly.",
+      "http_requests": 14,
+      "temporary_grant_created": true,
+      "temporary_grant_removed_via_formal_api_on_failure": true,
+      "original_grant_snapshot_restored": true,
+      "owned_session_logged_out": true
+    },
+    {
+      "attempt": "notification-validation-02",
+      "artifact": "report.private.json",
+      "sha256": "b3a385671b33122fb66a4b4a9985b021c51478e3f9134c404e217533665ac9ac",
+      "status": "PASS",
+      "accepted_check_groups": 7,
+      "http_requests": 31,
+      "http_status_counts": {
+        "200": 23,
+        "201": 3,
+        "403": 5
+      },
+      "existing_work_order_evidence_reused_from": "business-validation-03",
+      "new_work_orders_or_store_updates": 0
+    }
+  ],
+  "checks": {
+    "exact_existing_test_membership_discovered_by_formal_api": "PASS",
+    "grant_read_preview_and_single_self_insert": "PASS",
+    "target_memberships": 1,
+    "simultaneously_added_grants": 1,
+    "unrelated_grant_changes": 0,
+    "pregrant_live_token_observes_current_authorization_without_identity_change": "PASS",
+    "real_test_ticket_reminder_publication": "PASS",
+    "created_publications": 1,
+    "deliveries": 1,
+    "new_publication_and_notification_ids_are_rfc_uuid_v7": true,
+    "event_v7_reference_fields_checked": 6,
+    "http_inbox_and_live_socket_event_match": "PASS",
+    "deep_link_matches_the_existing_test_work_order": "PASS",
+    "same_key_reminder_and_direct_http_replay_return_same_publication": "PASS",
+    "duplicate_receipts": 2,
+    "duplicate_replays_create_no_new_delivery": true,
+    "self_scope_rejects_organization_and_tenant_broadcast": "PASS",
+    "rejected_broadcasts": 2,
+    "formal_preview_and_remove_of_temporary_grant": "PASS",
+    "original_retained_grant_ids_scopes_and_associations_restored": true,
+    "original_unchanged_ticket_grants": 5,
+    "still_active_pregrant_and_during_grant_tokens_cannot_publish_after_removal": "PASS",
+    "still_active_tokens_rejected_after_removal": 2,
+    "newly_issued_postremoval_token_rejected": 1,
+    "postremoval_denial_is_not_token_expiry": true,
+    "only_validator_owned_session_logged_out": true
+  },
+  "cleanup": {
+    "temporary_grant_removed_via_formal_api": true,
+    "temporary_grant_may_remain": false,
+    "original_authenticated_policy_materials_still_match_original_digests": true,
+    "platform_original_policy_restore": "PENDING_ROOT_AFTER_BROWSER_VALIDATION",
+    "scope_of_this_summary": "Publication, delivery and grant removal are complete. Root retains responsibility for restoring the original platform environment and checking the restored runtime policy."
+  },
+  "relationship_to_initial_limit": "The initial business report remains an accurate record of the no-publisher configuration. This later user-authorized temporary SELF-grant test supplies its missing positive notification publication and delivery evidence without permanently expanding business authorization.",
+  "phase_completion_asserted": false
+}

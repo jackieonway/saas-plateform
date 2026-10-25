@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import path from 'node:path'
-import { fixture as sessionFixture, deferred, json, root } from './helpers/session-fixture.mjs'
+import { fixture as sessionFixture, deferred, identity, json, root } from './helpers/session-fixture.mjs'
 
 const sourceRoot = process.env.DATA_GRANT_SOURCE_ROOT ? path.resolve(root, process.env.DATA_GRANT_SOURCE_ROOT) : root
 const fixture = handler => sessionFixture(handler, { sourceRoot })
-const requestId = 'b7307be0-6a17-401a-9be5-a57545376afb'
-const id = number => `20000000-0000-4000-8000-${number.toString().padStart(12, '0')}`
+const requestId = 'b7307be0-6a17-701a-9be5-a57545376afb'
+const id = number => `20000000-0000-7000-8000-${number.toString().padStart(12, '0')}`
 const target = () => ({ tenantId: id(1), organizationId: id(2), userId: id(3), membershipId: id(4), applicationId: id(5) })
 const grant = (scope = 'ORG') => ({ id: id(6), resource: 'ticket', action: 'read', scope, effectiveScope: scope, organizationIds: [id(2)] })
 const snapshot = (scope = 'ORG') => ({ target: target(), version: 'b'.repeat(64), grants: [grant(scope)], capabilities: [{ resource: 'ticket', action: 'read', scopes: ['ORG', 'SELF'] }] })
@@ -60,14 +60,16 @@ test('grant response from a retired logical session cannot return a successful s
   const f = await fixture(async () => { started.resolve(); await release.promise; return response(200, snapshot()) })
   const pending = assert.rejects(api(f).change(change()), error => error.name === 'AbortError')
   await started.promise
-  await f.state().setSession('replacement-platform-access', 'psr_replacement')
+  await f.state().setSession('replacement-platform-access', 'psr_replacement', undefined, identity())
   release.resolve()
   await pending
   assert.equal(f.state().token, 'replacement-platform-access')
 })
 
 test('invalid or missing success requestId never becomes trusted receipt metadata', async () => {
-  for (const receipt of [undefined, 'untrusted-request-id', 'secret:Bearer-private-value', '']) {
+  for (const receipt of [undefined, 'untrusted-request-id', 'secret:Bearer-private-value', '',
+    '019c0000-0000-4000-8000-000000000001', // Intentional old-format correlation.
+    '019c0000-0000-7000-c000-000000000001']) {
     const f = await fixture(async () => receipt === undefined ? json(200, snapshot()) : response(200, snapshot(), receipt))
     const result = await api(f).change(change())
     assert.equal(result.requestId, undefined)

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Explicit application or OAuth client access policy change",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["target", "id", "allowedMemberTypes", "accessPolicyVersion", "reason"],
+  "properties": {
+    "target": {"enum": ["application", "client"]},
+    "id": {"type": "string", "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-7[0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$"},
+    "allowedMemberTypes": {"type": "array", "uniqueItems": true, "maxItems": 2, "items": {"enum": ["EMPLOYEE", "CUSTOMER"]}},
+    "accessPolicyVersion": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+    "reason": {"type": "string", "minLength": 1, "description": "Trimmed reason must contain 1 to 500 Unicode characters; the CLI enforces the trimmed length.", "allOf": [{"pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"}, {"pattern": "\\S"}]},
+    "subjectMode": {"enum": ["USER", "MACHINE"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"target": {"const": "application"}}},
+      "then": {"properties": {"allowedMemberTypes": {"minItems": 1}}, "not": {"required": ["subjectMode"]}},
+      "else": {
+        "required": ["subjectMode"],
+        "if": {"properties": {"subjectMode": {"const": "MACHINE"}}},
+        "then": {"properties": {"allowedMemberTypes": {"maxItems": 0}}},
+        "else": {"properties": {"allowedMemberTypes": {"minItems": 1}}}
+      }
+    }
+  ]
+}

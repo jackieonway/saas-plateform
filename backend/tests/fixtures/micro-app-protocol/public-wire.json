@@ -4,19 +4,19 @@
     "contextVersion": "fixture-context-v1",
     "expiresAt": "2099-01-01T00:00:00Z",
     "appCode": "orders",
-    "application": { "id": "fixture-application", "name": "Orders", "runtimeMode": "TRUSTED", "entryType": "HTML", "entryUrl": "/micro-versions/orders/1.0.0/index.html", "deploymentVersion": "1.0.0", "entryVersionId": null },
-    "user": { "id": "fixture-user", "username": "fixture", "displayName": "Fixture User" },
-    "tenant": { "id": "fixture-tenant", "code": "fixture", "name": "Fixture Tenant" },
-    "organization": { "id": "fixture-organization", "name": "Fixture Organization", "path": "Fixture Organization" },
-    "organizationScopeIds": ["fixture-organization", "fixture-child"],
-    "roles": [{ "id": "fixture-role", "name": "Reader", "code": "reader" }],
+    "application": { "id": "019c0000-0000-7000-8000-000000000001", "name": "Orders", "runtimeMode": "TRUSTED", "entryType": "HTML", "entryUrl": "/micro-versions/orders/1.0.0/index.html", "deploymentVersion": "1.0.0", "entryVersionId": null },
+    "user": { "id": "019c0000-0000-7000-8000-000000000002", "username": "fixture", "displayName": "Fixture User" },
+    "tenant": { "id": "019c0000-0000-7000-8000-000000000003", "code": "fixture", "name": "Fixture Tenant" },
+    "organization": { "id": "019c0000-0000-7000-8000-000000000004", "name": "Fixture Organization", "path": "Fixture Organization" },
+    "organizationScopeIds": ["019c0000-0000-7000-8000-000000000004", "019c0000-0000-7000-8000-000000000005"],
+    "roles": [{ "id": "019c0000-0000-7000-8000-000000000006", "name": "Reader", "code": "reader" }],
     "permissions": ["order:read"],
-    "dataGrants": [{ "resource": "order", "action": "read", "scope": "ORG_SUBTREE", "subjectUserId": "fixture-user", "tenantId": "fixture-tenant", "organizationIds": ["fixture-organization", "fixture-child"] }],
-    "menus": [{ "id": "fixture-menu", "parentId": null, "type": "MENU", "title": "Orders", "path": "/orders", "icon": "", "sortOrder": 1, "visible": true, "permission": "order:read", "children": [], "linkUrl": null, "linkTarget": null }]
+    "dataGrants": [{ "resource": "order", "action": "read", "scope": "ORG_SUBTREE", "subjectUserId": "019c0000-0000-7000-8000-000000000002", "tenantId": "019c0000-0000-7000-8000-000000000003", "organizationIds": ["019c0000-0000-7000-8000-000000000004", "019c0000-0000-7000-8000-000000000005"] }],
+    "menus": [{ "id": "019c0000-0000-7000-8000-000000000007", "parentId": null, "type": "MENU", "title": "Orders", "path": "/orders", "icon": "", "sortOrder": 1, "visible": true, "permission": "order:read", "children": [], "linkUrl": null, "linkTarget": null }]
   },
-  "notificationPublish": { "idempotencyKey": "fixture.order.created:1", "target": { "kind": "USER", "userId": "fixture-user", "organizationId": "fixture-organization" }, "type": "INFO", "title": "Order created", "content": "Fixture payload", "link": "/micro/orders/1" },
-  "notificationPublication": { "publicationId": "fixture-publication", "recipientCount": 1, "deliveryCount": 1, "duplicate": false, "createdAt": "2026-10-15T00:00:00Z" },
-  "notificationSocketContext": { "contractVersion": "1.0", "userId": "fixture-user", "tenantId": "fixture-tenant", "organizationId": "fixture-organization", "expiresAt": "2099-01-01T00:00:00Z" },
-  "realtimeNotification": { "contractVersion": "1.0", "id": "fixture-notification", "userId": "fixture-user", "tenantId": "fixture-tenant", "organizationId": "fixture-organization", "applicationId": "fixture-application", "publicationId": "fixture-publication", "type": "INFO", "title": "Order created", "content": "Fixture payload", "link": "/micro/orders/1", "createdAt": "2026-10-15T00:00:00Z" },
-  "notificationRecord": { "id": "fixture-notification", "userId": "fixture-user", "tenantId": "fixture-tenant", "organizationId": "fixture-organization", "sourceKind": "APP", "applicationId": "fixture-application", "publicationId": "fixture-publication", "applicationName": "Orders", "type": "INFO", "title": "Order created", "content": "Fixture payload", "link": "/micro/orders/1", "isRead": false, "readAt": null, "createdAt": "2026-10-15T00:00:00Z" }
+  "notificationPublish": { "idempotencyKey": "fixture.order.created:1", "target": { "kind": "USER", "userId": "019c0000-0000-7000-8000-000000000002", "organizationId": "019c0000-0000-7000-8000-000000000004" }, "type": "INFO", "title": "Order created", "content": "Fixture payload", "link": "/micro/orders/1" },
+  "notificationPublication": { "publicationId": "019c0000-0000-7000-8000-000000000008", "recipientCount": 1, "deliveryCount": 1, "duplicate": false, "createdAt": "2026-10-15T00:00:00Z" },
+  "notificationSocketContext": { "contractVersion": "1.0", "userId": "019c0000-0000-7000-8000-000000000002", "tenantId": "019c0000-0000-7000-8000-000000000003", "organizationId": "019c0000-0000-7000-8000-000000000004", "expiresAt": "2099-01-01T00:00:00Z" },
+  "realtimeNotification": { "contractVersion": "1.0", "id": "019c0000-0000-7000-8000-000000000009", "userId": "019c0000-0000-7000-8000-000000000002", "tenantId": "019c0000-0000-7000-8000-000000000003", "organizationId": "019c0000-0000-7000-8000-000000000004", "applicationId": "019c0000-0000-7000-8000-000000000001", "publicationId": "019c0000-0000-7000-8000-000000000008", "type": "INFO", "title": "Order created", "content": "Fixture payload", "link": "/micro/orders/1", "createdAt": "2026-10-15T00:00:00Z" },
+  "notificationRecord": { "id": "019c0000-0000-7000-8000-000000000009", "userId": "019c0000-0000-7000-8000-000000000002", "tenantId": "019c0000-0000-7000-8000-000000000003", "organizationId": "019c0000-0000-7000-8000-000000000004", "sourceKind": "APP", "applicationId": "019c0000-0000-7000-8000-000000000001", "publicationId": "019c0000-0000-7000-8000-000000000008", "applicationName": "Orders", "type": "INFO", "title": "Order created", "content": "Fixture payload", "link": "/micro/orders/1", "isRead": false, "readAt": null, "createdAt": "2026-10-15T00:00:00Z" }
 }

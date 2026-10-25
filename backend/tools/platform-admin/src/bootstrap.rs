@@ -31,6 +31,7 @@ struct Application {
     description: String,
     sort_order: i64,
     status: String,
+    allowed_member_types: Vec<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -43,6 +44,8 @@ struct OAuthClient {
     access_token_validity: i64,
     refresh_token_validity: i64,
     provisioning: String,
+    subject_mode: String,
+    allowed_member_types: Vec<String>,
 }
 #[derive(Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -87,6 +90,7 @@ fn validate_definition(value: &Definition, known: KnownApp) -> Result<(), SafeEr
         || app.entry_url != known.entry_url()
         || app.auto_create_menu
         || app.status != "ENABLED"
+        || app.allowed_member_types != ["EMPLOYEE"]
         || !value.grants.is_empty()
         || value.menus.len() != known.menus().len()
         || client.client_name != known.client_name()
@@ -97,6 +101,8 @@ fn validate_definition(value: &Definition, known: KnownApp) -> Result<(), SafeEr
         || client.access_token_validity != 300
         || client.refresh_token_validity != 300
         || client.provisioning.is_empty()
+        || client.subject_mode != "MACHINE"
+        || !client.allowed_member_types.is_empty()
     {
         return Err(SafeError::new("INVALID_BOOTSTRAP_MANIFEST"));
     }
@@ -128,6 +134,10 @@ fn verify_app(row: &Value, expected: Option<&str>, known: KnownApp) -> Result<()
         || row["entryType"] != "HTML"
         || row["basePath"] != known.base_path()
         || !matches!(row["status"].as_str(), Some("ENABLED" | "DISABLED"))
+        || row["allowedMemberTypes"] != json!(["EMPLOYEE"])
+        || !row["accessPolicyVersion"]
+            .as_i64()
+            .is_some_and(|version| version > 0)
     {
         return Err(SafeError::new("APPLICATION_CONFLICT"));
     }
@@ -162,6 +172,11 @@ fn verify_client(row: &Value, app_id: Option<&str>, known: KnownApp) -> Result<(
         || row["status"] != "ENABLED"
         || row["accessTokenValidity"] != 300
         || row["refreshTokenValidity"] != 300
+        || row["subjectMode"] != "MACHINE"
+        || row["allowedMemberTypes"] != json!([])
+        || !row["accessPolicyVersion"]
+            .as_i64()
+            .is_some_and(|version| version > 0)
     {
         return Err(SafeError::new("CLIENT_CONFLICT"));
     }
@@ -472,7 +487,7 @@ mod tests {
     use super::*;
 
     fn uuid(n: u32) -> String {
-        format!("00000000-0000-4000-8000-{n:012x}")
+        format!("00000000-0000-7000-8000-{n:012x}")
     }
 
     #[test]
@@ -513,7 +528,7 @@ mod tests {
             // Inspect and repeat bootstrap must validate the runtime without
             // replacing that URL with the local development default.
             let mut app = json!({"id":uuid(1),"code":known.code(),"runtimeMode":"TRUSTED","entryType":"HTML",
-                "entryUrl":"https://apps.example.com/index.html","basePath":known.base_path(),"status":"ENABLED"});
+                "entryUrl":"https://apps.example.com/index.html","basePath":known.base_path(),"status":"ENABLED","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1});
             verify_app(&app, None, known).unwrap();
             for runtime in ["IFRAME", "SANDBOX"] {
                 app["runtimeMode"] = json!(runtime);
@@ -594,7 +609,7 @@ mod tests {
     fn only_exact_precreated_client_and_application_can_be_bound() {
         let id = uuid(1);
         let mut client = json!({"id":uuid(2),"clientName":"stores-client","clientType":"CONFIDENTIAL","status":"ENABLED",
-            "accessTokenValidity":300,"refreshTokenValidity":300,"grantTypes":["client_credentials"],"scopes":["openid"],"redirectUris":[],"applicationId":null,"clientSecret":"NEVER_PROJECTED"});
+            "accessTokenValidity":300,"refreshTokenValidity":300,"grantTypes":["client_credentials"],"scopes":["openid"],"redirectUris":[],"applicationId":null,"clientSecret":"NEVER_PROJECTED","subjectMode":"MACHINE","allowedMemberTypes":[],"accessPolicyVersion":1});
         verify_client(&client, Some(&id), KnownApp::Stores).unwrap();
         assert!(verify_client(&client, Some(&id), KnownApp::WorkOrders).is_err());
         client["applicationId"] = json!(uuid(3));
@@ -607,7 +622,29 @@ mod tests {
         client["applicationId"] = Value::Null;
         client["clientType"] = json!("PUBLIC");
         assert!(verify_client(&client, Some(&id), KnownApp::Stores).is_err());
-        let app = json!({"id":id,"code":"work-orders","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/work-orders","status":"ENABLED"});
+        let app = json!({"id":id,"code":"work-orders","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/work-orders","status":"ENABLED","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1});
         assert!(verify_app(&app, None, KnownApp::Stores).is_err());
+    }
+
+    #[test]
+    fn bootstrap_refuses_customer_apps_or_user_clients_without_rewriting_their_policy() {
+        for known in [KnownApp::WorkOrders, KnownApp::Stores] {
+            let mut definition = load(known).unwrap();
+            definition
+                .application
+                .allowed_member_types
+                .push("CUSTOMER".into());
+            assert!(validate_definition(&definition, known).is_err());
+            let mut definition = load(known).unwrap();
+            definition.oauth_client.subject_mode = "USER".into();
+            definition.oauth_client.allowed_member_types = vec!["EMPLOYEE".into()];
+            assert!(validate_definition(&definition, known).is_err());
+            let mut app = json!({"id":uuid(1),"code":known.code(),"runtimeMode":"TRUSTED","entryType":"HTML","basePath":known.base_path(),"status":"ENABLED","allowedMemberTypes":["EMPLOYEE","CUSTOMER"],"accessPolicyVersion":2});
+            assert!(verify_app(&app, None, known).is_err());
+            app["allowedMemberTypes"] = json!(["EMPLOYEE"]);
+            verify_app(&app, None, known).unwrap();
+            app["accessPolicyVersion"] = json!(0);
+            assert!(verify_app(&app, None, known).is_err());
+        }
     }
 }

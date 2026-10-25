@@ -32,9 +32,19 @@ export interface PageParams {
 
 /* ============ 1. 认证 ============ */
 
+export type MemberType = "EMPLOYEE" | "CUSTOMER"
+
+/** 服务端当前成员证明；版本使用规范十进制字符串，避免 i64 精度丢失。 */
+export interface ContextMembershipProof {
+  membershipId: string
+  memberType: MemberType
+  identityVersion: string
+  accountVersion: string
+}
+
 export interface Membership {
   /** 登录选择项可关联多个已验证账号；建立会话时需提交对应 userId。 */
-  userId?: string
+  userId: string
   username?: string
   realName?: string
   organizationId: string
@@ -44,6 +54,12 @@ export interface Membership {
   tenantName: string
   departmentId?: string | null
   departmentName?: string | null
+  membershipId: string
+  memberType: MemberType
+  identityVersion: string
+  status: Status
+  consoleSelectable: boolean
+  selectionDisabledReason: null | "CLIENT_MEMBER_TYPE_NOT_ALLOWED" | "MEMBERSHIP_DISABLED"
 }
 
 export interface LoginResp {
@@ -93,7 +109,7 @@ export interface AppBrief {
   entryVersionId?: string | null
 }
 
-export interface ContextResp {
+export interface ContextResp extends ContextMembershipProof {
   accessToken: string
   refreshToken?: string
   refreshExpiresIn?: number
@@ -105,7 +121,7 @@ export interface ContextResp {
   platformContext?: boolean
 }
 
-export interface ProfileResp {
+export interface ProfileResp extends ContextMembershipProof {
   user: AuthUser
   tenant: TenantBrief
   organization: OrgBrief

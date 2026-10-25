@@ -1,3 +1,4 @@
+import { newUuid } from "@/lib/uuid"
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { managedDeploymentsApi, type DeploymentIntent, type ManagedDeploymentJob } from "@/api/managed-deployments"
@@ -58,7 +59,7 @@ function ManagedDeploymentContent({ app, code, environment, releases, open }: Pr
     if (!write || mutation.isPending) return
     const value = imageRef.trim()
     const key = JSON.stringify([releaseId, targetId, templateId, value, epoch])
-    if (lastIntent.current?.key !== key) lastIntent.current = { key, body: { releaseId, targetId, templateId, imageRef: value, requestId: crypto.randomUUID() } }
+    if (lastIntent.current?.key !== key) lastIntent.current = { key, body: { releaseId, targetId, templateId, imageRef: value, requestId: newUuid() } }
     if (lastIntent.current) mutation.mutate({ kind: "create", body: lastIntent.current.body })
   }
   return <section className="space-y-4 rounded-lg border p-4" aria-label="受管镜像部署">

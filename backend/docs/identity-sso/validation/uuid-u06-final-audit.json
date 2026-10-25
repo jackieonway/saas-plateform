@@ -1,0 +1,475 @@
+{
+  "active_generation": "recovery",
+  "attempt_01": {
+    "actual_business_write_evidence": false,
+    "actual_protected_database_connect_create_temp_paths": 0,
+    "actual_protected_owner_set_inherit_admin_paths": 0,
+    "business_databases_opened": 0,
+    "correction": "MATCH_EXISTING_DATA_ENGINE_ADMISSION_FOR_OTHER_LOGINS_KEEP_FIVE_SAFE_FLAGS_FOR_FOUR_RECOVERY_RUNTIMES",
+    "failure_record_retained": true,
+    "private_exact_diagnostic_sha256": "f8250c5f7ddd701ffdb8f436694767b8f50e858766d79d195b7baad57390f778",
+    "private_failure_record_sha256": "5617c19b509afde79f76701398877c1e3b489424175a0e39e25fa6fb2aa0edfd",
+    "private_role_diagnostic_sha256": "0e554119b42e8f835ef1e82fb7a3acd0e2d094c87c5a8aa8a91dca74f2822877",
+    "reason": "CREATEDB_ONLY_UNRELATED_LOGIN_MISCLASSIFIED_USING_RUNTIME_FLAGS",
+    "rejected_role_count": 2,
+    "role_or_acl_mutations_performed": false,
+    "status": "REJECTED_AUDIT_PREDICATE_FALSE_POSITIVE"
+  },
+  "audit_attempt": 2,
+  "commitments": {
+    "audit_script_sha256": "49f2db360447258a18c4187f0e2f9eab9615d98d058d160a25cdd1da492bebd6",
+    "data_engine_sha256": "48dff22fbfac575d334443e0e45af78bfd25cf6b325d39d9f128463a8a3b9fc8",
+    "epoch_journals": {
+      "final": {
+        "activation_sha256": "1e0b0e4edf6e74225243e22ebf544ec6667a53811a51ab9db51ecae48254fa2d",
+        "prepared_sha256": "234f9e6f68dea11a91b4d7d989a88b35929552617a3d09bf5563f99ae24a0a42"
+      },
+      "recovery": {
+        "activation_sha256": "7659fd29c0c0a48454d9a655a9293c7ce947b8e42769d1fe210b4894ee930c8f",
+        "prepared_sha256": "3430b643fcc818172338c4276acaef6cc5c437a94da7cc02108c17d6bb90c537"
+      }
+    },
+    "private_audit_02_sha256": "c9bb7f4271463b656da4d58ffe2a4e319f996841f7f1ad11507c809397720e1d",
+    "registration_sha256": "c1b2c7936af2b29bf5b1015adc8fd7c3b7365ac350a64f84a746a7c0f087600f"
+  },
+  "completed_at": "2026-10-24T13:22:44.339231+00:00",
+  "database_groups": 3,
+  "databases": 9,
+  "elapsed_seconds": 8.167,
+  "fences": {
+    "confidential_clients_per_group": 12,
+    "external_task_rows_per_group": 0,
+    "managed_database_public_admission": false,
+    "metadata_dml": false,
+    "notification_publish_membership_grants_per_group": 0,
+    "notification_reader_other_table_access": false,
+    "original_v4_database_count": 3,
+    "original_v4_other_login_connect_owner_set_inherit_admin_paths_absent": true,
+    "original_v4_readonly_and_idle_before_after_equal": true,
+    "original_v4_two_legacy_roles_nologin": true,
+    "recovery_role_database_acl_proofs": 12,
+    "recovery_runtime_connect_maps_cover_managed_databases": 12,
+    "recovery_runtime_cross_database_connect": false,
+    "recovery_runtime_login_flags_safe": true,
+    "recovery_runtime_membership_edges": 0,
+    "recovery_runtime_oids_bound_to_activation": true,
+    "recovery_runtime_roles": 4,
+    "runtime_grant_option_or_maintain_or_ddl_or_owner_access": false,
+    "runtime_sequence_update": false,
+    "sole_disabled_external_client_bound_to_frozen_before_image": true,
+    "source_and_final_inactive_admission_before_after_equal": true,
+    "table_and_column_privilege_boundaries_verified": true
+  },
+  "format": "saas-uuid-u06-final-audit-public/1",
+  "groups": {
+    "final": {
+      "databases": [
+        {
+          "kind": "platform",
+          "legacy_migration_count": 0,
+          "sequence_count": 1,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 12,
+          "table_row_counts": {
+            "_sqlx_migrations": 12,
+            "application_deployments": 7,
+            "application_release_artifacts": 0,
+            "application_release_operations": 0,
+            "application_releases": 7,
+            "application_url_entries": 0,
+            "applications": 10,
+            "audit_logs": 368,
+            "departments": 6,
+            "managed_deployment_bindings": 0,
+            "managed_deployment_jobs": 0,
+            "managed_image_artifacts": 0,
+            "membership_data_grants": 12,
+            "memberships": 9,
+            "menus": 61,
+            "notification_prefs": 0,
+            "notification_publications": 1,
+            "notifications": 8,
+            "oauth_authorization_codes": 6,
+            "oauth_authorization_requests": 6,
+            "oauth_clients": 14,
+            "oauth_device_codes": 4,
+            "oauth_tokens": 36,
+            "organization_applications": 23,
+            "organization_menus": 124,
+            "organizations": 8,
+            "platform_session_refresh_tokens": 24,
+            "platform_sessions": 22,
+            "platform_settings": 1,
+            "region_versions": 1,
+            "regions": 665923,
+            "role_menus": 111,
+            "roles": 7,
+            "tenant_applications": 12,
+            "tenant_menus": 71,
+            "tenants": 2,
+            "user_roles": 8,
+            "users": 7,
+            "zip_distribution_jobs": 0,
+            "zip_distribution_nodes": 0
+          },
+          "totals": {
+            "foreign_keys": 64,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 3192,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 3192,
+            "tables": 40,
+            "uuid_columns": 107,
+            "v7_uuid_values": 3192
+          }
+        },
+        {
+          "kind": "stores",
+          "legacy_migration_count": 0,
+          "sequence_count": 0,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 3,
+          "table_row_counts": {
+            "_sqlx_migrations": 3,
+            "_stores_schema_contract": 1,
+            "_stores_schema_contract_v2": 1,
+            "_stores_schema_contract_v3": 1,
+            "store_audit_events": 6,
+            "store_daily_reports": 1,
+            "store_staff": 0,
+            "stores": 1
+          },
+          "totals": {
+            "foreign_keys": 2,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 46,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 46,
+            "tables": 8,
+            "uuid_columns": 23,
+            "v7_uuid_values": 46
+          }
+        },
+        {
+          "kind": "work_orders",
+          "legacy_migration_count": 4,
+          "sequence_count": 0,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 4,
+          "table_row_counts": {
+            "_sqlx_migrations": 4,
+            "work_order_counters": 1,
+            "work_order_create_idempotency": 2,
+            "work_order_migrations": 4,
+            "work_order_reminder_intents": 1,
+            "work_orders": 2
+          },
+          "totals": {
+            "foreign_keys": 1,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 24,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 24,
+            "tables": 6,
+            "uuid_columns": 17,
+            "v7_uuid_values": 24
+          }
+        }
+      ],
+      "totals": {
+        "foreign_keys": 67,
+        "invalid_uuid_values": 0,
+        "non_null_uuid_values": 3262,
+        "orphan_rows": 0,
+        "rfc_variant_uuid_values": 3262,
+        "tables": 54,
+        "uuid_columns": 147,
+        "v7_uuid_values": 3262
+      }
+    },
+    "recovery": {
+      "databases": [
+        {
+          "kind": "platform",
+          "legacy_migration_count": 0,
+          "sequence_count": 1,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 12,
+          "table_row_counts": {
+            "_sqlx_migrations": 12,
+            "application_deployments": 7,
+            "application_release_artifacts": 0,
+            "application_release_operations": 0,
+            "application_releases": 7,
+            "application_url_entries": 0,
+            "applications": 10,
+            "audit_logs": 389,
+            "departments": 6,
+            "managed_deployment_bindings": 0,
+            "managed_deployment_jobs": 0,
+            "managed_image_artifacts": 0,
+            "membership_data_grants": 12,
+            "memberships": 9,
+            "menus": 61,
+            "notification_prefs": 0,
+            "notification_publications": 1,
+            "notifications": 10,
+            "oauth_authorization_codes": 3,
+            "oauth_authorization_requests": 3,
+            "oauth_clients": 14,
+            "oauth_device_codes": 2,
+            "oauth_tokens": 18,
+            "organization_applications": 23,
+            "organization_menus": 124,
+            "organizations": 8,
+            "platform_session_refresh_tokens": 12,
+            "platform_sessions": 11,
+            "platform_settings": 1,
+            "region_versions": 1,
+            "regions": 665923,
+            "role_menus": 111,
+            "roles": 7,
+            "tenant_applications": 12,
+            "tenant_menus": 71,
+            "tenants": 2,
+            "user_roles": 8,
+            "users": 7,
+            "zip_distribution_jobs": 0,
+            "zip_distribution_nodes": 0
+          },
+          "totals": {
+            "foreign_keys": 64,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 3098,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 3098,
+            "tables": 40,
+            "uuid_columns": 107,
+            "v7_uuid_values": 3098
+          }
+        },
+        {
+          "kind": "stores",
+          "legacy_migration_count": 0,
+          "sequence_count": 0,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 3,
+          "table_row_counts": {
+            "_sqlx_migrations": 3,
+            "_stores_schema_contract": 1,
+            "_stores_schema_contract_v2": 1,
+            "_stores_schema_contract_v3": 1,
+            "store_audit_events": 6,
+            "store_daily_reports": 1,
+            "store_staff": 0,
+            "stores": 1
+          },
+          "totals": {
+            "foreign_keys": 2,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 46,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 46,
+            "tables": 8,
+            "uuid_columns": 23,
+            "v7_uuid_values": 46
+          }
+        },
+        {
+          "kind": "work_orders",
+          "legacy_migration_count": 4,
+          "sequence_count": 0,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 4,
+          "table_row_counts": {
+            "_sqlx_migrations": 4,
+            "work_order_counters": 1,
+            "work_order_create_idempotency": 3,
+            "work_order_migrations": 4,
+            "work_order_reminder_intents": 1,
+            "work_orders": 3
+          },
+          "totals": {
+            "foreign_keys": 1,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 32,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 32,
+            "tables": 6,
+            "uuid_columns": 17,
+            "v7_uuid_values": 32
+          }
+        }
+      ],
+      "totals": {
+        "foreign_keys": 67,
+        "invalid_uuid_values": 0,
+        "non_null_uuid_values": 3176,
+        "orphan_rows": 0,
+        "rfc_variant_uuid_values": 3176,
+        "tables": 54,
+        "uuid_columns": 147,
+        "v7_uuid_values": 3176
+      }
+    },
+    "source": {
+      "databases": [
+        {
+          "kind": "platform",
+          "legacy_migration_count": 0,
+          "sequence_count": 1,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 12,
+          "table_row_counts": {
+            "_sqlx_migrations": 12,
+            "application_deployments": 7,
+            "application_release_artifacts": 0,
+            "application_release_operations": 0,
+            "application_releases": 7,
+            "application_url_entries": 0,
+            "applications": 10,
+            "audit_logs": 326,
+            "departments": 6,
+            "managed_deployment_bindings": 0,
+            "managed_deployment_jobs": 0,
+            "managed_image_artifacts": 0,
+            "membership_data_grants": 12,
+            "memberships": 9,
+            "menus": 61,
+            "notification_prefs": 0,
+            "notification_publications": 1,
+            "notifications": 4,
+            "oauth_authorization_codes": 6,
+            "oauth_authorization_requests": 7,
+            "oauth_clients": 14,
+            "oauth_device_codes": 3,
+            "oauth_tokens": 67,
+            "organization_applications": 23,
+            "organization_menus": 124,
+            "organizations": 8,
+            "platform_session_refresh_tokens": 50,
+            "platform_sessions": 48,
+            "platform_settings": 1,
+            "region_versions": 1,
+            "regions": 665923,
+            "role_menus": 111,
+            "roles": 7,
+            "tenant_applications": 12,
+            "tenant_menus": 71,
+            "tenants": 2,
+            "user_roles": 8,
+            "users": 7,
+            "zip_distribution_jobs": 0,
+            "zip_distribution_nodes": 0
+          },
+          "totals": {
+            "foreign_keys": 64,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 3376,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 3376,
+            "tables": 40,
+            "uuid_columns": 107,
+            "v7_uuid_values": 3376
+          }
+        },
+        {
+          "kind": "stores",
+          "legacy_migration_count": 0,
+          "sequence_count": 0,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 3,
+          "table_row_counts": {
+            "_sqlx_migrations": 3,
+            "_stores_schema_contract": 1,
+            "_stores_schema_contract_v2": 1,
+            "_stores_schema_contract_v3": 1,
+            "store_audit_events": 4,
+            "store_daily_reports": 1,
+            "store_staff": 0,
+            "stores": 1
+          },
+          "totals": {
+            "foreign_keys": 2,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 34,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 34,
+            "tables": 8,
+            "uuid_columns": 23,
+            "v7_uuid_values": 34
+          }
+        },
+        {
+          "kind": "work_orders",
+          "legacy_migration_count": 4,
+          "sequence_count": 0,
+          "sequence_states_legal": true,
+          "sqlx_migration_count": 4,
+          "table_row_counts": {
+            "_sqlx_migrations": 4,
+            "work_order_counters": 1,
+            "work_order_create_idempotency": 1,
+            "work_order_migrations": 4,
+            "work_order_reminder_intents": 1,
+            "work_orders": 1
+          },
+          "totals": {
+            "foreign_keys": 1,
+            "invalid_uuid_values": 0,
+            "non_null_uuid_values": 16,
+            "orphan_rows": 0,
+            "rfc_variant_uuid_values": 16,
+            "tables": 6,
+            "uuid_columns": 17,
+            "v7_uuid_values": 16
+          }
+        }
+      ],
+      "totals": {
+        "foreign_keys": 67,
+        "invalid_uuid_values": 0,
+        "non_null_uuid_values": 3426,
+        "orphan_rows": 0,
+        "rfc_variant_uuid_values": 3426,
+        "tables": 54,
+        "uuid_columns": 147,
+        "v7_uuid_values": 3426
+      }
+    }
+  },
+  "limits": [
+    "Per-database repeatable-read observations are not a cross-database atomic snapshot.",
+    "Active recovery may create legitimate new sessions and audit rows while this read-only audit runs.",
+    "Sequence state is a fresh observation outside MVCC; cache=1 and no runtime sequence UPDATE are independently checked.",
+    "Zero database task rows do not establish unobserved external effects or contact external owners.",
+    "UUID counts include repeated foreign-key cells and are not entity counts.",
+    "The final audit does not by itself prove RPO or RTO; those are separate exercise results."
+  ],
+  "scope": "LOCAL_POST_ACTIVATION_LOGICAL_RECOVERY_READ_ONLY",
+  "status": "PASS",
+  "u06_acceptance": {
+    "audit_pass_does_not_complete_u06": true,
+    "completion_eligible": false,
+    "recovery_rto_seconds": 909.03540815,
+    "requires": "USER_ACCEPTED_DEVIATION_OR_NEW_PASSING_EXERCISE",
+    "rto_budget_seconds": 600,
+    "rto_status": "FAIL_RECORDED_NOT_WAIVED"
+  },
+  "validation": {
+    "ast": "PASS",
+    "audit_database_writes": false,
+    "audit_epoch_or_http_or_service_operations": false,
+    "diff_check": "PASS",
+    "fixture_host_database_mounts": false,
+    "fixture_network_access": false,
+    "independent_readonly_review": "PASS",
+    "isolated_postgresql_17_container_cases": 2,
+    "production_input_check": "PASS",
+    "test_file_sha256": "de8ce3d29e0498917e1c88937151642f8cac2a3133e9dcd3135e8106f1315ad7",
+    "test_status": "PASS",
+    "tests_passed": 12,
+    "tests_run": 12,
+    "tests_skipped": 0
+  }
+}

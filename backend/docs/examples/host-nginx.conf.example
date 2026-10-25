@@ -81,6 +81,21 @@ server {
         return 404;
     }
 
+    # BFF Cookie 属于当前公开来源。错误上下文可能包含 callback code 查询。
+    location = /auth {
+        error_log /dev/null crit;
+        access_log off;
+        add_header Cache-Control "no-store" always;
+        add_header Referrer-Policy "no-referrer" always;
+        proxy_pass http://saas_platform_api;
+    }
+    location /auth/ {
+        error_log /dev/null crit;
+        access_log off;
+        add_header Cache-Control "no-store" always;
+        add_header Referrer-Policy "no-referrer" always;
+        proxy_pass http://saas_platform_api;
+    }
     # 不带结尾 / 的 proxy_pass 保留完整 /api、/oauth 路径。
     location = /api { proxy_pass http://saas_platform_api; }
     location /api/ { proxy_pass http://saas_platform_api; }

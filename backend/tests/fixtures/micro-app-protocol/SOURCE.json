@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
   "repository": "saas-micro-app-sdk",
-  "revision": "7dd1b57d01ecb2e2892728031364384b5b7439a6",
+  "revision": "67031f14b522d49b3de63e0c1fc8bf7fe5fc7aa9",
   "workingTree": true,
-  "sdkVersion": "2.0.0",
+  "sdkVersion": "3.0.0",
   "files": {
-    "protocol.rs": "6613cf9825e27b89ccd5fc095bee3f974c34f78103df0d43cebf7b51944c42ca",
-    "schema.json": "7205dc0edccb87e69c13e0d0160bdf4f6ff662c7eb7487873139d0b5f5c9f4ce",
-    "public-wire.json": "ea969db74e03d5c39a08b87a2df28026d46cb077451d5e26ec4a45323df78e9b",
-    "release.json": "28d4eaa6d085d449a4f312804e29bf64b8ac5801e62572aa055d9cea6469aceb",
-    "artifact-manifest.json": "2e6007209f63dba709157eb6cd37ef7c4961c679e10b2dbbfad6690836143c3c"
+    "protocol.rs": "082aae25785550ebed9461cb108c70bb6d671122ed63af6134677f6c2ba51fd8",
+    "schema.json": "51d0e9a49701e3aa85dae1c3d1b83fe80f33a5b9c79f281b5ae14988cbb87dae",
+    "public-wire.json": "42996e0b397b1b4cd852e06fd8038413f53698d24e0d1c176133a56df75b0dc4",
+    "release.json": "d77b41651969f5d475cd2904b9b38d8507bfc0fa8547ee525cbef20a7cda8431",
+    "artifact-manifest.json": "02fe52794596edf08e8220c60aff3640a1401f0416ebec71ca0d37b154c40b47"
   },
   "sourcePaths": {
-    "protocol.rs": "releases/2.0.0/protocol.rs",
-    "schema.json": "releases/2.0.0/schema.json",
+    "protocol.rs": "releases/3.0.0/protocol.rs",
+    "schema.json": "releases/3.0.0/schema.json",
     "public-wire.json": "contracts/fixtures/public-wire.json",
     "release.json": "release.json",
-    "artifact-manifest.json": "releases/2.0.0/artifact-manifest.json"
+    "artifact-manifest.json": "releases/3.0.0/artifact-manifest.json"
   }
 }

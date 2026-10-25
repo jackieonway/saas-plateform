@@ -122,8 +122,8 @@ fn identity(headers: &HeaderMap, state: &AppState) -> RequestContext {
     let id = headers
         .get("x-request-id")
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| Uuid::parse_str(value).ok())
-        .unwrap_or_else(Uuid::new_v4);
+        .and_then(|value| crate::util::uuid7::parse_uuid(value).ok())
+        .unwrap_or_else(crate::util::uuid7::new_uuid);
     // Only a valid signature and current expiry can attribute an attempted
     // request. Database authorization remains the responsibility of extractors.
     let claims = bearer_token(headers)
@@ -135,11 +135,11 @@ fn identity(headers: &HeaderMap, state: &AppState) -> RequestContext {
         tenant_id: claims
             .as_ref()
             .and_then(|value| value.tenant.as_deref())
-            .and_then(|value| value.parse().ok()),
+            .and_then(|value| crate::util::uuid7::parse_uuid(value).ok()),
         organization_id: claims
             .as_ref()
             .and_then(|value| value.org.as_deref())
-            .and_then(|value| value.parse().ok()),
+            .and_then(|value| crate::util::uuid7::parse_uuid(value).ok()),
         app_code: claims
             .and_then(|value| value.aud)
             .filter(|value| valid_app(value)),
@@ -337,11 +337,11 @@ async fn runtime_event(
     let context = app_context::current_context(&state, &app, &headers).await?;
     let user: Uuid = context["user"]["id"]
         .as_str()
-        .and_then(|value| value.parse().ok())
+        .and_then(|value| crate::util::uuid7::parse_uuid(value).ok())
         .ok_or_else(|| AppError::unauthorized("应用上下文无效"))?;
     let tenant: Uuid = context["tenant"]["id"]
         .as_str()
-        .and_then(|value| value.parse().ok())
+        .and_then(|value| crate::util::uuid7::parse_uuid(value).ok())
         .ok_or_else(|| AppError::unauthorized("应用上下文无效"))?;
     let mut metrics = registry()
         .lock()

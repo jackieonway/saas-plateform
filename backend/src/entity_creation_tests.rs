@@ -75,7 +75,10 @@ impl Database {
             .connect_with(options.clone())
             .await
             .map_err(|error| database_error("administration connection", &error))?;
-        let name = format!("entity_creation_test_{}", Uuid::new_v4().simple());
+        let name = format!(
+            "entity_creation_test_{}",
+            crate::util::uuid7::new_uuid().simple()
+        );
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
             .await
@@ -190,12 +193,15 @@ async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<S
         .fetch_one(pool)
         .await?;
     let session: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) \
-         VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
@@ -228,44 +234,48 @@ struct Harness {
 impl Harness {
     async fn create(pool: &PgPool) -> Result<Self> {
         let platform: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code,is_platform) VALUES('创建测试平台','admin-tenant',true) RETURNING id")
-            .fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,is_platform,id) VALUES('创建测试平台','admin-tenant',true,$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let org: Uuid = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,name) VALUES($1,'创建测试平台') RETURNING id",
+            "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'创建测试平台',$2) RETURNING id",
         )
         .bind(platform)
-        .fetch_one(pool)
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
         .await?;
         let admin: Uuid = sqlx::query_scalar(
-            "INSERT INTO users(username,password_hash,is_super_admin) \
-             VALUES('entity-test-platform-admin','unused-test-hash',true) RETURNING id",
+            "INSERT INTO users(username,password_hash,is_super_admin,id) \
+             VALUES('entity-test-platform-admin','unused-test-hash',true,$1) RETURNING id",
         )
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(admin)
             .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(pool)
             .await?;
         let application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('系统管理','system') RETURNING id",
+            "INSERT INTO applications(name,code,id) VALUES('系统管理','system',$1) RETURNING id",
         )
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
         for permission in MANAGEMENT_PERMISSIONS.into_iter().chain(["system:tenant"]) {
             sqlx::query(
-                "INSERT INTO menus(application_id,title,permission,type) VALUES($1,$2,$2,'BUTTON')",
+                "INSERT INTO menus(application_id,title,permission,type,id) VALUES($1,$2,$2,'BUTTON',$3)",
             )
             .bind(application)
             .bind(permission)
-            .execute(pool)
+            .bind(crate::util::uuid7::new_uuid()).execute(pool)
             .await?;
         }
         let extra_menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,permission,type) \
-             VALUES($1,'后续授权','entity:later','BUTTON') RETURNING id",
+            "INSERT INTO menus(application_id,title,permission,type,id) \
+             VALUES($1,'后续授权','entity:later','BUTTON',$2) RETURNING id",
         )
         .bind(application)
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
         sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
@@ -473,9 +483,9 @@ async fn menu_hierarchy_moves_preserve_application_and_acyclicity() -> Result<()
         let pool = &database.pool;
         let h = Harness::create(pool).await?;
         let permission: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,permission,type) \
-             VALUES($1,'菜单管理','system:menu','BUTTON') RETURNING id",
-        ).bind(h.application).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,permission,type,id) \
+             VALUES($1,'菜单管理','system:menu','BUTTON',$2) RETURNING id",
+        ).bind(h.application).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT id,$1 FROM tenants WHERE is_platform")
             .bind(permission).execute(pool).await?;
         sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) \
@@ -504,13 +514,13 @@ async fn menu_hierarchy_moves_preserve_application_and_acyclicity() -> Result<()
         for invalid in [parent, child] {
             h.invalid(Method::PUT, &parent_path, json!({"parentId":invalid})).await?;
         }
-        h.invalid(Method::PUT, &child_path, json!({"parentId":Uuid::new_v4()})).await?;
+        h.invalid(Method::PUT, &child_path, json!({"parentId":crate::util::uuid7::new_uuid()})).await?;
         let foreign_application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('其他应用','menu-other-app') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,id) VALUES('其他应用','menu-other-app',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let foreign_menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title) VALUES($1,'其他应用父菜单') RETURNING id",
-        ).bind(foreign_application).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,id) VALUES($1,'其他应用父菜单',$2) RETURNING id",
+        ).bind(foreign_application).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         h.invalid(Method::PUT, &child_path, json!({"parentId":foreign_menu})).await?;
         h.invalid(Method::POST, "/api/menus", json!({
             "applicationId": h.application, "title":"跨应用菜单", "parentId":foreign_menu,
@@ -574,9 +584,9 @@ async fn region_mutations_serialize_with_catalog_deletion() -> Result<()> {
         let pool = &database.pool;
         let h = Harness::create(pool).await?;
         let permission: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,permission,type) \
-             VALUES($1,'地区管理','system:region','BUTTON') RETURNING id",
-        ).bind(h.application).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,permission,type,id) \
+             VALUES($1,'地区管理','system:region','BUTTON',$2) RETURNING id",
+        ).bind(h.application).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT id,$1 FROM tenants WHERE is_platform")
             .bind(permission).execute(pool).await?;
         sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) \
@@ -917,11 +927,11 @@ async fn initial_schema_entity_types_default_and_enforce_database_constraints() 
     let result = async {
         let pool = &database.pool;
         let tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code) VALUES('历史租户','legacy-types') RETURNING id")
-            .fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,id) VALUES('历史租户','legacy-types',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let org: Uuid = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,name) VALUES($1,'历史根组织') RETURNING id")
-            .bind(tenant).fetch_one(pool).await?;
+            "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'历史根组织',$2) RETURNING id")
+            .bind(tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let defaults: (String, String) = sqlx::query_as(
             "SELECT t.tenant_type,o.organization_type FROM tenants t \
              JOIN organizations o ON o.tenant_id=t.id WHERE t.id=$1 AND o.id=$2")
@@ -937,12 +947,12 @@ async fn initial_schema_entity_types_default_and_enforce_database_constraints() 
                 "database accepted an invalid entity type");
         }
         let new_tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code) VALUES('历史客户端新租户','legacy-new-types') RETURNING id")
-            .fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,id) VALUES('历史客户端新租户','legacy-new-types',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let new_defaults: (String, String) = sqlx::query_as(
-            "INSERT INTO organizations(tenant_id,name) VALUES($1,'历史客户端新组织') \
+            "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'历史客户端新组织',$2) \
              RETURNING (SELECT tenant_type FROM tenants WHERE id=$1), organization_type")
-            .bind(new_tenant).fetch_one(pool).await?;
+            .bind(new_tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         ensure!(new_defaults == ("COMPANY".into(), "COMPANY".into()),
             "inserts omitting entity types do not retain database defaults");
         Ok(())
@@ -1117,7 +1127,7 @@ async fn shared_contact_identifiers_select_only_password_verified_accounts_and_c
             "organizationId": second_root, "userId": first_user,
         })), StatusCode::FORBIDDEN).await?;
         request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({
-            "organizationId": second_root, "userId": Uuid::new_v4(),
+            "organizationId": second_root, "userId": crate::util::uuid7::new_uuid(),
         })), StatusCode::FORBIDDEN).await?;
         request(&h.app, ticket, Method::GET, "/api/auth/profile", None, StatusCode::UNAUTHORIZED).await?;
         sqlx::query("UPDATE users SET session_version=session_version+1 WHERE id=$1")
@@ -1188,8 +1198,8 @@ async fn explicit_administrator_initialization_is_idempotent_and_preserves_accou
         let other = h.ok(Method::POST, "/api/tenants", Some(json!({"name":"其他租户","code":"other-init"}))).await?;
         let other_tree = h.ok(Method::GET, &format!("/api/organizations/tree?tenantId={}",id(&other)?), None).await?;
         request(&h.app, &token, Method::POST, &format!("/api/organizations/{}/initialize-administrator",id(&other_tree[0])?), None, StatusCode::NOT_FOUND).await?;
-        let reader: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash) VALUES('init-reader','unused') RETURNING id").fetch_one(pool).await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)").bind(reader).bind(root).execute(pool).await?;
+        let reader: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,id) VALUES('init-reader','unused',$1) RETURNING id").bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)").bind(reader).bind(root).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         let reader_token = session(pool, tid, root, reader).await?;
         request(&h.app, &reader_token, Method::POST, &format!("/api/organizations/{oid}/initialize-administrator"), None, StatusCode::FORBIDDEN).await?;
         // Preserve a manually maintained legacy administrator instead of granting another.

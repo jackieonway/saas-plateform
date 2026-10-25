@@ -8,7 +8,10 @@ use std::time::{Duration, Instant};
 struct Storage(PathBuf);
 impl Storage {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!("saas-atomic-install-{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!(
+            "saas-atomic-install-{}",
+            crate::util::uuid7::new_uuid()
+        ));
         fs::create_dir(&root).unwrap();
         Self(root)
     }
@@ -307,7 +310,10 @@ fn symlinks_are_neither_overwritten_followed_nor_cleaned_as_owned_staging() {
         .file_type()
         .is_symlink());
     create_directory(&root.0.join(STAGING_NAME), true).unwrap();
-    let stage_link = root.0.join(STAGING_NAME).join(Uuid::new_v4().to_string());
+    let stage_link = root
+        .0
+        .join(STAGING_NAME)
+        .join(crate::util::uuid7::new_uuid().to_string());
     symlink(&outside.0, &stage_link).unwrap();
     let report = maintain_staging(root.as_str(), true).unwrap();
     assert_eq!(report["retained"].as_array().unwrap().len(), 1);
@@ -327,7 +333,10 @@ fn symlinks_are_neither_overwritten_followed_nor_cleaned_as_owned_staging() {
 #[test]
 fn cross_filesystem_move_fails_closed_without_copying() {
     let root = Storage::new();
-    let destination = Path::new("/dev/shm").join(format!("saas-no-replace-{}", Uuid::new_v4()));
+    let destination = Path::new("/dev/shm").join(format!(
+        "saas-no-replace-{}",
+        crate::util::uuid7::new_uuid()
+    ));
     let source = root.0.join("payload");
     fs::create_dir(&source).unwrap();
     fs::write(source.join("bytes"), b"immutable").unwrap();
@@ -358,10 +367,32 @@ fn maintenance_requires_no_active_writer_and_retains_unknown_stages_and_final() 
         .to_str()
         .unwrap()
         .to_owned();
+    assert!(crate::util::uuid7::is_uuid_v7(
+        Uuid::parse_str(&stage_id).unwrap()
+    ));
     std::mem::forget(stage);
-    let unknown = root.0.join(STAGING_NAME).join(Uuid::new_v4().to_string());
+    let unknown = root
+        .0
+        .join(STAGING_NAME)
+        .join(crate::util::uuid7::new_uuid().to_string());
     fs::create_dir(&unknown).unwrap();
     fs::write(unknown.join("keep"), b"unowned").unwrap();
+    // Intentional legacy v4 fixture: maintenance cannot adopt a pre-cutover
+    // stage merely because its directory and historical owner record agree.
+    let legacy_id = Uuid::new_v4();
+    let legacy = root.0.join(STAGING_NAME).join(legacy_id.to_string());
+    fs::create_dir_all(legacy.join("payload")).unwrap();
+    fs::write(
+        legacy.join(OWNER_NAME),
+        serde_json::to_vec(&StageOwner {
+            schema_version: 1,
+            staging_id: legacy_id,
+            application: "sample".into(),
+            version: "legacy".into(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
     let scan = maintain_staging(root.as_str(), false).unwrap();
     assert_eq!(scan["eligible"], json!([stage_id]));
     assert!(root.0.join(STAGING_NAME).join(&stage_id).exists());
@@ -369,6 +400,7 @@ fn maintenance_requires_no_active_writer_and_retains_unknown_stages_and_final() 
     let applied = maintain_staging(root.as_str(), true).unwrap();
     assert_eq!(applied["removed"], json!([stage_id]));
     assert!(unknown.join("keep").is_file());
+    assert!(legacy.join(OWNER_NAME).is_file());
     assert!(installed.path.join("index.html").is_file());
     assert!(root.0.join(STAGING_NAME).join(LOCK_NAME).is_file());
 }
@@ -554,7 +586,10 @@ fn windows_junctions_are_not_followed_overwritten_or_removed_by_maintenance() {
     assert!(atomic_move_no_replace(&source, &link).is_err());
     assert!(is_link(&fs::symlink_metadata(&link).unwrap()));
     create_directory(&root.0.join(STAGING_NAME), true).unwrap();
-    let stage = root.0.join(STAGING_NAME).join(Uuid::new_v4().to_string());
+    let stage = root
+        .0
+        .join(STAGING_NAME)
+        .join(crate::util::uuid7::new_uuid().to_string());
     junction(&stage);
     assert_eq!(
         maintain_staging(root.as_str(), true).unwrap()["retained"]

@@ -2,6 +2,8 @@
 
 `saas-deployment-agent` 是独立 Rust worker，经平台 HTTPS 领取固定目标任务，在受控 Docker 环境运行批准的静态镜像并维护版本路由。平台 API 不持 Docker 权限，worker 不读取平台数据库，不执行任务提供的任意命令。镜像内应为可供 qiankun 加载的 HTML/UMD 静态产物。
 
+新任务的 `jobId`、`releaseId`、`nonce` 必须为 UUID v7／RFC variant，旧 v4、nil 和非法值在任何引擎或文件系统操作前拒绝。UUID 标识不代替 attempt、nonce 回执比对、策略 revision 或摘要检查，也不作为安全 secret。
+
 ## 构建与运行
 
 在本目录执行：

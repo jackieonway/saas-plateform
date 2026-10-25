@@ -1,0 +1,20 @@
+{
+  "format": "saas-uuid-u05-external-rp-fence/1",
+  "status": "PASS",
+  "clients_fenced": 1,
+  "database_identity": {
+    "oid": 24339,
+    "owner": 22102
+  },
+  "before_status": "ENABLED",
+  "after_status": "DISABLED",
+  "all_other_client_fields_preserved": true,
+  "current_runtime_consumers_select_client": false,
+  "method": "Trusted local BEGIN READ WRITE maintenance transaction; API has no status update contract",
+  "database_default_read_only_changed": false,
+  "external_network_requests": 0,
+  "external_owner_confirmation": "NOT_OBTAINED",
+  "external_rp_linking": "NOT_TESTED_AND_CLIENT_FENCED",
+  "before_journal_sha256": "657bd0763811eda62ada19e04a5a1e18eabc43ed608a9258561a3e58aaf589a7",
+  "earlier_attempt": "Default read-only transaction rejected UPDATE; rolled back before mutation; retried with explicit READ WRITE"
+}

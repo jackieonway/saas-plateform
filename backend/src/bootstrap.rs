@@ -26,6 +26,16 @@ pub(crate) async fn run() -> anyhow::Result<()> {
         return Ok(());
     }
     config::load_environment()?;
+    let initialization_mode = std::env::var_os("PLATFORM_DATABASE_INIT_MODE");
+    let initialization_mode = initialization_mode
+        .as_deref()
+        .map(|value| {
+            value.to_str().ok_or_else(|| {
+                anyhow::anyhow!("PLATFORM_DATABASE_INIT_MODE must be seed, import or imported")
+            })
+        })
+        .transpose()?;
+    database::ensure_server_initialization_mode(initialization_mode)?;
     let config = Arc::new(Config::try_from_env()?);
     let filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
@@ -82,28 +92,53 @@ pub(crate) async fn run() -> anyhow::Result<()> {
     };
     tracing::info!("PostgreSQL 连接成功");
 
-    // 迁移文件在编译时嵌入，新增迁移须重建后端镜像。
-    database::run_migrations(&pool)
-        .await
-        .map_err(|_| anyhow::anyhow!("DATABASE_MIGRATION_FAILED"))?;
-    tracing::info!("数据库迁移完成");
-
-    // 种子 (幂等)
-    seed::initialize(&pool, &config).await.map_err(|error| {
-        // Preserve documented action codes; no SQL/URL/password error chains.
-        let message = error.to_string();
-        if message.starts_with("PRODUCTION_DEMO_") || message.starts_with("BOOTSTRAP_ADMIN_") {
-            anyhow::anyhow!(message)
-        } else {
-            anyhow::anyhow!("DATABASE_INITIALIZATION_FAILED")
+    if config.identity_remote_enabled {
+        verify_identity_deployment(&pool, &config).await?;
+        verify_membership_readiness(&pool, &config).await?;
+        tracing::info!(
+            event = "IDENTITY_DEPLOYMENT_VERIFIED",
+            "Independent identity deployment verified without migrations or seed"
+        );
+    } else if let Some(imported) = &config.imported_database {
+        let verified = tokio::time::timeout(Duration::from_secs(30), imported.verify(&pool)).await;
+        if !matches!(verified, Ok(Ok(()))) {
+            let _ = tokio::time::timeout(Duration::from_secs(10), pool.close()).await;
+            anyhow::bail!("IMPORTED_DATABASE_VERIFICATION_FAILED");
         }
-    })?;
-    region_seed::initialize(&pool).await.map_err(|error| {
-        tracing::error!(error = %error, "Region catalog initialization failed");
-        anyhow::anyhow!("REGION_INITIALIZATION_FAILED")
-    })?;
+        tracing::info!(
+            event = "IMPORTED_DATABASE_VERIFIED",
+            "Imported database verified without migrations or seed"
+        );
+        verify_membership_readiness(&pool, &config).await?;
+    } else {
+        // 迁移文件在编译时嵌入，新增迁移须重建后端镜像。
+        database::run_migrations(&pool)
+            .await
+            .map_err(|_| anyhow::anyhow!("DATABASE_MIGRATION_FAILED"))?;
+        tracing::info!("数据库迁移完成");
 
-    let state = AppState::new(pool, config.clone());
+        verify_membership_readiness(&pool, &config).await?;
+
+        // 种子 (幂等)
+        seed::initialize(&pool, &config).await.map_err(|error| {
+            // Preserve documented action codes; no SQL/URL/password error chains.
+            let message = error.to_string();
+            if message.starts_with("PRODUCTION_DEMO_") || message.starts_with("BOOTSTRAP_ADMIN_") {
+                anyhow::anyhow!(message)
+            } else {
+                anyhow::anyhow!("DATABASE_INITIALIZATION_FAILED")
+            }
+        })?;
+        region_seed::initialize(&pool).await.map_err(|error| {
+            tracing::error!(error = %error, "Region catalog initialization failed");
+            anyhow::anyhow!("REGION_INITIALIZATION_FAILED")
+        })?;
+    }
+
+    let state = AppState::try_new(pool, config.clone())?;
+    crate::oidc::initialize(&state)
+        .await
+        .map_err(|_| anyhow::anyhow!("OIDC_PROVIDER_INITIALIZATION_FAILED"))?;
     artifact_distribution::start(state.clone());
 
     // 后台维护任务: 每 10 分钟把过期仍 PENDING 的设备码标记为 EXPIRED (供设备码轮询端点识别)
@@ -147,7 +182,9 @@ pub(crate) async fn run() -> anyhow::Result<()> {
     }
 
     let mut app = axum::Router::new()
-        .merge(routes::api_router())
+        .merge(routes::api_router_for_deployment(
+            config.identity_remote_enabled,
+        ))
         .nest("/oauth", routes::oauth2::oauth_router())
         .with_state(state.clone());
 
@@ -180,6 +217,125 @@ pub(crate) async fn run() -> anyhow::Result<()> {
     .with_graceful_shutdown(shutdown_signal())
     .await?;
     state.pool.close().await;
+    Ok(())
+}
+
+async fn verify_identity_deployment(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()> {
+    let issuer = config
+        .oidc_issuer
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("IDENTITY_DEPLOYMENT_ISSUER_REQUIRED"))?;
+    let verified = tokio::time::timeout(Duration::from_secs(3), async {
+        let valid: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM public.identity_deployment_state d \
+             JOIN pg_catalog.pg_roles r ON r.rolname=current_user \
+             WHERE d.singleton AND d.schema_version=20 AND d.issuer=$1 \
+             AND d.platform_runtime=current_user AND current_user=session_user \
+             AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolcreaterole \
+             AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) \
+             AND NOT r.rolcreatedb AND NOT r.rolreplication AND NOT r.rolbypassrls \
+             AND NOT has_schema_privilege(current_user,'public','CREATE') \
+             AND NOT has_database_privilege(current_user,current_database(),'CREATE') \
+             AND NOT has_database_privilege(current_user,current_database(),'TEMP') \
+             AND NOT has_column_privilege(current_user,'public.users','password_hash','SELECT') \
+             AND NOT has_column_privilege(current_user,'public.users','password_hash','UPDATE') \
+             AND NOT has_column_privilege(current_user,'public.users','status','UPDATE') \
+             AND NOT has_column_privilege(current_user,'public.users','session_version','UPDATE') \
+             AND NOT has_table_privilege(current_user,'public.users','DELETE') \
+             AND NOT has_table_privilege(current_user,'public.users','TRUNCATE') \
+             AND NOT has_column_privilege(current_user,'public.users','id','UPDATE') \
+             AND NOT has_any_column_privilege(current_user,'public.users','INSERT') \
+             AND NOT has_table_privilege(current_user,'public.users','TRIGGER') \
+             AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class a \
+                 JOIN pg_catalog.pg_namespace an ON an.oid=a.relnamespace \
+                 WHERE an.nspname='public' AND a.relname IN \
+                 ('sso_sessions','sso_login_challenges','oidc_provider_settings','oidc_clients', \
+                  'oidc_authorization_requests','oidc_grants','oidc_authorization_codes', \
+                  'oidc_access_tokens','oidc_refresh_tokens','oidc_signing_keys', \
+                  'oidc_account_logout_receipts','identity_service_clients','identity_audit_logs', \
+                  'identity_account_command_receipts','identity_oidc_admin_receipts', \
+                  'identity_account_revocation_facts') AND \
+                 (has_any_column_privilege(current_user,a.oid,'SELECT') \
+                  OR has_any_column_privilege(current_user,a.oid,'INSERT') \
+                  OR has_any_column_privilege(current_user,a.oid,'UPDATE') \
+                  OR has_any_column_privilege(current_user,a.oid,'REFERENCES') \
+                  OR has_table_privilege(current_user,a.oid,'DELETE') \
+                  OR has_table_privilege(current_user,a.oid,'TRUNCATE') \
+                  OR has_table_privilege(current_user,a.oid,'TRIGGER'))) \
+             AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class c \
+                 JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace \
+                 WHERE n.nspname !~ '^pg_' AND n.nspname<>'information_schema' \
+                 AND pg_has_role(current_user,c.relowner,'MEMBER')) \
+             AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p \
+                 JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace \
+                 WHERE n.nspname !~ '^pg_' AND n.nspname<>'information_schema' \
+                 AND pg_has_role(current_user,p.proowner,'MEMBER')) \
+             AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_namespace n \
+                 WHERE n.nspname !~ '^pg_' AND n.nspname<>'information_schema' \
+                 AND has_schema_privilege(current_user,n.oid,'CREATE')) \
+             AND NOT pg_has_role(current_user,d.identity_owner,'MEMBER') \
+             AND NOT pg_has_role(current_user,d.migration_owner,'MEMBER') \
+             AND NOT pg_has_role(current_user,d.platform_owner,'MEMBER') \
+             AND NOT pg_has_role(current_user,d.revocation_bridge_owner,'MEMBER') \
+             AND NOT pg_has_role(current_user,d.projection_owner,'MEMBER'))",
+        )
+        .bind(issuer)
+        .fetch_one(pool)
+        .await?;
+        anyhow::ensure!(valid, "IDENTITY_DEPLOYMENT_PRIVILEGES_INVALID");
+        let endpoint = config
+            .identity_service_url
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("IDENTITY_SERVICE_URL_REQUIRED"))?;
+        let client = config
+            .identity_http_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("IDENTITY_SERVICE_TRANSPORT_REQUIRED"))?;
+        let mut response = client
+            .get(format!("{endpoint}/health/ready"))
+            .send()
+            .await?;
+        anyhow::ensure!(
+            response.status().as_u16() == 200,
+            "IDENTITY_SERVICE_NOT_READY"
+        );
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await? {
+            anyhow::ensure!(
+                bytes.len() + chunk.len() <= 8192,
+                "IDENTITY_READY_RESPONSE_INVALID"
+            );
+            bytes.extend_from_slice(&chunk);
+        }
+        let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+        anyhow::ensure!(
+            body == serde_json::json!({"status":"UP","service":"saas-identity","issuer":issuer}),
+            "IDENTITY_READY_RESPONSE_INVALID"
+        );
+        Ok::<_, anyhow::Error>(())
+    })
+    .await;
+    if !matches!(verified, Ok(Ok(()))) {
+        let _ = tokio::time::timeout(Duration::from_secs(10), pool.close()).await;
+        anyhow::bail!("IDENTITY_DEPLOYMENT_VERIFICATION_FAILED");
+    }
+    Ok(())
+}
+
+async fn verify_membership_readiness(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()> {
+    if let Some(readiness) = &config.membership_readiness {
+        if !matches!(
+            tokio::time::timeout(Duration::from_secs(45), readiness.verify(pool)).await,
+            Ok(Ok(()))
+        ) {
+            let _ = tokio::time::timeout(Duration::from_secs(10), pool.close()).await;
+            anyhow::bail!("MEMBERSHIP_READINESS_VERIFICATION_FAILED");
+        }
+        tracing::info!(
+            event = "MEMBERSHIP_READINESS_VERIFIED",
+            "Environment-bound membership rollout receipt verified"
+        );
+    }
     Ok(())
 }
 

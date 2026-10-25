@@ -107,7 +107,7 @@ async fn claim(state: &AppState) -> Result<Option<(Job, ConfiguredGroup)>, AppEr
     }
     let group = group.ok_or(AppError::Unavailable)?;
     j.attempt += 1;
-    j.nonce = Some(Uuid::new_v4());
+    j.nonce = Some(crate::util::uuid7::new_uuid());
     j.state = "RUNNING".into();
     sqlx::query("UPDATE zip_distribution_jobs SET state='RUNNING',attempt=$2,nonce=$3,lease_until=now()+interval '10 minutes',verification_nonce=NULL,verified_at=NULL,error_code=NULL,updated_at=now() WHERE id=$1").bind(id).bind(j.attempt).bind(j.nonce).execute(&mut *tx).await?;
     sqlx::query("UPDATE zip_distribution_nodes SET state='PENDING',attempt=$2,receipt=NULL,error_code=NULL,verified_at=NULL WHERE job_id=$1").bind(id).bind(j.attempt).execute(&mut *tx).await?;

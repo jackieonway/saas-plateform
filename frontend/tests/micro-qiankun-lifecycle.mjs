@@ -1,3 +1,4 @@
+import { newUuid } from '../src/lib/uuid.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -13,6 +14,7 @@ const output = ts.transpileModule(source, { compilerOptions: {
 } }).outputText
 const exports = {}
 new Script(`(function(require,exports){${output}\n})`).runInThisContext()(name => {
+  if (name === '@/lib/uuid') return { newUuid }
   if (name === './services') return { createMicroServices }
   throw new Error('Unexpected dependency: ' + name)
 }, exports)
@@ -24,7 +26,7 @@ const deferred = () => {
 }
 const tick = async () => { for (let index = 0; index < 20; index++) await Promise.resolve() }
 const props = (scope = new AbortController(), epoch = 1) => ({
-  sdkVersion: '2.0.0', contractVersion: '2.0', contextVersion: 'auth-' + epoch, contextEpoch: epoch,
+  sdkVersion: '3.0.0', contractVersion: '2.0', contextVersion: 'auth-' + epoch, contextEpoch: epoch,
   expiresAt: new Date(Date.now() + 60_000).toISOString(), tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
   token: 'application-token-' + epoch, appCode: 'orders', basePath: '/micro/orders', routePath: '/micro/orders/list',
   signal: scope.signal, user: { id: 'u' }, tenant: { id: 't' }, organization: { id: 'o' },

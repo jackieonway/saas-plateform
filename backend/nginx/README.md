@@ -37,7 +37,7 @@ docker build -t saas-platform-gateway:local nginx
 
 | 公开路径 | 行为 |
 | --- | --- |
-| `/api`、`/oauth` | 保留路径转平台 API |
+| `/auth`、`/api`、`/oauth` | 保留路径转平台 API；`/auth` 属于平台 BFF Cookie owner，不能交给静态宿主 |
 | `/micro-proxy/` | 保留完整 URL 转平台 API，关闭升级；由后端核对已登记静态入口 |
 | `/micro/<code>` | 宿主 SPA 导航 |
 | `/sub-apps/<app>/versions/<version>/` | 匹配 `versionRoutes` 后剥离前缀转静态服务 |
@@ -45,6 +45,8 @@ docker build -t saas-platform-gateway:local nginx
 | `/work-orders-api`、`/stores-api`、`/socket.io` | 转已启用的业务或通知上游 |
 
 内部、指标、开发服务器等命名空间受门禁保护。`/micro-proxy/` 不能落入宿主 SPA；宿主镜像对该路径固定返回 404。版本 URL 必须长期对应同一份字节。
+
+平台 BFF 的精确公开来源必须与 `publicOrigin` 相同；网关保留 Cookie、Origin 和上游 Set-Cookie，并将 Host 固定为该来源。访问日志仅记录不含查询串的 `$uri` 与状态。`/auth` 单独屏蔽原始 Nginx 错误上下文，避免上游故障把 callback code/state 查询写入错误日志；通过安全访问状态和后端固定错误类别诊断。认证中心的独立域名路由由身份服务部署阶段配置。
 
 以下片段可加入完整网关 JSON，还需设置真实 `publicOrigin` 和 `trustedHtmlEval: true`：
 

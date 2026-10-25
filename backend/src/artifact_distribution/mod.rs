@@ -1,4 +1,5 @@
 //! Optional ZIP replication authority. Nodes own local files; this service only uses HTTPS.
+use crate::util::uuid7::ParseUuid7;
 mod config;
 mod gates;
 mod routes;
@@ -31,7 +32,7 @@ pub(super) async fn authorize(
 }
 pub(super) fn uuid(value: &str) -> Result<Uuid, AppError> {
     value
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID格式错误"))
 }
 pub(super) async fn lock(tx: &mut Transaction<'_, Postgres>, app: Uuid) -> Result<(), AppError> {

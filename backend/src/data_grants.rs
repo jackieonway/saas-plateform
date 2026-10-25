@@ -39,10 +39,15 @@ pub(crate) async fn options(
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Target {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub tenant_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub organization_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub user_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub membership_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub application_id: Uuid,
 }
 
@@ -361,7 +366,7 @@ fn validate_target(target: &Target) -> Result<(), AppError> {
         target.application_id,
     ]
     .iter()
-    .any(Uuid::is_nil)
+    .any(|id| !crate::util::uuid7::is_uuid_v7(*id))
     {
         return Err(AppError::bad_request("目标标识不能是空 UUID"));
     }
@@ -650,24 +655,24 @@ mod tests {
     #[test]
     fn effective_scope_uses_the_target_boundary_even_for_a_platform_actor() {
         let target = Target {
-            tenant_id: Uuid::from_u128(1),
-            organization_id: Uuid::from_u128(2),
-            user_id: Uuid::from_u128(3),
-            membership_id: Uuid::from_u128(4),
-            application_id: Uuid::from_u128(5),
+            tenant_id: crate::util::uuid7::fixture_uuid(1),
+            organization_id: crate::util::uuid7::fixture_uuid(2),
+            user_id: crate::util::uuid7::fixture_uuid(3),
+            membership_id: crate::util::uuid7::fixture_uuid(4),
+            application_id: crate::util::uuid7::fixture_uuid(5),
         };
         let mut runtime = Runtime {
             actor_platform_root: true,
             target_platform_root: false,
             permissions: Vec::new(),
             target_ancestors: vec![target.organization_id],
-            subtree: vec![target.organization_id, Uuid::from_u128(6)],
+            subtree: vec![target.organization_id, crate::util::uuid7::fixture_uuid(6)],
             actor_subtree: Vec::new(),
             registered: BTreeSet::new(),
             fingerprint: Value::Null,
         };
         let grant = DraftGrant {
-            id: Some(Uuid::from_u128(7)),
+            id: Some(crate::util::uuid7::fixture_uuid(7)),
             resource: "ticket".into(),
             action: "read".into(),
             scope: GrantScope::Tenant,

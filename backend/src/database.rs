@@ -1,9 +1,22 @@
+//! Canonical migration ownership and isolated, seed-free initialization commands.
+
 use std::{borrow::Cow, str::FromStr};
 
 use anyhow::{Context, Result};
 use sqlx::migrate::{AppliedMigration, Migrate, Migrator};
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{Connection, Error, PgConnection, PgPool};
+
+mod identity_readiness;
+mod imported;
+mod migrate_only;
+pub use identity_readiness::{
+    run_membership_rollout_command, MembershipReadiness, MembershipReadinessError,
+};
+pub use imported::{ImportedDatabase, ImportedDatabaseError};
+pub use migrate_only::{
+    ensure_server_initialization_mode, run_migration_command, MigrationCommandError,
+};
 
 static MIGRATIONS: Migrator = sqlx::migrate!("./migrations");
 
@@ -91,6 +104,8 @@ pub async fn create_missing_database(database_url: &str) -> Result<()> {
     }
 }
 
+/// Identify PostgreSQL's missing-database error without treating other connection
+/// failures as authorization to create a database.
 pub fn is_database_missing(error: &Error) -> bool {
     matches!(error, Error::Database(db) if db.code().as_deref() == Some("3D000"))
 }

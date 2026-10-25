@@ -254,8 +254,8 @@ mod tests {
     fn foreign_or_changed_work_is_refused_before_any_engine_or_filesystem_access() {
         let c = config();
         let mut w = Work {
-            job_id: "00000000-0000-0000-0000-000000000001".into(),
-            release_id: "release".into(),
+            job_id: "00000000-0000-7000-8000-000000000001".into(),
+            release_id: "00000000-0000-7000-8000-000000000003".into(),
             application_code: "stores".into(),
             environment: "development".into(),
             version: "1.0.0".into(),
@@ -265,7 +265,7 @@ mod tests {
             policy_revision: deployment_contract::revision(&c.policy),
             operation: "DEPLOY".into(),
             attempt: 1,
-            nonce: "00000000-0000-0000-0000-000000000002".into(),
+            nonce: "00000000-0000-7000-8000-000000000002".into(),
         };
         for invalid in ["target", "revision", "command"] {
             w.target_id = if invalid == "target" {

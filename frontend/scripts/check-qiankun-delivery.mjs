@@ -40,7 +40,7 @@ export function assertMicroHtml(html, name) {
 export function verifyQiankunDelivery({ root = frontend, dist } = {}) {
   const sdk = JSON.parse(readFileSync(path.join(root, 'vendor/micro-app-sdk/package.json'), 'utf8'))
   assert.equal(sdk.name, '@saas-platform/micro-app-sdk')
-  assert.equal(sdk.version, '2.0.0', 'Active SDK must match the host contract')
+  assert.equal(sdk.version, '3.0.0', 'Active SDK must match the host contract')
   const sections = ['src', 'public', 'vendor/micro-app-sdk']
   let checked = 0
   for (const section of sections) {

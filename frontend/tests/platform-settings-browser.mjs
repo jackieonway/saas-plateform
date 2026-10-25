@@ -11,6 +11,7 @@ import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
+import { fixtureUuid, identityForProfile, installLegacyAuthMode, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.PLATFORM_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -44,16 +45,16 @@ function branding(settings) {
   return publicSettings
 }
 function profile(state) {
-  return {
-    user: { id: "platform-browser-user", username: "platform-browser", realName: "品牌验收管理员",
+  return profileWithIdentity({
+    user: { id: fixtureUuid("platform-browser-user"), username: "platform-browser", realName: "品牌验收管理员",
       email: "", phone: "", avatar: "", gender: "UNKNOWN", isSuperAdmin: false },
-    tenant: { id: "platform-browser-tenant", code: state.isPlatform ? "admin-tenant" : "customer-tenant",
+    tenant: { id: fixtureUuid("platform-browser-tenant"), code: state.isPlatform ? "admin-tenant" : "customer-tenant",
       name: state.isPlatform ? state.settings.platformTenantName : "客户租户", isPlatform: state.isPlatform },
-    organization: { id: "platform-browser-org", name: "平台管理组织", path: "/platform-browser-org/" },
+    organization: { id: fixtureUuid("platform-browser-org"), name: "平台管理组织", path: "/platform-browser-org/" },
     applications: [application],
-    memberships: [{ tenantId: "platform-browser-tenant", tenantName: state.isPlatform ? state.settings.platformTenantName : "客户租户",
-      organizationId: "platform-browser-org", organizationName: "平台管理组织", organizationPath: "/platform-browser-org/" }],
-  }
+    memberships: [{ tenantId: fixtureUuid("platform-browser-tenant"), tenantName: state.isPlatform ? state.settings.platformTenantName : "客户租户",
+      organizationId: fixtureUuid("platform-browser-org"), organizationName: "平台管理组织", organizationPath: "/platform-browser-org/" }],
+  })
 }
 
 let browser, vite, startupOutput = ""
@@ -83,10 +84,11 @@ async function withFixture(options, run) {
   const state = { authenticated: true, isPlatform: true, hasPermission: true, settings: structuredClone(originalSettings),
     requests: [], saves: [], errors: [], routeErrors: [], failSave: false, theme: "light", ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.addInitScript(({ authenticated, theme }) => {
-    if (authenticated) if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "test-platform-settings-session", refreshToken: null }))
+  if (state.authenticated) await installSession(context, "test-platform-settings-session", identityForProfile(profile(state)))
+  else await installLegacyAuthMode(context)
+  await context.addInitScript(({ theme }) => {
     localStorage.setItem("platform-theme", theme)
-  }, { authenticated: state.authenticated, theme: state.theme })
+  }, { theme: state.theme })
   // A notification transport is unrelated to branding; prevent any live service connection.
   await context.routeWebSocket(/\/socket\.io\//, (socket) => socket.close())
   await context.route((url) => url.origin === origin && url.pathname.startsWith("/__branding/"), (route) => {
@@ -143,7 +145,7 @@ async function withFixture(options, run) {
 
 async function readySettings(page) {
   await page.getByLabel("平台租户名称", { exact: true }).waitFor()
-  await page.waitForFunction((tenantName) => document.querySelector('button[aria-label="切换组织上下文"]')?.textContent.includes(tenantName), originalSettings.platformTenantName)
+  await page.waitForFunction((tenantName) => document.querySelector('button[aria-label="切换组织与成员身份"]')?.textContent.includes(tenantName), originalSettings.platformTenantName)
 }
 async function saveThemeColor(page, state, color) {
   const normalized = color.toUpperCase()
@@ -255,7 +257,7 @@ const scenarios = {
     await page.getByText("平台设置已保存", { exact: true }).waitFor()
     assert.deepEqual(state.saves, [next], "Save must serialize exactly the configurable fields, including the trimmed theme color.")
     await expectTitle(page, `平台设置 · ${next.platformName}`)
-    await page.waitForFunction((tenantName) => document.querySelector('button[aria-label="切换组织上下文"]')?.textContent.includes(tenantName), next.platformTenantName)
+    await page.waitForFunction((tenantName) => document.querySelector('button[aria-label="切换组织与成员身份"]')?.textContent.includes(tenantName), next.platformTenantName)
     assert.equal(await code.inputValue(), "admin-tenant")
     assert.equal(await page.getByLabel("平台名称", { exact: true }).inputValue(), next.platformName)
     assert.equal(await page.getByRole("button", { name: "保存设置", exact: true }).isDisabled(), true)

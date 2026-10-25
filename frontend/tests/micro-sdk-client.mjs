@@ -8,13 +8,13 @@ const deferred = () => { let resolve; const promise = new Promise(done => { reso
 function props(extra = {}) {
   return { sdkVersion: SDK_VERSION, contractVersion: '2.0', appCode: 'orders', basePath: '/micro/orders', contextVersion: 'ctx', contextEpoch: 1,
     token: 'sentinel-private-token', expiresAt: new Date(Date.now() + 60000).toISOString(), tokenExpiresAt: new Date(Date.now() + 60000).toISOString(),
-    signal: new AbortController().signal, user: { id: 'u' }, tenant: { id: 't' }, organization: { id: 'o' }, ...extra }
+    signal: new AbortController().signal, user: { id: '019c0000-0000-7000-8000-000000000002' }, tenant: { id: '019c0000-0000-7000-8000-000000000003' }, organization: { id: '019c0000-0000-7000-8000-000000000004' }, ...extra }
 }
 const json = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
 const schema = JSON.parse(readFileSync(new URL('../vendor/micro-app-sdk/schema.json', import.meta.url), 'utf8'))
 
 test('registered context client forces omitted credentials and captured Bearer, preserves a valid request identifier', async () => {
-  const requestId = '02345678-1234-4321-abcd-123456789abc', requests = []
+  const requestId = '02345678-1234-7321-abcd-123456789abc', requests = []
   const client = createContextClient(props(), async function (url, options) {
     assert.equal(this, undefined)
     requests.push({ url, ...options }); return json({ ok: true })
@@ -29,7 +29,7 @@ test('registered context client forces omitted credentials and captured Bearer, 
 })
 
 test('HTTP 401, 403 and 409 retain distinguishable structured status with bounded fixed diagnostics', async () => {
-  const requestId = '02345678-1234-4321-abcd-123456789abc'
+  const requestId = '02345678-1234-7321-abcd-123456789abc'
   for (const [status, kind] of [[401, 'UNAUTHORIZED'], [403, 'FORBIDDEN'], [409, 'CONFLICT'], [500, 'HTTP']]) {
     const client = createContextClient(props(), async () => new Response('sentinel-private-token https://secret.invalid/password', { status, headers: { 'X-Request-Id': requestId } }))
     await assert.rejects(client.requestJson('/orders'), error => {
@@ -119,7 +119,7 @@ test('caller cancellation, host cancellation and expired contexts fail closed', 
 })
 
 test('archived and unknown SDK or MicroProps versions are rejected while optional version metadata remains supported', () => {
-  for (const extra of [{ sdkVersion: '1.0.0' }, { sdkVersion: '2.0.1' }, { contractVersion: '3.0' }]) {
+  for (const extra of [{ sdkVersion: '1.0.0' }, { sdkVersion: '2.0.0' }, { sdkVersion: '2.0.1' }, { contractVersion: '3.0' }]) {
     assert.throws(() => createContextClient(props(extra)), error => error instanceof MicroSdkError && error.kind === 'PROTOCOL')
   }
   const legacy = createContextClient(props({ sdkVersion: undefined }))

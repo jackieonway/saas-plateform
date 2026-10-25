@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
@@ -15,7 +16,7 @@ use crate::extractors::{bearer_token, ApiJson, CurrentUser};
 use crate::routes::page_json;
 use crate::session;
 use crate::state::AppState;
-use crate::util::{audit, jwt, password as pw};
+use crate::util::{audit, jwt};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -36,6 +37,11 @@ pub fn routes() -> Router<AppState> {
 
 #[derive(sqlx::FromRow)]
 struct MembershipRow {
+    membership_id: Uuid,
+    user_id: Uuid,
+    member_type: String,
+    status: String,
+    identity_version: i64,
     organization_id: Uuid,
     organization_name: String,
     organization_path: Option<String>,
@@ -50,25 +56,40 @@ async fn fetch_memberships(
     user_id: Uuid,
 ) -> Result<Vec<MembershipRow>, AppError> {
     let rows = sqlx::query_as::<_, MembershipRow>(
-        "SELECT m.organization_id, o.name AS organization_name, org_path(o.id) AS organization_path, \
+        "SELECT m.id AS membership_id, m.user_id, m.member_type, m.status, m.identity_version, m.organization_id, o.name AS organization_name, org_path(o.id) AS organization_path, \
          o.tenant_id, t.name AS tenant_name, m.department_id, d.name AS department_name \
          FROM memberships m \
          JOIN organizations o ON o.id = m.organization_id \
          JOIN tenants t ON t.id = o.tenant_id \
          LEFT JOIN departments d ON d.id = m.department_id \
-         WHERE m.user_id = $1 AND org_chain_active(o.id) AND t.status = 'ENABLED' \
+         WHERE m.user_id = $1 \
+         AND org_chain_active(o.id) AND t.status = 'ENABLED' \
          AND (o.expires_at IS NULL OR o.expires_at > now()) \
          AND (t.expires_at IS NULL OR t.expires_at > now()) \
-         ORDER BY m.created_at",
+         ORDER BY m.created_at,m.id",
     )
     .bind(user_id)
     .fetch_all(pool)
-    .await?;
+    .await.map_err(|_| AppError::Unavailable)?;
     Ok(rows)
 }
 
 fn membership_json(m: &MembershipRow) -> Value {
+    let disabled_reason = if m.member_type != "EMPLOYEE" {
+        Some("CLIENT_MEMBER_TYPE_NOT_ALLOWED")
+    } else if m.status != "ENABLED" {
+        Some("MEMBERSHIP_DISABLED")
+    } else {
+        None
+    };
     json!({
+        "membershipId": m.membership_id,
+        "userId": m.user_id,
+        "memberType": m.member_type,
+        "status": m.status,
+        "identityVersion": m.identity_version.to_string(),
+        "consoleSelectable": disabled_reason.is_none(),
+        "selectionDisabledReason": disabled_reason,
         "organizationId": m.organization_id,
         "organizationName": m.organization_name,
         "organizationPath": m.organization_path.clone().unwrap_or_default(),
@@ -79,27 +100,33 @@ fn membership_json(m: &MembershipRow) -> Value {
     })
 }
 
+fn console_selectable(membership: &MembershipRow) -> bool {
+    membership.member_type == "EMPLOYEE" && membership.status == "ENABLED"
+}
+
 #[derive(Deserialize)]
 struct LoginBody {
     username: String,
     password: String,
 }
 
-#[derive(sqlx::FromRow)]
-struct LoginUserRow {
-    id: Uuid,
-    username: String,
-    password_hash: String,
-    status: String,
-    session_version: i64,
-    real_name: String,
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CredentialAccount {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
+    user_id: Uuid,
+    version: i64,
+    memberships: Vec<CredentialMembership>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CredentialAccount {
-    user_id: Uuid,
-    version: i64,
+struct CredentialMembership {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
+    membership_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
+    organization_id: Uuid,
+    identity_version: i64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -107,6 +134,80 @@ struct CredentialSelection {
     #[serde(flatten)]
     claims: jwt::Claims,
     accounts: Vec<CredentialAccount>,
+    origin_client_policy_version: i64,
+}
+
+const LEGACY_CLIENT_REF: &str = "platform-console-legacy";
+const LEGACY_ISSUER: &str = "urn:saas:legacy-platform";
+
+fn require_legacy_login(state: &AppState) -> Result<(), AppError> {
+    if state.config.bff_enabled && !state.config.bff_legacy_login_enabled {
+        return Err(AppError::forbidden("请通过统一登录入口认证"));
+    }
+    Ok(())
+}
+
+async fn legacy_source_policy(connection: &mut sqlx::PgConnection) -> Result<i64, AppError> {
+    sqlx::query_scalar(
+        "SELECT access_policy_version FROM oauth_clients WHERE client_id=$1 \
+         AND status='ENABLED' AND subject_mode='USER' AND application_id IS NULL \
+         AND allowed_member_types=ARRAY['EMPLOYEE']::text[] FOR SHARE",
+    )
+    .bind(LEGACY_CLIENT_REF)
+    .fetch_optional(connection)
+    .await
+    .map_err(|_| AppError::Unavailable)?
+    .ok_or_else(|| AppError::unauthorized("员工登录来源已停用，请重新登录"))
+}
+
+/// Trusted owned-database fixture equivalent of a completed password proof.
+#[cfg(test)]
+pub(crate) async fn fixture_credential_ticket(
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+    secret: &str,
+) -> anyhow::Result<String> {
+    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await?;
+    let origin_client_policy_version = legacy_source_policy(&mut *pool.acquire().await?).await?;
+    let memberships = fetch_memberships(pool, user_id)
+        .await?
+        .into_iter()
+        .filter(console_selectable)
+        .map(|membership| CredentialMembership {
+            membership_id: membership.membership_id,
+            organization_id: membership.organization_id,
+            identity_version: membership.identity_version,
+        })
+        .collect();
+    let now = Utc::now().timestamp();
+    jwt::sign_payload(
+        &CredentialSelection {
+            claims: jwt::Claims {
+                sub: user_id.to_string(),
+                typ: "credential".into(),
+                tenant: None,
+                org: None,
+                cid: None,
+                scope: None,
+                sid: None,
+                ver: Some(version),
+                aud: None,
+                jti: None,
+                exp: now + 300,
+                iat: now,
+            },
+            accounts: vec![CredentialAccount {
+                user_id,
+                version,
+                memberships,
+            }],
+            origin_client_policy_version,
+        },
+        secret,
+    )
 }
 
 /// Password proof precedes tenant/organization selection, including shared aliases.
@@ -115,6 +216,7 @@ async fn login(
     headers: HeaderMap,
     ApiJson(body): ApiJson<LoginBody>,
 ) -> Result<Json<Value>, AppError> {
+    require_legacy_login(&state)?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     if body.username.len() > state.config.login_identifier_max_bytes || body.password.len() > 1024 {
@@ -146,11 +248,14 @@ async fn login(
     if let Some(retry) = state.login_limits.check_account(&input_key) {
         return Err(AppError::RateLimited(retry));
     }
-    let rows: Vec<LoginUserRow> = sqlx::query_as(
-        "SELECT id, username, password_hash, status, session_version, COALESCE(real_name,'') AS real_name \
-         FROM users WHERE username=$1 OR ($2<>'' AND regexp_replace(phone, '[[:space:]()\\-]', '', 'g')=$2) \
-         OR ($3<>'' AND lower(email)=$3) ORDER BY id LIMIT 65",
-    ).bind(&identifier).bind(phone).bind(email).fetch_all(&state.pool).await?;
+    let rows = state
+        .authentication
+        .candidates(crate::platform_accounts::LoginIdentifier {
+            identifier: &identifier,
+            phone: &phone,
+            email: &email,
+        })
+        .await?;
     if rows.len() > 64 {
         return Err(AppError::bad_request(
             "该电话或 Email 关联账号过多，请使用其他登录账号",
@@ -179,6 +284,14 @@ async fn login(
     let mut locked = None;
     let mut authenticated_without_membership = false;
     let mut failures = Vec::new();
+    let origin_client_policy_version = legacy_source_policy(
+        &mut *state
+            .pool
+            .acquire()
+            .await
+            .map_err(|_| AppError::Unavailable)?,
+    )
+    .await?;
     let verify_deadline = tokio::time::Instant::now()
         + std::time::Duration::from_millis(state.config.login_verify_budget_ms);
     for row in rows {
@@ -195,7 +308,7 @@ async fn login(
         }
         let valid = tokio::time::timeout_at(
             verify_deadline,
-            state.passwords.verify(&row.password_hash, &body.password),
+            state.authentication.verify(&row, &body.password),
         )
         .await
         .map_err(|_| AppError::RateLimited(1))??;
@@ -205,7 +318,7 @@ async fn login(
         }
         state.login_limits.clear_account(&account_key);
         let memberships = fetch_memberships(&state.pool, row.id).await?;
-        if memberships.is_empty() {
+        if !memberships.iter().any(console_selectable) {
             authenticated_without_membership = true;
             continue;
         }
@@ -216,11 +329,11 @@ async fn login(
             choice["realName"] = json!(row.real_name);
             choices.push(choice);
         }
-        sqlx::query("UPDATE users SET last_login_at=now(), updated_at=now() WHERE id=$1")
-            .bind(row.id)
-            .execute(&state.pool)
-            .await?;
-        let first = &memberships[0];
+        state.accounts.record_login(row.id).await?;
+        let first = memberships
+            .iter()
+            .find(|membership| console_selectable(membership))
+            .ok_or_else(|| AppError::forbidden("没有可用于控制台的员工身份"))?;
         audit::write(
             &state.pool,
             audit::AuditInfo {
@@ -237,7 +350,16 @@ async fn login(
         .await;
         accounts.push(CredentialAccount {
             user_id: row.id,
-            version: row.session_version,
+            version: row.account_version,
+            memberships: memberships
+                .iter()
+                .filter(|membership| console_selectable(membership))
+                .map(|membership| CredentialMembership {
+                    membership_id: membership.membership_id,
+                    organization_id: membership.organization_id,
+                    identity_version: membership.identity_version,
+                })
+                .collect(),
         });
     }
     let Some(first) = accounts.first() else {
@@ -267,7 +389,7 @@ async fn login(
             return Err(AppError::RateLimited(retry));
         }
         if authenticated_without_membership {
-            return Err(AppError::forbidden("所属租户或组织已到期, 无法登录"));
+            return Err(AppError::forbidden("没有可用于平台控制台的有效员工身份"));
         }
         return Err(AppError::unauthorized("用户名或密码错误"));
     };
@@ -293,148 +415,275 @@ async fn login(
         exp: now + state.config.credential_ticket_ttl_minutes * 60,
         iat: now,
     };
-    let ticket = if account_count == 1 {
-        jwt::sign(&claims, &state.config.jwt_secret)?
-    } else {
-        jwt::sign_payload(
-            &CredentialSelection { claims, accounts },
-            &state.config.jwt_secret,
-        )?
-    };
+    let ticket = jwt::sign_payload(
+        &CredentialSelection {
+            claims,
+            accounts,
+            origin_client_policy_version,
+        },
+        &state.config.jwt_secret,
+    )?;
     Ok(Json(
         json!({ "ticket": ticket, "memberships": choices, "accountCount": account_count }),
     ))
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ContextBody {
-    organization_id: String,
     #[serde(default)]
+    organization_id: Option<String>,
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
+    membership_id: Option<Uuid>,
+    #[serde(default)]
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize_optional")]
     user_id: Option<Uuid>,
 }
 
-/// POST /api/auth/context — ticket (首次选择组织) 或 session (切换组织) → 会话 JWT
+#[derive(sqlx::FromRow)]
+struct ContextUserRow {
+    username: String,
+    real_name: String,
+    email: String,
+    phone: String,
+    avatar: String,
+    gender: String,
+    is_super_admin: bool,
+    status: String,
+    session_version: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct ContextOrganizationRow {
+    org_id: Uuid,
+    org_name: String,
+    org_path: String,
+    tenant_id: Uuid,
+    tenant_name: String,
+    tenant_code: String,
+    tenant_is_platform: bool,
+    org_is_root: bool,
+    org_expires: Option<DateTime<Utc>>,
+    tenant_expires: Option<DateTime<Utc>>,
+}
+
+/// POST /api/auth/context — select an exact employee membership from a bound proof.
 async fn context(
     State(state): State<AppState>,
     headers: HeaderMap,
     ApiJson(body): ApiJson<ContextBody>,
 ) -> Result<Json<Value>, AppError> {
+    require_legacy_login(&state)?;
     let token = bearer_token(&headers)?;
     let claims = jwt::verify(&token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("凭证无效或已过期"))?;
-    if claims.typ != "credential" && claims.typ != "credential_multi" && claims.typ != "session" {
+    if !matches!(
+        claims.typ.as_str(),
+        "credential" | "credential_multi" | "session"
+    ) {
         return Err(AppError::unauthorized(
             "凭证类型错误, 需要 ticket 或会话令牌",
         ));
     }
-    let org_id: Uuid = body
+    let requested_org = body
         .organization_id
-        .parse()
-        .map_err(|_| AppError::bad_request("组织 ID 格式错误"))?;
-    let (user_id, claim_version) =
-        if claims.typ == "credential_multi" {
-            let selection: CredentialSelection =
-                jwt::verify_payload(&token, &state.config.jwt_secret)
-                    .map_err(|_| AppError::unauthorized("登录选择凭证无效或已过期"))?;
-            let selected =
-                if let Some(selected) = body.user_id {
-                    selected
-                } else {
-                    let ids: Vec<Uuid> = selection
-                        .accounts
-                        .iter()
-                        .map(|account| account.user_id)
-                        .collect();
-                    let candidates: Vec<Uuid> = sqlx::query_scalar(
-                "SELECT user_id FROM memberships WHERE organization_id=$1 AND user_id=ANY($2)",
-            ).bind(org_id).bind(ids).fetch_all(&state.pool).await?;
-                    if candidates.len() != 1 {
-                        return Err(AppError::bad_request("请选择要进入该组织的账号"));
-                    }
-                    candidates[0]
-                };
-            let account = selection
-                .accounts
-                .iter()
-                .find(|account| account.user_id == selected)
-                .ok_or_else(|| AppError::forbidden("所选账号未通过本次登录验证"))?;
-            (account.user_id, account.version)
-        } else {
-            let id: Uuid = claims
-                .sub
-                .parse()
-                .map_err(|_| AppError::unauthorized("凭证无效"))?;
-            if body.user_id.is_some_and(|selected| selected != id) {
-                return Err(AppError::forbidden("不能通过当前凭证切换用户账号"));
-            }
-            (
-                id,
-                claims
-                    .ver
-                    .ok_or_else(|| AppError::unauthorized("旧版凭证已失效，请重新登录"))?,
-            )
-        };
+        .as_deref()
+        .map(|value| {
+            value
+                .parse_uuid7()
+                .map_err(|_| AppError::bad_request("组织 ID 格式错误"))
+        })
+        .transpose()?;
+    if requested_org.is_none() && body.membership_id.is_none() {
+        return Err(AppError::bad_request("请选择成员身份"));
+    }
+    // A password ticket binds the exact identity generations offered at login.
+    // Missing snapshots are rejected instead of silently reading newer versions.
+    let selection: Option<CredentialSelection> = if claims.typ == "session" {
+        None
+    } else {
+        Some(
+            jwt::verify_payload(&token, &state.config.jwt_secret)
+                .map_err(|_| AppError::unauthorized("旧版登录选择凭证已失效，请重新登录"))?,
+        )
+    };
+    let (user_id, claim_version) = if let Some(selection) = &selection {
+        let candidates: Vec<&CredentialAccount> = selection
+            .accounts
+            .iter()
+            .filter(|account| body.user_id.is_none_or(|id| id == account.user_id))
+            .filter(|account| {
+                account.memberships.iter().any(|membership| {
+                    body.membership_id
+                        .is_none_or(|id| id == membership.membership_id)
+                        && requested_org.is_none_or(|id| id == membership.organization_id)
+                })
+            })
+            .collect();
+        if candidates.is_empty() {
+            return Err(AppError::forbidden("所选账号或成员身份未通过本次登录验证"));
+        }
+        if candidates.len() > 1 {
+            return Err(AppError::bad_request(
+                "请选择本次登录验证过的账号及成员身份",
+            ));
+        }
+        (candidates[0].user_id, candidates[0].version)
+    } else {
+        let id = claims
+            .sub
+            .parse_uuid7()
+            .map_err(|_| AppError::unauthorized("凭证无效"))?;
+        if body.user_id.is_some_and(|selected| selected != id) {
+            return Err(AppError::forbidden("不能通过当前凭证切换用户账号"));
+        }
+        (
+            id,
+            claims
+                .ver
+                .ok_or_else(|| AppError::unauthorized("旧版凭证已失效，请重新登录"))?,
+        )
+    };
     let old_session_id = if claims.typ == "session" {
-        let sid: Uuid = claims
-            .sid
-            .as_deref()
-            .and_then(|value| Uuid::parse_str(value).ok())
-            .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
+        Some(
+            claims
+                .sid
+                .as_deref()
+                .and_then(|value| crate::util::uuid7::parse_uuid(value).ok())
+                .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?,
+        )
+    } else {
+        None
+    };
+    if let Some(id) = old_session_id {
+        let bff_source: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM platform_sessions WHERE id=$1 AND bff_session_id IS NOT NULL)",
+        )
+        .bind(id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+        if bff_source {
+            return Err(AppError::unauthorized(
+                "BFF 上下文只能通过受保护的 /auth/context-token 获取",
+            ));
+        }
+    }
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+    let user: Option<ContextUserRow> = sqlx::query_as(
+        "SELECT username,COALESCE(real_name,'') AS real_name,COALESCE(email,'') AS email, \
+         COALESCE(phone,'') AS phone,COALESCE(avatar,'') AS avatar, \
+         COALESCE(gender,'UNKNOWN') AS gender,is_super_admin,status,session_version \
+         FROM users WHERE id=$1 FOR UPDATE",
+    )
+    .bind(user_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|_| AppError::Unavailable)?;
+    let ContextUserRow {
+        username,
+        real_name,
+        email,
+        phone,
+        avatar,
+        gender,
+        is_super_admin: is_super,
+        status,
+        session_version,
+    } = user.ok_or_else(|| AppError::unauthorized("用户不存在"))?;
+    if status != "ENABLED" || session_version != claim_version {
+        return Err(AppError::unauthorized("凭证已撤销，请重新登录"));
+    }
+    // Account then source client: match revocation/policy writers' lock order.
+    let source_version = legacy_source_policy(&mut tx).await?;
+    if selection
+        .as_ref()
+        .is_some_and(|proof| proof.origin_client_policy_version != source_version)
+    {
+        return Err(AppError::unauthorized("登录来源策略已变更，请重新登录"));
+    }
+    if let Some(old_id) = old_session_id {
         let old_tenant = claims
             .tenant
             .as_deref()
-            .and_then(|value| Uuid::parse_str(value).ok())
+            .and_then(|v| crate::util::uuid7::parse_uuid(v).ok())
             .ok_or_else(|| AppError::unauthorized("会话缺少租户上下文"))?;
         let old_org = claims
             .org
             .as_deref()
-            .and_then(|value| Uuid::parse_str(value).ok())
+            .and_then(|v| crate::util::uuid7::parse_uuid(v).ok())
             .ok_or_else(|| AppError::unauthorized("会话缺少组织上下文"))?;
-        session::active_user(
-            &state.pool,
-            user_id,
-            old_tenant,
-            old_org,
-            sid,
-            claim_version,
+        let valid: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM platform_sessions s WHERE s.id=$1 AND s.user_id=$2 \
+             AND s.tenant_id=$3 AND s.organization_id=$4 AND s.account_version=$5 \
+             AND s.member_type='EMPLOYEE' AND s.origin_client_ref=$6 AND s.origin_issuer=$7 \
+             AND s.origin_client_policy_version=$8 AND s.bff_session_id IS NULL AND platform_session_active(s.id))",
         )
-        .await?;
-        Some(sid)
-    } else {
-        None
-    };
-    let user = sqlx::query_as::<_, (String, String, String, String, String, String, bool, String, i64)>(
-        "SELECT username, COALESCE(real_name,''), COALESCE(email,''), COALESCE(phone,''), \
-         COALESCE(avatar,''), COALESCE(gender,'UNKNOWN'), is_super_admin, status, session_version FROM users WHERE id = $1",
+        .bind(old_id)
+        .bind(user_id)
+        .bind(old_tenant)
+        .bind(old_org)
+        .bind(claim_version)
+        .bind(LEGACY_CLIENT_REF)
+        .bind(LEGACY_ISSUER)
+        .bind(source_version)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+        if !valid {
+            return Err(AppError::unauthorized("会话已失效，请重新登录"));
+        }
+    }
+    let memberships: Vec<(Uuid, Uuid, i64)> = sqlx::query_as(
+        "SELECT id,organization_id,identity_version FROM memberships WHERE user_id=$1 \
+         AND member_type='EMPLOYEE' AND status='ENABLED' \
+         AND ($2::uuid IS NULL OR organization_id=$2) AND ($3::uuid IS NULL OR id=$3)",
     )
     .bind(user_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::unauthorized("用户不存在"))?;
-    let (username, real_name, email, phone, avatar, gender, is_super, status, session_version) =
-        user;
-    if status != "ENABLED" {
-        return Err(AppError::unauthorized("账号已被禁用"));
+    .bind(requested_org)
+    .bind(body.membership_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|_| AppError::Unavailable)?;
+    if memberships.is_empty() {
+        return Err(AppError::forbidden("您在该组织没有所选员工成员身份"));
     }
-    if session_version != claim_version {
-        return Err(AppError::unauthorized("凭证已撤销，请重新登录"));
+    if memberships.len() > 1 {
+        return Err(AppError::bad_request("请选择唯一且有效的员工成员身份"));
     }
-
-    let org = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, String, bool, bool, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>(
-        "SELECT o.id, o.name, org_path(o.id), o.tenant_id, t.name, t.code, t.is_platform, o.parent_id IS NULL, org_chain_expires_at(o.id), t.expires_at \
-         FROM memberships m \
-         JOIN organizations o ON o.id = m.organization_id \
-         JOIN tenants t ON t.id = o.tenant_id \
-         WHERE m.user_id = $1 AND m.organization_id = $2 \
-         AND org_chain_active(o.id) AND t.status = 'ENABLED'",
-    )
-    .bind(user_id)
-    .bind(org_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::forbidden("您在该组织没有成员身份"))?;
-    let (
+    let (membership_id, org_id, identity_version) = memberships[0];
+    if let Some(selection) = &selection {
+        let bound = selection
+            .accounts
+            .iter()
+            .find(|account| account.user_id == user_id)
+            .is_some_and(|account| {
+                account.memberships.iter().any(|membership| {
+                    membership.membership_id == membership_id
+                        && membership.organization_id == org_id
+                        && membership.identity_version == identity_version
+                })
+            });
+        if !bound {
+            return Err(AppError::unauthorized("成员身份已变更，请重新登录"));
+        }
+    }
+    let org: Option<ContextOrganizationRow> =
+        sqlx::query_as(
+            "SELECT o.id AS org_id,o.name AS org_name,org_path(o.id) AS org_path,o.tenant_id, \
+             t.name AS tenant_name,t.code AS tenant_code,t.is_platform AS tenant_is_platform, \
+             o.parent_id IS NULL AS org_is_root,org_chain_expires_at(o.id) AS org_expires, \
+             t.expires_at AS tenant_expires \
+             FROM organizations o JOIN tenants t ON t.id=o.tenant_id \
+             WHERE o.id=$1 AND org_chain_active(o.id) AND t.status='ENABLED' \
+             AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) \
+             AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>clock_timestamp())",
+        ).bind(org_id).fetch_optional(&mut *tx).await.map_err(|_| AppError::Unavailable)?;
+    let ContextOrganizationRow {
         org_id,
         org_name,
         org_path,
@@ -445,15 +694,7 @@ async fn context(
         org_is_root,
         org_expires,
         tenant_expires,
-    ) = org;
-    // 会话与刷新均受组织祖先链及租户有效期约束。
-    if org_expires.is_some_and(|e| e <= Utc::now()) {
-        return Err(AppError::forbidden("该组织已到期, 无法切换"));
-    }
-    if tenant_expires.is_some_and(|e| e <= Utc::now()) {
-        return Err(AppError::forbidden("所属租户已到期, 无法登录"));
-    }
-
+    } = org.ok_or_else(|| AppError::forbidden("所属租户或组织不可用"))?;
     let now = Utc::now().timestamp();
     let ttl = state.config.session_ttl_hours * 3600;
     let refresh_ttl = state.config.refresh_token_ttl_seconds;
@@ -462,28 +703,22 @@ async fn context(
     }
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
-    let mut tx = state.pool.begin().await?;
-    let (session_id, expires_at): (Uuid, DateTime<Utc>) = sqlx::query_as(
+    let (session_id,expires_at): (Uuid,DateTime<Utc>) = sqlx::query_as(
         "INSERT INTO platform_sessions \
-         (user_id, tenant_id, organization_id, expires_at, ip, user_agent) \
-         VALUES ($1, $2, $3, LEAST(now() + make_interval(secs => $4::float8), \
-                $7::timestamptz, $8::timestamptz), $5, $6) \
-         RETURNING id, expires_at",
-    )
-    .bind(user_id)
-    .bind(tenant_id)
-    .bind(org_id)
-    .bind(ttl.max(refresh_ttl) as f64)
-    .bind(&ip)
-    .bind(&ua)
-    .bind(org_expires)
-    .bind(tenant_expires)
-    .fetch_one(&mut *tx)
-    .await?;
+         (user_id,tenant_id,organization_id,expires_at,ip,user_agent,id,account_version, \
+          membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         VALUES($1,$2,$3,LEAST(clock_timestamp()+make_interval(secs=>$4::float8), \
+         $7::timestamptz,$8::timestamptz),$5,$6,$9,$10,$11,'EMPLOYEE',$12,$13,$14,$15) \
+         RETURNING id,expires_at",
+    ).bind(user_id).bind(tenant_id).bind(org_id).bind(ttl.max(refresh_ttl) as f64)
+        .bind(&ip).bind(&ua).bind(org_expires).bind(tenant_expires)
+        .bind(crate::util::uuid7::new_uuid()).bind(session_version).bind(membership_id)
+        .bind(identity_version).bind(LEGACY_ISSUER).bind(LEGACY_CLIENT_REF).bind(source_version)
+        .fetch_one(&mut *tx).await?;
     if let Some(old_id) = old_session_id {
         let revoked = sqlx::query(
-            "UPDATE platform_sessions SET revoked_at = now() \
-             WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > now()",
+            "UPDATE platform_sessions SET revoked_at=clock_timestamp() WHERE id=$1 AND user_id=$2 \
+             AND revoked_at IS NULL AND expires_at>clock_timestamp()",
         )
         .bind(old_id)
         .bind(user_id)
@@ -518,43 +753,29 @@ async fn context(
         iat: now,
     };
     let access_token = jwt::sign(&session, &state.config.jwt_secret)?;
-    if claims.typ == "session" {
-        audit::write_in_tx(
-            &mut tx,
-            audit::AuditInfo {
-                user_id: Some(user_id),
-                username: &username,
-                tenant_id: Some(tenant_id),
-                organization_id: Some(org_id),
-                action: "CONTEXT_SWITCH",
-                detail: &audit::change_detail(
-                    "platform_session",
-                    session_id,
-                    json!({"previousSessionId": old_session_id, "organizationId": claims.org,
-                    "tenantId": claims.tenant, "username": username}),
-                    json!({"organizationId": org_id, "organizationName": org_name,
-                    "tenantId": tenant_id, "username": username}),
-                ),
-                ip: &ip,
-                user_agent: &ua,
-            },
-        )
-        .await?;
+    if old_session_id.is_some() {
+        audit::write_in_tx(&mut tx,audit::AuditInfo {
+            user_id:Some(user_id),username:&username,tenant_id:Some(tenant_id),
+            organization_id:Some(org_id),action:"CONTEXT_SWITCH",
+            detail:&audit::change_detail("platform_session",session_id,
+                json!({"previousSessionId":old_session_id,"organizationId":claims.org,
+                    "tenantId":claims.tenant,"username":username}),
+                json!({"organizationId":org_id,"organizationName":org_name,"membershipId":membership_id,
+                    "identityVersion":identity_version.to_string(),"tenantId":tenant_id,"username":username})),
+            ip:&ip,user_agent:&ua,
+        }).await?;
     }
     tx.commit().await?;
-
     Ok(Json(json!({
-        "accessToken": access_token,
-        "expiresIn": access_expiry - now,
-        "refreshToken": refresh_token,
-        "refreshExpiresIn": refresh_expiry.timestamp() - now,
-        "platformContext": tenant_is_platform && org_is_root,
-        "user": {
-            "id": user_id, "username": username, "realName": real_name, "email": email,
-            "phone": phone, "avatar": avatar, "gender": gender, "isSuperAdmin": is_super,
-        },
-        "tenant": {"id": tenant_id, "name": tenant_name, "code": tenant_code, "isPlatform": tenant_is_platform},
-        "organization": {"id": org_id, "name": org_name, "path": org_path},
+        "accessToken":access_token,"expiresIn":access_expiry-now,
+        "refreshToken":refresh_token,"refreshExpiresIn":refresh_expiry.timestamp()-now,
+        "platformContext":tenant_is_platform && org_is_root,
+        "membershipId":membership_id,"memberType":"EMPLOYEE","identityVersion":identity_version.to_string(),
+        "accountVersion":session_version.to_string(),
+        "user":{"id":user_id,"username":username,"realName":real_name,"email":email,
+            "phone":phone,"avatar":avatar,"gender":gender,"isSuperAdmin":is_super},
+        "tenant":{"id":tenant_id,"name":tenant_name,"code":tenant_code,"isPlatform":tenant_is_platform},
+        "organization":{"id":org_id,"name":org_name,"path":org_path},
     })))
 }
 
@@ -563,6 +784,7 @@ async fn profile(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
+    let proof = authorization::require_employee_context(&state.pool, &user).await?;
     let u = sqlx::query_as::<_, (String, String, String, String, String, String, bool)>(
         "SELECT username, COALESCE(real_name,''), COALESCE(email,''), COALESCE(phone,''), \
          COALESCE(avatar,''), COALESCE(gender,'UNKNOWN'), is_super_admin FROM users WHERE id = $1",
@@ -607,7 +829,8 @@ async fn profile(
          JOIN tenant_applications ta ON ta.application_id = a.id AND ta.tenant_id = $1 \
          JOIN organization_applications oa ON oa.application_id = a.id AND oa.organization_id = $2 \
          CROSS JOIN LATERAL application_effective_entry(a.id,$3) e \
-         WHERE a.status = 'ENABLED' ORDER BY a.sort_order, a.created_at",
+         WHERE a.status = 'ENABLED' AND 'EMPLOYEE'=ANY(a.allowed_member_types) \
+         ORDER BY a.sort_order, a.created_at",
     )
     .bind(user.tenant_id)
     .bind(user.org_id)
@@ -639,8 +862,14 @@ async fn profile(
 
     let memberships = fetch_memberships(&state.pool, user.user_id).await?;
     let platform_context = state.can_manage_platform(&user).await?;
+    if authorization::require_employee_context(&state.pool, &user).await? != proof {
+        return Err(AppError::unauthorized("成员身份已在资料读取期间变更"));
+    }
 
     Ok(Json(json!({
+        "membershipId": proof.membership_id, "memberType": "EMPLOYEE",
+        "identityVersion": proof.identity_version.to_string(),
+        "accountVersion": proof.account_version.to_string(),
         "platformContext": platform_context,
         "user": {
             "id": user.user_id, "username": username, "realName": real_name, "email": email,
@@ -661,22 +890,10 @@ async fn menus(
 ) -> Result<Json<Value>, AppError> {
     let app_id: Uuid = params
         .get("applicationId")
-        .and_then(|v| Uuid::parse_str(v).ok())
+        .and_then(|v| crate::util::uuid7::parse_uuid(v).ok())
         .ok_or_else(|| AppError::bad_request("缺少 applicationId 参数"))?;
 
-    let rows = if user.is_super_admin {
-        authorization::granted_menu_rows(&state.pool, user.tenant_id, user.org_id, Some(app_id))
-            .await?
-    } else {
-        authorization::effective_menu_rows(
-            &state.pool,
-            user.user_id,
-            user.tenant_id,
-            user.org_id,
-            Some(app_id),
-        )
-        .await?
-    };
+    let rows = authorization::context_menu_rows(&state.pool, &user, Some(app_id)).await?;
     Ok(Json(json!({"menus": authorization::menu_tree(rows)})))
 }
 
@@ -685,7 +902,7 @@ async fn permissions(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
-    let roles = state.effective_roles(user.user_id, user.org_id).await?;
+    let roles = state.context_roles(&user).await?;
     let mut perms: Vec<String> = state
         .context_permissions(&user)
         .await?
@@ -758,29 +975,53 @@ async fn change_password(
     user: CurrentUser,
     ApiJson(body): ApiJson<PasswordBody>,
 ) -> Result<Json<Value>, AppError> {
-    pw::validate_for_config(&body.new_password, &state.config)?;
-    let (hash,): (String,) = sqlx::query_as("SELECT password_hash FROM users WHERE id = $1")
-        .bind(user.user_id)
-        .fetch_one(&state.pool)
-        .await?;
-    if !state.passwords.verify(&hash, &body.old_password).await? {
+    state.accounts.validate_password(&body.new_password)?;
+    if state.remote_accounts.is_some() {
+        return super::users::remote::mutate(
+            &state,
+            &headers,
+            &user,
+            user.user_id,
+            "CHANGE_PASSWORD",
+            json!({"oldPassword":body.old_password,"newPassword":body.new_password}),
+            None,
+        )
+        .await
+        .map(Json);
+    }
+    let credential = state.authentication.by_user_id(user.user_id).await?;
+    if !state
+        .authentication
+        .verify(&credential, &body.old_password)
+        .await?
+    {
         return Err(AppError::bad_request("原密码不正确"));
     }
-    let new_hash = state.passwords.hash(&body.new_password).await?;
+    let password = state.accounts.prepare_password(&body.new_password).await?;
     let mut tx = state.pool.begin().await?;
-    let (current_hash, before_version): (String, i64) =
-        sqlx::query_as("SELECT password_hash, session_version FROM users WHERE id=$1 FOR UPDATE")
-            .bind(user.user_id)
-            .fetch_one(&mut *tx)
+    {
+        let mut accounts = crate::authentication::PostgresAccountTransaction::new(&mut tx);
+        accounts
+            .lock_verified_password_snapshot(&credential)
             .await?;
-    if current_hash != hash {
-        return Err(AppError::conflict("密码已变更，请重新验证"));
     }
-    let revoked = session::revoke_all_in_tx(&mut tx, user.user_id, Some(&new_hash)).await?;
-    let after_version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user.user_id)
-        .fetch_one(&mut *tx)
-        .await?;
+    // Preserve the reset-conflict check above, then reject an original context
+    // retired while this request waited. No account mutation has run yet.
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    let change = {
+        let mut accounts = crate::authentication::PostgresAccountTransaction::new(&mut tx);
+        state
+            .accounts
+            .replace_password(&mut accounts, user.user_id, &password, Some(&credential))
+            .await?
+    };
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     audit::write_in_tx(
@@ -794,9 +1035,9 @@ async fn change_password(
             detail: &audit::change_detail(
                 "user",
                 user.user_id,
-                json!({"username": user.username, "sessionVersion": before_version}),
-                json!({"username": user.username, "sessionVersion": after_version,
-                "passwordChanged": true, "revokedSessions": revoked}),
+                json!({"username": user.username, "sessionVersion": change.before_version}),
+                json!({"username": user.username, "sessionVersion": change.after_version,
+                "passwordChanged": true, "revokedSessions": change.revoked_sessions}),
             ),
             ip: &ip,
             user_agent: &ua,
@@ -951,7 +1192,7 @@ async fn revoke_my_session(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")

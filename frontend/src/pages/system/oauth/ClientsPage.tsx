@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zResolver } from "@/lib/form"
-import { KeyRound, LayoutGrid, Loader2, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, Unlink, Unlock } from "lucide-react"
+import { Bot, KeyRound, LayoutGrid, Loader2, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, Unlink, Unlock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -43,6 +43,9 @@ import { SecretDialog } from "@/components/CopyButton"
 import { TableSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { oauthApi } from "@/api/oauth"
 import { applicationsApi } from "@/api/applications"
+import { admissionMemberLabels, admissionSubjectLabels, type AdmissionPolicySummary, type AdmissionPolicyTarget } from "@/api/admission-policies"
+import { AdmissionPolicyDialog } from "@/components/admission-policy-dialog"
+import { useAuthStore } from "@/stores/auth"
 import { asArray } from "@/lib/api"
 import { GRANT_TYPE_LABELS, formatNumber } from "@/lib/format"
 import { toast } from "sonner"
@@ -66,7 +69,9 @@ const clientSchema = z.object({
     .optional(),
   clientType: z.enum(["CONFIDENTIAL", "PUBLIC"]),
   requirePkce: z.boolean(),
-  redirectUris: z.string().min(1, "至少填写一个回调地址"),
+  redirectUris: z.string(),
+  subjectMode: z.enum(["USER", "MACHINE", "LEGACY_MIXED"]),
+  allowedMemberTypes: z.array(z.enum(["EMPLOYEE", "CUSTOMER"])),
   grantTypes: z.array(z.string()).min(1, "至少选择一种授权类型"),
   scopes: z.array(z.string()),
   accessTokenValidity: z.coerce.number().int().min(60).max(86400),
@@ -74,8 +79,19 @@ const clientSchema = z.object({
   description: z.string().max(255).optional(),
   /* 关联平台应用: "none" = 不关联, 其余为应用 id */
   applicationId: z.string().optional(),
+}).superRefine((value, context) => {
+  const issue = (path: string, message: string) => context.addIssue({ code: "custom", path: [path], message })
+  if (value.subjectMode === "MACHINE") {
+    if (value.clientType !== "CONFIDENTIAL" || value.grantTypes.length !== 1 || value.grantTypes[0] !== "client_credentials") issue("grantTypes", "机器客户端须为机密类型，且仅使用客户端凭证授权")
+    if (value.allowedMemberTypes.length) issue("allowedMemberTypes", "机器客户端不配置人员身份")
+  } else {
+    if (!value.allowedMemberTypes.length) issue("allowedMemberTypes", "至少允许一种成员身份")
+    if (!value.redirectUris.trim()) issue("redirectUris", "至少填写一个回调地址")
+    if (value.subjectMode === "USER" && value.grantTypes.includes("client_credentials")) issue("grantTypes", "人员客户端不能使用机器客户端凭证授权")
+  }
 })
 type ClientForm = z.infer<typeof clientSchema>
+type ClientWithPolicy = OAuthClientRecord & AdmissionPolicySummary
 
 /** 「不关联」哨兵值(Radix Select 不允许空串 value) */
 const NO_APP = "none"
@@ -95,7 +111,7 @@ export default function OAuthClientsPage() {
 
   const listQuery = useQuery({
     queryKey: ["oauth-clients"],
-    queryFn: async () => asArray<OAuthClientRecord>(await oauthApi.clients()),
+    queryFn: async () => asArray<ClientWithPolicy>(await oauthApi.clients()),
     staleTime: 30_000,
     retry: 1,
   })
@@ -110,7 +126,9 @@ export default function OAuthClientsPage() {
   const apps = appsQuery.data ?? []
 
   const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [editing, setEditing] = React.useState<OAuthClientRecord | null>(null)
+  const [editing, setEditing] = React.useState<ClientWithPolicy | null>(null)
+  const [policyTarget, setPolicyTarget] = React.useState<AdmissionPolicyTarget | null>(null)
+  const openPolicy = (client: ClientWithPolicy) => setPolicyTarget({ kind: "client", id: client.id, name: client.clientName, fixedEmployee: client.clientId === "platform-console-legacy" })
   const [secret, setSecret] = React.useState<string | null>(null)
   const writing = React.useRef(false)
   const [writeBusy, setWriteBusy] = React.useState(false)
@@ -132,6 +150,8 @@ export default function OAuthClientsPage() {
       clientType: "CONFIDENTIAL",
       requirePkce: false,
       redirectUris: "",
+      subjectMode: "USER",
+      allowedMemberTypes: ["EMPLOYEE"],
       grantTypes: ["authorization_code"],
       scopes: ["profile"],
       accessTokenValidity: 7200,
@@ -141,6 +161,8 @@ export default function OAuthClientsPage() {
     },
   })
   const clientName = form.watch("clientName")
+  const subjectMode = form.watch("subjectMode")
+  const machine = subjectMode === "MACHINE"
 
   const openCreate = () => {
     if (writing.current) return
@@ -151,6 +173,8 @@ export default function OAuthClientsPage() {
       clientType: "CONFIDENTIAL",
       requirePkce: false,
       redirectUris: "",
+      subjectMode: "USER",
+      allowedMemberTypes: ["EMPLOYEE"],
       grantTypes: ["authorization_code"],
       scopes: ["profile"],
       accessTokenValidity: 7200,
@@ -161,8 +185,9 @@ export default function OAuthClientsPage() {
     setDialogOpen(true)
   }
 
-  const openEdit = (c: OAuthClientRecord) => {
+  const openEdit = (c: ClientWithPolicy) => {
     if (writing.current) return
+    if (!c.subjectMode || !Array.isArray(c.allowedMemberTypes)) { toast.error("客户端准入信息未加载，请刷新列表后重试"); return }
     setEditing(c)
     form.reset({
       clientName: c.clientName,
@@ -170,6 +195,8 @@ export default function OAuthClientsPage() {
       clientType: c.clientType,
       requirePkce: c.requirePkce ?? false,
       redirectUris: (c.redirectUris ?? []).join("\n"),
+      subjectMode: c.subjectMode,
+      allowedMemberTypes: [...c.allowedMemberTypes],
       grantTypes: c.grantTypes ?? [],
       scopes: c.scopes ?? [],
       accessTokenValidity: c.accessTokenValidity ?? 7200,
@@ -198,6 +225,9 @@ export default function OAuthClientsPage() {
         description: v.description || "",
         /* "none"/缺省 → null = 不关联/清除关联 */
         applicationId: v.applicationId && v.applicationId !== NO_APP ? v.applicationId : null,
+        // Existing policies use the separate versioned endpoint. Creation has
+        // no old version and always states its purpose and safe initial set.
+        ...(!editing ? { subjectMode: v.subjectMode, allowedMemberTypes: v.subjectMode === "MACHINE" ? [] : v.allowedMemberTypes } : {}),
       }
       if (editing) {
         await oauthApi.updateClient(editing.id, payload)
@@ -265,7 +295,7 @@ export default function OAuthClientsPage() {
       <div className="rounded-xl border bg-card">
         {listQuery.isLoading ? (
           <div className="p-2">
-            <TableSkeleton cols={8} />
+            <TableSkeleton cols={9} />
           </div>
         ) : listQuery.isError ? (
           <ErrorState
@@ -293,6 +323,7 @@ export default function OAuthClientsPage() {
                 <TableHead className="pl-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">客户端</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">关联应用</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">类型</TableHead>
+                <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">身份准入</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">授权类型</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Scopes</TableHead>
                 <TableHead className="text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">令牌有效期</TableHead>
@@ -335,6 +366,14 @@ export default function OAuthClientsPage() {
                       {c.clientType === "CONFIDENTIAL" ? "机密" : "公开"}
                     </Badge>
                     <p className="mt-1 text-xs text-muted-foreground">{c.requirePkce ? "PKCE · 强制 S256" : "PKCE · 兼容模式"}</p>
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" className="h-auto flex-col items-start gap-1.5 px-2 py-2" disabled={writeBusy} onClick={() => openPolicy(c)} aria-label={`管理 ${c.clientName} 的身份准入`}>
+                      <span className="flex items-center gap-1.5 text-xs font-medium">{c.subjectMode === "MACHINE" ? <Bot className="size-3.5" /> : <ShieldCheck className="size-3.5" />}
+                        {c.subjectMode ? admissionSubjectLabels[c.subjectMode] : "读取准入策略"}</span>
+                      <span className="flex flex-wrap gap-1">{c.subjectMode === "MACHINE" ? <span className="text-[11px] text-muted-foreground">无人员身份</span> :
+                        c.allowedMemberTypes?.map(type => <Badge key={type} variant="outline" className="text-[10px]">{admissionMemberLabels[type]}</Badge>)}</span>
+                    </Button>
                   </TableCell>
                   <TableCell>
                     <div className="flex max-w-[16rem] flex-wrap gap-1">
@@ -462,6 +501,31 @@ export default function OAuthClientsPage() {
                 />
               </div>
 
+              <FormField control={form.control} name="subjectMode" render={({ field }) => <FormItem>
+                <FormLabel>主体用途</FormLabel>
+                <Select value={field.value} disabled={!!editing || writeBusy} onValueChange={value => {
+                  field.onChange(value)
+                  form.setValue("allowedMemberTypes", value === "MACHINE" ? [] : ["EMPLOYEE"], { shouldDirty: true })
+                  form.setValue("grantTypes", value === "MACHINE" ? ["client_credentials"] : ["authorization_code"], { shouldDirty: true })
+                  if (value === "MACHINE") { form.setValue("clientType", "CONFIDENTIAL"); form.setValue("requirePkce", false) }
+                }}>
+                  <FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent><SelectItem value="USER">人员登录 · USER</SelectItem><SelectItem value="MACHINE">机器凭据 · MACHINE</SelectItem>
+                    {editing?.subjectMode === "LEGACY_MIXED" && <SelectItem value="LEGACY_MIXED" disabled>历史混合用途 · 仅维护原注册</SelectItem>}</SelectContent>
+                </Select>
+                <FormDescription>主体用途与公开／机密类型分别管理。新人员客户端默认仅员工；机器客户端不提供人员准入。</FormDescription><FormMessage />
+              </FormItem>} />
+              {machine ? <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                <Bot className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><p>机器客户端仅使用 CONFIDENTIAL 与 client_credentials。成员集合为空，不能作为员工或客户登录入口。</p>
+              </div> : <FormField control={form.control} name="allowedMemberTypes" render={({ field }) => <FormItem>
+                <FormLabel>允许的成员身份</FormLabel>
+                <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2">{(["EMPLOYEE", "CUSTOMER"] as const).map(type =>
+                  <label key={type} className="flex items-center gap-2 text-sm"><Checkbox checked={field.value.includes(type)} disabled={!!editing || writeBusy}
+                    onCheckedChange={checked => field.onChange(checked === true ? [...field.value.filter(value => value !== type), type] : field.value.filter(value => value !== type))} />{admissionMemberLabels[type]}</label>)}</div>
+                {editing ? <Button type="button" variant="link" size="sm" className="h-auto px-0" disabled={writeBusy} onClick={() => { setDialogOpen(false); openPolicy(editing) }}>在身份准入中编辑集合与影响</Button> :
+                  <FormDescription>客户用途须与目标应用的准入集合匹配，选择身份不会自动创建成员关系。</FormDescription>}<FormMessage />
+              </FormItem>} />}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -471,7 +535,7 @@ export default function OAuthClientsPage() {
                       <FormLabel>
                         客户端类型 <span className="text-destructive">*</span>
                       </FormLabel>
-                      <Select onValueChange={value => { field.onChange(value); form.setValue("requirePkce", value === "PUBLIC", { shouldDirty: true }) }} value={field.value} disabled={!!editing || writeBusy}>
+                      <Select onValueChange={value => { field.onChange(value); form.setValue("requirePkce", value === "PUBLIC", { shouldDirty: true }) }} value={field.value} disabled={!!editing || machine || writeBusy}>
                         <FormControl>
                           <SelectTrigger className="w-full">
                             <SelectValue />
@@ -541,7 +605,7 @@ export default function OAuthClientsPage() {
                 render={({ field }) => (
                   <FormItem className="rounded-lg border p-3">
                     <label className="flex items-center gap-2 text-sm font-medium">
-                      <Checkbox aria-label="强制 PKCE S256" checked={field.value} disabled={writeBusy} onCheckedChange={value => field.onChange(value === true)} />
+                      <Checkbox aria-label="强制 PKCE S256" checked={field.value} disabled={machine || writeBusy} onCheckedChange={value => field.onChange(value === true)} />
                       授权码强制使用 PKCE（S256）
                     </label>
                     <FormDescription>启用后，授权请求必须携带 S256 code_challenge，兑换授权码时必须提交对应的 code_verifier。新公开客户端默认启用；已有接入方请先完成 S256 配置再开启，旧的无 PKCE 或 plain 请求需重新发起。关闭时保留兼容模式。仅影响授权码流程。</FormDescription>
@@ -556,12 +620,12 @@ export default function OAuthClientsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      回调地址 <span className="text-destructive">*</span>
+                      回调地址 {!machine && <span className="text-destructive">*</span>}
                     </FormLabel>
                     <FormControl>
                       <Textarea rows={3} placeholder={"每行一个,如:\nhttps://tv.example.com/callback"} className="font-mono text-xs" {...field} />
                     </FormControl>
-                    <FormDescription>授权码模式将仅允许跳转至这些地址</FormDescription>
+                    <FormDescription>{machine ? "机器客户端不使用浏览器回调，可留空" : "授权码模式将仅允许跳转至这些地址"}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -576,12 +640,13 @@ export default function OAuthClientsPage() {
                       授权类型 <span className="text-destructive">*</span>
                     </FormLabel>
                     <div className="grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-2">
-                      {GRANT_TYPES.map((g) => {
+                      {GRANT_TYPES.filter(g => machine ? g === "client_credentials" : subjectMode === "LEGACY_MIXED" || g !== "client_credentials").map((g) => {
                         const checked = field.value.includes(g)
                         return (
                           <label key={g} className="flex cursor-pointer items-start gap-2 text-sm">
                             <Checkbox
                               checked={checked}
+                              disabled={machine || writeBusy}
                               onCheckedChange={(v) =>
                                 field.onChange(v ? [...field.value, g] : field.value.filter((x) => x !== g))
                               }
@@ -692,6 +757,8 @@ export default function OAuthClientsPage() {
       </Dialog>
 
       <SecretDialog open={!!secret} onOpenChange={(o) => !o && setSecret(null)} secret={secret ?? ""} />
+      {policyTarget && <AdmissionPolicyDialog key={policyTarget.id} target={policyTarget} onClose={() => setPolicyTarget(null)}
+        onSaved={fence => { useAuthStore.getState().retireAuthorizationProjection(fence); void queryClient.invalidateQueries({ queryKey: ["oauth-clients"] }) }} />}
 
       <ConfirmDialog
         open={!!deleting}

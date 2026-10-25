@@ -9,8 +9,8 @@ pub(crate) async fn track<T>(
     kind: &str,
     work: impl Future<Output = Result<T, AppError>>,
 ) -> Result<T, AppError> {
-    let id:Uuid=sqlx::query_scalar("INSERT INTO application_release_operations(application_id,kind) VALUES($1,$2) RETURNING id")
-        .bind(app).bind(kind).fetch_one(&state.pool).await?;
+    let id:Uuid=sqlx::query_scalar("INSERT INTO application_release_operations(application_id,kind, id) VALUES($1,$2, $3) RETURNING id")
+        .bind(app).bind(kind).bind(crate::util::uuid7::new_uuid()).fetch_one(&state.pool).await?;
     // No connection/row lock is held while the work waits on external HTTP.
     // Cancellation or process death leaves a pending record: no TTL guesses.
     let result = work.await;

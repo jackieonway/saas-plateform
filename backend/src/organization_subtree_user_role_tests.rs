@@ -22,27 +22,29 @@ const SECRET: &str = "organization-subtree-user-role-tests-only";
 
 async fn org(pool: &PgPool, tenant: Uuid, parent: Option<Uuid>, name: &str) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,parent_id,name) VALUES($1,$2,$3) RETURNING id",
+        "INSERT INTO organizations(tenant_id,parent_id,name,id) VALUES($1,$2,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(parent)
     .bind(name)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?)
 }
 
 async fn account(pool: &PgPool, name: &str, orgs: &[Uuid], admin: bool) -> Result<Uuid> {
     let id = sqlx::query_scalar(
-        "INSERT INTO users(username,password_hash,is_super_admin) VALUES($1,'test-only',$2) RETURNING id",
+        "INSERT INTO users(username,password_hash,is_super_admin,id) VALUES($1,'test-only',$2,$3) RETURNING id",
     )
     .bind(name)
     .bind(admin)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
     for org in orgs {
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(id)
             .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(pool)
             .await?;
     }
@@ -51,12 +53,12 @@ async fn account(pool: &PgPool, name: &str, orgs: &[Uuid], admin: bool) -> Resul
 
 async fn role(pool: &PgPool, tenant: Uuid, org: Uuid, name: &str, users: &[Uuid]) -> Result<Uuid> {
     let id = sqlx::query_scalar(
-        "INSERT INTO roles(tenant_id,organization_id,name,code) VALUES($1,$2,$3,$3) RETURNING id",
+        "INSERT INTO roles(tenant_id,organization_id,name,code,id) VALUES($1,$2,$3,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(org)
     .bind(name)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
     for user in users {
         sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
@@ -71,12 +73,15 @@ async fn role(pool: &PgPool, tenant: Uuid, org: Uuid, name: &str, users: &[Uuid]
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<String> {
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) \
-         VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
@@ -189,7 +194,8 @@ async fn role_assignment_rechecks_membership_after_lock(
                 let observed: bool = sqlx::query_scalar(
                     "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() \
                      AND wait_event_type='Lock' AND $1=ANY(pg_blocking_pids(pid)) \
-                     AND query LIKE '%FROM users%' AND query LIKE '%FOR UPDATE%')",
+                     AND query LIKE '%FROM users%' \
+                     AND (query LIKE '%FOR UPDATE%' OR query LIKE '%FOR NO KEY UPDATE%'))",
                 )
                 .bind(blocker_pid)
                 .fetch_one(pool)
@@ -239,9 +245,9 @@ async fn exercise(platform: bool) -> Result<()> {
     let pool = &database.pool;
     let result = async {
         let tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code,is_platform) VALUES('Subtree tenant',$1,$2) RETURNING id",
+            "INSERT INTO tenants(name,code,is_platform,id) VALUES('Subtree tenant',$1,$2,$3) RETURNING id",
         ).bind(if platform { "admin-tenant" } else { "subtree-tenant" }).bind(platform)
-            .fetch_one(pool).await?;
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let root = org(pool, tenant, None, "Root").await?;
         let child = org(pool, tenant, Some(root), "Child").await?;
         let leaf = org(pool, tenant, Some(child), "Leaf").await?;
@@ -258,8 +264,8 @@ async fn exercise(platform: bool) -> Result<()> {
         let sibling_role = role(pool, tenant, sibling, "sibling-role", &[sibling_user, shared]).await?;
 
         let application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('Subtree system','system') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,id) VALUES('Subtree system','system',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
             .bind(tenant).bind(application).execute(pool).await?;
         for org in [root, child] {
@@ -268,8 +274,8 @@ async fn exercise(platform: bool) -> Result<()> {
         }
         for permission in ["system:user", "system:role", "system:organization"] {
             let menu: Uuid = sqlx::query_scalar(
-                "INSERT INTO menus(application_id,title,permission,type) VALUES($1,$2,$2,'MENU') RETURNING id",
-            ).bind(application).bind(permission).fetch_one(pool).await?;
+                "INSERT INTO menus(application_id,title,permission,type,id) VALUES($1,$2,$2,'MENU',$3) RETURNING id",
+            ).bind(application).bind(permission).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
             sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
                 .bind(tenant).bind(menu).execute(pool).await?;
             for org in [root, child] {

@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
@@ -41,12 +42,16 @@ struct RoleListRow {
     created_at: DateTime<Utc>,
 }
 
-const LIST_SELECT: &str = "SELECT r.id, r.name, COALESCE(r.code,'') AS code, COALESCE(r.description,'') AS description, \
+fn list_select() -> String {
+    let employee_support =
+        super::users::role_employee_support_sql("ur.user_id", "ur.organization_id", "$4");
+    format!(
+    "SELECT r.id, r.name, COALESCE(r.code,'') AS code, COALESCE(r.description,'') AS description, \
  r.organization_id, o.name AS organization_name, r.tenant_id, r.status, r.built_in, r.created_at, \
  (SELECT count(*) FROM role_menus rm WHERE rm.role_id = r.id) AS menu_count, \
- (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id \
- AND ($4::uuid[] IS NULL OR (ur.organization_id = ANY($4) AND EXISTS( \
- SELECT 1 FROM memberships um WHERE um.user_id = ur.user_id AND um.organization_id = ANY($4))))) AS user_count";
+ (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id AND ur.organization_id=r.organization_id \
+ AND {employee_support} AND ($4::uuid[] IS NULL OR ur.organization_id = ANY($4))) AS user_count")
+}
 
 /// GET /api/roles — 分页 + keyword/tenantId/organizationId; 非平台根组织仅看当前组织及下级组织角色。
 async fn list(
@@ -60,14 +65,13 @@ async fn list(
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
     let scoped_orgs = state.scoped_org_ids(&user).await?;
+    let requested_tenant = crate::util::uuid7::optional_query(params.get("tenantId"))?;
     let tenant_filter: Option<Uuid> = if scoped_orgs.is_none() {
-        params.get("tenantId").and_then(|v| Uuid::parse_str(v).ok())
+        requested_tenant
     } else {
         Some(user.tenant_id)
     };
-    let org_filter: Option<Uuid> = params
-        .get("organizationId")
-        .and_then(|v| Uuid::parse_str(v).ok());
+    let org_filter = crate::util::uuid7::optional_query(params.get("organizationId"))?;
     if let Some(org) = org_filter {
         state.ensure_org_scope(&user, org, "组织").await?;
     }
@@ -75,8 +79,9 @@ async fn list(
         "($1 = '' OR r.name ILIKE '%' || $1 || '%' OR r.code ILIKE '%' || $1 || '%') \
      AND ($2::uuid IS NULL OR r.tenant_id = $2) AND ($3::uuid IS NULL OR r.organization_id = $3) \
      AND ($4::uuid[] IS NULL OR r.organization_id = ANY($4))";
+    let list_select = list_select();
     let rows: Vec<RoleListRow> = sqlx::query_as(&format!(
-        "{LIST_SELECT} FROM roles r JOIN organizations o ON o.id = r.organization_id \
+        "{list_select} FROM roles r JOIN organizations o ON o.id = r.organization_id \
          WHERE {where_clause} ORDER BY r.created_at, r.id LIMIT $5 OFFSET $6"
     ))
     .bind(&kw)
@@ -183,6 +188,27 @@ async fn ensure_role_in_scope(
     state.ensure_org_scope(user, role.0, "角色").await
 }
 
+async fn lock_actor(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    actor: &CurrentUser,
+) -> Result<(), AppError> {
+    sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(actor.user_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or_else(|| AppError::unauthorized("当前会话用户已失效"))?;
+    super::users::require_employee_permission_in_tx(tx, actor, "system:role").await
+}
+
+async fn revalidate_actor(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    actor: &CurrentUser,
+    scope: Option<&[Uuid]>,
+) -> Result<(), AppError> {
+    super::users::require_scope_unchanged_in_tx(tx, actor, scope).await?;
+    super::users::require_employee_permission_in_tx(tx, actor, "system:role").await
+}
+
 /// POST /api/roles
 async fn create(
     State(state): State<AppState>,
@@ -199,7 +225,7 @@ async fn create(
     }
     let org_id: Uuid = body
         .organization_id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("organizationId 格式错误"))?;
     let (tenant_id,): (Uuid,) = sqlx::query_as("SELECT tenant_id FROM organizations WHERE id = $1")
         .bind(org_id)
@@ -207,9 +233,12 @@ async fn create(
         .await?
         .ok_or_else(|| AppError::not_found("组织不存在"))?;
     state.ensure_org_scope(&user, org_id, "组织").await?;
+    let scoped_orgs = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
+    lock_actor(&mut tx, &user).await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     let row: RoleListRow = sqlx::query_as(
-        "INSERT INTO roles (tenant_id, organization_id, name, code, description) VALUES ($1, $2, $3, $4, $5) \
+        "INSERT INTO roles (tenant_id, organization_id, name, code, description, id) VALUES ($1, $2, $3, $4, $5, $6) \
          RETURNING id, name, COALESCE(code,'') AS code, COALESCE(description,'') AS description, \
          organization_id, (SELECT name FROM organizations WHERE id = $2) AS organization_name, tenant_id, \
          status, built_in, created_at, 0::bigint AS menu_count, 0::bigint AS user_count",
@@ -219,7 +248,7 @@ async fn create(
     .bind(&name)
     .bind(&body.code)
     .bind(&body.description)
-    .fetch_one(&mut *tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
@@ -238,6 +267,7 @@ async fn create(
         },
     )
     .await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
@@ -265,7 +295,7 @@ async fn update(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     // 隔离校验需在写库前: 先读角色归属再更新
     let loaded = load_role_org(&state.pool, id).await?;
@@ -277,26 +307,29 @@ async fn update(
     }
     let scoped_orgs = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
+    lock_actor(&mut tx, &user).await?;
     let before = lock_role(&mut tx, id).await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     if before.managed() {
         return Err(AppError::conflict("默认管理员角色由系统维护，不允许修改"));
     }
-    let row: RoleListRow = sqlx::query_as(
+    let employee_support =
+        super::users::role_employee_support_sql("ur.user_id", "ur.organization_id", "$5");
+    let row: RoleListRow = sqlx::query_as(&format!(
         "UPDATE roles SET name = COALESCE($2, name), code = COALESCE($3, code), \
          description = COALESCE($4, description), updated_at = now() WHERE id = $1 \
          RETURNING id, name, COALESCE(code,'') AS code, COALESCE(description,'') AS description, \
          organization_id, (SELECT name FROM organizations WHERE id = roles.organization_id) AS organization_name, \
          tenant_id, status, built_in, created_at, \
          (SELECT count(*) FROM role_menus rm WHERE rm.role_id = roles.id) AS menu_count, \
-         (SELECT count(*) FROM user_roles ur WHERE ur.role_id = roles.id \
-         AND ($5::uuid[] IS NULL OR (ur.organization_id = ANY($5) AND EXISTS( \
-         SELECT 1 FROM memberships um WHERE um.user_id = ur.user_id AND um.organization_id = ANY($5))))) AS user_count"
-    )
+         (SELECT count(*) FROM user_roles ur WHERE ur.role_id = roles.id AND ur.organization_id=roles.organization_id \
+         AND {employee_support} AND ($5::uuid[] IS NULL OR ur.organization_id=ANY($5))) AS user_count"
+    ))
     .bind(id)
     .bind(&body.name)
     .bind(&body.code)
     .bind(&body.description)
-    .bind(scoped_orgs)
+    .bind(&scoped_orgs)
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("角色不存在"))?;
@@ -329,6 +362,7 @@ async fn update(
         )
         .await?;
     }
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     tx.commit().await?;
     Ok(Json(serde_json::to_value(&row).unwrap_or_default()))
 }
@@ -344,12 +378,15 @@ async fn delete(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, name)).await?;
+    let scoped_orgs = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
+    lock_actor(&mut tx, &user).await?;
     let before = lock_role(&mut tx, id).await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     if before.built_in {
         return Err(AppError::conflict("内置角色不允许删除"));
     }
@@ -389,6 +426,7 @@ async fn delete(
         },
     )
     .await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
@@ -404,7 +442,7 @@ async fn get_menus(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let loaded = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, loaded).await?;
@@ -435,14 +473,14 @@ async fn put_menus(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, role_name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, role_name.clone())).await?;
     let menu_ids: Vec<Uuid> = body
         .menu_ids
         .iter()
-        .map(|m| Uuid::parse_str(m))
+        .map(|m| crate::util::uuid7::parse_uuid(m))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| AppError::bad_request("menuId 格式错误"))?;
     let mut unique: Vec<Uuid> = Vec::new();
@@ -452,8 +490,11 @@ async fn put_menus(
             unique.push(m);
         }
     }
+    let scoped_orgs = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
+    lock_actor(&mut tx, &user).await?;
     let role = lock_role(&mut tx, id).await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     if role.managed() {
         return Err(AppError::conflict("默认管理员角色的菜单随授权自动同步"));
     }
@@ -519,6 +560,7 @@ async fn put_menus(
         )
         .await?;
     }
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))
@@ -534,18 +576,21 @@ async fn get_users(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let loaded = load_role_org(&state.pool, id).await?;
+    let org_id = loaded.0;
     ensure_role_in_scope(&state, &user, loaded).await?;
-    let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
+    let employee_support =
+        super::users::role_employee_support_sql("ur.user_id", "ur.organization_id", "$2");
+    let rows: Vec<(Uuid, String, String)> = sqlx::query_as(&format!(
         "SELECT u.id, u.username, COALESCE(u.real_name,'') FROM user_roles ur \
-         JOIN users u ON u.id = ur.user_id WHERE ur.role_id = $1 \
-         AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
-         SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.organization_id = ANY($2)))) ORDER BY u.created_at",
-    )
+         JOIN users u ON u.id = ur.user_id WHERE ur.role_id = $1 AND ur.organization_id=$3 \
+         AND {employee_support} AND ($2::uuid[] IS NULL OR ur.organization_id = ANY($2)) ORDER BY u.created_at",
+    ))
     .bind(id)
     .bind(state.scoped_org_ids(&user).await?)
+    .bind(org_id)
     .fetch_all(&state.pool)
     .await?;
     let items: Vec<Value> = rows
@@ -576,14 +621,14 @@ async fn put_users(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let (org_id, tenant_id, role_name) = load_role_org(&state.pool, id).await?;
     ensure_role_in_scope(&state, &user, (org_id, tenant_id, role_name.clone())).await?;
     let user_ids: Vec<Uuid> = body
         .user_ids
         .iter()
-        .map(|u| Uuid::parse_str(u))
+        .map(|u| crate::util::uuid7::parse_uuid(u))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| AppError::bad_request("userId 格式错误"))?;
     let mut unique: Vec<Uuid> = Vec::new();
@@ -595,15 +640,25 @@ async fn put_users(
     }
     let scoped_orgs = state.scoped_org_ids(&user).await?;
     let mut tx = state.pool.begin().await?;
+    let mut account_locks = unique.clone();
+    account_locks.push(user.user_id);
+    account_locks.sort_unstable();
+    account_locks.dedup();
+    sqlx::query("SELECT id FROM users WHERE id = ANY($1) ORDER BY id FOR NO KEY UPDATE")
+        .bind(&account_locks)
+        .execute(&mut *tx)
+        .await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     if !unique.is_empty() {
-        sqlx::query("SELECT id FROM users WHERE id = ANY($1) ORDER BY id FOR UPDATE")
-            .bind(&unique)
-            .execute(&mut *tx)
-            .await?;
         let n: i64 = sqlx::query_scalar(
-            "SELECT count(*) FROM users u WHERE u.id = ANY($1) \
-             AND ($2::uuid[] IS NULL OR EXISTS(SELECT 1 FROM memberships m \
-                 WHERE m.user_id = u.id AND m.organization_id = ANY($2)))",
+            "SELECT count(*) FROM users u WHERE u.id = ANY($1) AND u.status='ENABLED' \
+             AND EXISTS(SELECT 1 FROM memberships m JOIN organizations o ON o.id=m.organization_id \
+                 JOIN tenants t ON t.id=o.tenant_id WHERE m.user_id=u.id \
+                 AND m.member_type='EMPLOYEE' AND m.status='ENABLED' \
+                 AND t.status='ENABLED' AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) \
+                 AND org_chain_active(o.id) \
+                 AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>clock_timestamp()) \
+                 AND ($2::uuid[] IS NULL OR m.organization_id=ANY($2)))",
         )
         .bind(&unique)
         .bind(&scoped_orgs)
@@ -614,22 +669,31 @@ async fn put_users(
         }
     }
     let role = lock_role(&mut tx, id).await?;
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     for uid in &unique {
         super::users::ensure_role_membership_in_tx(&mut tx, *uid, org_id).await?;
     }
-    let before_bindings: Vec<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT ur.user_id, ur.organization_id FROM user_roles ur WHERE ur.role_id=$1 \
-         AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
-         SELECT 1 FROM memberships m WHERE m.user_id = ur.user_id AND m.organization_id = ANY($2)))) \
+    let employee_support =
+        super::users::role_employee_support_sql("ur.user_id", "ur.organization_id", "$2");
+    let before_bindings: Vec<(Uuid, Uuid)> = sqlx::query_as(&format!(
+        "SELECT ur.user_id, ur.organization_id FROM user_roles ur WHERE ur.role_id=$1 AND ur.organization_id=$3 \
+         AND {employee_support} AND ($2::uuid[] IS NULL OR ur.organization_id = ANY($2)) \
          ORDER BY ur.user_id, ur.organization_id",
-    ).bind(id).bind(&scoped_orgs).fetch_all(&mut *tx).await?;
-    sqlx::query("DELETE FROM user_roles ur WHERE ur.role_id = $1 \
-        AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
-        SELECT 1 FROM memberships m WHERE m.user_id = ur.user_id AND m.organization_id = ANY($2))))")
-        .bind(id)
-        .bind(&scoped_orgs)
-        .execute(&mut *tx)
-        .await?;
+    ))
+    .bind(id)
+    .bind(&scoped_orgs)
+    .bind(org_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    sqlx::query(&format!(
+        "DELETE FROM user_roles ur WHERE ur.role_id = $1 AND ur.organization_id=$3 \
+        AND {employee_support} AND ($2::uuid[] IS NULL OR ur.organization_id = ANY($2))",
+    ))
+    .bind(id)
+    .bind(&scoped_orgs)
+    .bind(org_id)
+    .execute(&mut *tx)
+    .await?;
     for uid in &unique {
         sqlx::query(
             "INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
@@ -640,12 +704,16 @@ async fn put_users(
         .execute(&mut *tx)
         .await?;
     }
-    let after_bindings: Vec<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT ur.user_id, ur.organization_id FROM user_roles ur WHERE ur.role_id=$1 \
-         AND ($2::uuid[] IS NULL OR (ur.organization_id = ANY($2) AND EXISTS( \
-         SELECT 1 FROM memberships m WHERE m.user_id = ur.user_id AND m.organization_id = ANY($2)))) \
+    let after_bindings: Vec<(Uuid, Uuid)> = sqlx::query_as(&format!(
+        "SELECT ur.user_id, ur.organization_id FROM user_roles ur WHERE ur.role_id=$1 AND ur.organization_id=$3 \
+         AND {employee_support} AND ($2::uuid[] IS NULL OR ur.organization_id = ANY($2)) \
          ORDER BY ur.user_id, ur.organization_id",
-    ).bind(id).bind(&scoped_orgs).fetch_all(&mut *tx).await?;
+    ))
+    .bind(id)
+    .bind(&scoped_orgs)
+    .bind(org_id)
+    .fetch_all(&mut *tx)
+    .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     if before_bindings != after_bindings {
@@ -672,6 +740,10 @@ async fn put_users(
         )
         .await?;
     }
+    for uid in &unique {
+        super::users::ensure_role_membership_in_tx(&mut tx, *uid, org_id).await?;
+    }
+    revalidate_actor(&mut tx, &user, scoped_orgs.as_deref()).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(Json(json!({"ok": true})))

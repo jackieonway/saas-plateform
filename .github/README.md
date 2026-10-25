@@ -6,7 +6,7 @@
 
 | Job | 实际执行内容 |
 | --- | --- |
-| `contracts` | 仓库交付结构、SDK 2 固定发行物/跨端 Rust DTO、后端 Nginx 渲染策略 |
+| `contracts` | 仓库交付结构、SDK 3 固定发行物/跨端 Rust DTO、后端 Nginx 渲染策略 |
 | `frontend` | Node 24.22.1、npm 11.16.0、锁定安装、SDK/qiankun 校验、ESLint、TypeScript、Node 测试、Vite 构建及产物门禁 |
 | `backend` | Rust 1.97.0、格式检查、check、严格 Clippy、普通测试、独立 deployment-contract 测试 |
 | `backend-integration` | PostgreSQL 17 服务下明确列出的 ignored 数据库回归 |
@@ -37,7 +37,7 @@ npm run build
 
 仓库结构测试检查 Git 跟踪文件和未被忽略的新增源码，要求实际交付的非隐藏顶层目录只有 `frontend` 和 `backend`。被忽略的本地 `local-*` 工具不参与交付检查；显式跟踪或新增非忽略的意外目录仍会失败。测试用临时 Git 仓库覆盖这些边界，不删除本机辅助目录。
 
-SDK 消费者测试校验固定 SDK 2.0.0 发行物，并逐字比较 `backend/src/public_contract.rs` 与前端 SDK `protocol.rs`。这与 SDK 仓库的生成测试分工不同，不能通过修改哈希或现场重新生成 vendor 来掩盖发行物漂移。
+SDK 消费者测试校验固定 SDK 3.0.0 发行物，并逐字比较 `backend/src/public_contract.rs` 与前端 SDK `protocol.rs`。当前交付已使用 UUID v7 的 3.0.0 SDK；MicroProps、上下文和通知仍分别保持其独立协议版本 2.0、1.0、1.0。历史 2.0.0 发行物保持归档。这与 SDK 仓库的生成测试分工不同，不能通过修改哈希或现场重新生成 vendor 来掩盖发行物漂移。
 
 qiankun 门禁在 `frontend` job 安装锁定依赖后运行，扫描活动前端源码、public、当前 SDK 和构建产物，拒绝旧桥接代码、SDK 1、宿主内置微应用副本及子应用 HTML 的 module 脚本。HTML 使用开发依赖 parse5 按标准解析真实 script 元素与属性实体，注释或脚本字符串不作为标签。宿主 index.html 自身仍是合法 Vite ESM 入口，历史 SDK releases 不在活动扫描范围。构建入口自动执行产物检查，因此 Docker 构建也经过同一门禁。
 

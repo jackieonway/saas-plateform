@@ -44,36 +44,8 @@ import { AppIcon } from "@/lib/icons"
 import { ROUTE_TITLES } from "@/lib/routes"
 import { formatDateTime, formatRelative, useDebounced } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { pushRecentSearch, readRecentSearches } from "@/lib/recent-searches"
 import type { MenuNode } from "@/api/types"
-
-/* ------------------------------ 最近搜索 ------------------------------ */
-
-const RECENT_SEARCHES_KEY = "platform-recent-searches"
-const MAX_RECENT_SEARCHES = 6
-
-function readRecentSearches(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENT_SEARCHES_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((s): s is string => typeof s === "string").slice(0, MAX_RECENT_SEARCHES)
-  } catch {
-    return []
-  }
-}
-
-function pushRecentSearch(term: string) {
-  const t = term.trim()
-  if (!t) return
-  const rest = readRecentSearches().filter((s) => s !== t)
-  const next = [t, ...rest].slice(0, MAX_RECENT_SEARCHES)
-  try {
-    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
-  } catch {
-    /* ignore */
-  }
-}
 
 /* ------------------------------ 工具函数 ------------------------------ */
 
@@ -217,16 +189,17 @@ export function CommandPalette({
   }, [open])
 
   /* ---------- 最近搜索 ---------- */
+  const contextKey = useAuthStore(state => state.contextKey)
   const [recentSearches, setRecentSearches] = React.useState<string[]>([])
   React.useEffect(() => {
-    if (open) setRecentSearches(readRecentSearches())
-  }, [open])
+    setRecentSearches(open ? readRecentSearches(contextKey) : [])
+  }, [open, contextKey])
 
   /* ---------- 实体搜索(服务端过滤) ---------- */
   const searchQuery = useQuery({
-    queryKey: ["global-search", debouncedQuery],
+    queryKey: ["global-search", contextKey, debouncedQuery],
     queryFn: () => searchEntities(debouncedQuery, 5),
-    enabled: open && debouncedQuery.length >= 1,
+    enabled: open && !!contextKey && debouncedQuery.length >= 1,
     staleTime: 10_000,
     retry: 1,
     placeholderData: (prev) => prev,
@@ -281,9 +254,10 @@ export function CommandPalette({
 
   /** 选中实体/菜单结果:记录搜索词后跳转 */
   const selectWithHistory = (term: string, run: () => void) => {
+    if (useAuthStore.getState().contextKey !== contextKey) return
     if (term.trim()) {
-      pushRecentSearch(term)
-      setRecentSearches(readRecentSearches())
+      pushRecentSearch(term, contextKey)
+      setRecentSearches(readRecentSearches(contextKey))
     }
     run()
   }
@@ -505,19 +479,19 @@ export function CommandPalette({
               <span>{isDark ? "切换浅色主题" : "切换深色主题"}</span>
             </CommandItem>
             <CommandItem
-              value="退出登录 logout"
+              value="退出本平台 logout"
               onSelect={async () => {
                 onOpenChange(false)
                 try {
                   if (!await logoutPlatformSession()) return
-                  navigate("/login", { replace: true })
+                  navigate("/login?signedOut=1", { replace: true })
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : "退出结果尚未确认，请重新登录")
                 }
               }}
             >
               <LogOut className="size-4 text-muted-foreground" />
-              <span>退出登录</span>
+              <span>退出本平台</span>
             </CommandItem>
           </CommandGroup>
         )}

@@ -131,7 +131,10 @@ struct Files(PathBuf);
 
 impl Files {
     fn create() -> Result<Self> {
-        let path = std::env::temp_dir().join(format!("phase25-cli-{}", Uuid::new_v4().simple()));
+        let path = std::env::temp_dir().join(format!(
+            "phase25-cli-{}",
+            crate::util::uuid7::new_uuid().simple()
+        ));
         std::fs::create_dir(&path)?;
         Ok(Self(path))
     }
@@ -258,21 +261,23 @@ impl Cli<'_> {
 
 async fn tenant(pool: &PgPool, code: &str, platform: bool) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO tenants(name,code,is_platform) VALUES($1,$1,$2) RETURNING id",
+        "INSERT INTO tenants(name,code,is_platform,id) VALUES($1,$1,$2,$3) RETURNING id",
     )
     .bind(code)
     .bind(platform)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?)
 }
 
 async fn org(pool: &PgPool, tenant: Uuid, parent: Option<Uuid>, name: &str) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,parent_id,name) VALUES($1,$2,$3) RETURNING id",
+        "INSERT INTO organizations(tenant_id,parent_id,name,id) VALUES($1,$2,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(parent)
     .bind(name)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?)
 }
@@ -283,13 +288,14 @@ async fn user(
     super_admin: bool,
     organization: Uuid,
 ) -> Result<(Uuid, Uuid)> {
-    let id = sqlx::query_scalar("INSERT INTO users(username,real_name,password_hash,is_super_admin) VALUES($1,$1,'unused-owned-fixture-password',$2) RETURNING id")
-        .bind(name).bind(super_admin).fetch_one(pool).await?;
+    let id = sqlx::query_scalar("INSERT INTO users(username,real_name,password_hash,is_super_admin,id) VALUES($1,$1,'unused-owned-fixture-password',$2,$3) RETURNING id")
+        .bind(name).bind(super_admin).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let membership = sqlx::query_scalar(
-        "INSERT INTO memberships(user_id,organization_id) VALUES($1,$2) RETURNING id",
+        "INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3) RETURNING id",
     )
     .bind(id)
     .bind(organization)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     Ok((id, membership))
@@ -297,12 +303,12 @@ async fn user(
 
 async fn role(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid, menus: &[Uuid]) -> Result<Uuid> {
     let role = sqlx::query_scalar(
-        "INSERT INTO roles(tenant_id,organization_id,name,code) VALUES($1,$2,$3,$3) RETURNING id",
+        "INSERT INTO roles(tenant_id,organization_id,name,code,id) VALUES($1,$2,$3,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(org)
-    .bind(format!("phase25-role-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
+    .bind(format!("phase25-role-{}", crate::util::uuid7::new_uuid().simple()))
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
     sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
         .bind(user)
@@ -325,8 +331,11 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
         .bind(user)
         .fetch_one(pool)
         .await?;
-    let sid: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id")
-        .bind(user).bind(tenant).bind(org).fetch_one(pool).await?;
+    let sid: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id")
+        .bind(user).bind(tenant).bind(org).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
         &jwt::Claims {
@@ -476,7 +485,7 @@ struct GrantAudit {
 }
 
 async fn http(origin: &str, token: &str, method: Method, path: &str, body: Value) -> Result<Reply> {
-    let request_id = Uuid::new_v4();
+    let request_id = crate::util::uuid7::new_uuid();
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -600,9 +609,9 @@ async fn bootstrap_and_releases(
     let root = org(pool, platform_tenant, None, "Phase25 platform root").await?;
     let child = org(pool, platform_tenant, Some(root), "Phase25 platform child").await?;
     let system: Uuid = sqlx::query_scalar(
-        "INSERT INTO applications(name,code) VALUES('Phase25 management','system') RETURNING id",
+        "INSERT INTO applications(name,code,id) VALUES('Phase25 management','system',$1) RETURNING id",
     )
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
     let mut management = Vec::new();
     for permission in [
@@ -624,16 +633,19 @@ async fn bootstrap_and_releases(
         } else {
             ("BUTTON", "", false)
         };
-        let menu = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,visible,path) VALUES($1,$2,$3,$3,$4,$5) RETURNING id")
-            .bind(system).bind(kind).bind(permission).bind(visible).bind(path).fetch_one(pool).await?;
+        let menu = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,visible,path,id) VALUES($1,$2,$3,$3,$4,$5,$6) RETURNING id")
+            .bind(system).bind(kind).bind(permission).bind(visible).bind(path).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         management.push(menu);
     }
     authorize(pool, platform_tenant, &[root, child], system, &management).await?;
     let (actor, _) = user(pool, "phase25-admin", true, root).await?;
     let admin = session(pool, actor, platform_tenant, root).await?;
-    let client_id = format!("phase25-generated-{}", Uuid::new_v4().simple());
-    let client: Uuid = sqlx::query_scalar("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,client_type,grant_types,scopes,access_token_validity,refresh_token_validity) VALUES($1,'work-orders-client',$2,'CONFIDENTIAL','client_credentials','openid',300,300) RETURNING id")
-        .bind(&client_id).bind(hash::sha256_hex(CLIENT_SECRET)).fetch_one(pool).await?;
+    let client_id = format!(
+        "phase25-generated-{}",
+        crate::util::uuid7::new_uuid().simple()
+    );
+    let client: Uuid = sqlx::query_scalar("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,client_type,subject_mode,allowed_member_types,grant_types,scopes,access_token_validity,refresh_token_validity,id) VALUES($1,'work-orders-client',$2,'CONFIDENTIAL','MACHINE',ARRAY[]::text[],'client_credentials','openid',300,300,$3) RETURNING id")
+        .bind(&client_id).bind(hash::sha256_hex(CLIENT_SECRET)).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let cli = Cli {
         binary,
         files,
@@ -656,12 +668,12 @@ async fn bootstrap_and_releases(
         vec![
             "preflight",
             "--release-id",
-            "00000000-0000-4000-8000-000000000001",
+            "019a1163-0000-7000-8000-000000000001",
         ],
         vec![
             "activate",
             "--release-id",
-            "00000000-0000-4000-8000-000000000001",
+            "019a1163-0000-7000-8000-000000000001",
         ],
         vec!["rollback"],
     ] {
@@ -710,7 +722,7 @@ async fn bootstrap_and_releases(
             && inspection["menuIds"] == first["menuIds"],
         "inspect failed to reconcile real bootstrap"
     );
-    let other: Uuid = sqlx::query_scalar("INSERT INTO applications(name,code) VALUES('Other owned app','phase25-other') RETURNING id").fetch_one(pool).await?;
+    let other: Uuid = sqlx::query_scalar("INSERT INTO applications(name,code,id) VALUES('Other owned app','phase25-other',$1) RETURNING id").bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     sqlx::query("UPDATE oauth_clients SET application_id=$1 WHERE id=$2")
         .bind(other)
         .bind(client)
@@ -964,9 +976,10 @@ async fn grant_round_trip(
         identity_users.push(id);
         identities.push(session(pool, id, platform_tenant, root).await?);
     }
-    sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+    sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
         .bind(actor)
         .bind(child)
+        .bind(crate::util::uuid7::new_uuid())
         .execute(pool)
         .await?;
     let child_admin = session(pool, actor, platform_tenant, child).await?;
@@ -1015,7 +1028,7 @@ async fn grant_round_trip(
             ensure!(denied["status"] == 403, "denied grant CLI did not retain the actual platform 403");
         }
         ensure!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM membership_data_grants").fetch_one(pool).await? == 0, "denied CLI granted data scope");
-        let foreign_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,title,type,permission) VALUES($1,'Foreign ticket read','BUTTON','ticket:read') RETURNING id").bind(other).fetch_one(pool).await?;
+        let foreign_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,title,type,permission,id) VALUES($1,'Foreign ticket read','BUTTON','ticket:read',$2) RETURNING id").bind(other).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let mut bad = manifest.clone();
         bad["menuIds"]["ticket:read"] = json!(foreign_menu);
         let cross_app = cli.files.json("grants-cross-app", &bad)?;
@@ -1105,8 +1118,8 @@ async fn functional_authorization_round_trip(
     let tenant = tenant(pool, "phase25-new-customer", false).await?;
     let organization = org(pool, tenant, None, "Phase25 new customer root").await?;
     let (user, membership) = user(pool, "phase25-new-customer-user", false, organization).await?;
-    let role: Uuid = sqlx::query_scalar("INSERT INTO roles(tenant_id,organization_id,name,code) VALUES($1,$2,'Phase25 unprovisioned role','phase25-unprovisioned') RETURNING id")
-        .bind(tenant).bind(organization).fetch_one(pool).await?;
+    let role: Uuid = sqlx::query_scalar("INSERT INTO roles(tenant_id,organization_id,name,code,id) VALUES($1,$2,'Phase25 unprovisioned role','phase25-unprovisioned',$3) RETURNING id")
+        .bind(tenant).bind(organization).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let manifest = json!({"schemaVersion":"1.0","applicationCode":"work-orders","applicationId":app,"menuIds":menus,
         "targets":[{"tenantId":tenant,"organizationId":organization,"roleId":role,"userId":user,"membershipId":membership,
             "permissions":["ticket:create"],"dataGrants":[]}]});

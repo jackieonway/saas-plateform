@@ -1,0 +1,636 @@
+{
+  "schemaVersion": 1,
+  "status": "READ_ONLY_SOURCE_AUDIT_RUNTIME_NOT_VALIDATED",
+  "registry": "saas-plateform/backend/ops/recovery/uuid-references-v2.json",
+  "services": [
+    {
+      "service": "platform",
+      "binary": "saas-platform-backend",
+      "repository": "saas-plateform/backend",
+      "explicitPreviewEnv": [
+        "APP_ENV",
+        "APPLICATION_ENVIRONMENT",
+        "DATABASE_URL",
+        "AUTO_CREATE_DATABASE",
+        "BIND_ADDR",
+        "JWT_SECRET",
+        "METRICS_TOKEN",
+        "PUBLIC_APP_URL",
+        "MICRO_GATEWAY_ORIGIN",
+        "MICRO_ALLOWED_ORIGINS",
+        "CORS_ALLOWED_ORIGINS",
+        "DATA_GRANT_POLICY",
+        "STATIC_DIR",
+        "MICRO_APPS_DIR",
+        "OAUTH_AUTO_PURGE",
+        "APP_ENV_FILE"
+      ],
+      "importedReceiptEnv": [
+        "PLATFORM_DATABASE_INIT_MODE",
+        "PLATFORM_EXPECTED_DATABASE",
+        "PLATFORM_IMPORT_MARKER",
+        "PLATFORM_EXPECTED_SCHEMA_SHA256"
+      ],
+      "forbiddenInheritedEnv": [
+        "BOOTSTRAP_ADMIN_USERNAME",
+        "BOOTSTRAP_ADMIN_PASSWORD"
+      ],
+      "secretEnv": [
+        "JWT_SECRET",
+        "METRICS_TOKEN"
+      ],
+      "databaseEnv": "DATABASE_URL"
+    },
+    {
+      "service": "stores",
+      "binary": "stores-api",
+      "repository": "saas-stores/backend",
+      "requiredEnv": [
+        "STORES_DATABASE_URL",
+        "STORES_ALLOWED_ORIGINS",
+        "PLATFORM_API_ORIGIN",
+        "PLATFORM_CLIENT_ID",
+        "PLATFORM_CLIENT_SECRET"
+      ],
+      "explicitPreviewEnv": [
+        "NODE_ENV",
+        "STORES_HOST",
+        "STORES_PORT",
+        "PLATFORM_AUTHORIZATION_MODE"
+      ],
+      "importedReceiptEnv": [
+        "STORES_DATABASE_INIT_MODE",
+        "STORES_EXPECTED_DATABASE",
+        "STORES_IMPORT_MARKER",
+        "STORES_EXPECTED_SCHEMA_SHA256"
+      ],
+      "secretEnv": [
+        "PLATFORM_CLIENT_SECRET",
+        "STORES_METRICS_TOKEN"
+      ],
+      "databaseEnv": "STORES_DATABASE_URL"
+    },
+    {
+      "service": "work_orders",
+      "binary": "work-orders-api",
+      "repository": "saas-work-orders/backend",
+      "requiredEnv": [
+        "WORK_ORDERS_DATABASE_URL",
+        "WORK_ORDERS_ALLOWED_ORIGINS",
+        "PLATFORM_API_ORIGIN",
+        "PLATFORM_CLIENT_ID",
+        "PLATFORM_CLIENT_SECRET"
+      ],
+      "explicitPreviewEnv": [
+        "NODE_ENV",
+        "WORK_ORDERS_HOST",
+        "WORK_ORDERS_PORT",
+        "PLATFORM_AUTHORIZATION_MODE"
+      ],
+      "importedReceiptEnv": [
+        "WORK_ORDERS_DATABASE_INIT_MODE",
+        "WORK_ORDERS_EXPECTED_DATABASE",
+        "WORK_ORDERS_IMPORT_MARKER",
+        "WORK_ORDERS_EXPECTED_SCHEMA_SHA256"
+      ],
+      "secretEnv": [
+        "PLATFORM_CLIENT_SECRET",
+        "WORK_ORDERS_METRICS_TOKEN"
+      ],
+      "databaseEnv": "WORK_ORDERS_DATABASE_URL"
+    },
+    {
+      "service": "notification",
+      "binary": "saas-notification-ws",
+      "repository": "saas-notification",
+      "requiredEnv": [
+        "DATABASE_URL",
+        "PLATFORM_API_BASE_URL",
+        "NOTIFICATION_ALLOWED_ORIGINS"
+      ],
+      "explicitPreviewEnv": [
+        "NOTIFICATION_ENV",
+        "NOTIFICATION_HOST",
+        "NOTIFICATION_PORT",
+        "NOTIFICATION_SOCKET_PATH"
+      ],
+      "secretEnv": [
+        "METRICS_TOKEN"
+      ],
+      "forbiddenInheritedEnv": [
+        "JWT_SECRET"
+      ],
+      "databaseEnv": "DATABASE_URL",
+      "databaseRole": "dedicated readonly notification role on TARGET platform DB"
+    },
+    {
+      "service": "examples_oauth",
+      "binary": "oauth-playground-api",
+      "repository": "saas-examples/oauth-playground/backend",
+      "requiredEnv": [
+        "OAUTH_PUBLIC_ORIGIN",
+        "OAUTH_PLATFORM_ORIGIN"
+      ],
+      "explicitPreviewEnv": [
+        "OAUTH_ALLOW_INSECURE_LOOPBACK",
+        "OAUTH_BIND_ADDR",
+        "OAUTH_PASSWORD_ENABLED"
+      ],
+      "flowEnv": [
+        "OAUTH_AUTH_CLIENT_ID",
+        "OAUTH_AUTH_CLIENT_SECRET",
+        "OAUTH_DEVICE_CLIENT_ID",
+        "OAUTH_CC_CLIENT_ID",
+        "OAUTH_CC_CLIENT_SECRET"
+      ],
+      "optionalEnv": [
+        "OAUTH_DEVICE_CLIENT_SECRET",
+        "OAUTH_SCOPE",
+        "OAUTH_SESSION_TTL_SECONDS",
+        "OAUTH_STATE_TTL_SECONDS",
+        "OAUTH_TOKEN_TTL_SECONDS",
+        "OAUTH_MAX_SESSIONS",
+        "OAUTH_MAX_STATES",
+        "OAUTH_HTTP_TIMEOUT_SECONDS"
+      ],
+      "secretEnv": [
+        "OAUTH_AUTH_CLIENT_SECRET",
+        "OAUTH_CC_CLIENT_SECRET",
+        "OAUTH_DEVICE_CLIENT_SECRET"
+      ],
+      "databaseEnv": null,
+      "uuidEnvFields": [],
+      "notes": [
+        "All CLIENT_ID fields are opaque OAuth identifiers; not platform.oauth_client row UUIDs.",
+        "Password flow remains disabled in this preview contract.",
+        "Restart with fresh configuration to clear in-memory OAuth sessions/state/tokens."
+      ]
+    },
+    {
+      "service": "examples_chat",
+      "binary": "saas-chat-reference",
+      "repository": "saas-examples/websocket/backend",
+      "requiredEnv": [],
+      "explicitPreviewEnv": [
+        "CHAT_BIND_ADDR",
+        "CHAT_ALLOWED_ORIGINS",
+        "CHAT_ALLOW_SANDBOX_ORIGIN"
+      ],
+      "secretEnv": [],
+      "databaseEnv": null,
+      "uuidEnvFields": [],
+      "notes": [
+        "CHAT_BIND_ADDR must stay loopback; default 127.0.0.1:3008.",
+        "CHAT_ALLOWED_ORIGINS must include the actual platform origin for qiankun.",
+        "Keep stdin open (Docker interactive/stdin_open) because EOF triggers shutdown.",
+        "Socket.IO connection IDs and chat-{sequence} message IDs are opaque demo identifiers."
+      ]
+    }
+  ],
+  "configurationContracts": [
+    {
+      "id": "data-grant-policy",
+      "configuration": "DATA_GRANT_POLICY",
+      "operation": "private_field_level_rewrite_then_validate_closed_policy_no_values_in_reports",
+      "uuidFields": [
+        {
+          "pointer": "/applications/*/applicationId",
+          "authority": "platform.application",
+          "nullable": false
+        },
+        {
+          "pointer": "/managementScopes/*/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/managementScopes/*/organizationId",
+          "authority": "platform.organization",
+          "nullable": false
+        }
+      ],
+      "unknownUuidPath": "block",
+      "routeFields": []
+    },
+    {
+      "id": "platform-admin-grants",
+      "configuration": "platform-admin grants manifest",
+      "operation": "rewrite_actual_operator_files_preserve_placeholder_examples",
+      "uuidFields": [
+        {
+          "pointer": "/applicationId",
+          "authority": "platform.application",
+          "nullable": false
+        },
+        {
+          "pointer": "/menuIds/*",
+          "authority": "platform.menu",
+          "nullable": false
+        },
+        {
+          "pointer": "/targets/*/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/targets/*/organizationId",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/targets/*/roleId",
+          "authority": "platform.role",
+          "nullable": false
+        },
+        {
+          "pointer": "/targets/*/userId",
+          "authority": "platform.user",
+          "nullable": false
+        },
+        {
+          "pointer": "/targets/*/membershipId",
+          "authority": "platform.membership",
+          "nullable": false
+        }
+      ],
+      "unknownUuidPath": "block",
+      "routeFields": []
+    },
+    {
+      "id": "bootstrap-output",
+      "configuration": "platform-admin bootstrap output",
+      "operation": "archive_old_report_regenerate_from_target_API",
+      "uuidFields": [
+        {
+          "pointer": "/applicationId",
+          "authority": "platform.application",
+          "nullable": false
+        },
+        {
+          "pointer": "/clientRecordId",
+          "authority": "platform.oauth_client",
+          "nullable": false
+        },
+        {
+          "pointer": "/menuIds/*",
+          "authority": "platform.menu",
+          "nullable": false
+        }
+      ],
+      "unknownUuidPath": "block",
+      "routeFields": []
+    },
+    {
+      "id": "preview-private-state",
+      "configuration": "private preview state",
+      "operation": "private_inventory_then_regenerate_target_state",
+      "uuidFields": [
+        {
+          "pointer": "/applications/*/id",
+          "authority": "platform.application",
+          "nullable": false
+        },
+        {
+          "pointer": "/applications/*/menuIds/*",
+          "authority": "platform.menu",
+          "nullable": false
+        },
+        {
+          "pointer": "/clients/*/id",
+          "authority": "platform.oauth_client",
+          "nullable": false
+        },
+        {
+          "pointer": "/clients/*/applicationId",
+          "authority": "platform.application",
+          "nullable": true
+        },
+        {
+          "pointer": "/adminId",
+          "authority": "platform.user",
+          "nullable": false
+        },
+        {
+          "pointer": "/businessTenant/id",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/businessOrganization/id",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/businessOrganization/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeOrganization/id",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeOrganization/parentId",
+          "authority": "platform.organization",
+          "nullable": true
+        },
+        {
+          "pointer": "/storeOrganization/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeOrganization/administrator/userId",
+          "authority": "platform.user",
+          "nullable": false
+        },
+        {
+          "pointer": "/membership/membershipId",
+          "authority": "platform.membership",
+          "nullable": false
+        },
+        {
+          "pointer": "/membership/organizationId",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/membership/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/role/id",
+          "authority": "platform.role",
+          "nullable": false
+        },
+        {
+          "pointer": "/role/organizationId",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/role/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeRole/id",
+          "authority": "platform.role",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeRole/organizationId",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeRole/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/platformSession/user/id",
+          "authority": "platform.user",
+          "nullable": false
+        },
+        {
+          "pointer": "/platformSession/tenant/id",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/platformSession/organization/id",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/businessSession/user/id",
+          "authority": "platform.user",
+          "nullable": false
+        },
+        {
+          "pointer": "/businessSession/tenant/id",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/businessSession/organization/id",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/membership/departmentId",
+          "authority": "platform.department",
+          "nullable": true
+        },
+        {
+          "pointer": "/businessOrganization/parentId",
+          "authority": "platform.organization",
+          "nullable": true
+        }
+      ],
+      "unknownUuidPath": "block",
+      "routeFields": []
+    },
+    {
+      "id": "preview-bootstrap-report",
+      "configuration": "preview bootstrap report",
+      "operation": "archive_source_report_regenerate_target_report",
+      "uuidFields": [
+        {
+          "pointer": "/businessTenant/id",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/businessOrganization/id",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeOrganization/id",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/storeOrganization/parentId",
+          "authority": "platform.organization",
+          "nullable": true
+        },
+        {
+          "pointer": "/roleId",
+          "authority": "platform.role",
+          "nullable": false
+        }
+      ],
+      "unknownUuidPath": "block",
+      "routeFields": [
+        "/applications/*/entryUrl"
+      ]
+    },
+    {
+      "id": "application-rebuild-inventory",
+      "configuration": "local application rebuild inventory",
+      "operation": "archive_source_inventory_regenerate_target_API_inventory",
+      "uuidFields": [
+        {
+          "pointer": "/applications/*/id",
+          "authority": "platform.application",
+          "nullable": false
+        },
+        {
+          "pointer": "/platformScope/*/tenantId",
+          "authority": "platform.tenant",
+          "nullable": false
+        },
+        {
+          "pointer": "/platformScope/*/organizationId",
+          "authority": "platform.organization",
+          "nullable": false
+        },
+        {
+          "pointer": "/platformScope/*/roleId",
+          "authority": "platform.role",
+          "nullable": false
+        }
+      ],
+      "unknownUuidPath": "block",
+      "routeFields": []
+    }
+  ],
+  "neverMapAsOwnedUuid": [
+    "oauth client_id",
+    "JWT cid",
+    "JWT aud/appCode",
+    "grant resource/action/scope labels",
+    "database/role names",
+    "origin/path settings",
+    "logical menu keys",
+    "artifact schema1 appCode/version/digest/buildId",
+    "deployment target/group/node/template logical ids"
+  ],
+  "discardAndReissue": [
+    "platformSession",
+    "businessSession",
+    "applicationTokens",
+    "JWT/access/refresh/code/device/PKCE/OIDC runtime state",
+    "clients.*.clientSecret",
+    "storeOrganization.administrator.initialPassword"
+  ],
+  "notes": [
+    "Imported receipt four-field contract is being implemented by inspect_auth; audit has not run it.",
+    "Batch UUID inside IMPORT_MARKER comes from U04 receipt, never from an entity remap.",
+    "No private env, state JSON or secret values were read for this catalog."
+  ],
+  "importedReceiptContract": {
+    "status": "IMPLEMENTATION_IN_PROGRESS_BY_INSPECT_AUTH_NOT_RUNTIME_VALIDATED",
+    "mode": "imported",
+    "markerGrammar": "saas-uuid-import/1/<canonical-v7-RFC-batch-uuid>/<64-lowerhex>",
+    "schemaSha256": "64 lowerhex from U04 formal schema_material hash",
+    "expectedDatabase": "decoded URL database name; exact runtime current_database match",
+    "batchIdAuthority": "U04 import receipt, not an entity-map authority",
+    "requiredRoles": "Fresh LOGIN runtime role; nonowner/nonsuper/no create/no SET owner; target DB owner remains NOLOGIN",
+    "platformRules": [
+      "AUTO_CREATE_DATABASE=false",
+      "BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD absent",
+      "Explicit fresh strong JWT_SECRET required even in development",
+      "Successful imported proof skips migrations/seed/region_seed before HTTP/workers"
+    ]
+  },
+  "nonMappingReferenceRules": [
+    {
+      "kind": "artifact-manifest-schema1",
+      "uuidFields": [],
+      "operation": "Validate closed schema and preserve immutable original bytes"
+    },
+    {
+      "kind": "deployment-policy",
+      "uuidFields": [],
+      "operation": "Logical target/group/node/template/applicationCode fields stay opaque; do not rewrite ID-shaped text"
+    },
+    {
+      "kind": "work-order-deep-link",
+      "template": "/micro/work-orders/tickets/{ticketId}",
+      "authority": "work_orders.ticket",
+      "operation": "Exact owner route parser only"
+    },
+    {
+      "kind": "platform-url-entry",
+      "template": "/micro-proxy/{appCode}/{revision}/",
+      "authority": "platform.application_url_revision",
+      "operation": "Regenerate from target API entry metadata, do not mutate old signed evidence"
+    }
+  ],
+  "sourceAuditWarnings": [
+    {
+      "source": "saas-plateform/backend/.integration/local-runtime/prepare-platform-env.mjs",
+      "lines": [
+        8,
+        11,
+        16,
+        23
+      ],
+      "issues": [
+        "Old source DB exact name",
+        "Development defaults",
+        "previous.JWT_SECRET reuse"
+      ]
+    },
+    {
+      "source": "saas-plateform/backend/.integration/local-runtime/bootstrap-preview.mjs",
+      "lines": [
+        54,
+        65,
+        123,
+        130,
+        163,
+        169,
+        211,
+        248
+      ],
+      "issues": [
+        "Old three-DB fence",
+        "Old private state reuse",
+        "Seed-based login and organization lookup",
+        "Stored client secret reused without rotation",
+        "May create STORE organization/admin/member/role",
+        "Tokens obtained from real HTTP but saved state must not migrate"
+      ]
+    },
+    {
+      "source": "saas-plateform/backend/.integration/local-runtime/check-preview-policy.mjs",
+      "lines": [
+        3,
+        9
+      ],
+      "issues": [
+        "Uses old platformSession.accessToken without fresh login"
+      ]
+    }
+  ],
+  "previewStateRules": {
+    "operation": "Regenerate target state and reports, do not feed old state into launcher",
+    "discardWhole": [
+      "platformSession",
+      "businessSession",
+      "applicationTokens"
+    ],
+    "deleteAndRotate": [
+      "clients.*.clientSecret"
+    ],
+    "deleteOnly": [
+      "storeOrganization.administrator.initialPassword"
+    ],
+    "recompute": [
+      "fingerprint"
+    ],
+    "reverify": [
+      "prepared",
+      "grantsApplied",
+      "storeAccessConfigured"
+    ],
+    "sourceTreeWarning": "businessOrganization/storeOrganization may retain recursive children nodes. Registered top-level ID paths do not authorize guessing unregistered child paths; block or use an explicitly approved owner tree DTO parser. Full state is regeneration-only."
+  }
+}

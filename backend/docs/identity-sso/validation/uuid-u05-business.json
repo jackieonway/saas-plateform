@@ -1,0 +1,133 @@
+{
+  "format": "saas-uuid-u05-business-public-summary/1",
+  "validation_date": "2026-10-24",
+  "scope": "local U04 preview targets through real U05 HTTP and Socket.IO services",
+  "status": "PASS_WITH_AUTHORIZATION_LIMIT",
+  "subsequent_authorized_positive_notification_evidence": "uuid-u05-notification.json",
+  "initial_limit_is_preserved_as_historical_evidence": true,
+  "fixture_services_used": false,
+  "direct_database_writes": false,
+  "shared_hq_session_switched_or_refreshed": false,
+  "business_permission_or_policy_expanded": false,
+  "script": {
+    "name": "validate-uuid-u05-business.mjs",
+    "sha256": "d4cbd1ff77686289c650371c0d74548b413a25e76c61a51f027f35b3fd7c2ca5",
+    "modern_node_syntax_check": "PASS"
+  },
+  "evidence": [
+    {
+      "attempt": "business-validation-03",
+      "artifact": "report.private.json",
+      "sha256": "809002c9b25eb9685a18e409703a69a47801697825a508b5457b08780e8ffc5d",
+      "status": "FAIL",
+      "accepted_check_groups": 3,
+      "http_requests": 21,
+      "failure_stage": "notification_real_reminder_http_socket_and_inbox",
+      "failure_code": "TICKET_REMINDER_CREATE_HTTP_403_DATA_DENIED",
+      "successful_business_effects": {
+        "existing_store_versioned_updates": 1,
+        "store_business_contact_preserved": true,
+        "new_work_orders": 1,
+        "new_notification_publications": 0
+      }
+    },
+    {
+      "attempt": "business-validation-04",
+      "artifact": "report.private.json",
+      "sha256": "15c474c9d8450f3967206dfc1ff4d6c72d165c7ac04a9b5160b6f74727ab68f8",
+      "status": "PASS_WITH_AUTHORIZATION_LIMIT",
+      "accepted_check_groups": 7,
+      "http_requests": 24,
+      "resumes_successful_business_evidence_from": "business-validation-03",
+      "resumed_evidence_rule": "Verify the existing store and the already-created work order through real reads; retain the previous successful update, creation and idempotency evidence.",
+      "additional_business_effects": {
+        "store_updates": 0,
+        "new_work_orders": 0,
+        "new_notification_publications": 0
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "independent_business_session_and_tokens",
+      "result": "PASS",
+      "independently_created_sessions_in_final_attempt": 2,
+      "independently_issued_application_tokens_in_final_attempt": 2,
+      "application_specific_context_selected": true
+    },
+    {
+      "name": "store_read_safe_update_and_platform_association",
+      "result": "PASS",
+      "stores_read": 1,
+      "total_safe_versioned_updates": 1,
+      "business_value_preserved": true,
+      "uuid_v7_and_platform_organization_owner_member_association_checked": true,
+      "store_creation_covered": false,
+      "store_creation_alternative": "The authorized safe update of an existing retained store was used."
+    },
+    {
+      "name": "work_order_create_read_owner_and_idempotency",
+      "result": "PASS",
+      "new_work_orders": 1,
+      "detail_and_list_readback": true,
+      "uuid_v7_and_tenant_organization_owner_association_checked": true,
+      "same_key_replay_preserved_record": true,
+      "conflicting_key_replay_http_status": 409,
+      "conflicting_key_replay_code": "IDEMPOTENCY_CONFLICT"
+    },
+    {
+      "name": "notification_authorization_and_live_socket_subject",
+      "result": "EXPECTED_DENIAL_WITH_POSITIVE_DELIVERY_NOT_COVERED",
+      "live_rust_socket_authentication": "PASS",
+      "socket_subject_matches_authoritative_v7_http_context": true,
+      "business_reminder_http_status": 403,
+      "business_reminder_code": "DATA_DENIED",
+      "hq_narrow_user_publication_http_status": 403,
+      "hq_narrow_user_publication_code": "FORBIDDEN",
+      "existing_notification_rows": 0,
+      "inbox_unchanged_after_denied_requests": true,
+      "actual_publications_created": 0,
+      "successful_publication_covered": false,
+      "notification_event_delivery_covered": false,
+      "existing_notification_deep_link_readback_covered": false,
+      "old_session_http_status": 401,
+      "old_session_socket_code": "SESSION_INVALID"
+    },
+    {
+      "name": "typed_uuid_v4_identity_input_rejected",
+      "result": "PASS",
+      "services_checked": 2,
+      "rejected_inputs": 2
+    },
+    {
+      "name": "chat_two_real_clients",
+      "result": "PASS",
+      "clients": 2,
+      "messages_sent": 1,
+      "matching_recipients": 2,
+      "matching_message_id_and_content": true,
+      "disconnect_observed": true,
+      "rejoin_observed": true,
+      "message_id_contract": "Opaque chat sequence; not a persistent system UUID."
+    },
+    {
+      "name": "independent_session_cleanup",
+      "result": "PASS",
+      "only_validator_owned_sessions_logged_out": true,
+      "shared_hq_session_changed": false
+    }
+  ],
+  "authorization_limits": {
+    "work_order_policy_declares_notification_publish": false,
+    "notification_publish_grants_in_target_at_readonly_audit": 0,
+    "hq_actor_notification_publish_grants_at_readonly_audit": 0,
+    "formal_session_publication_requires_the_same_data_grant": true,
+    "test_did_not_change_business_authorization": true,
+    "uncovered": [
+      "Successful notification publication through an authorized publisher",
+      "New publication and notification UUID generation through the running services",
+      "Positive HTTP inbox, deep link and Socket.IO event correlation for a newly published notification"
+    ]
+  },
+  "phase_completion_asserted": false
+}

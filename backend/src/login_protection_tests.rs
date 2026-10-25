@@ -207,12 +207,15 @@ async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<S
         .fetch_one(pool)
         .await?;
     let sid: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) \
-         VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
@@ -246,41 +249,45 @@ struct Harness {
 impl Harness {
     async fn create(pool: &PgPool, config: Config) -> Result<Self> {
         let tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code,is_platform) \
-             VALUES('Login test platform','admin-tenant',true) RETURNING id",
+            "INSERT INTO tenants(name,code,is_platform,id) \
+             VALUES('Login test platform','admin-tenant',true,$1) RETURNING id",
         )
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
         let org: Uuid = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,name) VALUES($1,'Login test root') RETURNING id",
+            "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'Login test root',$2) RETURNING id",
         )
         .bind(tenant)
-        .fetch_one(pool)
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
         .await?;
         let state = AppState::new(pool.clone(), Arc::new(config));
         let password_hash = state.passwords.hash(PASSWORD).await?;
         let admin: Uuid = sqlx::query_scalar(
-            "INSERT INTO users(username,password_hash,is_super_admin) \
-             VALUES('login-test-admin',$1,true) RETURNING id",
+            "INSERT INTO users(username,password_hash,is_super_admin,id) \
+             VALUES('login-test-admin',$1,true,$2) RETURNING id",
         )
         .bind(password_hash)
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(admin)
             .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(pool)
             .await?;
         let application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('Login test management','system') RETURNING id",
+            "INSERT INTO applications(name,code,id) VALUES('Login test management','system',$1) RETURNING id",
         )
-        .fetch_one(pool)
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
         .await?;
         let menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,permission,type) \
-             VALUES($1,'Manage users','system:user','BUTTON') RETURNING id",
+            "INSERT INTO menus(application_id,title,permission,type,id) \
+             VALUES($1,'Manage users','system:user','BUTTON',$2) RETURNING id",
         )
         .bind(application)
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
         sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
@@ -306,12 +313,12 @@ impl Harness {
             .execute(pool)
             .await?;
         sqlx::query(
-            "INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,grant_types,scopes,application_id) \
-             VALUES('login-protection-client',$1,'Owned login test','password,refresh_token','profile',$2)",
+            "INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,grant_types,scopes,application_id,id) \
+             VALUES('login-protection-client',$1,'Owned login test','password,refresh_token','profile',$2,$3)",
         )
         .bind(hash::sha256_hex(CLIENT_SECRET))
         .bind(application)
-        .execute(pool)
+        .bind(crate::util::uuid7::new_uuid()).execute(pool)
         .await?;
         let app = routes::api_router()
             .nest("/oauth", routes::oauth2::oauth_router())
@@ -343,17 +350,18 @@ impl Harness {
         phone: &str,
     ) -> Result<Uuid> {
         let user: Uuid = sqlx::query_scalar(
-            "INSERT INTO users(username,password_hash,email,phone) VALUES($1,$2,$3,$4) RETURNING id",
+            "INSERT INTO users(username,password_hash,email,phone,id) VALUES($1,$2,$3,$4,$5) RETURNING id",
         )
         .bind(username)
         .bind(password_hash)
         .bind(email)
         .bind(phone)
-        .fetch_one(&self.state.pool)
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(&self.state.pool)
         .await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(user)
             .bind(self.org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(&self.state.pool)
             .await?;
         Ok(user)
@@ -745,9 +753,10 @@ async fn password_http_lifecycle_preserves_hashes_login_oauth_reset_and_revocati
         .await?;
         expect(&created, StatusCode::OK)?;
         let user: Uuid = field(&created, "id")?.parse()?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(user)
             .bind(harness.org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(&database.pool)
             .await?;
         let hash: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1")
@@ -828,6 +837,7 @@ async fn password_http_lifecycle_preserves_hashes_login_oauth_reset_and_revocati
         let oauth = oauth_password(&harness.app, "created-password-user", OTHER_PASSWORD).await?;
         expect(&oauth, StatusCode::OK)?;
         let old_access = field(&oauth, "access_token")?.to_owned();
+        let old_refresh = field(&oauth, "refresh_token")?.to_owned();
         let reset = json_request(
             &harness.app,
             Method::POST,
@@ -845,8 +855,8 @@ async fn password_http_lifecycle_preserves_hashes_login_oauth_reset_and_revocati
                 .fetch_one(&database.pool)
                 .await?;
         ensure!(
-            !revoked,
-            "reset silently changed the existing ordinary OAuth revocation policy"
+            revoked,
+            "password reset retained an ordinary OAuth credential"
         );
         expect(
             &json_request(
@@ -884,8 +894,8 @@ async fn password_http_lifecycle_preserves_hashes_login_oauth_reset_and_revocati
             .await?,
             StatusCode::UNAUTHORIZED,
         )?;
-        // Ordinary OAuth has independent explicit revocation. A password reset
-        // preserves that established policy while rejecting new old-password grants.
+        // The existing password-reset transaction retires ordinary OAuth grants
+        // too: an old refresh must not undo account-wide credential revocation.
         expect(
             &json_request(
                 &harness.app,
@@ -895,8 +905,24 @@ async fn password_http_lifecycle_preserves_hashes_login_oauth_reset_and_revocati
                 Value::Null,
             )
             .await?,
-            StatusCode::OK,
+            StatusCode::UNAUTHORIZED,
         )?;
+        let ordinary_refresh = form_request(
+            &harness.app,
+            "/oauth/token",
+            &[
+                ("client_id", "login-protection-client"),
+                ("client_secret", CLIENT_SECRET),
+                ("grant_type", "refresh_token"),
+                ("refresh_token", &old_refresh),
+            ],
+        )
+        .await?;
+        expect(&ordinary_refresh, StatusCode::BAD_REQUEST)?;
+        ensure!(
+            ordinary_refresh.body["error"] == "invalid_grant",
+            "password reset left the ordinary OAuth refresh grant usable"
+        );
         expect(
             &form_request(
                 &harness.app,

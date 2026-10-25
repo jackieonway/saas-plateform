@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use std::collections::HashMap;
 
 use axum::body::Bytes;
@@ -53,7 +54,7 @@ async fn authorize(state: &AppState, user: &CurrentUser) -> Result<(), AppError>
 
 fn uuid(value: &str) -> Result<Uuid, AppError> {
     value
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))
 }
 
@@ -355,7 +356,7 @@ async fn upload_inner(
     let Json(row) = register_definition(&state, &user, &headers, app, body, Some(artifact)).await?;
     let id = row["id"]
         .as_str()
-        .and_then(|value| value.parse::<Uuid>().ok())
+        .and_then(|value| value.parse_uuid7().ok())
         .ok_or_else(|| AppError::conflict("版本已登记，但无法读取其 ID"))?;
     let registered = release(&state, app, id).await?;
     if crate::artifact_distribution::defer_upload_probe(&state, &registered).await? {
@@ -541,11 +542,11 @@ async fn register_definition(
         }
     }
     let id: Uuid = sqlx::query_scalar("INSERT INTO application_releases \
-        (application_id, environment, version, entry_type, entry_url, health_url, resources, created_by, artifact_digest) \
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id")
+        (application_id, environment, version, entry_type, entry_url, health_url, resources, created_by, artifact_digest, id) \
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9, $10) RETURNING id")
         .bind(app).bind(&environment).bind(&version).bind(body.entry_type).bind(entry_url)
         .bind(health_url).bind(resources).bind(user.user_id).bind(artifact.as_ref().map(|value| &value.digest))
-        .fetch_one(&mut *tx).await?;
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx).await?;
     let detail = audit::change_detail(
         "application_release",
         id,

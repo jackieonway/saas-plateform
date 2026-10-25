@@ -1,7 +1,7 @@
 //! Ordinary OAuth issuance and its shared live identity contract.
 //!
 //! The caller owns the transaction, client authentication, credential consumption
-//! and audit. Lock the user first, then the client, then the one-time credential;
+//! and audit. Lock the user first, then the application, client and one-time credential;
 //! this module writes the complete token pair before that transaction commits.
 
 use chrono::{DateTime, Utc};
@@ -12,13 +12,14 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::routes::oauth_admin::ClientFull;
 use crate::state::AppState;
-use crate::util::{hash, jwt};
+use crate::util::{hash, jwt, uuid7::is_uuid_v7};
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct IssuanceIdentity {
     pub user_id: Option<Uuid>,
     pub tenant_id: Option<Uuid>,
     pub organization_id: Option<Uuid>,
+    pub binding: StoredBinding,
 }
 
 /// Match account, membership and platform-session revocations' user-first order.
@@ -36,54 +37,180 @@ pub(crate) async fn lock_user(
     Ok(())
 }
 
-/// Resolve a currently valid ordinary OAuth identity to its username.
-///
-/// Machine grants have no user or context and return an empty username. User
-/// grants require the exact membership and a matching, active tenant and entire
-/// organization ancestry. Wall-clock expiry remains strict after lock waits.
+/// Persisted proof is nullable so pre-binding credentials fail closed.
+#[derive(Clone, Debug, Default, sqlx::FromRow)]
+pub(crate) struct StoredBinding {
+    pub account_version: Option<i64>,
+    pub membership_id: Option<Uuid>,
+    pub member_type: Option<String>,
+    pub identity_version: Option<i64>,
+    pub client_policy_version: Option<i64>,
+    pub application_id: Option<Uuid>,
+    pub application_policy_version: Option<i64>,
+    pub platform_session_id: Option<Uuid>,
+}
+
+#[derive(Clone, Debug, sqlx::FromRow)]
+pub(crate) struct UserBinding {
+    pub account_version: i64,
+    pub membership_id: Uuid,
+    pub member_type: String,
+    pub identity_version: i64,
+    pub client_policy_version: i64,
+    pub application_id: Option<Uuid>,
+    pub application_policy_version: Option<i64>,
+    pub platform_session_id: Option<Uuid>,
+}
+
+impl StoredBinding {
+    pub(crate) fn user(&self) -> Option<UserBinding> {
+        Some(UserBinding {
+            account_version: self.account_version?,
+            membership_id: self.membership_id?,
+            member_type: self.member_type.clone()?,
+            identity_version: self.identity_version?,
+            client_policy_version: self.client_policy_version?,
+            application_id: self.application_id,
+            application_policy_version: self.application_policy_version,
+            platform_session_id: self.platform_session_id,
+        })
+    }
+}
+
+impl From<UserBinding> for StoredBinding {
+    fn from(value: UserBinding) -> Self {
+        Self {
+            account_version: Some(value.account_version),
+            membership_id: Some(value.membership_id),
+            member_type: Some(value.member_type),
+            identity_version: Some(value.identity_version),
+            client_policy_version: Some(value.client_policy_version),
+            application_id: value.application_id,
+            application_policy_version: value.application_policy_version,
+            platform_session_id: value.platform_session_id,
+        }
+    }
+}
+
+/// Capture only for new password authentication, never a stored grant exchange.
+/// The caller holds the user, application and client locks in that order.
+pub(crate) async fn capture_binding(
+    connection: &mut PgConnection,
+    user_id: Uuid,
+    tenant_id: Uuid,
+    org_id: Uuid,
+    membership_id: Uuid,
+    client_id: &str,
+) -> Result<Option<UserBinding>, sqlx::Error> {
+    let binding = sqlx::query_as::<_, UserBinding>(
+        "SELECT u.session_version AS account_version, m.id AS membership_id, m.member_type::text, \
+         m.identity_version, c.access_policy_version AS client_policy_version, c.application_id, \
+         a.access_policy_version AS application_policy_version, NULL::uuid AS platform_session_id \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.id=$2 \
+         JOIN oauth_clients c ON c.client_id=$3 \
+         LEFT JOIN applications a ON a.id=c.application_id WHERE u.id=$1",
+    )
+    .bind(user_id)
+    .bind(membership_id)
+    .bind(client_id)
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some(binding) = binding else {
+        return Ok(None);
+    };
+    if binding_identity(connection, user_id, tenant_id, org_id, client_id, &binding)
+        .await?
+        .is_some()
+    {
+        Ok(Some(binding))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Validate exactly the proof stored at issuance; current state cannot repair it.
+pub(crate) async fn binding_identity(
+    connection: &mut PgConnection,
+    user_id: Uuid,
+    tenant_id: Uuid,
+    org_id: Uuid,
+    client_id: &str,
+    binding: &UserBinding,
+) -> Result<Option<String>, sqlx::Error> {
+    if ![user_id, tenant_id, org_id, binding.membership_id]
+        .into_iter()
+        .all(is_uuid_v7)
+        || binding.application_id.is_some_and(|id| !is_uuid_v7(id))
+        || binding
+            .platform_session_id
+            .is_some_and(|id| !is_uuid_v7(id))
+    {
+        return Ok(None);
+    }
+    sqlx::query_scalar(
+        "SELECT u.username FROM users u \
+         JOIN oauth_clients c ON c.client_id=$4 AND c.status='ENABLED' \
+           AND c.subject_mode IN ('USER','LEGACY_MIXED') \
+           AND c.access_policy_version=$9 AND $7=ANY(c.allowed_member_types) \
+           AND c.application_id IS NOT DISTINCT FROM $10 \
+         LEFT JOIN applications a ON a.id=c.application_id \
+         WHERE u.id=$1 AND identity_binding_active($1,$2,$3,$5,$6,$7,$8) \
+           AND ($12::uuid IS NULL OR EXISTS (SELECT 1 FROM platform_sessions s WHERE s.id=$12 \
+             AND s.user_id=$1 AND s.tenant_id=$2 AND s.organization_id=$3 \
+             AND s.account_version=$5 AND s.membership_id=$6 AND s.member_type=$7 AND s.identity_version=$8 \
+             AND platform_session_active(s.id))) \
+           AND ((c.application_id IS NULL AND $11::bigint IS NULL) OR \
+             (a.status='ENABLED' AND a.access_policy_version=$11 \
+              AND $7=ANY(a.allowed_member_types) \
+              AND EXISTS(SELECT 1 FROM tenant_applications WHERE tenant_id=$2 AND application_id=a.id) \
+              AND EXISTS(SELECT 1 FROM organization_applications WHERE organization_id=$3 AND application_id=a.id)))",
+    ).bind(user_id).bind(tenant_id).bind(org_id).bind(client_id)
+    .bind(binding.account_version).bind(binding.membership_id).bind(&binding.member_type)
+    .bind(binding.identity_version).bind(binding.client_policy_version)
+    .bind(binding.application_id).bind(binding.application_policy_version).bind(binding.platform_session_id)
+    .fetch_optional(connection).await
+}
+
+/// Capture registration when starting a pending request before any user exists.
+pub(crate) async fn client_registration(
+    connection: &mut PgConnection,
+    client_id: &str,
+) -> Result<Option<(i64, Option<Uuid>, Option<i64>)>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT c.access_policy_version,c.application_id,a.access_policy_version \
+         FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id \
+         WHERE c.client_id=$1 AND c.status='ENABLED' AND c.subject_mode IN ('USER','LEGACY_MIXED') \
+         AND (c.application_id IS NULL OR a.status='ENABLED')",
+    )
+    .bind(client_id)
+    .fetch_optional(connection)
+    .await
+}
+
 pub(crate) async fn active_identity(
     connection: &mut PgConnection,
     user_id: Option<Uuid>,
     tenant_id: Option<Uuid>,
     org_id: Option<Uuid>,
     client_id: &str,
+    binding: &StoredBinding,
 ) -> Result<Option<String>, sqlx::Error> {
-    match (user_id, tenant_id, org_id) {
-        (None, None, None) => {
+    match (user_id,tenant_id,org_id) {
+        (Some(user),Some(tenant),Some(org)) => match binding.user() {
+            Some(proof) => binding_identity(connection,user,tenant,org,client_id,&proof).await,
+            None => Ok(None),
+        },
+        (None,None,None) if binding.account_version.is_none() && binding.membership_id.is_none()
+            && binding.member_type.is_none() && binding.identity_version.is_none() && binding.platform_session_id.is_none() => {
             sqlx::query_scalar(
-                "SELECT ''::text FROM oauth_clients WHERE client_id = $1 AND status = 'ENABLED'",
-            )
-            .bind(client_id)
-            .fetch_optional(connection)
-            .await
-        }
-        (Some(user_id), Some(tenant_id), Some(org_id)) => {
-            sqlx::query_scalar(
-                "WITH RECURSIVE chain AS ( \
-                   SELECT id, parent_id, tenant_id, status, expires_at FROM organizations WHERE id = $3 \
-                   UNION \
-                   SELECT parent.id, parent.parent_id, parent.tenant_id, parent.status, parent.expires_at \
-                   FROM chain child JOIN organizations parent ON parent.id = child.parent_id \
-                 ) \
-                 SELECT u.username FROM users u \
-                 JOIN memberships m ON m.user_id = u.id AND m.organization_id = $3 \
-                 JOIN organizations o ON o.id = m.organization_id AND o.tenant_id = $2 \
-                 JOIN tenants t ON t.id = o.tenant_id \
-                 JOIN oauth_clients c ON c.client_id = $4 AND c.status = 'ENABLED' \
-                 WHERE u.id = $1 AND u.status = 'ENABLED' AND t.status = 'ENABLED' \
-                   AND (t.expires_at IS NULL OR t.expires_at > clock_timestamp()) \
-                   AND EXISTS (SELECT 1 FROM chain WHERE parent_id IS NULL) \
-                   AND NOT EXISTS (SELECT 1 FROM chain \
-                       WHERE tenant_id <> $2 OR status <> 'ENABLED' \
-                         OR (expires_at IS NOT NULL AND expires_at <= clock_timestamp()))",
-            )
-            .bind(user_id)
-            .bind(tenant_id)
-            .bind(org_id)
-            .bind(client_id)
-            .fetch_optional(connection)
-            .await
-        }
+                "SELECT ''::text FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id \
+                 WHERE c.client_id=$1 AND c.status='ENABLED' AND c.subject_mode IN ('MACHINE','LEGACY_MIXED') \
+                   AND c.access_policy_version=$2 AND c.application_id IS NOT DISTINCT FROM $3 \
+                   AND ((c.application_id IS NULL AND $4::bigint IS NULL) OR \
+                     (a.status='ENABLED' AND a.access_policy_version=$4))",
+            ).bind(client_id).bind(binding.client_policy_version).bind(binding.application_id)
+                .bind(binding.application_policy_version).fetch_optional(connection).await
+        },
         _ => Ok(None),
     }
 }
@@ -114,8 +241,10 @@ pub(crate) async fn issue_in_tx(
         identity.tenant_id,
         identity.organization_id,
         &client.client_id,
+        &identity.binding,
     )
-    .await?
+    .await
+    .map_err(|_| AppError::Unavailable)?
     .is_none()
     {
         return Err(AppError::unauthorized("OAuth 身份或客户端已失效"));
@@ -140,6 +269,18 @@ pub(crate) async fn issue_in_tx(
         }
         None => None,
     };
+    let authority_expiry = if let Some(sid) = identity.binding.platform_session_id {
+        let parent: DateTime<Utc> = sqlx::query_scalar(
+            "SELECT expires_at FROM platform_sessions WHERE id=$1 AND platform_session_active(id)",
+        )
+        .bind(sid)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+        Some(authority_expiry.map_or(parent, |end| end.min(parent)))
+    } else {
+        authority_expiry
+    };
     let now = Utc::now();
     let access_expiry = expires_at(now, client.access_token_validity)?;
     let access_expiry = authority_expiry.map_or(access_expiry, |end| end.min(access_expiry));
@@ -147,7 +288,7 @@ pub(crate) async fn issue_in_tx(
     if expires_in <= 0 {
         return Err(AppError::unauthorized("OAuth 身份已到期"));
     }
-    let jti = Uuid::new_v4();
+    let jti = crate::util::uuid7::new_uuid();
     let access = jwt::sign(
         &jwt::Claims {
             sub: identity
@@ -171,8 +312,9 @@ pub(crate) async fn issue_in_tx(
     let access_written = sqlx::query(
         "INSERT INTO oauth_tokens \
          (token_hash, token_type, jwt, user_id, client_id, tenant_id, organization_id, \
-          scope, expires_at, token_use, jti, storage_version) \
-         VALUES ($1, 'access', NULL, $2, $3, $4, $5, $6, $7, 'oauth', $8, 2)",
+          scope, expires_at, token_use, jti, storage_version, id, \
+          account_version,membership_id,member_type,identity_version,client_policy_version,application_id,application_policy_version,platform_session_id) \
+         VALUES ($1, 'access', NULL, $2, $3, $4, $5, $6, $7, 'oauth', $8, 2, $9,$10,$11,$12,$13,$14,$15,$16,$17)",
     )
     .bind(hash::sha256_hex(&access))
     .bind(identity.user_id)
@@ -182,6 +324,11 @@ pub(crate) async fn issue_in_tx(
     .bind(scope)
     .bind(access_expiry)
     .bind(jti)
+    .bind(crate::util::uuid7::new_uuid())
+    .bind(identity.binding.account_version).bind(identity.binding.membership_id)
+    .bind(&identity.binding.member_type).bind(identity.binding.identity_version)
+    .bind(identity.binding.client_policy_version).bind(identity.binding.application_id)
+    .bind(identity.binding.application_policy_version).bind(identity.binding.platform_session_id)
     .execute(&mut **tx)
     .await?
     .rows_affected();
@@ -204,8 +351,9 @@ pub(crate) async fn issue_in_tx(
         let refresh_written = sqlx::query(
             "INSERT INTO oauth_tokens \
              (token_hash, token_type, jwt, user_id, client_id, tenant_id, organization_id, \
-              scope, expires_at, token_use, storage_version) \
-             VALUES ($1, 'refresh', NULL, $2, $3, $4, $5, $6, $7, 'oauth', 2)",
+              scope, expires_at, token_use, storage_version, id, \
+              account_version,membership_id,member_type,identity_version,client_policy_version,application_id,application_policy_version,platform_session_id) \
+             VALUES ($1, 'refresh', NULL, $2, $3, $4, $5, $6, $7, 'oauth', 2, $8,$9,$10,$11,$12,$13,$14,$15,$16)",
         )
         .bind(hash::sha256_hex(&refresh))
         .bind(identity.user_id)
@@ -214,6 +362,11 @@ pub(crate) async fn issue_in_tx(
         .bind(identity.organization_id)
         .bind(scope)
         .bind(refresh_expiry)
+        .bind(crate::util::uuid7::new_uuid())
+        .bind(identity.binding.account_version).bind(identity.binding.membership_id)
+        .bind(&identity.binding.member_type).bind(identity.binding.identity_version)
+        .bind(identity.binding.client_policy_version).bind(identity.binding.application_id)
+        .bind(identity.binding.application_policy_version).bind(identity.binding.platform_session_id)
         .execute(&mut **tx)
         .await?
         .rows_affected();
@@ -228,6 +381,31 @@ pub(crate) async fn issue_in_tx(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_or_partial_credentials_cannot_acquire_a_current_user_binding() {
+        let full = StoredBinding {
+            account_version: Some(4),
+            membership_id: Some(crate::util::uuid7::new_uuid()),
+            member_type: Some("CUSTOMER".into()),
+            identity_version: Some(8),
+            client_policy_version: Some(3),
+            ..Default::default()
+        };
+        assert!(full.user().is_some());
+        assert!(StoredBinding::default().user().is_none());
+        for missing in 0..5 {
+            let mut proof = full.clone();
+            match missing {
+                0 => proof.account_version = None,
+                1 => proof.membership_id = None,
+                2 => proof.member_type = None,
+                3 => proof.identity_version = None,
+                _ => proof.client_policy_version = None,
+            }
+            assert!(proof.user().is_none());
+        }
+    }
 
     #[test]
     fn token_expiry_rejects_invalid_or_overflowing_configuration() {

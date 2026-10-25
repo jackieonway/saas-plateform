@@ -54,8 +54,11 @@ pub(super) fn routes() -> Router<AppState> {
 struct SetupQuery {
     #[serde(default = "development")]
     environment: String,
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     tenant_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     organization_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     role_id: Option<Uuid>,
 }
 
@@ -66,6 +69,7 @@ fn development() -> String {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OrganizationQuery {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     tenant_id: Uuid,
 }
 
@@ -89,12 +93,13 @@ async fn organization_options(
     Path(id): Path<Uuid>,
     query: Result<Query<OrganizationQuery>, QueryRejection>,
 ) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
     state.require_platform(&actor).await?;
     RequirePermission("system:application")
         .check(&state, &actor)
         .await?;
     let Query(query) = query.map_err(|_| AppError::bad_request("请选择有效的租户 ID"))?;
-    if query.tenant_id.is_nil() {
+    if !crate::util::uuid7::is_uuid_v7(query.tenant_id) {
         return Err(AppError::bad_request("请选择有效的租户 ID"));
     }
     let mut tx = state.pool.begin().await?;
@@ -207,9 +212,11 @@ pub(crate) async fn actor_permissions(
          FROM platform_sessions s JOIN users u ON u.id=s.user_id AND u.status='ENABLED' \
          JOIN tenants t ON t.id=s.tenant_id AND t.status='ENABLED' \
          JOIN organizations o ON o.id=s.organization_id AND o.tenant_id=t.id \
-         JOIN memberships ms ON ms.user_id=u.id AND ms.organization_id=o.id \
+         JOIN memberships ms ON ms.id=s.membership_id AND ms.user_id=u.id AND ms.organization_id=o.id \
+           AND ms.member_type='EMPLOYEE' AND ms.status='ENABLED' \
+           AND ms.identity_version=s.identity_version \
          WHERE s.id=$1 AND s.user_id=$2 AND s.tenant_id=$3 AND s.organization_id=$4 \
-         AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() \
+         AND s.member_type='EMPLOYEE' AND platform_session_active(s.id) \
          AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) AND org_chain_active(o.id) \
          AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>clock_timestamp())",
     )
@@ -336,12 +343,13 @@ async fn access_evidence(
            EXISTS(SELECT 1 FROM organization_entries e JOIN role_menus rm ON rm.menu_id=e.id AND rm.role_id=$4)"
     )).bind(app_id).bind(target.tenant_id).bind(target.organization_id).bind(target.role_id)
         .fetch_one(&mut **tx).await?;
-    let assigned_user_count: i64 = sqlx::query_scalar(
+    let employee_support =
+        super::users::role_employee_support_sql("ur.user_id", "ur.organization_id", "NULL::uuid[]");
+    let assigned_user_count: i64 = sqlx::query_scalar(&format!(
         "SELECT count(DISTINCT ur.user_id) FROM user_roles ur \
          JOIN users u ON u.id=ur.user_id AND u.status='ENABLED' \
-         JOIN memberships m ON m.user_id=ur.user_id AND m.organization_id=$2 \
-         WHERE ur.role_id=$1 AND ur.organization_id=$2",
-    )
+         WHERE ur.role_id=$1 AND ur.organization_id=$2 AND {employee_support}",
+    ))
     .bind(target.role_id)
     .bind(target.organization_id)
     .fetch_one(&mut **tx)
@@ -359,6 +367,7 @@ async fn read(
     Path(id): Path<Uuid>,
     query: Result<Query<SetupQuery>, QueryRejection>,
 ) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
     RequirePermission("system:application")
         .check(&state, &actor)
         .await?;
@@ -422,9 +431,13 @@ async fn read(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct AccessBody {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     tenant_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     organization_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     role_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize_vec")]
     menu_ids: Vec<Uuid>,
 }
 
@@ -445,6 +458,7 @@ async fn configure_access(
     Path(id): Path<Uuid>,
     ApiJson(body): ApiJson<AccessBody>,
 ) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
     state.require_platform(&actor).await?;
     for permission in ALL_PERMISSIONS {
         RequirePermission(permission).check(&state, &actor).await?;

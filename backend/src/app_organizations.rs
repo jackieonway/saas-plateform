@@ -1,5 +1,6 @@
 //! Application-owned operation proof plus a fresh platform STORE projection.
 //! Directory metadata never proves a business record's SELF ownership.
+use crate::util::uuid7::ParseUuid7;
 mod store;
 
 use axum::http::HeaderMap;
@@ -54,7 +55,7 @@ fn search(query: &LookupQuery, single: bool) -> Result<Search, AppError> {
 fn uuid(value: &Value) -> Result<Uuid, AppError> {
     value
         .as_str()
-        .and_then(|text| text.parse().ok())
+        .and_then(|text| text.parse_uuid7().ok())
         .filter(|id: &Uuid| !id.is_nil())
         .ok_or_else(|| AppError::unauthorized("应用组织上下文无效"))
 }
@@ -167,7 +168,7 @@ async fn lookup_inner(
     target: Option<Uuid>,
     mut deadline: DateTime<Utc>,
 ) -> Result<Value, AppError> {
-    if target.is_some_and(|id| id.is_nil()) {
+    if target.is_some_and(|id| !crate::util::uuid7::is_uuid_v7(id)) {
         return Err(AppError::bad_request("组织 ID 无效"));
     }
     let search = search(&query, target.is_some())?;
@@ -297,8 +298,8 @@ mod tests {
     use super::*;
     #[test]
     fn self_never_widens_to_descendants_and_missing_ceiling_is_current_only() {
-        let current = Uuid::new_v4();
-        let child = Uuid::new_v4();
+        let current = crate::util::uuid7::new_uuid();
+        let child = crate::util::uuid7::new_uuid();
         let context = json!({"organizationScopeIds":[current,child]});
         let grant = json!({"scope":"SELF","organizationIds":[current,child]});
         assert_eq!(
@@ -317,8 +318,8 @@ mod tests {
     }
     #[test]
     fn invalid_directory_boundaries_fail_closed() {
-        let current = Uuid::new_v4();
-        let other = Uuid::new_v4();
+        let current = crate::util::uuid7::new_uuid();
+        let other = crate::util::uuid7::new_uuid();
         assert!(allowed_ids(
             &json!({"organizationScopeIds":[other]}),
             &json!({"scope":"TENANT","organizationIds":[]}),
@@ -337,9 +338,9 @@ mod tests {
 
     #[test]
     fn self_known_metadata_stays_in_the_grant_and_hard_ceiling_without_owner_claims() {
-        let current = Uuid::new_v4();
-        let child = Uuid::new_v4();
-        let sibling = Uuid::new_v4();
+        let current = crate::util::uuid7::new_uuid();
+        let child = crate::util::uuid7::new_uuid();
+        let sibling = crate::util::uuid7::new_uuid();
         let context = json!({"organizationScopeIds":[current,child]});
         let grant = json!({"scope":"SELF","organizationIds":[current,child,sibling]});
         assert_eq!(

@@ -21,13 +21,14 @@ Linux 下载浏览器时可追加 `--with-deps` 安装系统依赖。项目下�
 node tests/browser/run.mjs --browser msedge
 ```
 
-完整入口依次运行八套检查，每套最长 300 秒；任意套件失败会让入口失败。入口会清除通知、路由和导航的诊断筛选变量，避免局部筛选被误认为完整通过。
+完整入口依次运行九套检查，每套最长 300 秒；任意套件失败会让入口失败。入口会清除通知、路由和导航的诊断筛选变量，避免局部筛选被误认为完整通过。
 
 | 套件 | 单独入口 | 主要范围 |
 | --- | --- | --- |
 | 通知 | `npm run test:notifications:browser` | HTTP/Socket.IO 上下文、通知交互 |
 | 平台设置 | `npm run test:platform:browser` | 配置页面与微应用上下文联动 |
 | 应用导航 | `npm run test:auth:navigation:browser` | 应用选择和授权导航 |
+| 登录会话 | `npm run test:auth:login:browser` | 真实表单登录、返回路由、刷新草稿与组织隔离 |
 | 地区位置 | `npm run test:regions:browser` | 地区及位置交互 |
 | 实体类型 | `npm run test:entities:browser` | 实体表单与类型 |
 | 部门上下文 | `npm run test:departments:browser` | 组织切换与部门操作 |
@@ -80,7 +81,23 @@ $env:SAAS_TEST_BROWSER = 'msedge'
 npm run test:applications:browser
 ```
 
-该专项不在八套完整入口之内，需要单独执行。它使用隔离 API fixture 验证 qiankun 应用创建、直接地址、资源发现、发布激活、授权配置的忙碌状态、缺项提示和移动端布局；实际授权事务由后端 PostgreSQL 测试覆盖。
+该专项不在九套完整入口之内，需要单独执行。它使用隔离 API fixture 验证 qiankun 应用创建、直接地址、资源发现、发布激活、授权配置的忙碌状态、缺项提示和移动端布局；实际授权事务由后端 PostgreSQL 测试覆盖。
+
+## 具体成员与准入策略专项
+
+以下两个显式入口不包含在上面的九套完整入口中。报告目录必须为可写的绝对路径，脚本拒绝把报告写入源码、测试或依赖目录。
+
+```powershell
+$env:SAAS_TEST_BROWSER = 'msedge'
+$env:IDENTITY_MANAGEMENT_BROWSER_REPORT_DIR = Join-Path (Get-Location) 'target/identity-sso-phase05/members'
+npm run test:identity:management:browser
+$env:ADMISSION_POLICY_BROWSER_REPORT_DIR = Join-Path (Get-Location) 'target/identity-sso-phase05/admission'
+npm run test:admission:policy:browser
+```
+
+成员专项运行实际 `UsersPage` 与成员操作组件，验证分视图、创建开关、账号绑定、独立启停、第二身份／替换、旧版本拒绝及员工 bulk 保护。准入专项运行实际应用／客户端页面、宿主 session gate 和 QueryClient，验证集合与主体用途、版本冲突、影响确认，以及保存后立即撤下旧授权投影、清空缓存并中止活动请求。两者均保留 React StrictMode，生成 JSON 结果和桌面／手机截图。
+
+这些场景使用隔离 HTTP fixture。后端成员与角色、真实策略撤销、迁移及通知服务之间的安全结论，分别以 PostgreSQL 和真实双服务证据验收，见[身份台账](../../../backend/docs/identity-sso/task-ledger.md)及[Phase 5 验收](../../../backend/docs/identity-sso/validation/phase-05.md)。
 
 ## 结果解释
 

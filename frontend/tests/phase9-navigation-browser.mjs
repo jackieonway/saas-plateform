@@ -7,6 +7,7 @@ import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser } from './browser/runtime.mjs'
+import { fixtureUuid, profileWithIdentity, identityForProfile, installSession, sessionRecord } from './browser/identity-fixture.mjs'
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const bindHost = process.env.PHASE9_BROWSER_BIND || (process.platform === 'win32' ? '::1' : '127.0.0.1')
@@ -17,24 +18,25 @@ async function waitState(predicate, message, timeout = 12_000) {
   while (!await predicate() && Date.now() < deadline) await pause(20)
   assert(await predicate(), message)
 }
-const menu = (id, title, pathname, permission = null, extra = {}) => ({ id, parentId: null,
+const ORG_A = fixtureUuid('navigation-org-A'), ORG_B = fixtureUuid('navigation-org-B'), TENANT = fixtureUuid('nav-tenant')
+const menu = (id, title, pathname, permission = null, extra = {}) => ({ id: fixtureUuid(id), parentId: null,
   type: 'MENU', title, path: pathname, icon: 'Boxes', permission, sortOrder: 1, visible: true, children: [], ...extra })
-const system = { id: 'nav-system', code: 'system', name: '系统管理', icon: 'LayoutGrid', basePath: '/system',
+const system = { id: fixtureUuid('nav-system'), code: 'system', name: '系统管理', icon: 'LayoutGrid', basePath: '/system',
   entryType: 'HTML', runtimeMode: 'TRUSTED' }
-const app = (suffix) => ({ id: 'nav-app-' + suffix, code: 'nav-' + suffix, name: '导航应用 ' + suffix.toUpperCase(),
+const app = (suffix) => ({ id: fixtureUuid('nav-app-' + suffix), code: 'nav-' + suffix, name: '导航应用 ' + suffix.toUpperCase(),
   icon: 'Boxes', basePath: '/micro/nav-' + suffix, runtimeMode: 'TRUSTED', entryType: 'HTML',
-  entryUrl: '/__phase9/' + suffix + '/index.html', deploymentVersion: 'phase9', entryVersionId: 'nav-release-' + suffix })
+  entryUrl: '/__phase9/' + suffix + '/index.html', deploymentVersion: 'phase9', entryVersionId: fixtureUuid('nav-release-' + suffix) })
 const appA = app('a'), appB = app('b')
 const appMenu = (application, suffix = '/home', title = application.name + '入口') =>
   menu(application.code + suffix, title, application.basePath + suffix, application.code + ':read')
-const user = { id: 'nav-user', username: 'navigation', realName: '导航验收用户', email: 'nav@example.test',
+const user = { id: fixtureUuid('nav-user'), username: 'navigation', realName: '导航验收用户', email: 'nav@example.test',
   phone: '', gender: 'UNKNOWN', avatar: '', isSuperAdmin: true }
-const profile = (apps = [system, appA, appB], org = 'org-A', platformContext = true) => ({ user,
-  tenant: { id: 'nav-tenant', name: '导航租户', code: 'navigation', isPlatform: true }, platformContext,
+const profile = (apps = [system, appA, appB], org = ORG_A, platformContext = true, patch = {}) => profileWithIdentity({ user,
+  tenant: { id: TENANT, name: '导航租户', code: 'navigation', isPlatform: true }, platformContext,
   organization: { id: org, name: '导航组织 ' + org, path: org }, applications: apps,
-  memberships: [{ userId: user.id, tenantId: 'nav-tenant', tenantName: '导航租户', organizationId: org,
-    organizationName: '导航组织 ' + org, organizationPath: org }] })
-const tenantRow = { id: 'nav-visible-tenant', name: '明确授权页面业务行', code: 'nav-visible', tenantType: 'COMPANY',
+  memberships: [{ userId: user.id, tenantId: TENANT, tenantName: '导航租户', organizationId: org,
+    organizationName: '导航组织 ' + org, organizationPath: org, ...patch }] }, patch)
+const tenantRow = { id: fixtureUuid('nav-visible-tenant'), name: '明确授权页面业务行', code: 'nav-visible', tenantType: 'COMPANY',
   status: 'ENABLED', isPlatform: false, organizationCount: 1, userCount: 1, authorizedAppCount: 1,
   createdAt: '2026-10-15T00:00:00Z', expiresAt: null }
 let browser, vite, origin, startup = '', count = 0
@@ -96,12 +98,13 @@ async function fixture(pathname, options = {}) {
   const close = async () => { for (const gate of state.gates.values()) gate.resolve(); await context.close() }
   state.release = id => state.gates.get(id)?.resolve()
   page.on('pageerror', error => state.errors.push(error.message))
-  await context.addInitScript(({ recent, detachMenus }) => {
-    if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: 'phase9-session-A', refreshToken: null }))
+  const proof = identityForProfile(state.profile)
+  await installSession(context, 'phase9-session-A', proof)
+  await context.addInitScript(({ recent, namespace, applicationId }) => {
     localStorage.setItem('platform-theme', 'light')
-    localStorage.setItem('platform-current-app', 'nav-system')
-    if (recent) localStorage.setItem('platform-recent-visits', JSON.stringify(recent))
-  }, { recent: options.recent, detachMenus: options.detachMenus })
+    localStorage.setItem(`platform-current-app-v2:${namespace}`, applicationId)
+    if (recent) localStorage.setItem(`platform-recent-visits-v2:${namespace}`, JSON.stringify(recent))
+  }, { recent: options.recent, namespace: sessionRecord('phase9-session-A', proof).contextKey, applicationId: system.id })
   await context.addInitScript(observeTransport, Boolean(options.detachMenus))
   await context.routeWebSocket(() => true, () => {})
   await context.route(url => url.origin === origin && url.pathname === '/src/main.tsx', async route => {
@@ -246,7 +249,7 @@ try {
       await pause(120)
       assert.equal(new URL(page.url()).pathname, appB.basePath + '/home')
       assert.equal(await rail(page).getByRole('button', { name: '切换到应用 ' + appB.name }).getAttribute('aria-current'), 'true')
-      assert.equal(await page.getByTestId('phase9-mounted').innerText(), 'org-A:' + appB.basePath + '/home')
+      assert.equal(await page.getByTestId('phase9-mounted').innerText(), ORG_A + ':' + appB.basePath + '/home')
       assert.equal(state.entries.some(entry => entry.includes('/a/')), false)
       emit('selection-' + label.replaceAll(' ', '-'), { selected: appB.id, path: new URL(page.url()).pathname, replies: state.menuReplies, entries: state.entries })
     })
@@ -343,7 +346,7 @@ try {
     assert.equal(state.requests.some(request => request.path.includes('phase9-unknown')), false)
     emit('unknown-policy-display-direct', { path: unknownMenu.path, denied: true })
   })
-  const workOrders = { ...app('work-orders'), id: 'nav-work-orders', code: 'work-orders', name: '工单创建路由验收', basePath: '/micro/work-orders' }
+  const workOrders = { ...app('work-orders'), id: fixtureUuid('nav-work-orders'), code: 'work-orders', name: '工单创建路由验收', basePath: '/micro/work-orders' }
   const detailMenu = menu('work-orders-detail', '只读工单详情', '/micro/work-orders/tickets/:id', 'ticket:read', { visible: false })
   const createMenu = menu('work-orders-create', '明确工单创建', '/micro/work-orders/ticket-create', 'ticket:create')
   await check('phase9 detail-only permission cannot grant the nonoverlapping creation route', createMenu.path, {
@@ -353,27 +356,31 @@ try {
     assert.deepEqual(state.entries, []); assert.deepEqual(state.contextRequests, [])
     await navigate(page, '/micro/work-orders/tickets/existing')
     await page.getByTestId('phase9-mounted').waitFor()
-    assert.equal(await page.getByTestId('phase9-mounted').innerText(), 'org-A:/micro/work-orders/tickets/existing')
+    assert.equal(await page.getByTestId('phase9-mounted').innerText(), ORG_A + ':/micro/work-orders/tickets/existing')
     emit('detail-only-denies-creation', { deniedPath: createMenu.path, permittedDetail: '/micro/work-orders/tickets/existing', entries: state.entries })
   })
   await check('phase9 explicit creation MENU permits creation route independently of detail', createMenu.path, {
     apps: [system, workOrders], permissions: ['ticket:create'], menus: { [workOrders.id]: [createMenu] },
   }, async ({ page, state }) => {
     await page.getByTestId('phase9-mounted').waitFor()
-    assert.equal(await page.getByTestId('phase9-mounted').innerText(), 'org-A:' + createMenu.path)
+    assert.equal(await page.getByTestId('phase9-mounted').innerText(), ORG_A + ':' + createMenu.path)
     await navigate(page, '/micro/work-orders/tickets/existing'); await page.getByText('无访问权限', { exact: true }).waitFor()
     assert.equal(state.entries.length, 1)
     emit('creation-MENU-independent', { allowedPath: createMenu.path, detailDenied: true })
   })
-  await check('phase9 cross organization rejects actual ignored-abort late menus without old entry or data', '/profile', {
+  for (const replacement of [{ label: 'cross organization', organization: ORG_B, patch: {} },
+    { label: 'same user and organization replacement member', organization: ORG_A, patch: { membershipId: fixtureUuid('navigation-replacement-member'), identityVersion: '2' } },
+    { label: 'same member identity generation', organization: ORG_A, patch: { identityVersion: '2', accountVersion: '1' } }]) {
+  await check('phase9 ' + replacement.label + ' rejects actual ignored-abort late menus without old entry or data', '/profile', {
     detachMenus: true, holdMenus: [appA.id], recent: [recent(appA.basePath + '/home', '旧组织私有入口')],
   }, async ({ page, state }) => {
     await openPalette(page)
     await waitState(() => menuRequests(state, appA.id).length > 0, 'Old org request is actually pending')
-    state.profile = profile([system, appA, appB], 'org-B')
+    state.profile = profile([system, appA, appB], replacement.organization, true, replacement.patch)
     state.menus.set(appA.id, [])
-    await page.evaluate(() => window.__phase9Auth.getState().setSession('phase9-session-B'))
-    await waitState(async () => (await page.evaluate(() => window.__phase9Auth.getState().profile?.organization.id)) === 'org-B', 'New organization profile is authoritative')
+    await page.evaluate(proof => window.__phase9Auth.getState().setSession('phase9-session-B', null, undefined, proof), identityForProfile(state.profile))
+    await waitState(async () => (await page.evaluate(() => window.__phase9Auth.getState().profile?.membershipId)) === state.profile.membershipId &&
+      (await page.evaluate(() => window.__phase9Auth.getState().profile?.identityVersion)) === state.profile.identityVersion, 'New concrete member profile is authoritative')
     await openPalette(page)
     await waitState(() => menuRequests(state, appA.id, 'B').length > 0, 'New organization obtains its own menu query')
     state.release(appA.id)
@@ -386,11 +393,13 @@ try {
     await page.keyboard.press('Escape'); await navigate(page, '/dashboard'); await page.getByText('我的应用', { exact: true }).waitFor()
     assert.equal(await page.getByText('旧组织私有入口', { exact: true }).count(), 0)
     assert.deepEqual(state.entries, []); assert.deepEqual(state.contextRequests, [])
-    assert.equal(await page.evaluate(() => window.__phase9Auth.getState().profile.organization.id), 'org-B')
+    assert.equal(await page.evaluate(() => window.__phase9Auth.getState().profile.organization.id), replacement.organization)
     const cached = await page.evaluate(() => window.__phase9QueryClient.getQueryCache().getAll().filter(query => query.queryKey[0] === 'auth-menus').map(query => ({ key: query.queryKey, data: query.state.data })))
     assert(!JSON.stringify(cached).includes(appA.basePath + '/home'), 'Old menu bytes never enter current query cache')
-    emit('cross-org-ignored-abort', { oldNativeResponses: old, currentOrganization: 'org-B', entries: state.entries, contextRequests: state.contextRequests, cache: cached })
+    emit('identity-ignored-abort', { oldNativeResponses: old, currentOrganization: replacement.organization, membershipId: state.profile.membershipId,
+      identityVersion: state.profile.identityVersion, entries: state.entries, contextRequests: state.contextRequests, cache: cached })
   })
+  }
   console.log(`Phase9 navigation browser checks: ${count} passed`)
 } finally {
   if (browser) await browser.close()

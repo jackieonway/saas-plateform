@@ -1,0 +1,7 @@
+{
+  "target": "application",
+  "id": "00000000-0000-7000-8000-000000000001",
+  "allowedMemberTypes": ["EMPLOYEE"],
+  "accessPolicyVersion": 1,
+  "reason": "示例：按已批准的应用用途将准入收紧为员工；实际执行须填写真实原因与当前版本"
+}

@@ -5,6 +5,8 @@ import path from "node:path"
 import vm from "node:vm"
 import { createRequire } from "node:module"
 import { fileURLToPath } from "node:url"
+import { contextIdentityKey } from "../src/lib/context-identity.ts"
+import { identity } from "./helpers/session-fixture.mjs"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const require = createRequire(path.join(root, "package.json"))
@@ -177,12 +179,16 @@ test("landing selection ignores directories, buttons, links, invisible menus and
 
 function hookFixture({ landing, permissionFailure = false }) {
   const app = { id: "selected", code: "orders", basePath: landing.startsWith("/micro/") ? "/micro/orders" : "/system" }
+  const proof = identity(), namespace = contextIdentityKey(proof)
   const state = { token: "token", contextEpoch: 1, contextSwitching: false, currentApplicationId: null,
-    profile: { user: { id: "u" }, tenant: { id: "t" }, organization: { id: "o" }, platformContext: false, applications: [app] },
+    identity: proof, contextKey: namespace,
+    profile: { user: { id: proof.userId }, tenant: { id: proof.tenantId }, organization: { id: proof.organizationId },
+      membershipId: proof.membershipId, memberType: proof.memberType, identityVersion: proof.identityVersion, accountVersion: proof.accountVersion,
+      platformContext: false, applications: [app] },
     setCurrentApplication: (id) => { state.currentApplicationId = id } }
   const useAuthStore = selector => selector(state); useAuthStore.getState = () => state
   const calls = [], navigations = [], cache = new Map()
-  const keys = { menus: (id, epoch) => ["auth-menus", id, epoch], permissions: epoch => ["permissions", epoch] }
+  const keys = { menus: (id, namespace, epoch) => ["auth-menus", id, namespace, epoch], permissions: (namespace, epoch) => ["permissions", namespace, epoch] }
   const queryClient = {
     fetchQuery: async options => {
       const key = JSON.stringify(options.queryKey); calls.push(options.kind)
@@ -198,9 +204,9 @@ function hookFixture({ landing, permissionFailure = false }) {
     "@tanstack/react-query": { useQueryClient: () => queryClient }, sonner: { toast: { error() {} } },
     "@/stores/auth": { useAuthStore }, "@/hooks/use-authorized-paths": { useAuthorizedPaths: () => ({}) },
     "@/lib/auth-queries": {
-      captureAuthSession: () => ({ epoch: state.contextEpoch, identity: "u:t:o" }), authQueryKeys: keys,
-      authMenusQueryOptions: (id, session) => ({ kind: "menus", queryKey: keys.menus(id, session.epoch) }),
-      authPermissionsQueryOptions: session => ({ kind: "permissions", queryKey: keys.permissions(session.epoch) }),
+      captureAuthSession: () => ({ epoch: state.contextEpoch, identity: proof, namespace, profileReady: true }), authQueryKeys: keys,
+      authMenusQueryOptions: (id, session) => ({ kind: "menus", queryKey: keys.menus(id, session.namespace, session.epoch) }),
+      authPermissionsQueryOptions: session => ({ kind: "permissions", queryKey: keys.permissions(session.namespace, session.epoch) }),
     },
   }
   const loaded = new Map()

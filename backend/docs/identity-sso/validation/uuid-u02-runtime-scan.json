@@ -1,0 +1,94 @@
+{
+  "phase": "UUID-U02",
+  "runtime_rust_v4_generator_hits": 0,
+  "remaining_rust_hits_explicit_negative_tests": [
+    {
+      "path": "saas-plateform/backend/src/app_token.rs",
+      "line": 181,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "Uuid::new_v4(),"
+    },
+    {
+      "path": "saas-plateform/backend/src/micro_proxy.rs",
+      "line": 538,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "uuid::Uuid::new_v4().to_string(),"
+    },
+    {
+      "path": "saas-plateform/backend/src/oauth_issuance_tests.rs",
+      "line": 332,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "let h = Harness::create_with_user(&db.pool, Uuid::new_v4()).await?;"
+    },
+    {
+      "path": "saas-plateform/backend/src/platform_session_refresh_tests.rs",
+      "line": 383,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "let h = Harness::create_with_user(&db.pool, Uuid::new_v4()).await?;"
+    },
+    {
+      "path": "saas-plateform/backend/src/release_archives/installation/tests.rs",
+      "line": 382,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "let legacy_id = Uuid::new_v4();"
+    },
+    {
+      "path": "saas-plateform/backend/src/session.rs",
+      "line": 362,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "Uuid::new_v4(),"
+    },
+    {
+      "path": "saas-plateform/backend/src/release_tests/database_upgrade.rs",
+      "line": 85,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "Uuid::new_v4(),"
+    },
+    {
+      "path": "saas-plateform/backend/src/release_tests/database_upgrade.rs",
+      "line": 122,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "let old_id = Uuid::new_v4();"
+    },
+    {
+      "path": "saas-plateform/backend/src/util/uuid7.rs",
+      "line": 104,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "Uuid::new_v4(),"
+    },
+    {
+      "path": "saas-plateform/backend/src/util/uuid7.rs",
+      "line": 124,
+      "classification": "explicit_non_v7_rejection_or_legacy_schema_fixture",
+      "code": "let invalid = Uuid::new_v4().to_string();"
+    }
+  ],
+  "historical_migrations": {
+    "saas-plateform": {
+      "tracked_historical_migrations": 11,
+      "modified": 0
+    },
+    "saas-stores": {
+      "tracked_historical_migrations": 2,
+      "modified": 0
+    },
+    "saas-work-orders": {
+      "tracked_historical_migrations": 3,
+      "modified": 0
+    }
+  },
+  "new_migrations": [
+    {
+      "path": "saas-plateform/backend/migrations/0012_uuid_v7.sql",
+      "sha256": "48168286dbbab7f3c68511e9dc0ff019f7285b2856b4bec1d3b4cb262ed81b24"
+    },
+    {
+      "path": "saas-stores/backend/migrations/0003_uuid_v7.sql",
+      "sha256": "d6eac2775227ec16a286959a3a01881d76966e1c112afcc75692c909f764b765"
+    },
+    {
+      "path": "saas-work-orders/backend/migrations/0004_uuid_v7.sql",
+      "sha256": "e9cc16d8cb3cf13fe12c7cff92518d448449a23822d0d6d282a23457d03867d9"
+    }
+  ]
+}

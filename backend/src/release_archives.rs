@@ -358,8 +358,10 @@ mod tests {
         let tar = prepare(&tar_gz_files(files), "tar.gz", "HTML").unwrap();
         assert_eq!(zip.entry, "index.html");
         assert_eq!(zip.resources[0].url, "assets/app.js");
-        let root =
-            std::env::temp_dir().join(format!("micro-archive-test-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!(
+            "micro-archive-test-{}",
+            crate::util::uuid7::new_uuid()
+        ));
         fs::create_dir(&root).unwrap();
         let root_str = root.to_str().unwrap();
         let first = write(&zip, root_str, "sample", "1.0.0").unwrap();

@@ -10,8 +10,11 @@ use crate::error::AppError;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Organization {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub tenant_id: Uuid,
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     pub parent_id: Option<Uuid>,
     pub name: String,
     pub code: String,

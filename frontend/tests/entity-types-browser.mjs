@@ -9,6 +9,7 @@ import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
+import { fixtureUuid, identityForProfile, installLegacyAuthMode, installSession, profileWithIdentity, SESSION_KEY } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.ENTITY_TYPES_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -30,15 +31,18 @@ const types = {
   tenant: [["PERSONAL", "个人"], ["COMPANY", "公司"], ["PUBLIC_INSTITUTION", "事业单位"], ["GOVERNMENT", "政府"], ["OTHER", "其他"]],
   organization: [["COMPANY", "公司"], ["SUBSIDIARY", "子公司"], ["BRANCH", "分公司"], ["STORE", "门店"], ["PUBLIC_INSTITUTION", "事业单位"], ["GOVERNMENT", "政府"], ["OTHER", "其他"]],
 }
-const tenant = { id: "type-tenant", name: "类型验收租户", code: "type-tenant", tenantType: "GOVERNMENT",
+const tenant = { id: fixtureUuid("type-tenant"), name: "类型验收租户", code: "type-tenant", tenantType: "GOVERNMENT",
   contactName: "既有联系人", contactPhone: "13800138000", contactEmail: "existing@example.com",
   status: "ENABLED", isPlatform: false, description: "", expiresAt: null, organizationCount: 2, userCount: 0,
   authorizedAppCount: 0, createdAt: "2026-10-01T00:00:00Z" }
-const rootOrganization = { id: "type-root-org", name: "类型验收根组织", code: "type-root-org", organizationType: "COMPANY",
+const rootOrganization = { id: fixtureUuid("type-root-org"), name: "类型验收根组织", code: "type-root-org", organizationType: "COMPANY",
   contactName: "既有联系人", contactPhone: "13800138000", contactEmail: "existing@example.com",
   tenantId: tenant.id, parentId: null, status: "ENABLED", sortOrder: 0, description: "", expiresAt: null }
-const childOrganization = { ...rootOrganization, id: "type-child-org", name: "类型验收子公司", code: "type-child-org",
+const childOrganization = { ...rootOrganization, id: fixtureUuid("type-child-org"), name: "类型验收子公司", code: "type-child-org",
   organizationType: "SUBSIDIARY", parentId: rootOrganization.id, children: [] }
+const fixtureProfile = profileWithIdentity({ user: { id: fixtureUuid("entity-user"), username: "entity-fixture", realName: "类型验收管理员" },
+  tenant: { ...tenant, isPlatform: true }, organization: { ...rootOrganization, path: rootOrganization.name },
+  platformContext: true, applications: [], memberships: [] })
 const typeField = (kind) => kind === "tenant" ? "tenantType" : "organizationType"
 const typeLabel = (kind) => kind === "tenant" ? "租户类型" : "组织类型"
 const formId = (kind) => kind === "tenant" ? "tenant-form" : "org-form"
@@ -72,8 +76,8 @@ async function fixture(kind, legacy = false, organizationType) {
   if (organizationType) childRecord.organizationType = organizationType
   if (legacy) { delete tenantRecord.tenantType; delete childRecord.organizationType }
   page.on("pageerror", (error) => state.errors.push(error.message))
+  await installSession(context, "test-entity-types-session", identityForProfile(fixtureProfile))
   await context.addInitScript(() => {
-    if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: "test-entity-types-session", refreshToken: null }))
     localStorage.setItem("platform-theme", "light")
   })
   // Disable HMR: a reload would undo the fixture entry's production-page import.
@@ -84,7 +88,7 @@ async function fixture(kind, legacy = false, organizationType) {
     const appImport = /import App from ["']\/src\/App\.tsx(?:\?[^"']*)?["']/
     assert.match(body, appImport, "Mount the production page from the real Vite entry.")
     body = body.replace(appImport, `import App from "/src/pages/system/${kind === "tenant" ? "tenants/TenantsPage" : "organizations/OrganizationsPage"}.tsx"`)
-    body = body.replace("ReactDOM.createRoot", `import { authStore as entityFixtureAuthStore } from "/src/stores/auth.ts";\nentityFixtureAuthStore.setState({ profile: { tenant: { id: "${tenant.id}", isPlatform: true } } });\nReactDOM.createRoot`)
+    body = body.replace("ReactDOM.createRoot", `import { authStore as entityFixtureAuthStore } from "/src/stores/auth.ts";\nawait entityFixtureAuthStore.getState().initializeSessionCoordination();\nentityFixtureAuthStore.getState().setProfile(${JSON.stringify(fixtureProfile)});\nReactDOM.createRoot`)
     await route.fulfill({ response, body })
   })
   const fulfill = async (route, value, status = 200) => {
@@ -363,18 +367,21 @@ async function verifyExplicitInitialization(kind) {
 
 async function verifyLoginIdentitySelection(sameOrganization, singleMembership = false) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } })
+  await installLegacyAuthMode(context)
   const page = await context.newPage()
   page.setDefaultTimeout(12_000)
   const state = { logins: 0, selections: [], errors: [], unexpected: [] }
-  const first = { userId: "10000000-0000-0000-0000-000000000001", username: "contact-a", realName: "联系人甲",
-    tenantId: "20000000-0000-0000-0000-000000000001", tenantName: "身份验收租户甲",
-    organizationId: "30000000-0000-0000-0000-000000000001", organizationName: "身份验收组织甲", organizationPath: "身份验收组织甲" }
-  const second = { ...first, userId: "10000000-0000-0000-0000-000000000002", username: "contact-b", realName: "联系人乙",
-    ...(sameOrganization ? {} : { tenantId: "20000000-0000-0000-0000-000000000002", tenantName: "身份验收租户乙",
-      organizationId: "30000000-0000-0000-0000-000000000002", organizationName: "身份验收组织乙", organizationPath: "身份验收组织乙" }) }
+  const first = { userId: "10000000-0000-7000-8000-000000000001", username: "contact-a", realName: "联系人甲",
+    tenantId: "20000000-0000-7000-8000-000000000001", tenantName: "身份验收租户甲",
+    organizationId: "30000000-0000-7000-8000-000000000001", organizationName: "身份验收组织甲", organizationPath: "身份验收组织甲",
+    membershipId: fixtureUuid("entity-login-first"), memberType: "EMPLOYEE", identityVersion: "1", status: "ENABLED",
+    consoleSelectable: true, selectionDisabledReason: null }
+  const second = { ...first, userId: "10000000-0000-7000-8000-000000000002", username: "contact-b", realName: "联系人乙", membershipId: fixtureUuid("entity-login-second"),
+    ...(sameOrganization ? {} : { tenantId: "20000000-0000-7000-8000-000000000002", tenantName: "身份验收租户乙",
+      organizationId: "30000000-0000-7000-8000-000000000002", organizationName: "身份验收组织乙", organizationPath: "身份验收组织乙" }) }
   const expected = singleMembership ? first : second
   const manyOrganizations = Array.from({ length: 30 }, (_, index) => ({ ...first,
-    organizationId: `first-tenant-org-${index}`, organizationName: `甲租户分公司 ${index}`,
+    organizationId: fixtureUuid(`first-tenant-org-${index}`), membershipId: fixtureUuid(`first-tenant-member-${index}`), organizationName: `甲租户分公司 ${index}`,
     organizationPath: `${first.organizationName} / 甲租户分公司 ${index}` }))
   const fixtureMemberships = singleMembership ? [first] : sameOrganization ? [first, second] : [first, ...manyOrganizations, second]
   page.on("pageerror", (error) => state.errors.push(error.message))
@@ -400,8 +407,11 @@ async function verifyLoginIdentitySelection(sameOrganization, singleMembership =
       state.selections.push(payload)
       assert.equal(payload.userId, expected.userId)
       assert.equal(payload.organizationId, expected.organizationId)
+      assert.equal(payload.membershipId, expected.membershipId)
       value = { accessToken: "selected-session-fixture", refreshToken: "selected-refresh-fixture",
-        user: { realName: expected.realName }, expiresIn: 3600 }
+        user: { id: expected.userId, username: expected.username, realName: expected.realName },
+        tenant: { id: expected.tenantId }, organization: { id: expected.organizationId },
+        membershipId: expected.membershipId, memberType: expected.memberType, identityVersion: expected.identityVersion, accountVersion: "0", expiresIn: 3600 }
     } else { state.unexpected.push(url.pathname); value = {} }
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(value) })
   })
@@ -420,14 +430,14 @@ async function verifyLoginIdentitySelection(sameOrganization, singleMembership =
     await page.getByText("未找到匹配的租户", { exact: true }).waitFor()
     await tenantSearch.fill("")
     await page.getByRole("button").filter({ hasText: first.tenantName }).click()
-    await page.getByRole("heading", { name: "选择登录组织", exact: true }).waitFor()
+    await page.getByRole("heading", { name: "选择组织与身份", exact: true }).waitFor()
     assert.equal(state.selections.length, 0, "Tenant choice must not establish a business session.")
     await page.getByRole("button", { name: "重新选择租户", exact: true }).click()
     await page.getByRole("heading", { name: "选择登录租户", exact: true }).waitFor()
     assert.equal(state.logins, 1, "Reselecting tenants reuses the verified credential ticket.")
     assert.equal(state.selections.length, 0)
     await page.getByRole("button").filter({ hasText: expected.tenantName }).click()
-    await page.getByRole("heading", { name: "选择登录组织", exact: true }).waitFor()
+    await page.getByRole("heading", { name: "选择组织与身份", exact: true }).waitFor()
     if (!sameOrganization && !singleMembership) {
       assert.equal(await page.getByRole("button").filter({ hasText: "甲租户分公司" }).count(), 0,
         "The organization page only shows memberships in the chosen tenant.")
@@ -442,7 +452,7 @@ async function verifyLoginIdentitySelection(sameOrganization, singleMembership =
     await choice.click()
     await waitState(() => state.selections.length === 1, "The selected account and organization must both be submitted.")
     await page.waitForURL(`${origin}/`)
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("platform-session-v1") || "null")?.refreshToken), "selected-refresh-fixture",
+    assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "null")?.refreshToken, SESSION_KEY), "selected-refresh-fixture",
       "Login should retain the refresh token from the selected context.")
     assert.deepEqual(state.errors, [])
     assert.deepEqual(state.unexpected, [])

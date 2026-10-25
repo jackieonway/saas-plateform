@@ -67,7 +67,10 @@ impl Database {
             .connect_with(options.clone())
             .await
             .map_err(|error| database_error("administration connection", &error))?;
-        let name = format!("platform_settings_test_{}", Uuid::new_v4().simple());
+        let name = format!(
+            "platform_settings_test_{}",
+            crate::util::uuid7::new_uuid().simple()
+        );
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
             .await
@@ -198,21 +201,23 @@ async fn identity(pool: &PgPool, tenant: Uuid, name: &str) -> Result<(Uuid, Uuid
             .fetch_optional(pool)
             .await?;
     let org: Uuid = sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,name,parent_id) VALUES($1,$2,$3) RETURNING id",
+        "INSERT INTO organizations(tenant_id,name,parent_id,id) VALUES($1,$2,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(format!("{name} 组织"))
     .bind(root)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let user: Uuid = sqlx::query_scalar(
-        "INSERT INTO users(username,password_hash) VALUES($1,'isolated-unused-password') RETURNING id",
-    ).bind(name).fetch_one(pool).await?;
+        "INSERT INTO users(username,password_hash,id) VALUES($1,'isolated-unused-password',$2) RETURNING id",
+    ).bind(name).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let membership: Uuid = sqlx::query_scalar(
-        "INSERT INTO memberships(user_id,organization_id) VALUES($1,$2) RETURNING id",
+        "INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3) RETURNING id",
     )
     .bind(user)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     Ok((org, user, membership))
@@ -224,12 +229,15 @@ async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<S
         .fetch_one(pool)
         .await?;
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) \
-         VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
@@ -273,8 +281,8 @@ async fn grant(
     .execute(pool)
     .await?;
     let role: Uuid = sqlx::query_scalar(
-        "INSERT INTO roles(tenant_id,organization_id,name) VALUES($1,$2,'settings-test-role') RETURNING id",
-    ).bind(tenant).bind(org).fetch_one(pool).await?;
+        "INSERT INTO roles(tenant_id,organization_id,name,id) VALUES($1,$2,'settings-test-role',$3) RETURNING id",
+    ).bind(tenant).bind(org).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
         .bind(user)
         .bind(role)
@@ -315,17 +323,17 @@ struct Harness {
 impl Harness {
     async fn create(pool: &PgPool) -> Result<Self> {
         let platform: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code,is_platform) VALUES('初始平台租户','admin-tenant',true) RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,is_platform,id) VALUES('初始平台租户','admin-tenant',true,$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let other_tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code) VALUES('普通租户','settings-other-tenant') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,id) VALUES('普通租户','settings-other-tenant',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let (organization, user, membership) = identity(pool, platform, "settings-admin").await?;
         let (viewer_org, viewer, _) = identity(pool, platform, "settings-viewer").await?;
         let (other_org, other, _) = identity(pool, other_tenant, "settings-other").await?;
         let application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('设置测试','settings-test-app') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,id) VALUES('设置测试','settings-test-app',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let mut menus = Vec::new();
         for permission in [
             "system:settings",
@@ -334,8 +342,8 @@ impl Harness {
             "system:user",
         ] {
             menus.push(sqlx::query_scalar::<_, Uuid>(
-                "INSERT INTO menus(application_id,title,permission,type) VALUES($1,$2,$2,'BUTTON') RETURNING id",
-            ).bind(application).bind(permission).fetch_one(pool).await?);
+                "INSERT INTO menus(application_id,title,permission,type,id) VALUES($1,$2,$2,'BUTTON',$3) RETURNING id",
+            ).bind(application).bind(permission).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?);
         }
         grant(pool, platform, organization, user, application, &menus).await?;
         grant(pool, other_tenant, other_org, other, application, &menus).await?;
@@ -752,10 +760,10 @@ async fn initial_schema_creates_generic_branding_and_preserves_settings_on_resta
         // Exercise the startup menu repair with an actual SQL NULL parent, while
         // skipping the unrelated full catalog COPY in this restart regression.
         let system: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(code,name) VALUES('system','System') RETURNING id",
-        ).fetch_one(&database.pool).await?;
-        sqlx::query("INSERT INTO menus(application_id,parent_id,title,path) VALUES($1,NULL,'Menus','/system/menus')")
-            .bind(system).execute(&database.pool).await?;
+            "INSERT INTO applications(code,name,id) VALUES('system','System',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        sqlx::query("INSERT INTO menus(application_id,parent_id,title,path,id) VALUES($1,NULL,'Menus','/system/menus',$2)")
+            .bind(system).bind(crate::util::uuid7::new_uuid()).execute(&database.pool).await?;
         sqlx::query("INSERT INTO region_versions(version,label,imported) VALUES('2023','2023版',true)")
             .execute(&database.pool).await?;
         crate::region_seed::initialize(&database.pool).await?;

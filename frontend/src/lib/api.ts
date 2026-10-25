@@ -1,8 +1,12 @@
+import { isUuidV7 } from "@/lib/uuid"
 import { authStore, captureSessionFence, captureSessionSignal, reconcileSessionSync } from "@/stores/auth"
 import type { SessionFence } from "@/stores/auth"
 import { sessionCoordinator, SessionCoordinationError, SessionOperationError } from "@/lib/session-coordinator"
+import { bffSessionCoordinator } from "@/lib/bff-session"
 import type { SessionRecord, SessionTokens } from "@/lib/session-coordinator"
 import type { ContextResp } from "@/api/types"
+import { isContextIdentity, requireContextIdentity } from "@/lib/context-identity"
+import type { ContextIdentity } from "@/lib/context-identity"
 
 export class ApiError extends Error {
   constructor(message: string, public code: string, public status: number, public requestId?: string) {
@@ -35,6 +39,7 @@ function contextChanged(): DOMException { return new DOMException("登录上下�
  * avoid recursively acquiring their own lock through request(). */
 async function refreshPair(record: SessionRecord, signal: AbortSignal): Promise<SessionTokens> {
   signal.throwIfAborted()
+  if (!isContextIdentity(record.identity) || record.identity.memberType !== "EMPLOYEE") throw new SessionOperationError("会话成员证明已失效，请重新登录", "invalid", 401)
   if (!record.refreshToken) throw new SessionOperationError("会话已失效，请重新登录", "invalid", 401)
   let response: Response
   try {
@@ -55,11 +60,19 @@ async function refreshPair(record: SessionRecord, signal: AbortSignal): Promise<
   if (typeof data.access_token !== "string" || !data.access_token || typeof data.refresh_token !== "string" || !data.refresh_token) {
     throw new SessionOperationError("会话刷新响应无法确认，请重新登录", "unknown", 502)
   }
-  return { token: data.access_token, refreshToken: data.refresh_token }
+  return { token: data.access_token, refreshToken: data.refresh_token, identity: record.identity }
 }
-let renewal: { sessionId: string | null; version: number; promise: Promise<string> } | null = null
+let renewal: (SessionFence & { promise: Promise<string> }) | null = null
 async function renewSession(fence: SessionFence): Promise<string> {
-  if (renewal?.sessionId === fence.sessionId && renewal.version === fence.version) return renewal.promise
+  if (authStore.getState().authMode === "BFF") {
+    try { return await bffSessionCoordinator.renew(fence) }
+    catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw error
+      const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : 0
+      throw new ApiError(error instanceof Error ? error.message : "认证服务暂时不可用，请重新检查", "BFF_SESSION_RENEWAL_FAILED", status)
+    }
+  }
+  if (renewal?.sessionId === fence.sessionId && renewal.version === fence.version && renewal.contextKey === fence.contextKey) return renewal.promise
   const entry = { ...fence, promise: Promise.resolve("") }
   entry.promise = (async () => {
     try {
@@ -86,7 +99,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   // Capture the caller's view before any await. A queued A mutation must never
   // acquire B's identity merely because a cross-page context operation finishes.
   const invoked = authStore.getState(), epoch = invoked.contextEpoch
-  const fence = sessionFence ?? { sessionId: invoked.sessionId, version: invoked.sessionVersion }
+  const fence = sessionFence ?? { sessionId: invoked.sessionId, version: invoked.sessionVersion, contextKey: invoked.contextKey }
   const lifetime = captureSessionSignal()
   if (platform) {
     reconcileSessionSync()
@@ -94,31 +107,31 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     if (observed.sessionStatus === "unknown" || observed.sessionStatus === "unavailable") {
       throw new SessionCoordinationError(observed.coordinationError ?? "请重新登录", observed.sessionStatus === "unknown" ? "SESSION_UNKNOWN" : "SESSION_UNAVAILABLE")
     }
-    if (observed.contextSwitching || observed.sessionId !== fence.sessionId || observed.contextEpoch !== epoch || observed.sessionStatus === "initializing") throw contextChanged()
+    if (observed.contextSwitching || observed.sessionId !== fence.sessionId || observed.contextKey !== fence.contextKey || observed.contextEpoch !== epoch || observed.sessionStatus === "initializing") throw contextChanged()
   }
   if (platform) await authStore.getState().reconcileSession()
   const initial = authStore.getState()
   const sessionRequest = platform && !!invoked.token
   const requestSignal = sessionRequest ? AbortSignal.any([lifetime, ...(signal ? [signal] : [])]) : signal
-  if (sessionFence && initial.sessionId !== sessionFence.sessionId) throw contextChanged()
+  if (sessionFence && (initial.sessionId !== sessionFence.sessionId || initial.contextKey !== sessionFence.contextKey)) throw contextChanged()
   let token = platform ? initial.token : skipAuth ? null : bearer ?? null
   let sentFence = fence
   const checkContext = async () => {
     if (platform) await authStore.getState().reconcileSession()
     const state = authStore.getState()
-    if (requestSignal?.aborted || (platform && (state.contextEpoch !== epoch || state.sessionId !== fence.sessionId || state.contextSwitching))) throw contextChanged()
+    if (requestSignal?.aborted || (platform && (state.contextEpoch !== epoch || state.sessionId !== fence.sessionId || state.contextKey !== fence.contextKey || state.contextSwitching))) throw contextChanged()
     if (platform && (state.sessionStatus === "unknown" || state.sessionStatus === "unavailable")) {
       throw new SessionCoordinationError(state.coordinationError ?? "请重新登录", state.sessionStatus === "unknown" ? "SESSION_UNKNOWN" : "SESSION_UNAVAILABLE")
     }
   }
   const send = async (): Promise<Response> => {
     await checkContext()
-    if (sessionRequest) { const state = authStore.getState(); token = state.token; sentFence = { sessionId: state.sessionId, version: state.sessionVersion } }
+    if (sessionRequest) { const state = authStore.getState(); token = state.token; sentFence = { sessionId: state.sessionId, version: state.sessionVersion, contextKey: state.contextKey } }
     const headers: Record<string, string> = { Accept: "application/json" }
     if (body !== undefined) headers["Content-Type"] = "application/json"
     if (rawBody !== undefined && contentType) headers["Content-Type"] = contentType
     if (token) headers.Authorization = `Bearer ${token}`
-    try { return await fetch(path, { method, headers, body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined), signal: requestSignal }) }
+    try { return await fetch(path, { method, headers, credentials: "same-origin", body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined), signal: requestSignal }) }
     catch (error) {
       await checkContext()
       if ((error as Error).name === "AbortError") throw error
@@ -127,7 +140,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
   let response = await send()
   await checkContext()
-  if (response.status === 401 && sessionRequest && initial.refreshToken) {
+  if (response.status === 401 && sessionRequest && (initial.authMode === "BFF" || initial.refreshToken)) {
     await renewSession(sentFence)
     await checkContext()
     response = await send() // Exactly one retry, using the latest complete pair.
@@ -149,29 +162,34 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       if (await authStore.getState().logout(fence)) redirectToLogin()
     }
     const candidate = response.headers.get("x-request-id")
-    const requestId = candidate && candidate.length === 36 && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate) ? candidate : undefined
+    const requestId = isUuidV7(candidate) ? candidate : undefined
     throw new ApiError(requestId ? `${message}（请求编号：${requestId}）` : message, code, response.status, requestId)
   }
   // A body may have completed after another page changed the logical session.
   // Receipts must obey the same fence as the successful business response.
   await checkContext()
   const candidate = response.headers.get("x-request-id")
-  const requestId = candidate && candidate.length === 36 && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate) ? candidate : undefined
+  const requestId = isUuidV7(candidate) ? candidate : undefined
   onResponse?.({ requestId })
   return data as T
 }
-export async function switchPlatformContext(organizationId: string, expected?: SessionFence): Promise<ContextResp> {
+export async function switchPlatformContext(organizationId: string, membershipId: string, expected?: SessionFence): Promise<ContextResp> {
+  if (!isUuidV7(organizationId) || !isUuidV7(membershipId)) throw new ApiError("请选择有效的具体成员身份", "INVALID_CONTEXT_SELECTION", 400)
+  organizationId = organizationId.toLowerCase()
+  membershipId = membershipId.toLowerCase()
   const invoked = authStore.getState()
-  const fence = expected ?? { sessionId: invoked.sessionId, version: invoked.sessionVersion }
+  const fence = expected ?? { sessionId: invoked.sessionId, version: invoked.sessionVersion, contextKey: invoked.contextKey }
+  if (invoked.authMode === "BFF") return bffSessionCoordinator.selectContext(organizationId, membershipId, fence)
+  if (invoked.authMode !== "LEGACY") throw new SessionCoordinationError("登录方式尚未确认，请稍后重新检查", "SESSION_UNAVAILABLE")
   reconcileSessionSync()
   const observed = authStore.getState()
-  if (observed.sessionId !== fence.sessionId || observed.contextEpoch !== invoked.contextEpoch || observed.contextSwitching) throw contextChanged()
+  if (observed.sessionId !== fence.sessionId || observed.contextKey !== fence.contextKey || observed.contextEpoch !== invoked.contextEpoch || observed.contextSwitching) throw contextChanged()
   await authStore.getState().reconcileSession()
   const result = await sessionCoordinator.operation("context", fence, async ({ record, signal, updateTokens }) => {
     let token = record.token
     const send = () => { signal.throwIfAborted(); return fetch("/api/auth/context", { method: "POST", signal,
       headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ organizationId }),
+      body: JSON.stringify({ organizationId, membershipId }),
     }) }
     let response: Response
     try {
@@ -195,12 +213,20 @@ export async function switchPlatformContext(organizationId: string, expected?: S
     if (!response.ok) throw new SessionOperationError(data.message ?? "组织切换失败",
       response.status === 400 || response.status === 403 || response.status === 404 ? "safe" : response.status === 401 ? "invalid" : "unknown", response.status)
     if (typeof data.accessToken !== "string" || !data.accessToken || typeof data.refreshToken !== "string" || !data.refreshToken) throw new SessionOperationError("组织切换响应无法确认，请重新登录", "unknown", 502)
-    return { value: data, tokens: { token: data.accessToken, refreshToken: data.refreshToken } }
+    let identity: ContextIdentity
+    try { identity = requireContextIdentity(data) } catch {
+      throw new SessionOperationError("成员切换响应缺少有效员工证明，请重新登录", "unknown", 502)
+    }
+    if (identity.organizationId !== organizationId || identity.membershipId !== membershipId) throw new SessionOperationError("成员切换响应与所选身份不符，请重新登录", "unknown", 502)
+    return { value: data, tokens: { token: data.accessToken, refreshToken: data.refreshToken, identity } }
   })
   return result as ContextResp
 }
 /** Remote revoke and local clear share the lock and captured logical identity. */
-export async function logoutPlatformSession(expected = captureSessionFence()): Promise<boolean> {
+export async function logoutPlatformSession(expected = captureSessionFence(), scope: "PLATFORM" | "GLOBAL" = "PLATFORM"): Promise<boolean> {
+  if (authStore.getState().authMode === "BFF") return bffSessionCoordinator.logout(expected, scope)
+  if (authStore.getState().authMode !== "LEGACY") throw new SessionCoordinationError("登录方式尚未确认，请稍后重新检查", "SESSION_UNAVAILABLE")
+  if (scope === "GLOBAL") throw new ApiError("当前登录方式不支持退出所有应用", "GLOBAL_LOGOUT_UNAVAILABLE", 400)
   try {
     const result = await sessionCoordinator.operation("logout", expected, async ({ record, signal, updateTokens }) => {
       let token = record.token

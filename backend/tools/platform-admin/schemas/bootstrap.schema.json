@@ -29,7 +29,8 @@
         "autoCreateMenu",
         "description",
         "sortOrder",
-        "status"
+        "status",
+        "allowedMemberTypes"
       ],
       "properties": {
         "code": {
@@ -66,6 +67,9 @@
         },
         "status": {
           "const": "ENABLED"
+        },
+        "allowedMemberTypes": {
+          "const": ["EMPLOYEE"]
         }
       }
     },
@@ -80,7 +84,9 @@
         "redirectUris",
         "accessTokenValidity",
         "refreshTokenValidity",
-        "provisioning"
+        "provisioning",
+        "subjectMode",
+        "allowedMemberTypes"
       ],
       "properties": {
         "clientName": {
@@ -88,6 +94,12 @@
         },
         "clientType": {
           "const": "CONFIDENTIAL"
+        },
+        "subjectMode": {
+          "const": "MACHINE"
+        },
+        "allowedMemberTypes": {
+          "const": []
         },
         "grantTypes": {
           "const": [

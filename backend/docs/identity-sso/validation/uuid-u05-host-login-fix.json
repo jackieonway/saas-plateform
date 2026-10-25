@@ -1,0 +1,151 @@
+{
+  "format": "saas-uuid-u05-host-login-fix/1",
+  "recorded_at_utc": "2026-10-24T11:03:04Z",
+  "timezone": "Asia/Shanghai",
+  "status": "SOURCE_FIX_AND_ISOLATED_REGRESSIONS_PASSED_REAL_U05_RERUN_PENDING",
+  "scope": "Minimal host router lifetime fix and isolated actual-source frontend regressions. Candidate builds and real U05 runtime acceptance are owned by the separate build and root agents.",
+  "change": {
+    "runtime_source": "frontend/src/main.tsx",
+    "behavior": "BrowserRouter now surrounds SessionStatusGate so navigation callbacks retain the live history listener when a session commit retires the page subtree.",
+    "preserved": [
+      "SessionStatusGate physically remounts private page state when logical session or context epoch changes",
+      "Context epoch changes synchronously cancel and clear the shared QueryClient",
+      "Auth store continues to abort the retired context lifetime and clear profile and selected application",
+      "Ordinary refresh preserves the logical context and page drafts"
+    ],
+    "other_changes": "New real-source login browser suite, bootstrap hierarchy regression, npm entrypoint, full browser runner registration and browser documentation. No LoginPage or backend implementation change."
+  },
+  "source_files": [
+    {
+      "path": "frontend/src/main.tsx",
+      "bytes": 1822,
+      "sha256": "5b2f750e6d994d1f57180946f882cc881f78d94a6cfb589840c9775040d0c9fb"
+    },
+    {
+      "path": "frontend/tests/login-session-browser.mjs",
+      "bytes": 12706,
+      "sha256": "3a8860ebef992f277944c7cfb2f4fca844d46477e4e25af5f42197cf422e422c"
+    },
+    {
+      "path": "frontend/tests/session-integration.mjs",
+      "bytes": 23225,
+      "sha256": "7c4ba889e876e4acc7082ac404feb1cf218a17ae20ff46c45ae62afd0dcbf6ea"
+    },
+    {
+      "path": "frontend/tests/browser/run.mjs",
+      "bytes": 1408,
+      "sha256": "bf49d896553e6e8d83ac0f81b7a218769186859d74434bda23f0a31bf722ba4e"
+    },
+    {
+      "path": "frontend/tests/browser/README.md",
+      "bytes": 5432,
+      "sha256": "dd808be1b392f247b84a011e42fc915dde835007ffa3de4db16a66beadfeacfc"
+    },
+    {
+      "path": "frontend/package.json",
+      "bytes": 5235,
+      "sha256": "d4a0808b9a48b0ad9e86750abbbc96c5cc49acf13d5604c5d305ee0ec6253933"
+    }
+  ],
+  "runtime": {
+    "node": "24.22.1",
+    "browser_product": "msedge",
+    "browser_version": "142.0.3595.94",
+    "playwright_version": "1.64.1",
+    "fixture": "Owned Vite server on a dynamically allocated loopback port, fresh browser contexts, real production main/App/LoginPage/auth coordinator, isolated HTTP responses and suppressed external WebSocket connections. No real credentials, backend, or database used."
+  },
+  "before_fix_reproduction": {
+    "command": "SAAS_TEST_BROWSER=msedge node tests/login-session-browser.mjs",
+    "exit_code": 1,
+    "test_revision": "Initial revision of the added browser regression, before the runtime fix and later isolation assertions. The same protected-layout assertion remains in the final regression.",
+    "navigation_target": "/profile?login-check=1#security",
+    "observed_pathname": "/profile",
+    "login_form_visible": true,
+    "login_http_status": 200,
+    "context_http_status": 200,
+    "profile_requests": 0,
+    "uncaught_page_errors": 0,
+    "failed_assertion": "Accepted login mounts the protected layout and requests profile",
+    "interpretation": "The address changed through the retired router history while the new router still rendered LoginPage. URL-only assertions do not detect this defect."
+  },
+  "after_fix_login_browser": {
+    "command": "SAAS_TEST_BROWSER=msedge node tests/login-session-browser.mjs",
+    "exit_code": 0,
+    "fresh_ui_login_scenarios": 2,
+    "passed": 2,
+    "failed": 0,
+    "scenarios": [
+      {
+        "name": "Explicit encoded return path, query and hash",
+        "assertions": [
+          "Anonymous browser uses the actual credential form, tenant selection and organization selection",
+          "Accepted context is followed by a profile request using the committed platform session",
+          "Address exactly matches the requested protected path, query and hash; protected navigation renders and the login form disappears",
+          "A real 401 response followed by one OAuth refresh preserves context epoch, cache, private draft and the original input DOM node",
+          "Actual switchContext replaces the organization, unmounts the old private input node, renders an empty form and clears the prior private cache",
+          "The real sidebar still navigates to dashboard after the organization switch"
+        ]
+      },
+      {
+        "name": "Default dashboard and actual UI logout",
+        "assertions": [
+          "Fresh UI login without a return parameter renders dashboard and requests profile",
+          "User menu logout completes the actual logout request and renders the login form at the login address",
+          "Protected navigation is absent and the auth store is anonymous after logout"
+        ]
+      }
+    ],
+    "uncaught_page_errors": 0
+  },
+  "after_fix_late_response_browser": {
+    "command": "SAAS_TEST_BROWSER=msedge PHASE9_BROWSER_FILTER='cross organization rejects' node tests/phase9-navigation-browser.mjs",
+    "source": "frontend/tests/phase9-navigation-browser.mjs",
+    "source_sha256": "7cba07d0edc1af15664f517c59296100762586db4dfe4e7e7118feee1014dbbf",
+    "exit_code": 0,
+    "passed": 1,
+    "failed": 0,
+    "assertions": [
+      "The prior context request receives its actual late HTTP 200 response even though its native abort has been detached",
+      "Production still receives the real signal and aborts the retired context before the response arrives",
+      "The old menu never enters the current query cache or visible palette/recent navigation",
+      "No old micro-application entry or app-context request is made"
+    ],
+    "uncaught_page_errors": 0
+  },
+  "checks": {
+    "targeted_session_tests": { "command": "node --test tests/session-integration.mjs tests/session-coordinator.mjs tests/session-refresh.mjs", "passed": 63, "failed": 0 },
+    "full_frontend_tests": { "command": "npm test", "exit_code": 0, "passed": 398, "failed": 0, "skipped": 0 },
+    "typecheck": { "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json", "exit_code": 0 },
+    "sdk": { "command": "node scripts/check-sdk.mjs", "exit_code": 0, "result": "Pinned SDK artifacts verified" },
+    "lint": { "command": "node node_modules/eslint/bin/eslint.js src vite.config.ts", "exit_code": 0, "errors": 0, "warnings": 47, "warning_scope": "Existing warnings in other files; this fix only changes main.tsx runtime source and adds no lint warning." },
+    "diff_whitespace": { "command": "git diff --check -- frontend/src/main.tsx frontend/tests/session-integration.mjs frontend/tests/browser/run.mjs frontend/tests/browser/README.md frontend/package.json", "exit_code": 0 },
+    "new_test_syntax": { "command": "node --check frontend/tests/login-session-browser.mjs", "exit_code": 0 }
+  },
+  "independent_review": {
+    "status": "PASSED_READ_ONLY_REVIEW",
+    "conclusion": "Router placement matches the installed react-router history listener lifetime, preserves existing private subtree retirement, and needs no LoginPage change."
+  },
+  "real_u05_attempt02_context": {
+    "source": "Root and frontend build agents' private browser-validation-02 evidence; independently reported to the repair agent",
+    "evidence_sha256": "23db330f001ceed0e167ecff880c20fa217d5ebb7582d4333ee91852e5bed29b",
+    "login_http_status": 200,
+    "context_http_status": 200,
+    "shared_session_active": true,
+    "observed_pathname": "/",
+    "login_form_still_visible": true,
+    "welcome_toast_visible": true,
+    "profile_requests": 0,
+    "uncaught_page_errors": 0,
+    "failed_network_requests": 0,
+    "interpretation": "Real U05 attempt02 identifies the same old-router notification defect. This record does not claim the repaired source has passed real U05 runtime acceptance."
+  },
+  "execution_boundary": {
+    "build_run_by_repair_agent": false,
+    "existing_frontend_dist_modified_by_repair_agent": false,
+    "frozen_runtime_static_modified_by_repair_agent": false,
+    "real_login_run_by_repair_agent_for_this_fix": false,
+    "real_service_started_or_stopped_by_repair_agent_for_this_fix": false,
+    "ledger_modified_by_repair_agent_for_this_fix": false,
+    "next_owner": "The frontend build agent produces the independent r2 host candidate; the root agent coordinates runtime publication and real U05 browser rerun."
+  }
+}

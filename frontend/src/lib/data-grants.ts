@@ -1,3 +1,4 @@
+import { isUuidV7 } from "@/lib/uuid"
 import type {
   DataGrantCapability, DataGrantChange, DataGrantKey, DataGrantOptions,
   DataGrantPreview, DataGrantRow, DataGrantScope, DataGrantSnapshot,
@@ -7,7 +8,6 @@ import type {
 export type DataGrantDraft = Record<string, DataGrantScope | null>
 
 const SCOPES: readonly DataGrantScope[] = ["SELF", "ORG", "ORG_SUBTREE", "TENANT"]
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const VERSION = /^[0-9a-f]{64}$/
 const IDENTIFIER = /^[a-z][a-z0-9_-]{0,99}$/
 const TARGET_FIELDS = ["tenantId", "organizationId", "userId", "membershipId", "applicationId"] as const
@@ -30,7 +30,7 @@ function identifier(value: unknown): string {
   return typeof value === "string" && value.trim() === value && IDENTIFIER.test(value) ? value : invalid()
 }
 function uuid(value: unknown): string {
-  if (typeof value !== "string" || value.length !== 36 || !UUID.test(value) || value.toLowerCase() === "00000000-0000-0000-0000-000000000000") invalid()
+  if (typeof value !== "string" || value.length !== 36 || !isUuidV7(value) || value.toLowerCase() === "00000000-0000-0000-0000-000000000000") invalid()
   return value.toLowerCase()
 }
 function version(value: unknown): string { return typeof value === "string" && value.length === 64 && VERSION.test(value) ? value : invalid() }

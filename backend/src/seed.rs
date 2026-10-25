@@ -91,7 +91,7 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         .bind(&hashes)
         .execute(&mut *tx)
         .await?;
-    let tenant = scalar_uuid(&mut tx, "INSERT INTO tenants(name,code,description,is_platform) VALUES('平台管理租户','admin-tenant','平台控制层',true) RETURNING id").await?;
+    let tenant = scalar_uuid(&mut tx, "INSERT INTO tenants(name,code,description,is_platform, id) VALUES('平台管理租户','admin-tenant','平台控制层',true, $1) RETURNING id").await?;
     let root = insert_org(&mut tx, tenant, None, "平台总部", "HQ", 1, "平台管理组织").await?;
     let system = insert_app(&mut tx, "system", "系统管理", "LayoutGrid", "/system", 1).await?;
     let hermes = insert_app(&mut tx, "hermes", "消息中心", "MessageSquare", "/hermes", 2).await?;
@@ -303,7 +303,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     // 平台租户: 全库唯一 (初始化 SQL 部分唯一索引约束), 可跨租户管理
     let tenant = scalar_uuid(
         &mut tx,
-        "INSERT INTO tenants (name, code, description, is_platform) VALUES ('平台管理租户', 'admin-tenant', '多租户多层级组织多应用权限演示平台', true) RETURNING id",
+        "INSERT INTO tenants (name, code, description, is_platform, id) VALUES ('平台管理租户', 'admin-tenant', '多租户多层级组织多应用权限演示平台', true, $1) RETURNING id",
     )
     .await?;
 
@@ -1031,7 +1031,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     // 平台租户可管理全部租户; 星辰制造的管理员只能管理本租户内的组织/用户/角色
     let star = scalar_uuid(
         &mut tx,
-        "INSERT INTO tenants (name, code, description) VALUES ('星辰制造', 'star-mfg', '演示普通租户: 仅能管理自己租户内的数据') RETURNING id",
+        "INSERT INTO tenants (name, code, description, id) VALUES ('星辰制造', 'star-mfg', '演示普通租户: 仅能管理自己租户内的数据', $1) RETURNING id",
     )
     .await?;
     let star_root = insert_org(&mut tx, star, None, "星辰集团", "STAR", 1, "星辰制造总部").await?;
@@ -1141,7 +1141,10 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 }
 
 async fn scalar_uuid(tx: &mut Transaction<'_, Postgres>, sql: &str) -> anyhow::Result<Uuid> {
-    Ok(sqlx::query_scalar(sql).fetch_one(&mut **tx).await?)
+    Ok(sqlx::query_scalar(sql)
+        .bind(crate::util::uuid7::new_uuid())
+        .fetch_one(&mut **tx)
+        .await?)
 }
 
 /// Called only by fresh bootstrap. Existing installations must register and
@@ -1211,14 +1214,14 @@ async fn insert_app(
     sort: i32,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO applications (code, name, icon, base_path, sort_order) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        "INSERT INTO applications (code, name, icon, base_path, sort_order, id, allowed_member_types, access_policy_version) VALUES ($1, $2, $3, $4, $5, $6, ARRAY['EMPLOYEE']::TEXT[], 1) RETURNING id",
     )
     .bind(code)
     .bind(name)
     .bind(icon)
     .bind(base_path)
     .bind(sort)
-    .fetch_one(&mut **tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut **tx)
     .await?)
 }
 
@@ -1237,8 +1240,8 @@ async fn insert_menu(
     visible: bool,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO menus (application_id, parent_id, type, title, path, component, icon, permission, sort_order, visible) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+        "INSERT INTO menus (application_id, parent_id, type, title, path, component, icon, permission, sort_order, visible, id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
     )
     .bind(app)
     .bind(parent)
@@ -1250,7 +1253,7 @@ async fn insert_menu(
     .bind(permission)
     .bind(sort)
     .bind(visible)
-    .fetch_one(&mut **tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut **tx)
     .await?)
 }
 
@@ -1264,7 +1267,7 @@ async fn insert_org(
     desc: &str,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations (tenant_id, parent_id, name, code, sort_order, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+        "INSERT INTO organizations (tenant_id, parent_id, name, code, sort_order, description, id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
     )
     .bind(tenant)
     .bind(parent)
@@ -1272,7 +1275,7 @@ async fn insert_org(
     .bind(code)
     .bind(sort)
     .bind(desc)
-    .fetch_one(&mut **tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut **tx)
     .await?)
 }
 
@@ -1285,14 +1288,14 @@ async fn insert_dept(
     sort: i32,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO departments (organization_id, parent_id, name, code, sort_order) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        "INSERT INTO departments (organization_id, parent_id, name, code, sort_order, id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
     )
     .bind(org)
     .bind(parent)
     .bind(name)
     .bind(code)
     .bind(sort)
-    .fetch_one(&mut **tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut **tx)
     .await?)
 }
 
@@ -1309,8 +1312,8 @@ async fn insert_user(
 ) -> anyhow::Result<Uuid> {
     let hash = password::hash_password(password)?;
     Ok(sqlx::query_scalar(
-        "INSERT INTO users (username, password_hash, real_name, email, phone, gender, is_super_admin) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+        "INSERT INTO users (username, password_hash, real_name, email, phone, gender, is_super_admin, id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
     )
     .bind(username)
     .bind(&hash)
@@ -1319,7 +1322,7 @@ async fn insert_user(
     .bind(phone)
     .bind(gender)
     .bind(is_super)
-    .fetch_one(&mut **tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut **tx)
     .await?)
 }
 
@@ -1330,12 +1333,12 @@ async fn insert_membership(
     dept: Option<Uuid>,
     position: &str,
 ) -> anyhow::Result<()> {
-    sqlx::query("INSERT INTO memberships (user_id, organization_id, department_id, position) VALUES ($1, $2, $3, $4)")
+    sqlx::query("INSERT INTO memberships (user_id, organization_id, department_id, position, member_type, id) VALUES ($1, $2, $3, $4, 'EMPLOYEE', $5)")
         .bind(user)
         .bind(org)
         .bind(dept)
         .bind(position)
-        .execute(&mut **tx)
+        .bind(crate::util::uuid7::new_uuid()).execute(&mut **tx)
         .await?;
     Ok(())
 }
@@ -1350,7 +1353,7 @@ async fn insert_role(
     built_in: bool,
 ) -> anyhow::Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO roles (tenant_id, organization_id, name, code, description, built_in) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+        "INSERT INTO roles (tenant_id, organization_id, name, code, description, built_in, id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
     )
     .bind(tenant)
     .bind(org)
@@ -1358,7 +1361,7 @@ async fn insert_role(
     .bind(code)
     .bind(desc)
     .bind(built_in)
-    .fetch_one(&mut **tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut **tx)
     .await?)
 }
 
@@ -1461,8 +1464,8 @@ async fn insert_client(
     let secret_hash = secret.map(hash::sha256_hex);
     sqlx::query(
         "INSERT INTO oauth_clients \
-         (client_id, client_secret_hash, client_name, description, client_type, redirect_uris, grant_types, scopes, access_token_validity, refresh_token_validity) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+         (client_id, client_secret_hash, client_name, description, client_type, redirect_uris, grant_types, scopes, access_token_validity, refresh_token_validity, id, subject_mode, allowed_member_types, access_policy_version) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1)",
     )
     .bind(client_id)
     .bind(secret_hash)
@@ -1474,6 +1477,9 @@ async fn insert_client(
     .bind(scopes)
     .bind(access_validity)
     .bind(refresh_validity)
+    .bind(crate::util::uuid7::new_uuid())
+    .bind(if grant_types == "client_credentials" { "MACHINE" } else { "USER" })
+    .bind(if grant_types == "client_credentials" { Vec::<String>::new() } else { vec!["EMPLOYEE".to_string()] })
     .execute(&mut **tx)
     .await?;
     Ok(())

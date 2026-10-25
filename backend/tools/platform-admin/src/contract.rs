@@ -183,6 +183,11 @@ impl KnownApp {
 }
 pub(crate) fn is_uuid(value: &str) -> bool {
     value.len() == 36
+        && value.as_bytes()[14] == b'7'
+        && matches!(
+            value.as_bytes()[19],
+            b'8' | b'9' | b'a' | b'b' | b'A' | b'B'
+        )
         && value.bytes().enumerate().all(|(index, byte)| {
             if [8, 13, 18, 23].contains(&index) {
                 byte == b'-'
@@ -300,4 +305,24 @@ pub(crate) fn rows(value: &Value) -> Result<&Vec<Value>, SafeError> {
     value
         .as_array()
         .ok_or_else(|| SafeError::new("INVALID_CONTRACT"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn management_id_fields_require_rfc_uuid_v7() {
+        for id in [
+            "00000000-0000-0000-0000-000000000000",
+            "00000000-0000-4000-8000-000000000001", // deliberate legacy input
+            "00000000-0000-7000-c000-000000000001",
+            "../path",
+        ] {
+            assert!(!is_uuid(id));
+            assert!(uuid_field(&serde_json::json!({"id":id}), "id", "INVALID_CONTRACT").is_err());
+        }
+        assert!(is_uuid("00000000-0000-7000-8000-000000000001"));
+        assert!(is_uuid("ABCDEF00-0000-7000-A000-ABCDEF000001"));
+    }
 }

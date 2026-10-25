@@ -12,11 +12,11 @@ pub fn build_tree(items: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
         let id = v
             .get("id")
             .and_then(|x| x.as_str())
-            .and_then(|s| Uuid::parse_str(s).ok());
+            .and_then(|s| crate::util::uuid7::parse_uuid(s).ok());
         let pid = v
             .get("parentId")
             .and_then(|x| x.as_str())
-            .and_then(|s| Uuid::parse_str(s).ok());
+            .and_then(|s| crate::util::uuid7::parse_uuid(s).ok());
         if let Some(id) = id {
             if !nodes.contains_key(&id) {
                 ordered_ids.push(id);
@@ -75,7 +75,7 @@ mod tests {
     use serde_json::{json, Value};
 
     fn node(id: u128, parent: Option<u128>) -> Value {
-        json!({"id": Uuid::from_u128(id), "parentId": parent.map(Uuid::from_u128)})
+        json!({"id": crate::util::uuid7::fixture_uuid(id), "parentId": parent.map(crate::util::uuid7::fixture_uuid)})
     }
 
     #[test]
@@ -89,11 +89,14 @@ mod tests {
         ];
         for _ in 0..32 {
             let tree = build_tree(items.clone());
-            assert_eq!(tree[0]["id"], json!(Uuid::from_u128(30)));
-            assert_eq!(tree[1]["id"], json!(Uuid::from_u128(20)));
+            assert_eq!(tree[0]["id"], json!(crate::util::uuid7::fixture_uuid(30)));
+            assert_eq!(tree[1]["id"], json!(crate::util::uuid7::fixture_uuid(20)));
             let children = tree[0]["children"].as_array().unwrap();
             let ids: Vec<_> = children.iter().map(|node| node["id"].clone()).collect();
-            assert_eq!(ids, [13, 12, 11].map(|id| json!(Uuid::from_u128(id))));
+            assert_eq!(
+                ids,
+                [13, 12, 11].map(|id| json!(crate::util::uuid7::fixture_uuid(id)))
+            );
         }
     }
 
@@ -114,12 +117,15 @@ mod tests {
             node(4, None),
         ]);
         assert_eq!(tree.len(), 2);
-        assert_eq!(tree[0]["id"], json!(Uuid::from_u128(4)));
-        assert_eq!(tree[1]["id"], json!(Uuid::from_u128(1)));
-        assert_eq!(tree[1]["children"][0]["id"], json!(Uuid::from_u128(2)));
+        assert_eq!(tree[0]["id"], json!(crate::util::uuid7::fixture_uuid(4)));
+        assert_eq!(tree[1]["id"], json!(crate::util::uuid7::fixture_uuid(1)));
+        assert_eq!(
+            tree[1]["children"][0]["id"],
+            json!(crate::util::uuid7::fixture_uuid(2))
+        );
         assert_eq!(
             tree[1]["children"][0]["children"],
-            json!([{"id": Uuid::from_u128(3), "parentId": Uuid::from_u128(2), "children": []}])
+            json!([{"id": crate::util::uuid7::fixture_uuid(3), "parentId": crate::util::uuid7::fixture_uuid(2), "children": []}])
         );
     }
 }

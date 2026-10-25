@@ -6,6 +6,7 @@ import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser } from './browser/runtime.mjs'
+import { fixtureUuid, profileWithIdentity, identityForProfile, installSession, sessionRecord } from './browser/identity-fixture.mjs'
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const screenshotDir = path.resolve(process.env.MICRO_SETUP_SCREENSHOT_DIR || path.join(workspace, 'local-micro-setup-qa'))
@@ -13,16 +14,17 @@ const bindHost = process.env.MICRO_SETUP_BROWSER_BIND || (process.platform === '
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done }); return { promise, resolve } }
 const ids = {
-  system: '00000000-0000-4000-8000-000000000001',
-  app: '00000000-0000-4000-8000-000000000002',
-  tenant: '00000000-0000-4000-8000-000000000003',
-  org: '00000000-0000-4000-8000-000000000004',
-  role: '00000000-0000-4000-8000-000000000005',
-  menu: '00000000-0000-4000-8000-000000000006',
-  release: '00000000-0000-4000-8000-000000000007',
+  system: '00000000-0000-7000-8000-000000000001',
+  app: '00000000-0000-7000-8000-000000000002',
+  tenant: '00000000-0000-7000-8000-000000000003',
+  org: '00000000-0000-7000-8000-000000000004',
+  role: '00000000-0000-7000-8000-000000000005',
+  menu: '00000000-0000-7000-8000-000000000006',
+  release: '00000000-0000-7000-8000-000000000007',
 }
 const system = { id: ids.system, code: 'system', name: '系统管理', icon: 'Settings2', basePath: '/system', status: 'ENABLED', menuCount: 1, entryType: 'HTML', runtimeMode: 'TRUSTED', sortOrder: 0 }
 const application = { id: ids.app, code: 'crm', name: '客户管理', icon: 'Contact', basePath: '/micro/crm', status: 'ENABLED', menuCount: 1, entryType: 'HTML', runtimeMode: 'TRUSTED', entryUrl: '/sub-apps/crm/unreleased/index.html', sortOrder: 1 }
+const actor = { user: fixtureUuid('micro-setup-user'), tenant: fixtureUuid('micro-setup-platform'), organization: fixtureUuid('micro-setup-root') }
 const permissions = ['system:application', 'system:tenant', 'system:organization', 'system:authorization', 'system:role', 'system:menu']
 const pageResult = records => ({ records, total: records.length, page: 1, size: 200 })
 const menu = app => ({ id: ids.menu, parentId: null, applicationId: app.id, type: 'MENU', title: app.name + '首页', path: app.basePath, icon: 'Home', permission: '', sortOrder: 0, visible: true, linkUrl: '', children: [], authorized: false })
@@ -55,13 +57,20 @@ async function fixture(run, options = {}) {
   const page = await context.newPage()
   page.setDefaultTimeout(15_000)
   const state = { apps: [structuredClone(system), structuredClone(application)], releases: [], deployments: [], urlEntries: [], grants: [], creates: [], errors: [], routeErrors: [], requests: [], accessConfigured: false, ...options }
-  page.on('pageerror', error => state.errors.push(error.message))
-  await context.addInitScript(() => {
-    if (window.parent !== window) return
-    localStorage.setItem('platform-session-v1', JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: 'active', token: 'micro-setup-fixture-session', refreshToken: null }))
-    localStorage.setItem('platform-theme', 'light')
-    localStorage.setItem('platform-current-app', '00000000-0000-4000-8000-000000000001')
+  const profile = () => profileWithIdentity({
+    user: { id: actor.user, username: 'fixture-admin', realName: '平台管理员', email: '', phone: '', avatar: '', gender: 'UNKNOWN', isSuperAdmin: true },
+    tenant: { id: actor.tenant, name: '平台管理', code: 'admin-tenant', isPlatform: true }, platformContext: true,
+    organization: { id: actor.organization, name: '平台管理组织', path: `/${actor.organization}/` }, applications: state.micro ? [system, state.apps[1]] : [system],
+    memberships: [{ tenantId: actor.tenant, tenantName: '平台管理', organizationId: actor.organization, organizationName: '平台管理组织', organizationPath: `/${actor.organization}/` }],
   })
+  page.on('pageerror', error => state.errors.push(error.message))
+  const proof = identityForProfile(profile())
+  await installSession(context, 'micro-setup-fixture-session', proof)
+  await context.addInitScript(({ namespace, systemId }) => {
+    if (window.parent !== window) return
+    localStorage.setItem('platform-theme', 'light')
+    localStorage.setItem(`platform-current-app-v2:${namespace}`, systemId)
+  }, { namespace: sessionRecord('micro-setup-fixture-session', proof).contextKey, systemId: ids.system })
   await context.routeWebSocket(/\/socket\.io\//, socket => socket.close())
   const fulfill = (route, value, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(value) })
   await context.route(url => url.origin === origin && url.pathname.startsWith('/api/'), async route => {
@@ -70,12 +79,7 @@ async function fixture(run, options = {}) {
       state.requests.push({ method, path: url.pathname, query: url.search })
       if (url.pathname === '/api/platform/branding') return fulfill(route, { platformName: '企业工作台', platformDescription: '统一应用工作空间', logoUrl: '', loginTitle: '登录', loginDescription: '', footerText: '' })
       assert.equal(request.headers().authorization, /^\/api\/apps\//.test(url.pathname) ? 'Bearer micro-application-fixture-token' : 'Bearer micro-setup-fixture-session')
-      if (url.pathname === '/api/auth/profile') return fulfill(route, {
-        user: { id: 'fixture-user', username: 'fixture-admin', realName: '平台管理员', email: '', phone: '', avatar: '', gender: 'UNKNOWN', isSuperAdmin: true },
-        tenant: { id: 'fixture-platform', name: '平台管理', code: 'admin-tenant', isPlatform: true }, platformContext: true,
-        organization: { id: 'fixture-root', name: '平台管理组织', path: '/fixture-root/' }, applications: state.micro ? [system, state.apps[1]] : [system],
-        memberships: [{ tenantId: 'fixture-platform', tenantName: '平台管理', organizationId: 'fixture-root', organizationName: '平台管理组织', organizationPath: '/fixture-root/' }],
-      })
+      if (url.pathname === '/api/auth/profile') return fulfill(route, profile())
       if (url.pathname === '/api/auth/permissions') return fulfill(route, { permissions, roles: [] })
       if (url.pathname === '/api/auth/menus') return fulfill(route, state.micro && url.searchParams.get('applicationId') === ids.app ? [menu(state.apps[1])] : [{ id: 'applications-menu', parentId: null, type: 'MENU', title: '应用管理', path: '/system/applications', icon: 'Boxes', permission: 'system:application', sortOrder: 0, visible: true, children: [] }])
       if (url.pathname === '/api/oauth/session-token') {
@@ -88,8 +92,8 @@ async function fixture(run, options = {}) {
         const app = state.apps[1]
         return fulfill(route, { contractVersion: '1.0', contextVersion: 'micro-layout-v1', appCode: 'crm', expiresAt: new Date(Date.now() + 60_000).toISOString(),
           application: { id: app.id, name: app.name, runtimeMode: app.runtimeMode, entryType: app.entryType, entryUrl: app.entryUrl, deploymentVersion: app.deploymentVersion, entryVersionId: app.entryVersionId },
-          user: { id: 'fixture-user', username: 'fixture-admin', displayName: '平台管理员' }, tenant: { id: 'fixture-platform', name: '平台管理', code: 'admin-tenant' },
-          organization: { id: 'fixture-root', name: '平台管理组织', path: '/fixture-root/' }, organizationScopeIds: ['fixture-root'], roles: [], permissions: [], dataGrants: [], menus: [menu(app)] })
+          user: { id: actor.user, username: 'fixture-admin', displayName: '平台管理员' }, tenant: { id: actor.tenant, name: '平台管理', code: 'admin-tenant' },
+          organization: { id: actor.organization, name: '平台管理组织', path: `/${actor.organization}/` }, organizationScopeIds: [actor.organization], roles: [], permissions: [], dataGrants: [], menus: [menu(app)] })
       }
       if (url.pathname === '/api/apps/crm/runtime-events') return fulfill(route, { ok: true })
       if (url.pathname === '/api/notifications/unread-count') return fulfill(route, { count: 0 })
@@ -218,6 +222,29 @@ async function shot(page, name) {
   const file = path.join(screenshotDir, `micro-setup-${name}.png`)
   await page.screenshot({ path: file, fullPage: true, animations: 'disabled' })
   console.log('SCREENSHOT ' + file)
+}
+async function settledSheetLayout(page) {
+  const layout = await page.getByRole('dialog').evaluate(async element => {
+    const deadline = performance.now() + 5000
+    let previous = '', stableFrames = 0, snapshot
+    do {
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      const rect = element.getBoundingClientRect(), style = getComputedStyle(element)
+      const animations = element.getAnimations({ subtree: true }).filter(animation =>
+        (animation.pending || animation.playState === 'running') && Number.isFinite(animation.effect?.getComputedTiming().endTime))
+      snapshot = { bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        viewport: { width: window.innerWidth, height: window.innerHeight }, scrollWidth: document.documentElement.scrollWidth,
+        computed: { width: style.width, maxWidth: style.maxWidth, transform: style.transform },
+        animations: animations.map(animation => ({ name: animation.animationName ?? animation.transitionProperty ?? 'animation', playState: animation.playState, pending: animation.pending })) }
+      const current = JSON.stringify(snapshot.bounds)
+      stableFrames = animations.length === 0 && current === previous ? stableFrames + 1 : 0
+      previous = current
+      if (stableFrames >= 3) return { ...snapshot, stable: true }
+    } while (performance.now() < deadline)
+    return { ...snapshot, stable: false }
+  })
+  assert(layout.stable, 'The onboarding sheet must finish its finite animations and reach stable bounds: ' + JSON.stringify(layout))
+  return layout
 }
 async function accessTarget(page) {
   await page.getByLabel('访问租户', { exact: true }).click()
@@ -373,12 +400,13 @@ const scenarios = {
   mobile_layout: () => fixture(async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByRole('navigation', { name: '应用接入步骤' }).waitFor()
-    const bounds = await page.getByRole('dialog').boundingBox()
-    assert(bounds && bounds.x >= 0 && bounds.width <= 390, 'The onboarding sheet must fit the mobile viewport.')
+    const layout = await settledSheetLayout(page), { bounds } = layout
+    assert(bounds && bounds.x >= 0 && bounds.width <= 390, 'The onboarding sheet must fit the mobile viewport: ' + JSON.stringify(layout))
     await page.getByRole('button', { name: '继续配置入口', exact: true }).click()
     await page.getByRole('heading', { name: '配置应用入口', exact: true }).waitFor()
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
-    assert.equal(overflow, false, 'Mobile onboarding must not overflow horizontally.')
+    const releaseLayout = await settledSheetLayout(page)
+    const overflow = releaseLayout.scrollWidth > releaseLayout.viewport.width
+    assert.equal(overflow, false, 'Mobile onboarding must not overflow horizontally: ' + JSON.stringify(releaseLayout))
     await shot(page, 'mobile')
   }, { startPath: `/system/applications?setup=${ids.app}&step=overview` }),
 

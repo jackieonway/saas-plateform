@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::routing::get;
@@ -9,8 +10,11 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser, RequirePermission};
+use crate::identity_policy::MemberType;
 use crate::state::AppState;
 use crate::util::audit;
+
+use super::admission_policy::{self, PolicyUpdate};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -18,6 +22,10 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/api/applications/{id}",
             get(get_one).put(update).delete(delete),
+        )
+        .route(
+            "/api/applications/{id}/access-policy",
+            get(get_policy).put(update_policy),
         )
 }
 
@@ -37,18 +45,21 @@ struct ApplicationRow {
     description: String,
     sort_order: i32,
     status: String,
+    allowed_member_types: Vec<String>,
+    access_policy_version: i64,
     created_at: DateTime<Utc>,
     menu_count: i64,
 }
 
 const LIST_SELECT: &str = "SELECT a.id, a.code, a.name, COALESCE(a.icon,'') AS icon, COALESCE(a.base_path,'') AS base_path, \
- a.entry_type, COALESCE(a.entry_url,'') AS entry_url, a.runtime_mode, COALESCE(a.description,'') AS description, a.sort_order, a.status, a.created_at, \
+ a.entry_type, COALESCE(a.entry_url,'') AS entry_url, a.runtime_mode, COALESCE(a.description,'') AS description, a.sort_order, a.status, a.allowed_member_types, a.access_policy_version, a.created_at, \
  (SELECT count(*) FROM menus m WHERE m.application_id = a.id) AS menu_count";
 
 fn audit_summary(row: &ApplicationRow) -> Value {
     json!({"id":row.id,"name":row.name,"code":row.code,"entryType":row.entry_type,
         "entryConfigured":!row.entry_url.is_empty(),"runtimeMode":row.runtime_mode,
-        "status":row.status,"sortOrder":row.sort_order,"menuCount":row.menu_count})
+        "status":row.status,"sortOrder":row.sort_order,"menuCount":row.menu_count,
+        "allowedMemberTypes":row.allowed_member_types,"accessPolicyVersion":row.access_policy_version})
 }
 
 async fn locked_application(
@@ -96,7 +107,7 @@ async fn get_one(
         .await?;
     state.require_platform(&user).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let row: ApplicationRow = sqlx::query_as(&format!(
         "{LIST_SELECT} FROM applications a WHERE a.id = $1"
@@ -131,6 +142,8 @@ struct ApplicationBody {
     sort_order: i32,
     #[serde(default = "default_status")]
     status: String,
+    #[serde(default, deserialize_with = "admission_policy::present_value")]
+    allowed_member_types: Option<Vec<MemberType>>,
 }
 
 fn default_status() -> String {
@@ -284,13 +297,26 @@ async fn create(
         body.entry_url.as_str()
     };
     let entry_url = validate_entry_url(micro, raw_entry_url)?;
+    let allowed_member_types = admission_policy::member_strings(
+        body.allowed_member_types
+            .unwrap_or_else(|| vec![MemberType::Employee]),
+        false,
+    )?;
     let mut tx = state.pool.begin().await?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     let mut row: ApplicationRow = sqlx::query_as(
-        "INSERT INTO applications (code, name, icon, base_path, entry_type, entry_url, description, sort_order, status, runtime_mode) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+        "INSERT INTO applications (code, name, icon, base_path, entry_type, entry_url, description, sort_order, status, runtime_mode, id, allowed_member_types) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
          RETURNING id, code, name, COALESCE(icon,'') AS icon, COALESCE(base_path,'') AS base_path, \
          entry_type, COALESCE(entry_url,'') AS entry_url, runtime_mode, COALESCE(description,'') AS description, \
-         sort_order, status, created_at, 0::bigint AS menu_count",
+         sort_order, status, allowed_member_types, access_policy_version, created_at, 0::bigint AS menu_count",
     )
     .bind(code)
     .bind(&name)
@@ -302,17 +328,18 @@ async fn create(
     .bind(body.sort_order)
     .bind(&body.status)
     .bind(&body.runtime_mode)
-    .fetch_one(&mut *tx)
+    .bind(crate::util::uuid7::new_uuid())
+    .bind(&allowed_member_types).fetch_one(&mut *tx)
     .await?;
     if body.auto_create_menu {
         let inserted = sqlx::query(
-            "INSERT INTO menus (application_id, type, title, path, sort_order, visible, link_target) \
-             VALUES ($1, 'MENU', $2, $3, 1, true, 'MICRO')",
+            "INSERT INTO menus (application_id, type, title, path, sort_order, visible, link_target, id) \
+             VALUES ($1, 'MENU', $2, $3, 1, true, 'MICRO', $4)",
         )
         .bind(row.id)
         .bind(&name)
         .bind(format!("/micro/{code}"))
-        .execute(&mut *tx)
+        .bind(crate::util::uuid7::new_uuid()).execute(&mut *tx)
         .await?;
         if inserted.rows_affected() != 1 {
             return Err(AppError::Server(anyhow::anyhow!(
@@ -346,6 +373,12 @@ async fn create(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ApplicationUpdate {
+    #[serde(default, deserialize_with = "admission_policy::present_value")]
+    allowed_member_types: Option<Vec<MemberType>>,
+    #[serde(default)]
+    access_policy_version: Option<i64>,
+    #[serde(default)]
+    reason: Option<String>,
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
@@ -366,6 +399,54 @@ struct ApplicationUpdate {
     status: Option<String>,
 }
 
+fn policy_json(row: &Value) -> Value {
+    json!({"id":row["id"],"status":row["status"],
+        "allowedMemberTypes":row["allowedMemberTypes"],"accessPolicyVersion":row["accessPolicyVersion"]})
+}
+
+async fn get_policy(
+    state: State<AppState>,
+    user: CurrentUser,
+    id: Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let Json(row) = get_one(state, user, id).await?;
+    Ok(Json(policy_json(&row)))
+}
+
+async fn update_policy(
+    state: State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+    id: Path<String>,
+    ApiJson(body): ApiJson<PolicyUpdate>,
+) -> Result<Json<Value>, AppError> {
+    if body.subject_mode.is_some() {
+        return Err(AppError::bad_request("应用准入不接受 subjectMode"));
+    }
+    let Json(row) = update(
+        state,
+        headers,
+        user,
+        id,
+        ApiJson(ApplicationUpdate {
+            allowed_member_types: Some(body.allowed_member_types),
+            access_policy_version: Some(body.access_policy_version),
+            reason: Some(body.reason),
+            name: None,
+            icon: None,
+            base_path: None,
+            entry_type: None,
+            entry_url: None,
+            runtime_mode: None,
+            description: None,
+            sort_order: None,
+            status: None,
+        }),
+    )
+    .await?;
+    Ok(Json(policy_json(&row)))
+}
+
 /// PUT /api/applications/{id}
 async fn update(
     State(state): State<AppState>,
@@ -379,7 +460,7 @@ async fn update(
         .await?;
     state.require_platform(&user).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(mode) = &body.runtime_mode {
         authorize_runtime_mode(&state, &user, mode).await?;
@@ -401,7 +482,41 @@ async fn update(
     // entry_url: 键缺省 = 不更新; 显式传值(含空串) = 按目标 entry_type 校验后更新
     let new_entry_url = body.entry_url.as_ref().map(|url| url.trim().to_owned());
     let mut tx = state.pool.begin().await?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     let before = locked_application(&mut tx, id).await?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    RequirePermission("system:application")
+        .check(&state, &user)
+        .await?;
+    state.require_platform(&user).await?;
+    admission_policy::check_version(
+        body.access_policy_version,
+        before.access_policy_version,
+        body.allowed_member_types.is_some(),
+    )?;
+    let allowed_member_types = body
+        .allowed_member_types
+        .map(|members| admission_policy::member_strings(members, false))
+        .transpose()?;
+    let policy_reason = if allowed_member_types.is_some() {
+        Some(admission_policy::reason(body.reason.as_deref())?)
+    } else {
+        None
+    };
     // 校验合并后的完整配置，覆盖仅修改入口类型、运行模式或挂载路径的补丁。
     let final_type = new_entry_type.as_deref().unwrap_or(&before.entry_type);
     let final_base_path = body.base_path.as_deref().unwrap_or(&before.base_path);
@@ -415,10 +530,10 @@ async fn update(
         "UPDATE applications SET name = COALESCE($2, name), icon = COALESCE($3, icon), \
          base_path = COALESCE($4, base_path), entry_type = COALESCE($5, entry_type), \
          entry_url = COALESCE($6, entry_url), description = COALESCE($7, description), \
-         sort_order = COALESCE($8, sort_order), status = COALESCE($9, status), runtime_mode = COALESCE($10, runtime_mode), updated_at = now() \
+         sort_order = COALESCE($8, sort_order), status = COALESCE($9, status), runtime_mode = COALESCE($10, runtime_mode), allowed_member_types=COALESCE($11,allowed_member_types), updated_at = now() \
          WHERE id = $1 RETURNING id, code, name, COALESCE(icon,'') AS icon, COALESCE(base_path,'') AS base_path, \
          entry_type, COALESCE(entry_url,'') AS entry_url, runtime_mode, COALESCE(description,'') AS description, \
-         sort_order, status, created_at, \
+         sort_order, status, allowed_member_types, access_policy_version, created_at, \
          (SELECT count(*) FROM menus m WHERE m.application_id = applications.id) AS menu_count"
     )
     .bind(id)
@@ -431,12 +546,19 @@ async fn update(
     .bind(body.sort_order)
     .bind(&body.status)
     .bind(&body.runtime_mode)
+    .bind(&allowed_member_types)
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("应用不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let mut after = audit_summary(&row);
+    if before.access_policy_version != row.access_policy_version {
+        crate::credential_binding::revoke_application_policy_in_tx(&mut tx, id).await?;
+    }
+    if let Some(reason) = policy_reason {
+        after["reason"] = json!(reason);
+    }
     let changed_fields: Vec<&str> = [
         ("name", before.name != row.name),
         ("icon", before.icon != row.icon),
@@ -447,6 +569,10 @@ async fn update(
         ("description", before.description != row.description),
         ("sortOrder", before.sort_order != row.sort_order),
         ("status", before.status != row.status),
+        (
+            "allowedMemberTypes",
+            before.allowed_member_types != row.allowed_member_types,
+        ),
     ]
     .into_iter()
     .filter_map(|(field, changed)| changed.then_some(field))
@@ -486,10 +612,30 @@ async fn delete(
         .await?;
     state.require_platform(&user).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     let before = locked_application(&mut tx, id).await?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    RequirePermission("system:application")
+        .check(&state, &user)
+        .await?;
+    state.require_platform(&user).await?;
     let (_name,): (String,) =
         sqlx::query_as("DELETE FROM applications WHERE id = $1 RETURNING name")
             .bind(id)

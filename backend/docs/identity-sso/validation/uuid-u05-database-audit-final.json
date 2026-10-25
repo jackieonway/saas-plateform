@@ -1,0 +1,1822 @@
+{
+  "format": "saas-uuid-u05-database-audit/1",
+  "status": "PASS",
+  "recorded_at_utc": "2026-10-24T11:22:30.929001+00:00",
+  "scope": "Fixed local U04 targets after U05 business/browser writes; source fences observed through maintenance catalog",
+  "method": "runuser postgres; psql -X with no inherited PG settings; four bounded REPEATABLE READ READ ONLY transactions; ROLLBACK",
+  "database_writes": 0,
+  "business_uuid_or_row_values_disclosed": false,
+  "inputs": {
+    "u04_summary_sha256": "3539a671d37d6c9c0fb6445cc72a72d71b10eb370d930f46fccefa0b1bd79408",
+    "startup_diagnostic_sha256": "d5f7459b7a99b2184bcb5d28c39d32a16b6d92d56dbcc75586c751afb52694c7",
+    "schema_query_sha256": "204b5d744b099f2eda02fa363f5c54d3379da75753ae4673474017e6fb51ade2"
+  },
+  "source_fences": {
+    "sources": [
+      {
+        "database": "qiankun_orders_preview_20261024",
+        "active_backends": 0,
+        "default_read_only": true,
+        "prepared_transactions": 0
+      },
+      {
+        "database": "qiankun_platform_preview_20261024",
+        "active_backends": 0,
+        "default_read_only": true,
+        "prepared_transactions": 0
+      },
+      {
+        "database": "qiankun_stores_preview_20261024",
+        "active_backends": 0,
+        "default_read_only": true,
+        "prepared_transactions": 0
+      }
+    ],
+    "isolation": "repeatable read",
+    "source_roles": [
+      {
+        "name": "qiankun_notification_preview_20261024",
+        "login": false,
+        "superuser": false
+      },
+      {
+        "name": "qiankun_preview_20261024",
+        "login": false,
+        "superuser": false
+      }
+    ],
+    "identity_valid": true,
+    "transaction_read_only": true
+  },
+  "targets": [
+    {
+      "service": "platform",
+      "database": "qiankun_platform_uuid7_u04_20261024",
+      "database_oid_matches_u04": true,
+      "owner_oid_matches_u04": true,
+      "owner_nologin": true,
+      "owner_non_superuser": true,
+      "database_default_read_only": true,
+      "import_marker_matches_u04": true,
+      "raw_schema_sha256": "a11665c8c4a4282bf406a54cb61b82105fc9ea2c077b1ff717c9947eed47e3af",
+      "raw_schema_items": 1541,
+      "uuid_columns": 107,
+      "uuid_array_columns": 0,
+      "uuid_domain_columns": 0,
+      "nonnull_uuid_values": 3008,
+      "invalid_uuid_values": 0,
+      "uuid_defaults": 0,
+      "uuid_column_scans": [
+        {
+          "table": "application_deployments",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_deployments",
+          "column": "active_release_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_deployments",
+          "column": "previous_release_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_deployments",
+          "column": "updated_by",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_release_artifacts",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_release_operations",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_release_operations",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_releases",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_releases",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_releases",
+          "column": "created_by",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_url_entries",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_url_entries",
+          "column": "revision",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "application_url_entries",
+          "column": "updated_by",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "applications",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 10,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "audit_logs",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 297,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "audit_logs",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 299,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "audit_logs",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 297,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "audit_logs",
+          "column": "request_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 301,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "audit_logs",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 207,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "departments",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 6,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "departments",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 6,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "departments",
+          "column": "parent_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_bindings",
+          "column": "release_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_bindings",
+          "column": "artifact_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_jobs",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_jobs",
+          "column": "artifact_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_jobs",
+          "column": "release_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_jobs",
+          "column": "request_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_jobs",
+          "column": "nonce",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_deployment_jobs",
+          "column": "created_by",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_image_artifacts",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "managed_image_artifacts",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "membership_data_grants",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 12,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "membership_data_grants",
+          "column": "membership_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 12,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "membership_data_grants",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 12,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "memberships",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 9,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "memberships",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 9,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "memberships",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 9,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "memberships",
+          "column": "department_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "menus",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 61,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "menus",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 61,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "menus",
+          "column": "parent_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 43,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notification_prefs",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notification_publications",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notification_publications",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notification_publications",
+          "column": "publisher_organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notification_publications",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notification_publications",
+          "column": "publisher_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notifications",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notifications",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notifications",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notifications",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notifications",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "notifications",
+          "column": "publication_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_authorization_codes",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_authorization_codes",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_authorization_codes",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_authorization_codes",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_authorization_requests",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 3,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_clients",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 14,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_clients",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_device_codes",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_device_codes",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_device_codes",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_device_codes",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_tokens",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 49,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_tokens",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 48,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_tokens",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 48,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_tokens",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 48,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_tokens",
+          "column": "jti",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 44,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_tokens",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 38,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "oauth_tokens",
+          "column": "platform_session_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 38,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "organization_applications",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 23,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "organization_applications",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 23,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "organization_menus",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 124,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "organization_menus",
+          "column": "menu_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 124,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "organizations",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 8,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "organizations",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 8,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "organizations",
+          "column": "parent_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 6,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "platform_session_refresh_tokens",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 33,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "platform_session_refresh_tokens",
+          "column": "session_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 33,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "platform_sessions",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 31,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "platform_sessions",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 31,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "platform_sessions",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 31,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "platform_sessions",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 31,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "role_menus",
+          "column": "role_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 111,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "role_menus",
+          "column": "menu_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 111,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "roles",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "roles",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "roles",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "tenant_applications",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 12,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "tenant_applications",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 12,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "tenant_menus",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 71,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "tenant_menus",
+          "column": "menu_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 71,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "tenants",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 2,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "user_roles",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 8,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "user_roles",
+          "column": "role_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 8,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "user_roles",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 8,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "users",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 7,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_jobs",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_jobs",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_jobs",
+          "column": "release_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_jobs",
+          "column": "request_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_jobs",
+          "column": "nonce",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_jobs",
+          "column": "verification_nonce",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_jobs",
+          "column": "created_by",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "zip_distribution_nodes",
+          "column": "job_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        }
+      ],
+      "foreign_keys": 64,
+      "unvalidated_foreign_keys": 0,
+      "disabled_triggers": 0,
+      "migration_count": 12,
+      "migration_versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "migration_checksums_match_formal_source_or_exact_legacy_allowlist": true,
+      "migration_history_sha256": "fafb909d120a1c52a21e220e988b1e174de28dfdaf9835bb98d3b4645945ed5d",
+      "runtime_role_matrix": [
+        {
+          "login": true,
+          "exists": true,
+          "connect": true,
+          "service": "notification",
+          "unprivileged": true,
+          "select_tables": 1,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": "on"
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": true,
+          "service": "platform",
+          "unprivileged": true,
+          "select_tables": 40,
+          "full_dml_tables": 39,
+          "writable_tables": 39,
+          "configured_read_only": "off",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": "off"
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "stores",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "work_orders",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        }
+      ],
+      "task_rows": {
+        "zip_distribution_jobs": 0,
+        "zip_distribution_nodes": 0,
+        "managed_deployment_jobs": 0,
+        "application_release_operations": 0
+      },
+      "transaction": "REPEATABLE READ READ ONLY",
+      "search_path": "pg_catalog",
+      "server_version_num": 180006
+    },
+    {
+      "service": "stores",
+      "database": "qiankun_stores_uuid7_u04_20261024",
+      "database_oid_matches_u04": true,
+      "owner_oid_matches_u04": true,
+      "owner_nologin": true,
+      "owner_non_superuser": true,
+      "database_default_read_only": true,
+      "import_marker_matches_u04": true,
+      "raw_schema_sha256": "2d989b86b44b7f597aef31bfadf5b3eae3b697364e2fd5030cb32fc676cda550",
+      "raw_schema_items": 228,
+      "uuid_columns": 23,
+      "uuid_array_columns": 0,
+      "uuid_domain_columns": 0,
+      "nonnull_uuid_values": 34,
+      "invalid_uuid_values": 0,
+      "uuid_defaults": 0,
+      "uuid_column_scans": [
+        {
+          "table": "store_audit_events",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 4,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_audit_events",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 4,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_audit_events",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 4,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_audit_events",
+          "column": "actor_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 4,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_audit_events",
+          "column": "entity_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 4,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_audit_events",
+          "column": "request_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 4,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_daily_reports",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_daily_reports",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_daily_reports",
+          "column": "store_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_daily_reports",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_daily_reports",
+          "column": "owner_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_staff",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_staff",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_staff",
+          "column": "store_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_staff",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_staff",
+          "column": "owner_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_staff",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "store_staff",
+          "column": "created_by_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "stores",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "stores",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "stores",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "stores",
+          "column": "owner_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "stores",
+          "column": "manager_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        }
+      ],
+      "foreign_keys": 2,
+      "unvalidated_foreign_keys": 0,
+      "disabled_triggers": 0,
+      "migration_count": 3,
+      "migration_versions": [
+        1,
+        2,
+        3
+      ],
+      "migration_checksums_match_formal_source_or_exact_legacy_allowlist": true,
+      "migration_history_sha256": "aa2fb18623dcf21787191fbe6f65cd5e3a1101cb109a9a08d75046a18c92a697",
+      "runtime_role_matrix": [
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "notification",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "platform",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": true,
+          "service": "stores",
+          "unprivileged": true,
+          "select_tables": 8,
+          "full_dml_tables": 4,
+          "writable_tables": 4,
+          "configured_read_only": "off",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": "off"
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "work_orders",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        }
+      ],
+      "task_rows": {},
+      "transaction": "REPEATABLE READ READ ONLY",
+      "search_path": "pg_catalog",
+      "server_version_num": 180006
+    },
+    {
+      "service": "work_orders",
+      "database": "qiankun_orders_uuid7_u04_20261024",
+      "database_oid_matches_u04": true,
+      "owner_oid_matches_u04": true,
+      "owner_nologin": true,
+      "owner_non_superuser": true,
+      "database_default_read_only": true,
+      "import_marker_matches_u04": true,
+      "raw_schema_sha256": "b8a502cb0e3bcfdd7ed4c00fdfbbf21af1f527feddb5b61bebc4f13859732a3e",
+      "raw_schema_items": 165,
+      "uuid_columns": 17,
+      "uuid_array_columns": 0,
+      "uuid_domain_columns": 0,
+      "nonnull_uuid_values": 16,
+      "invalid_uuid_values": 0,
+      "uuid_defaults": 0,
+      "uuid_column_scans": [
+        {
+          "table": "work_order_counters",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_create_idempotency",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_create_idempotency",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_create_idempotency",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_create_idempotency",
+          "column": "ticket_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_reminder_intents",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_reminder_intents",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_reminder_intents",
+          "column": "application_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_reminder_intents",
+          "column": "user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_reminder_intents",
+          "column": "ticket_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_reminder_intents",
+          "column": "target_organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_order_reminder_intents",
+          "column": "recipient_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_orders",
+          "column": "id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_orders",
+          "column": "tenant_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_orders",
+          "column": "organization_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_orders",
+          "column": "owner_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 1,
+          "has_default": false,
+          "array_layers": 0
+        },
+        {
+          "table": "work_orders",
+          "column": "assignee_user_id",
+          "schema": "public",
+          "domains": [],
+          "invalid": 0,
+          "non_null": 0,
+          "has_default": false,
+          "array_layers": 0
+        }
+      ],
+      "foreign_keys": 1,
+      "unvalidated_foreign_keys": 0,
+      "disabled_triggers": 0,
+      "migration_count": 4,
+      "migration_versions": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "migration_checksums_match_formal_source_or_exact_legacy_allowlist": true,
+      "migration_history_sha256": "c9ee5e0594358896df0d38029bf3d506a24ea217595088c1d4be784961da9e91",
+      "runtime_role_matrix": [
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "notification",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "platform",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": false,
+          "service": "stores",
+          "unprivileged": true,
+          "select_tables": 0,
+          "full_dml_tables": 0,
+          "writable_tables": 0,
+          "configured_read_only": "on",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": null
+        },
+        {
+          "login": true,
+          "exists": true,
+          "connect": true,
+          "service": "work_orders",
+          "unprivileged": true,
+          "select_tables": 6,
+          "full_dml_tables": 4,
+          "writable_tables": 4,
+          "configured_read_only": "off",
+          "ddl_or_owner_reachable": false,
+          "per_database_read_only": "off"
+        }
+      ],
+      "task_rows": {},
+      "transaction": "REPEATABLE READ READ ONLY",
+      "search_path": "pg_catalog",
+      "server_version_num": 180006
+    }
+  ],
+  "totals": {
+    "uuid_columns": 147,
+    "nonnull_uuid_values": 3058,
+    "invalid_uuid_values": 0,
+    "foreign_keys": 67,
+    "unvalidated_foreign_keys": 0,
+    "disabled_triggers": 0
+  },
+  "limitations": [
+    "Each database has a separate read-only snapshot, not a coordinated cross-database snapshot.",
+    "Database defaults remain read-only, while the three dedicated business LOGIN roles intentionally have per-database read_only=off and effective DML. Targets are not claimed to reject every writer.",
+    "Runtime role permissions and configured defaults are catalog observations; no test write is made by this script.",
+    "Schema digests preserve the complete ordered service JSON material, including internal trigger names; they do not include ACLs, which are observed separately in the role matrix.",
+    "Task counts of zero establish the database task-table observation; external agent effects are not contacted or inferred.",
+    "The source gate repeats the named old-role/default-read-only/idle/prepared checks only; it does not claim to repeat the complete U03 export admission observer.",
+    "This audit alone does not prove browser behavior, credential rejection or completion of U05/U06."
+  ]
+}

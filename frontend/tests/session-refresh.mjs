@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { fixture, deferred, json } from './helpers/session-fixture.mjs'
+import { fixture, deferred, json, identity, targetIdentity, contextResponse } from './helpers/session-fixture.mjs'
 
 test('concurrent expired requests share one refresh, retry with rotated token and preserve context', async () => {
   const ready = deferred(), release = deferred(); let refreshes = 0
@@ -16,6 +16,7 @@ test('concurrent expired requests share one refresh, retry with rotated token an
   assert.equal(refreshes, 1); assert.equal(f.state().contextEpoch, epoch)
   assert.equal(f.state().currentApplicationId, 'authorized-app')
   assert.equal(f.record().refreshToken, 'psr_rotated'); assert.equal(f.storage.has('platform-refresh-token'), false)
+  assert.deepEqual(f.record().identity, identity(), 'proof-free refresh responses inherit the original authenticated member identity')
   assert.equal(f.redirects.length, 0)
 })
 
@@ -32,7 +33,7 @@ test('late refresh from previous tenant cannot overwrite or log out a new sessio
   const f = await fixture(async url => { if (url === '/oauth/token') { started.resolve(); await release.promise; return json(200, { access_token: 'old-rotated', refresh_token: 'psr_old' }) } return json(401, {}) })
   const rejected = assert.rejects(f.api.api.get('/api/users'), error => error.name === 'AbortError')
   await started.promise
-  await f.state().setSession('tenant-B-access', 'psr_tenant-B')
+  await f.state().setSession('tenant-B-access', 'psr_tenant-B', undefined, identity())
   release.resolve(); await rejected
   assert.equal(f.state().token, 'tenant-B-access'); assert.equal(f.redirects.length, 0)
   assert.equal(f.record().refreshToken, 'psr_tenant-B')
@@ -69,20 +70,22 @@ test('expired access refreshes inside a context operation without recursively ta
   let switchingDuringRefresh = false
   const f = await fixture(async (url, options) => {
     if (url === '/oauth/token') { switchingDuringRefresh = f.state().contextSwitching; return json(200, { access_token: 'renewed', refresh_token: 'psr_new' }) }
-    return options.headers.Authorization === 'Bearer renewed' ? json(200, { accessToken: 'selected-org', refreshToken: 'psr_selected' }) : json(401, {})
+    return options.headers.Authorization === 'Bearer renewed' ? json(200, contextResponse('selected-org', 'psr_selected')) : json(401, {})
   })
-  const result = await f.api.switchPlatformContext('other-org')
+  const result = await f.api.switchPlatformContext(targetIdentity.organizationId, targetIdentity.membershipId)
   assert.equal(result.accessToken, 'selected-org'); assert.equal(switchingDuringRefresh, true)
   assert.equal(f.state().contextSwitching, false); assert.equal(f.state().token, 'selected-org')
   assert.equal(f.record().refreshToken, 'psr_selected')
 })
 
-test('invalid refresh clears credentials and legacy setToken removes old refresh/app state', async () => {
+test('invalid refresh clears credentials and access-only replacement still requires proven identity', async () => {
   const f = await fixture(async url => json(url === '/oauth/token' ? 400 : 401, {}))
   await assert.rejects(f.api.api.get('/api/users'), error => error.code === 'SESSION_REFRESH_FAILED')
   assert.equal(f.state().token, null); assert.equal(f.state().refreshToken, null)
-  await f.state().setSession('first', 'psr_first'); f.state().setCurrentApplication('app')
-  await f.state().setToken('legacy')
+  await f.state().setSession('first', 'psr_first', undefined, identity()); f.state().setCurrentApplication('app')
+  await assert.rejects(f.state().setToken('unproven'), /成员证明/)
+  assert.equal(f.record().token, 'first'); assert.equal(f.record().refreshToken, 'psr_first')
+  await f.state().setToken('legacy', identity())
   assert.equal(f.state().refreshToken, null); assert.equal(f.state().currentApplicationId, null)
   assert.equal(f.record().token, 'legacy'); assert.equal(f.storage.has('platform-token'), false)
 })
@@ -140,7 +143,7 @@ test('a delayed logout refresh cannot revoke or clear a replacement login', asyn
   })
   const leaving = f.api.logoutPlatformSession()
   await started.promise
-  await f.state().setSession('replacement-access', 'psr_replacement')
+  await f.state().setSession('replacement-access', 'psr_replacement', undefined, identity())
   release.resolve()
   assert.equal(await leaving, false)
   assert.equal(f.record().token, 'replacement-access')

@@ -33,17 +33,19 @@ void sessionStore.getState().initializeSessionCoordination().catch(() => {
   // The coordinator publishes its unavailable/unknown state to the gate.
 });
 
+// Session commits retire page state, while pending navigation keeps the same
+// router and history listener after that retirement.
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <SessionStatusGate>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <BrowserRouter>
+    <BrowserRouter>
+      <SessionStatusGate>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
             <App />
             <Toaster position="top-center" richColors closeButton />
-          </BrowserRouter>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </SessionStatusGate>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </SessionStatusGate>
+    </BrowserRouter>
   </React.StrictMode>
 );

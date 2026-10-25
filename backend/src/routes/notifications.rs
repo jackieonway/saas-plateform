@@ -1,12 +1,13 @@
 use crate::error::AppError;
 use crate::extractors::{bearer_token, ApiJson, CurrentUser, RequirePermission};
+use crate::notification_context::NotificationContext;
 use crate::notifications::{self, valid_type, PublishBody, Publisher, Target};
 use crate::routes::{page_json, paging};
 use crate::state::AppState;
 use crate::util::{audit, jwt};
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::HeaderMap;
-use axum::routing::{delete, get, post, put};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -23,21 +24,30 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/api/notifications/legacy", get(legacy))
         .route("/api/notifications/socket-context", get(socket_context))
+        .route(
+            "/api/internal/notifications/context-proof",
+            get(context_proof),
+        )
         .route("/api/notifications/unread-count", get(unread_count))
         .route("/api/notifications/prefs", get(get_prefs).put(update_prefs))
         .route("/api/notifications/read-all", put(read_all))
         .route("/api/notifications/read-batch", put(read_batch))
         .route("/api/notifications/{id}/read", put(mark_read))
-        .route("/api/notifications/{id}", delete(remove))
+        .route("/api/notifications/{id}", get(detail).delete(remove))
         .layer(DefaultBodyLimit::max(64 * 1024))
 }
 
 // Shared by every inbox operation and per-delivery socket authorization.
 const VISIBLE: &str = "n.user_id=$1 AND n.tenant_id=$2 AND n.organization_id=$3 \
+    AND EXISTS(SELECT 1 FROM platform_sessions s WHERE s.id=$4 \
+    AND s.user_id=n.user_id AND s.tenant_id=n.tenant_id AND s.organization_id=n.organization_id \
+    AND s.membership_id=n.recipient_membership_id AND s.member_type=n.recipient_member_type \
+    AND s.identity_version=n.recipient_identity_version AND platform_session_active(s.id)) \
     AND (n.source_kind='SYSTEM' OR (n.source_kind='APP' AND EXISTS( \
     SELECT 1 FROM applications a JOIN tenant_applications ta ON ta.application_id=a.id AND ta.tenant_id=n.tenant_id \
     JOIN organization_applications oa ON oa.application_id=a.id AND oa.organization_id=n.organization_id \
-    WHERE a.id=n.application_id AND a.status='ENABLED')))";
+    WHERE a.id=n.application_id AND a.status='ENABLED' \
+    AND n.recipient_member_type=ANY(a.allowed_member_types))))";
 
 #[derive(sqlx::FromRow, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,7 +74,7 @@ const COLUMNS: &str = "n.id,n.user_id,n.type,n.title,COALESCE(n.content,'') AS c
 
 async fn list(
     State(state): State<AppState>,
-    user: CurrentUser,
+    user: NotificationContext,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     let (page, size, offset) = paging(&params);
@@ -88,8 +98,8 @@ async fn list(
         )
     };
     let predicate = format!(
-        "{VISIBLE} AND (NOT $4 OR NOT n.is_read) AND ($5='' OR n.type=$5) \
-        AND ($6='' OR n.title ILIKE $6 ESCAPE '\\' OR n.content ILIKE $6 ESCAPE '\\')"
+        "{VISIBLE} AND (NOT $5 OR NOT n.is_read) AND ($6='' OR n.type=$6) \
+        AND ($7='' OR n.title ILIKE $7 ESCAPE '\\' OR n.content ILIKE $7 ESCAPE '\\')"
     );
     let total: i64 = sqlx::query_scalar(&format!(
         "SELECT count(*) FROM notifications n WHERE {predicate}"
@@ -97,6 +107,7 @@ async fn list(
     .bind(user.user_id)
     .bind(user.tenant_id)
     .bind(user.org_id)
+    .bind(user.session_id)
     .bind(unread)
     .bind(type_filter)
     .bind(&pattern)
@@ -104,14 +115,32 @@ async fn list(
     .await?;
     let records: Vec<NotificationRow> = sqlx::query_as(&format!(
         "SELECT {COLUMNS} FROM notifications n LEFT JOIN notification_publications p ON p.id=n.publication_id \
-         WHERE {predicate} ORDER BY n.created_at DESC,n.id LIMIT $7 OFFSET $8"))
-        .bind(user.user_id).bind(user.tenant_id).bind(user.org_id).bind(unread).bind(type_filter).bind(&pattern)
+         WHERE {predicate} ORDER BY n.created_at DESC,n.id LIMIT $8 OFFSET $9"))
+        .bind(user.user_id).bind(user.tenant_id).bind(user.org_id).bind(user.session_id).bind(unread).bind(type_filter).bind(&pattern)
         .bind(size).bind(offset).fetch_all(&state.pool).await?;
+    user.revalidate(&state.pool).await?;
     Ok(Json(page_json(
         records.into_iter().map(|r| json!(r)).collect(),
         total,
         page,
         size,
+    )))
+}
+
+async fn detail(
+    State(state): State<AppState>,
+    user: NotificationContext,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
+    let row: Option<NotificationRow> = sqlx::query_as(&format!(
+        "SELECT {COLUMNS} FROM notifications n LEFT JOIN notification_publications p ON p.id=n.publication_id \
+         WHERE {VISIBLE} AND n.id=$5"))
+        .bind(user.user_id).bind(user.tenant_id).bind(user.org_id).bind(user.session_id).bind(id)
+        .fetch_optional(&state.pool).await?;
+    user.revalidate(&state.pool).await?;
+    Ok(Json(json!(
+        row.ok_or_else(|| AppError::not_found("通知不存在"))?
     )))
 }
 
@@ -126,12 +155,12 @@ async fn legacy(
         .await?;
     let (page, size, offset) = paging(&params);
     let total: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM notifications WHERE source_kind='LEGACY'")
+        sqlx::query_scalar("SELECT count(*) FROM notifications WHERE source_kind='LEGACY' OR recipient_membership_id IS NULL")
             .fetch_one(&state.pool)
             .await?;
     let records: Vec<NotificationRow> = sqlx::query_as(&format!(
         "SELECT {COLUMNS} FROM notifications n LEFT JOIN notification_publications p ON p.id=n.publication_id \
-         WHERE n.source_kind='LEGACY' ORDER BY n.created_at DESC,n.id LIMIT $1 OFFSET $2"))
+         WHERE n.source_kind='LEGACY' OR n.recipient_membership_id IS NULL ORDER BY n.created_at DESC,n.id LIMIT $1 OFFSET $2"))
         .bind(size).bind(offset).fetch_all(&state.pool).await?;
     Ok(Json(page_json(
         records.into_iter().map(|r| json!(r)).collect(),
@@ -144,21 +173,49 @@ async fn legacy(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SocketQuery {
+    #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     notification_id: Option<Uuid>,
 }
 async fn socket_context(
     State(state): State<AppState>,
-    headers: HeaderMap,
-    user: CurrentUser,
+    user: NotificationContext,
     Query(query): Query<SocketQuery>,
 ) -> Result<Json<Value>, AppError> {
+    check_socket_delivery(&state, &user, &query).await?;
+    Ok(Json(
+        json!({ "contractVersion": "1.0", "userId": user.user_id, "tenantId": user.tenant_id,
+        "organizationId": user.org_id, "sessionId": user.session_id, "expiresAt": user.expires_at }),
+    ))
+}
+
+/// Private authority adapter; the published Notification 1 DTO remains unchanged.
+async fn context_proof(
+    State(state): State<AppState>,
+    user: NotificationContext,
+    Query(query): Query<SocketQuery>,
+) -> Result<Json<Value>, AppError> {
+    check_socket_delivery(&state, &user, &query).await?;
+    Ok(Json(
+        json!({"proofVersion":"1", "contractVersion":"1.0", "userId":user.user_id,
+        "tenantId":user.tenant_id, "organizationId":user.org_id,"sessionId":user.session_id,
+        "expiresAt":user.expires_at,"membershipId":user.membership_id,"memberType":user.member_type,
+        "identityVersion":user.identity_version,"accountVersion":user.account_version}),
+    ))
+}
+
+async fn check_socket_delivery(
+    state: &AppState,
+    user: &NotificationContext,
+    query: &SocketQuery,
+) -> Result<(), AppError> {
     if let Some(id) = query.notification_id {
         let visible: bool = sqlx::query_scalar(&format!(
-            "SELECT EXISTS(SELECT 1 FROM notifications n WHERE {VISIBLE} AND n.id=$4)"
+            "SELECT EXISTS(SELECT 1 FROM notifications n WHERE {VISIBLE} AND n.id=$5)"
         ))
         .bind(user.user_id)
         .bind(user.tenant_id)
         .bind(user.org_id)
+        .bind(user.session_id)
         .bind(id)
         .fetch_one(&state.pool)
         .await?;
@@ -166,23 +223,7 @@ async fn socket_context(
             return Err(AppError::not_found("通知不存在"));
         }
     }
-    let token = bearer_token(&headers)?;
-    let claims = jwt::verify(&token, &state.config.jwt_secret)
-        .map_err(|_| AppError::unauthorized("会话已失效"))?;
-    let db_expiry: DateTime<Utc> =
-        sqlx::query_scalar("SELECT expires_at FROM platform_sessions WHERE id=$1")
-            .bind(user.session_id)
-            .fetch_one(&state.pool)
-            .await?;
-    let jwt_expiry = DateTime::<Utc>::from_timestamp(claims.exp, 0)
-        .ok_or_else(|| AppError::unauthorized("会话时效无效"))?;
-    if jwt_expiry <= Utc::now() {
-        return Err(AppError::unauthorized("会话凭证已过期"));
-    }
-    Ok(Json(
-        json!({ "contractVersion": "1.0", "userId": user.user_id, "tenantId": user.tenant_id,
-        "organizationId": user.org_id, "sessionId": user.session_id, "expiresAt": db_expiry.min(jwt_expiry) }),
-    ))
+    user.revalidate(&state.pool).await
 }
 
 async fn app_publish(
@@ -194,7 +235,7 @@ async fn app_publish(
     let token = bearer_token(&headers)?;
     let claims = jwt::verify(&token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("应用凭证无效或已过期"))?;
-    let info = crate::app_token::inspect(&state.pool, &token, &claims)
+    let info = crate::app_token::inspect_authorized(&state, &token, &claims)
         .await?
         .ok_or_else(|| AppError::unauthorized("需要有效应用专用令牌"))?;
     if info.audience != app_code {
@@ -227,6 +268,7 @@ async fn app_publish(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SendBody {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     application_id: Uuid,
     idempotency_key: String,
     target: Target,
@@ -280,7 +322,7 @@ async fn send(
 
 async fn unread_count(
     State(state): State<AppState>,
-    user: CurrentUser,
+    user: NotificationContext,
 ) -> Result<Json<Value>, AppError> {
     let count: i64 = sqlx::query_scalar(&format!(
         "SELECT count(*) FROM notifications n WHERE {VISIBLE} AND NOT n.is_read"
@@ -288,54 +330,117 @@ async fn unread_count(
     .bind(user.user_id)
     .bind(user.tenant_id)
     .bind(user.org_id)
+    .bind(user.session_id)
     .fetch_one(&state.pool)
     .await?;
+    user.revalidate(&state.pool).await?;
     Ok(Json(json!({ "count": count })))
 }
+
+/// Recheck application visibility in a new statement after notification row
+/// locks. A session can stay valid while an application grant is withdrawn.
+async fn revalidate_mutation(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user: &NotificationContext,
+    applications: &[Option<Uuid>],
+) -> Result<(), AppError> {
+    let ids: Vec<Uuid> = applications.iter().flatten().copied().collect();
+    if !ids.is_empty() {
+        let valid: bool = sqlx::query_scalar(
+            "SELECT NOT EXISTS(SELECT 1 FROM unnest($1::uuid[]) requested(id) WHERE NOT EXISTS( \
+             SELECT 1 FROM applications a \
+             JOIN tenant_applications ta ON ta.application_id=a.id AND ta.tenant_id=$2 \
+             JOIN organization_applications oa ON oa.application_id=a.id AND oa.organization_id=$3 \
+             WHERE a.id=requested.id AND a.status='ENABLED' AND $4=ANY(a.allowed_member_types)))",
+        )
+        .bind(&ids)
+        .bind(user.tenant_id)
+        .bind(user.org_id)
+        .bind(&user.member_type)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+        if !valid {
+            return Err(AppError::forbidden("应用通知准入已在操作期间变更"));
+        }
+    }
+    user.revalidate_in_tx(tx).await
+}
+
 async fn mark_read(
     State(state): State<AppState>,
-    user: CurrentUser,
+    user: NotificationContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let n = sqlx::query(&format!("UPDATE notifications n SET is_read=true,read_at=now() WHERE {VISIBLE} AND n.id=$4 AND NOT n.is_read"))
-        .bind(user.user_id).bind(user.tenant_id).bind(user.org_id).bind(id).execute(&state.pool).await?.rows_affected();
-    Ok(Json(json!({ "ok": n>0 })))
+    let id = crate::util::uuid7::validate_uuid(id)?;
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+    let apps: Vec<Option<Uuid>> = sqlx::query_scalar(&format!("UPDATE notifications n SET is_read=true,read_at=now() WHERE {VISIBLE} AND n.id=$5 AND NOT n.is_read RETURNING n.application_id"))
+        .bind(user.user_id).bind(user.tenant_id).bind(user.org_id).bind(user.session_id).bind(id).fetch_all(&mut *tx).await?;
+    revalidate_mutation(&mut tx, &user, &apps).await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "ok": !apps.is_empty() })))
 }
 async fn read_all(
     State(state): State<AppState>,
-    user: CurrentUser,
+    user: NotificationContext,
 ) -> Result<Json<Value>, AppError> {
-    let n = sqlx::query(&format!(
-        "UPDATE notifications n SET is_read=true,read_at=now() WHERE {VISIBLE} AND NOT n.is_read"
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+    let (count, apps): (i64, Vec<Uuid>) = sqlx::query_as(&format!(
+        "WITH changed AS (UPDATE notifications n SET is_read=true,read_at=now() \
+         WHERE {VISIBLE} AND NOT n.is_read RETURNING n.application_id) \
+         SELECT count(*),COALESCE(array_agg(DISTINCT application_id) FILTER(WHERE application_id IS NOT NULL),'{{}}'::uuid[]) FROM changed"
     ))
     .bind(user.user_id)
     .bind(user.tenant_id)
     .bind(user.org_id)
-    .execute(&state.pool)
-    .await?
-    .rows_affected();
-    Ok(Json(json!({ "updated": n })))
+    .bind(user.session_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let apps: Vec<_> = apps.into_iter().map(Some).collect();
+    revalidate_mutation(&mut tx, &user, &apps).await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "updated": count })))
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BatchIdsBody {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize_vec")]
     ids: Vec<Uuid>,
 }
 fn check_batch_ids(ids: &[Uuid]) -> Result<(), AppError> {
     if ids.is_empty() || ids.len() > 100 {
         return Err(AppError::bad_request("ids 数量必须在 1 到 100 之间"));
     }
+    if ids.iter().any(|id| !crate::util::uuid7::is_uuid_v7(*id)) {
+        return Err(AppError::bad_request("通知标识必须是 RFC UUID v7"));
+    }
     Ok(())
 }
 async fn read_batch(
     State(state): State<AppState>,
     headers: HeaderMap,
-    user: CurrentUser,
+    user: NotificationContext,
     ApiJson(body): ApiJson<BatchIdsBody>,
 ) -> Result<Json<Value>, AppError> {
     check_batch_ids(&body.ids)?;
-    let n = sqlx::query(&format!("UPDATE notifications n SET is_read=true,read_at=now() WHERE {VISIBLE} AND n.id=ANY($4) AND NOT n.is_read"))
-        .bind(user.user_id).bind(user.tenant_id).bind(user.org_id).bind(&body.ids).execute(&state.pool).await?.rows_affected();
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+    let apps: Vec<Option<Uuid>> = sqlx::query_scalar(&format!("UPDATE notifications n SET is_read=true,read_at=now() WHERE {VISIBLE} AND n.id=ANY($5) AND NOT n.is_read RETURNING n.application_id"))
+        .bind(user.user_id).bind(user.tenant_id).bind(user.org_id).bind(user.session_id).bind(&body.ids).fetch_all(&mut *tx).await?;
+    revalidate_mutation(&mut tx, &user, &apps).await?;
+    tx.commit().await?;
+    let n = apps.len();
     mutation_audit(
         &state,
         &user,
@@ -349,19 +454,28 @@ async fn read_batch(
 async fn remove(
     State(state): State<AppState>,
     headers: HeaderMap,
-    user: CurrentUser,
+    user: NotificationContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let title: String = sqlx::query_scalar(&format!(
-        "DELETE FROM notifications n WHERE {VISIBLE} AND n.id=$4 RETURNING title"
+    let id = crate::util::uuid7::validate_uuid(id)?;
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+    let (title, app): (String, Option<Uuid>) = sqlx::query_as(&format!(
+        "DELETE FROM notifications n WHERE {VISIBLE} AND n.id=$5 RETURNING n.title,n.application_id"
     ))
     .bind(user.user_id)
     .bind(user.tenant_id)
     .bind(user.org_id)
+    .bind(user.session_id)
     .bind(id)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("通知不存在"))?;
+    revalidate_mutation(&mut tx, &user, &[app]).await?;
+    tx.commit().await?;
     mutation_audit(
         &state,
         &user,
@@ -375,20 +489,28 @@ async fn remove(
 async fn batch_remove(
     State(state): State<AppState>,
     headers: HeaderMap,
-    user: CurrentUser,
+    user: NotificationContext,
     ApiJson(body): ApiJson<BatchIdsBody>,
 ) -> Result<Json<Value>, AppError> {
     check_batch_ids(&body.ids)?;
-    let n = sqlx::query(&format!(
-        "DELETE FROM notifications n WHERE {VISIBLE} AND n.id=ANY($4)"
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| AppError::Unavailable)?;
+    let apps: Vec<Option<Uuid>> = sqlx::query_scalar(&format!(
+        "DELETE FROM notifications n WHERE {VISIBLE} AND n.id=ANY($5) RETURNING n.application_id"
     ))
     .bind(user.user_id)
     .bind(user.tenant_id)
     .bind(user.org_id)
+    .bind(user.session_id)
     .bind(&body.ids)
-    .execute(&state.pool)
-    .await?
-    .rows_affected();
+    .fetch_all(&mut *tx)
+    .await?;
+    revalidate_mutation(&mut tx, &user, &apps).await?;
+    tx.commit().await?;
+    let n = apps.len();
     mutation_audit(
         &state,
         &user,
@@ -401,7 +523,7 @@ async fn batch_remove(
 }
 async fn mutation_audit(
     state: &AppState,
-    user: &CurrentUser,
+    user: &NotificationContext,
     headers: &HeaderMap,
     action: &str,
     detail: &str,
@@ -446,14 +568,17 @@ fn split_muted_types(muted: &str) -> Vec<&str> {
 /// 静态段路由, 与 /api/notifications/{id} 参数路由共存 (同 unread-count / read-all 模式)。
 async fn get_prefs(
     State(state): State<AppState>,
-    user: CurrentUser,
+    user: NotificationContext,
 ) -> Result<Json<Value>, AppError> {
     let row: Option<(bool, String, String, String)> = sqlx::query_as(
-        "SELECT dnd_enabled, dnd_start, dnd_end, muted_types FROM notification_prefs WHERE user_id = $1",
+        "SELECT dnd_enabled, dnd_start, dnd_end, muted_types FROM notification_member_prefs \
+         WHERE membership_id=$1 AND identity_version=$2",
     )
-    .bind(user.user_id)
+    .bind(user.membership_id)
+    .bind(user.identity_version)
     .fetch_optional(&state.pool)
     .await?;
+    user.revalidate(&state.pool).await?;
     let (dnd_enabled, dnd_start, dnd_end, muted) = row.unwrap_or_else(|| {
         (
             PREFS_DEFAULT.0,
@@ -473,7 +598,7 @@ async fn get_prefs(
 
 /// PUT /api/notifications/prefs 请求体
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PrefsBody {
     dnd_enabled: bool,
     dnd_start: String,
@@ -498,7 +623,7 @@ fn valid_hhmm(s: &str) -> bool {
 async fn update_prefs(
     State(state): State<AppState>,
     headers: HeaderMap,
-    user: CurrentUser,
+    user: NotificationContext,
     ApiJson(body): ApiJson<PrefsBody>,
 ) -> Result<Json<Value>, AppError> {
     if !valid_hhmm(&body.dnd_start) || !valid_hhmm(&body.dnd_end) {
@@ -514,19 +639,27 @@ async fn update_prefs(
         }
     }
     let muted_joined = body.muted_types.join(",");
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|_| AppError::Unavailable)?;
     sqlx::query(
-        "INSERT INTO notification_prefs (user_id, dnd_enabled, dnd_start, dnd_end, muted_types) \
-         VALUES ($1, $2, $3, $4, $5) \
-         ON CONFLICT (user_id) DO UPDATE \
-         SET dnd_enabled = $2, dnd_start = $3, dnd_end = $4, muted_types = $5, updated_at = now()",
+        "INSERT INTO notification_member_prefs (membership_id, identity_version, dnd_enabled, dnd_start, dnd_end, muted_types) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (membership_id, identity_version) DO UPDATE \
+         SET dnd_enabled = $3, dnd_start = $4, dnd_end = $5, muted_types = $6, updated_at = now()",
     )
-    .bind(user.user_id)
+    .bind(user.membership_id)
+    .bind(user.identity_version)
     .bind(body.dnd_enabled)
     .bind(&body.dnd_start)
     .bind(&body.dnd_end)
     .bind(&muted_joined)
-    .execute(&state.pool)
+    .execute(&mut *tx)
     .await?;
+    user.revalidate_in_tx(&mut tx).await?;
+    tx.commit().await?;
     let dnd_switch = if body.dnd_enabled { "开" } else { "关" };
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);

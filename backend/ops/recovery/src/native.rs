@@ -22,18 +22,7 @@ pub(crate) fn create_private(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 impl Scratch {
     pub fn new(root: &Path) -> Result<Self> {
-        let meta = io(fs::symlink_metadata(root))?;
-        if !meta.is_dir() || meta.file_type().is_symlink() {
-            return Err(Error("scratch directory required"));
-        }
-        let out = Command::new("findmnt")
-            .args(["-n", "-o", "FSTYPE", "-T"])
-            .arg(root)
-            .output()
-            .map_err(|_| Error("tmpfs check failed"))?;
-        if !out.status.success() || String::from_utf8_lossy(&out.stdout).trim() != "tmpfs" {
-            return Err(Error("plaintext scratch must be tmpfs; no disk fallback"));
-        }
+        require_tmpfs_directory(root)?;
         let nonce = crate::bundle::random()?;
         let name = format!("recovery-{}", crate::bundle::hex(&nonce));
         let dir = root.join(name);
@@ -45,6 +34,21 @@ impl Scratch {
         }
         Ok(Self(dir))
     }
+}
+pub(crate) fn require_tmpfs_directory(root: &Path) -> Result<()> {
+    let meta = io(fs::symlink_metadata(root))?;
+    if !meta.is_dir() || meta.file_type().is_symlink() {
+        return Err(Error("scratch directory required"));
+    }
+    let out = Command::new("findmnt")
+        .args(["-n", "-o", "FSTYPE", "-T"])
+        .arg(root)
+        .output()
+        .map_err(|_| Error("tmpfs check failed"))?;
+    if !out.status.success() || String::from_utf8_lossy(&out.stdout).trim() != "tmpfs" {
+        return Err(Error("plaintext scratch must be tmpfs; no disk fallback"));
+    }
+    Ok(())
 }
 impl Drop for Scratch {
     fn drop(&mut self) {

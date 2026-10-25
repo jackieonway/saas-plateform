@@ -38,29 +38,32 @@ struct Fixture {
 
 async fn create_tenant(pool: &PgPool, code: &str, platform: bool) -> Result<(Uuid, Uuid)> {
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO tenants(name,code,is_platform) VALUES($1,$1,$2) RETURNING id",
+        "INSERT INTO tenants(name,code,is_platform,id) VALUES($1,$1,$2,$3) RETURNING id",
     )
     .bind(code)
     .bind(platform)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
-    let organization =
-        sqlx::query_scalar("INSERT INTO organizations(tenant_id,name) VALUES($1,$2) RETURNING id")
-            .bind(id)
-            .bind(code)
-            .fetch_one(pool)
-            .await?;
+    let organization = sqlx::query_scalar(
+        "INSERT INTO organizations(tenant_id,name,id) VALUES($1,$2,$3) RETURNING id",
+    )
+    .bind(id)
+    .bind(code)
+    .bind(crate::util::uuid7::new_uuid())
+    .fetch_one(pool)
+    .await?;
     Ok((id, organization))
 }
 
 async fn create_role(pool: &PgPool, tenant: Uuid, organization: Uuid, code: &str) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO roles(tenant_id,organization_id,name,code) VALUES($1,$2,$3,$3) RETURNING id",
+        "INSERT INTO roles(tenant_id,organization_id,name,code,id) VALUES($1,$2,$3,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(organization)
     .bind(code)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?)
 }
 
@@ -72,14 +75,15 @@ async fn user_session(
     name: &str,
 ) -> Result<String> {
     let user: Uuid = sqlx::query_scalar(
-        "INSERT INTO users(username,password_hash,is_super_admin) VALUES($1,'test-only-unused-hash',false) RETURNING id",
+        "INSERT INTO users(username,password_hash,is_super_admin,id) VALUES($1,'test-only-unused-hash',false,$2) RETURNING id",
     )
     .bind(name)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
-    sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+    sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
         .bind(user)
         .bind(organization)
+        .bind(crate::util::uuid7::new_uuid())
         .execute(pool)
         .await?;
     sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
@@ -89,12 +93,15 @@ async fn user_session(
         .execute(pool)
         .await?;
     let sid: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(organization)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
@@ -120,9 +127,9 @@ impl Fixture {
     async fn create(pool: &PgPool) -> Result<Self> {
         let (platform, root) = create_tenant(pool, "admin-tenant", true).await?;
         let management: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code,base_path) VALUES('Management','system','/system') RETURNING id",
+            "INSERT INTO applications(name,code,base_path,id) VALUES('Management','system','/system',$1) RETURNING id",
         )
-        .fetch_one(pool)
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
         .await?;
         let admin_role = create_role(pool, platform, root, "setup-admin").await?;
         let limited_role = create_role(pool, platform, root, "setup-reader").await?;
@@ -133,11 +140,11 @@ impl Fixture {
             "system:role",
         ] {
             let menu: Uuid = sqlx::query_scalar(
-                "INSERT INTO menus(application_id,title,type,permission) VALUES($1,$2,'BUTTON',$2) RETURNING id",
+                "INSERT INTO menus(application_id,title,type,permission,id) VALUES($1,$2,'BUTTON',$2,$3) RETURNING id",
             )
             .bind(management)
             .bind(permission)
-            .fetch_one(pool)
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
             .await?;
             sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
                 .bind(platform)
@@ -180,8 +187,8 @@ impl Fixture {
         let role = create_role(pool, tenant, organization, "setup-business-role").await?;
         let _ = user_session(pool, tenant, organization, role, "setup-business-user").await?;
         let managed_role: Uuid = sqlx::query_scalar(
-            "INSERT INTO roles(tenant_id,organization_id,name,code,built_in) VALUES($1,$2,'Managed administrator','tenant_admin',true) RETURNING id",
-        ).bind(tenant).bind(organization).fetch_one(pool).await?;
+            "INSERT INTO roles(tenant_id,organization_id,name,code,built_in,id) VALUES($1,$2,'Managed administrator','tenant_admin',true,$3) RETURNING id",
+        ).bind(tenant).bind(organization).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let (foreign_tenant, foreign_organization) =
             create_tenant(pool, "setup-foreign", false).await?;
         let foreign_role = create_role(
@@ -192,20 +199,20 @@ impl Fixture {
         )
         .await?;
         let application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code,base_path,entry_type,runtime_mode,entry_url) VALUES('Setup demo','setup-demo','/micro/setup-demo','HTML','TRUSTED','/sub-apps/setup-demo/unreleased/index.html') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,base_path,entry_type,runtime_mode,entry_url,id) VALUES('Setup demo','setup-demo','/micro/setup-demo','HTML','TRUSTED','/sub-apps/setup-demo/unreleased/index.html',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let entry_menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,type,path) VALUES($1,'Home','MENU','/micro/setup-demo') RETURNING id",
-        ).bind(application).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,type,path,id) VALUES($1,'Home','MENU','/micro/setup-demo',$2) RETURNING id",
+        ).bind(application).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let button_menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,type,permission) VALUES($1,'Edit','BUTTON','setup:edit') RETURNING id",
-        ).bind(application).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,type,permission,id) VALUES($1,'Edit','BUTTON','setup:edit',$2) RETURNING id",
+        ).bind(application).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let foreign_application: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code,base_path) VALUES('Unrelated','setup-unrelated','/unrelated') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,base_path,id) VALUES('Unrelated','setup-unrelated','/unrelated',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let foreign_menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,type,path) VALUES($1,'Unrelated','MENU','/unrelated') RETURNING id",
-        ).bind(foreign_application).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,type,path,id) VALUES($1,'Unrelated','MENU','/unrelated',$2) RETURNING id",
+        ).bind(foreign_application).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         // This pre-existing chain must survive setup of a different application.
         sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
             .bind(tenant)
@@ -362,9 +369,44 @@ async fn application_setup_preserves_grants_and_reports_real_environment_and_acc
         ensure!(status == StatusCode::OK && setup["access"]["tenantAuthorized"] == true
             && setup["access"]["organizationAuthorized"] == true && setup["access"]["roleAuthorized"] == true
             && setup["access"]["assignedUserCount"] == 1, "target readiness is incorrect: {setup}");
+        // Ancestor role bindings remain valid with only a descendant employee.
+        // Keep the role row while changing this owned fixture's memberships so
+        // the read API must distinguish real support from stale configuration.
+        let business_user: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username='setup-business-user'")
+            .fetch_one(&database.pool).await?;
+        let child = option_organization(&database.pool,h.tenant,h.organization,"Setup employee child",false,false).await?;
+        let child_employee = crate::util::uuid7::new_uuid();
+        let mut moved = database.pool.begin().await?;
+        sqlx::query("DELETE FROM memberships WHERE user_id=$1 AND organization_id=$2 AND member_type='EMPLOYEE'")
+            .bind(business_user).bind(h.organization).execute(&mut *moved).await?;
+        sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type) VALUES($1,$2,$3,'EMPLOYEE')")
+            .bind(child_employee).bind(business_user).bind(child).execute(&mut *moved).await?;
+        moved.commit().await?;
+        let (status, setup) = h.call(&h.admin,Method::GET,&h.setup_path(true),None).await?;
+        ensure!(status==StatusCode::OK && setup["access"]["assignedUserCount"]==1,
+            "descendant employee no longer supported its ancestor role: {status} {setup}");
+        sqlx::query("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1 WHERE id=$1")
+            .bind(child_employee).execute(&database.pool).await?;
+        let (status, setup) = h.call(&h.admin,Method::GET,&h.setup_path(true),None).await?;
+        ensure!(status==StatusCode::OK && setup["access"]["assignedUserCount"]==0,
+            "disabled employee still counted as assigned role support: {status} {setup}");
+        sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type) VALUES($1,$2,$3,'CUSTOMER')")
+            .bind(crate::util::uuid7::new_uuid()).bind(business_user).bind(h.organization).execute(&database.pool).await?;
+        let (status, setup) = h.call(&h.admin,Method::GET,&h.setup_path(true),None).await?;
+        ensure!(status==StatusCode::OK && setup["access"]["assignedUserCount"]==0,
+            "customer substituted for a disabled employee supporting the ancestor role: {status} {setup}");
+        sqlx::query("DELETE FROM memberships WHERE id=$1").bind(child_employee).execute(&database.pool).await?;
+        let (status, setup) = h.call(&h.admin,Method::GET,&h.setup_path(true),None).await?;
+        ensure!(status==StatusCode::OK && setup["access"]["assignedUserCount"]==0,
+            "customer-only account counted as assigned employee support: {status} {setup}");
+        sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type) VALUES($1,$2,$3,'EMPLOYEE')")
+            .bind(crate::util::uuid7::new_uuid()).bind(business_user).bind(child).execute(&database.pool).await?;
+        let (status, setup) = h.call(&h.admin,Method::GET,&h.setup_path(true),None).await?;
+        ensure!(status==StatusCode::OK && setup["access"]["assignedUserCount"]==1,
+            "customer membership prevented a valid descendant employee from supporting its role: {status} {setup}");
         let release: Uuid = sqlx::query_scalar(
-            "INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at) VALUES($1,'development','setup-v1','HTML','/sub-apps/setup-demo/versions/setup-v1/index.html','PASSED',now()) RETURNING id",
-        ).bind(h.application).fetch_one(&database.pool).await?;
+            "INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) VALUES($1,'development','setup-v1','HTML','/sub-apps/setup-demo/versions/setup-v1/index.html','PASSED',now(),$2) RETURNING id",
+        ).bind(h.application).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         sqlx::query("INSERT INTO application_deployments(application_id,environment,active_release_id) VALUES($1,'development',$2)")
             .bind(h.application).bind(release).execute(&database.pool).await?;
         let (status, setup) = h.call(&h.admin, Method::GET, &h.setup_path(false), None).await?;
@@ -624,16 +666,16 @@ async fn option_organization(
     expired: bool,
 ) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,parent_id,name,status,expires_at,contact_name,contact_phone,address) \
+        "INSERT INTO organizations(tenant_id,parent_id,name,status,expires_at,contact_name,contact_phone,address,id) \
          VALUES($1,$2,$3,CASE WHEN $4 THEN 'DISABLED' ELSE 'ENABLED' END, \
-         CASE WHEN $5 THEN now()-interval '1 day' ELSE NULL END,'private contact','13800000000','private address') RETURNING id",
+         CASE WHEN $5 THEN now()-interval '1 day' ELSE NULL END,'private contact','13800000000','private address',$6) RETURNING id",
     )
     .bind(tenant)
     .bind(parent)
     .bind(name)
     .bind(disabled)
     .bind(expired)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?)
 }
 

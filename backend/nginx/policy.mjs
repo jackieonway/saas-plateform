@@ -242,9 +242,13 @@ ${staticDirectives('^/sub/oauth-playground/(.*)$ /$1')}        }
 }
 
 export function apiLocations(origin, upstreams) {
-  const location = (prefix, target, { socket = false, release = false } = {}) => {
+  const location = (prefix, target, { socket = false, release = false, sensitive = false } = {}) => {
     if (!target) return `        location = /${prefix} { return 404; }\n        location /${prefix}/ { return 404; }\n`
-    const directives = `            set $${target.name} ${quote(target.address)};
+    const directives = `${sensitive ? `            # Error contexts can contain the original authorization-code query.
+            # Safe URI/status access metrics remain available in gateway format.
+            error_log /dev/null crit;
+            add_header Referrer-Policy "no-referrer" always;
+` : ''}            set $${target.name} ${quote(target.address)};
             proxy_http_version 1.1;
 ${proxyHeaders(origin)}${socket ? `            proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
@@ -270,7 +274,7 @@ ${directives}        }
 ${directives}        }
 `
   }
-  return location('api', upstreams.backend, { release: true }) + location('api', upstreams.backend) + location('oauth', upstreams.backend) + location('work-orders-api', upstreams.workOrders) + location('stores-api', upstreams.stores) + location('socket.io', upstreams.notification, { socket: true })
+  return location('auth', upstreams.backend, { sensitive: true }) + location('api', upstreams.backend, { release: true }) + location('api', upstreams.backend) + location('oauth', upstreams.backend) + location('work-orders-api', upstreams.workOrders) + location('stores-api', upstreams.stores) + location('socket.io', upstreams.notification, { socket: true })
 }
 
 export function staticMaps() {

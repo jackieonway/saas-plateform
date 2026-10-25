@@ -1,7 +1,7 @@
 use super::*;
 
 fn uuid(number: u32) -> String {
-    format!("00000000-0000-4000-8000-{number:012x}")
+    format!("00000000-0000-7000-8000-{number:012x}")
 }
 
 fn manifest_value() -> Value {
@@ -212,7 +212,7 @@ impl Fake {
         if path.starts_with("/api/applications/") {
             return Ok(
                 json!({"id":self.manifest.application_id,"code":self.manifest.application_code,"status":"ENABLED",
-                "basePath":self.manifest.application_code.base_path(),"runtimeMode":"TRUSTED","entryType":"HTML"}),
+                "basePath":self.manifest.application_code.base_path(),"runtimeMode":"TRUSTED","entryType":"HTML","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1}),
             );
         }
         if path.starts_with("/api/menus/tree?") {
@@ -465,7 +465,7 @@ fn preflight_rejects_legacy_runtime_before_any_grant_write() {
                 );
                 Ok(
                     json!({"id":manifest.application_id,"code":app.code(),"status":"ENABLED",
-                    "basePath":app.base_path(),"runtimeMode":runtime,"entryType":entry}),
+                    "basePath":app.base_path(),"runtimeMode":runtime,"entryType":entry,"allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1}),
                 )
             })
             .unwrap_err();

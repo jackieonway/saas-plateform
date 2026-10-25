@@ -290,7 +290,7 @@ fn strict_candidate_schema_size_and_argument_boundaries_fail_before_network() {
     let mut args = fixture.args("artifact-bind", "work-orders", "production", true);
     args.extend([
         "--app-id".into(),
-        "11111111-1111-4111-8111-111111111111".into(),
+        "11111111-1111-7111-8111-111111111111".into(),
     ]);
     assert_eq!(category(args), "INVALID_ARGUMENT");
     let mut args = fixture.args("artifact-bind", "work-orders", "production", true);
@@ -572,11 +572,11 @@ fn platform_fixture(
                 serde_json::from_slice(&bytes).unwrap()
             };
             let response = if first.contains("GET /api/applications ") {
-                json!([{"id":"11111111-1111-4111-8111-111111111111","code":"work-orders","entryType":"HTML","runtimeMode":"TRUSTED","basePath":"/micro/work-orders","status":"ENABLED"}])
+                json!([{"id":"11111111-1111-7111-8111-111111111111","code":"work-orders","entryType":"HTML","runtimeMode":"TRUSTED","basePath":"/micro/work-orders","status":"ENABLED","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1}])
             } else if first.starts_with("POST ") {
                 let mut row = body.clone();
-                row["id"] = json!("22222222-2222-4222-8222-222222222222");
-                row["applicationId"] = json!("11111111-1111-4111-8111-111111111111");
+                row["id"] = json!("22222222-2222-7222-8222-222222222222");
+                row["applicationId"] = json!("11111111-1111-7111-8111-111111111111");
                 row["validationStatus"] = json!("DRAFT");
                 if let Some(overrides) = release.as_object() {
                     for (key, value) in overrides {
@@ -644,8 +644,8 @@ fn reconcile_requires_proven_origin_before_http_and_cannot_match_ambiguous_healt
     expected["healthUrl"] = json!("https://gateway.example.com/healthz");
     write_json(&fixture.release, &expected);
     let mut row = expected;
-    row["id"] = json!("22222222-2222-4222-8222-222222222222");
-    row["applicationId"] = json!("11111111-1111-4111-8111-111111111111");
+    row["id"] = json!("22222222-2222-7222-8222-222222222222");
+    row["applicationId"] = json!("11111111-1111-7111-8111-111111111111");
     row["validationStatus"] = json!("DRAFT");
     // Resources are relative to the proven absolute entry, so their origin is
     // unambiguous and remains valid when the management API has another origin.
@@ -678,8 +678,8 @@ fn reconcile_requires_proven_origin_before_http_and_cannot_match_ambiguous_healt
     fixture.write_artifact("work-orders", "https://static.example.com", 'a');
     fixture.bind("work-orders", "development");
     let mut ambiguous_remote = read_json(&fixture.release);
-    ambiguous_remote["id"] = json!("22222222-2222-4222-8222-222222222222");
-    ambiguous_remote["applicationId"] = json!("11111111-1111-4111-8111-111111111111");
+    ambiguous_remote["id"] = json!("22222222-2222-7222-8222-222222222222");
+    ambiguous_remote["applicationId"] = json!("11111111-1111-7111-8111-111111111111");
     ambiguous_remote["validationStatus"] = json!("DRAFT");
     ambiguous_remote["entryUrl"] = json!("/sub-apps/work-orders/versions/v1/index.html");
     ambiguous_remote["healthUrl"] = json!("/healthz");
@@ -811,8 +811,8 @@ fn guarded_register_sends_only_existing_fields_and_reconcile_compares_complete_d
         ]
     );
     let mut row = body.clone();
-    row["id"] = json!("22222222-2222-4222-8222-222222222222");
-    row["applicationId"] = json!("11111111-1111-4111-8111-111111111111");
+    row["id"] = json!("22222222-2222-7222-8222-222222222222");
+    row["applicationId"] = json!("11111111-1111-7111-8111-111111111111");
     row["validationStatus"] = json!("DRAFT");
     for scenario in ["match", "absent", "entry", "resource", "health"] {
         let mut actual = row.clone();

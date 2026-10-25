@@ -57,7 +57,7 @@ function container(t, { supportsUpdate = true, delayedContext = false } = {}) {
       ...(supportsUpdate ? { update: async props => { calls.push({ kind: 'update', props }) } } : {}),
       unmount: async () => { calls.push({ kind: 'unmount' }) } }) },
     './capabilities': { assertQiankunCapabilities() {} },
-    '../../../vendor/micro-app-sdk/protocol.mjs': { SDK_VERSION: '2.0.0', MICRO_PROPS_CONTRACT_VERSION: '2.0' },
+    '../../../vendor/micro-app-sdk/protocol.mjs': { SDK_VERSION: '3.0.0', MICRO_PROPS_CONTRACT_VERSION: '2.0' },
   }, { stableCallbacks: true })
   const host = node()
   const render = () => { const view = f.render('MicroMountZone', { entryInfo: app }); view.props.containerRef.current = host; return view }

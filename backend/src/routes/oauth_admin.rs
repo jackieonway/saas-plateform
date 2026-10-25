@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
@@ -12,16 +13,25 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::extractors::{ApiJson, CurrentUser};
+use crate::identity_policy::{
+    normalize_member_types, validate_client_policy, MemberType, SubjectMode,
+};
 use crate::session;
 use crate::state::AppState;
 use crate::util::{audit, hash};
+
+use super::admission_policy::{self, PolicyUpdate};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/oauth/clients", get(list_clients).post(create_client))
         .route(
             "/api/oauth/clients/{id}",
-            put(update_client).delete(delete_client),
+            get(get_client).put(update_client).delete(delete_client),
+        )
+        .route(
+            "/api/oauth/clients/{id}/access-policy",
+            get(get_policy).put(update_policy),
         )
         .route(
             "/api/oauth/clients/{id}/regenerate-secret",
@@ -70,6 +80,9 @@ pub struct ClientFull {
     pub status: String,
     /// 关联应用 (对外 API 数据源; NULL = 未关联, 迁移 0010)
     pub application_id: Option<Uuid>,
+    pub subject_mode: String,
+    pub allowed_member_types: Vec<String>,
+    pub access_policy_version: i64,
 }
 
 impl ClientFull {
@@ -90,6 +103,8 @@ impl ClientFull {
             "scopes": self.scope_list(), "accessTokenValidity": self.access_token_validity,
             "refreshTokenValidity": self.refresh_token_validity, "status": self.status,
             "applicationId": self.application_id,
+            "subjectMode": self.subject_mode, "allowedMemberTypes": self.allowed_member_types,
+            "accessPolicyVersion": self.access_policy_version,
         })
     }
 }
@@ -108,7 +123,7 @@ pub async fn fetch_client(
     let row = sqlx::query_as::<_, ClientFull>(
         "SELECT id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
-         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce \
+         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce, subject_mode, allowed_member_types, access_policy_version \
          FROM oauth_clients WHERE client_id = $1",
     )
     .bind(client_id)
@@ -125,6 +140,7 @@ async fn client_audit_snapshot(
     sqlx::query_scalar(
         "SELECT jsonb_build_object('id',id,'name',client_name,'clientId',client_id, \
          'clientType',client_type,'requirePkce',require_pkce,'status',status,'applicationId',application_id, \
+         'subjectMode',subject_mode,'allowedMemberTypes',allowed_member_types,'accessPolicyVersion',access_policy_version, \
          'grantTypes',grant_types,'scopeCount',COALESCE(array_length(string_to_array(scopes,','),1),0), \
          'redirectUriCount',COALESCE(array_length(string_to_array(redirect_uris,','),1),0), \
          'accessTokenValidity',access_token_validity,'refreshTokenValidity',refresh_token_validity) \
@@ -174,6 +190,72 @@ async fn lock_client_applications(
 type ClientMetadataRow = (Uuid, DateTime<Utc>, Option<Uuid>, Option<String>);
 type ClientMetadata = (DateTime<Utc>, Option<Uuid>, Option<String>);
 
+async fn get_client(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
+    let id: Uuid = id
+        .parse_uuid7()
+        .map_err(|_| AppError::bad_request("ID 格式错误"))?;
+    let row: ClientFull = sqlx::query_as(
+        "SELECT id,client_id,client_secret_hash,client_name,COALESCE(description,'') AS description, \
+         client_type,require_pkce,COALESCE(redirect_uris,'') AS redirect_uris,COALESCE(grant_types,'') AS grant_types, \
+         COALESCE(scopes,'') AS scopes,access_token_validity,refresh_token_validity,status,application_id, \
+         subject_mode,allowed_member_types,access_policy_version FROM oauth_clients WHERE id=$1",
+    ).bind(id).fetch_optional(&state.pool).await?
+        .ok_or_else(|| AppError::not_found("客户端不存在"))?;
+    Ok(Json(row.to_public_json()))
+}
+
+fn policy_json(row: &Value) -> Value {
+    json!({"id":row["id"],"status":row["status"],"subjectMode":row["subjectMode"],
+        "allowedMemberTypes":row["allowedMemberTypes"],"accessPolicyVersion":row["accessPolicyVersion"]})
+}
+
+async fn get_policy(
+    state: State<AppState>,
+    user: CurrentUser,
+    id: Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let Json(row) = get_client(state, user, id).await?;
+    Ok(Json(policy_json(&row)))
+}
+
+async fn update_policy(
+    state: State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+    id: Path<String>,
+    ApiJson(body): ApiJson<PolicyUpdate>,
+) -> Result<Json<Value>, AppError> {
+    let Json(row) = update_client(
+        state,
+        headers,
+        user,
+        id,
+        ApiJson(ClientUpdate {
+            subject_mode: body.subject_mode,
+            allowed_member_types: Some(body.allowed_member_types),
+            access_policy_version: Some(body.access_policy_version),
+            reason: Some(body.reason),
+            client_name: None,
+            client_type: None,
+            require_pkce: None,
+            redirect_uris: None,
+            grant_types: None,
+            scopes: None,
+            access_token_validity: None,
+            refresh_token_validity: None,
+            description: None,
+            application_id: None,
+        }),
+    )
+    .await?;
+    Ok(Json(policy_json(&row)))
+}
+
 /// GET /api/oauth/clients — 不返回 secret
 async fn list_clients(
     State(state): State<AppState>,
@@ -191,7 +273,7 @@ async fn list_clients(
     let rows: Vec<ClientFull> = sqlx::query_as(
         "SELECT id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
-         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce \
+         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce, subject_mode, allowed_member_types, access_policy_version \
          FROM oauth_clients ORDER BY created_at",
     )
     .fetch_all(&state.pool)
@@ -221,6 +303,10 @@ async fn list_clients(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ClientBody {
+    #[serde(default, deserialize_with = "admission_policy::present_value")]
+    subject_mode: Option<SubjectMode>,
+    #[serde(default, deserialize_with = "admission_policy::present_value")]
+    allowed_member_types: Option<Vec<MemberType>>,
     client_name: String,
     #[serde(default = "default_client_type")]
     client_type: String,
@@ -294,6 +380,66 @@ fn validate_client_grants(kind: &str, grants: &[String]) -> Result<(), AppError>
     Ok(())
 }
 
+/// Old single-purpose create requests keep their employee/machine defaults.
+/// Explicit subject policy never permits a new mixed registration.
+fn new_client_subject_policy(
+    kind: &str,
+    grants: &[String],
+) -> Result<(SubjectMode, Vec<MemberType>), AppError> {
+    let (mode, members) = if grants.iter().any(|grant| grant == "client_credentials") {
+        (SubjectMode::Machine, Vec::new())
+    } else {
+        (SubjectMode::User, vec![MemberType::Employee])
+    };
+    validate_client_policy(mode, &members, grants, kind, false)
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
+    Ok((mode, members))
+}
+
+fn requested_client_subject_policy(
+    body: &ClientBody,
+) -> Result<(SubjectMode, Vec<MemberType>), AppError> {
+    let (default_mode, default_members) =
+        new_client_subject_policy(&body.client_type, &body.grant_types)?;
+    let mode = body.subject_mode.unwrap_or(default_mode);
+    let members = normalize_member_types(
+        body.allowed_member_types.clone().unwrap_or(default_members),
+        mode == SubjectMode::Machine,
+    )
+    .map_err(|error| AppError::bad_request(error.to_string()))?;
+    validate_client_policy(mode, &members, &body.grant_types, &body.client_type, false)
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
+    Ok((mode, members))
+}
+
+fn validate_stored_subject_policy(
+    mode: &str,
+    members: &[String],
+    kind: &str,
+    grants: &[String],
+) -> Result<(), AppError> {
+    let mode: SubjectMode =
+        mode.parse()
+            .map_err(|error: crate::identity_policy::IdentityPolicyError| {
+                AppError::bad_request(error.to_string())
+            })?;
+    let members: Vec<MemberType> = members
+        .iter()
+        .map(|member| member.parse())
+        .collect::<Result<_, _>>()
+        .map_err(|error: crate::identity_policy::IdentityPolicyError| {
+            AppError::bad_request(error.to_string())
+        })?;
+    validate_client_policy(
+        mode,
+        &members,
+        grants,
+        kind,
+        mode == SubjectMode::LegacyMixed,
+    )
+    .map_err(|error| AppError::bad_request(error.to_string()))
+}
+
 fn validate_scopes(scopes: &[String]) -> Result<(), AppError> {
     if scopes.is_empty() {
         return Err(AppError::bad_request("至少配置一个 scope"));
@@ -338,6 +484,7 @@ fn validate_client_body(body: &ClientBody) -> Result<(), AppError> {
     }
     validate_grants(&body.grant_types)?;
     validate_client_grants(&body.client_type, &body.grant_types)?;
+    requested_client_subject_policy(body)?;
     validate_scopes(&body.scopes)?;
     validate_validity(body.access_token_validity)?;
     validate_validity(body.refresh_token_validity)?;
@@ -387,6 +534,11 @@ async fn create_client(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     validate_client_body(&body)?;
+    let (subject_mode, allowed_members) = requested_client_subject_policy(&body)?;
+    let allowed_members: Vec<&str> = allowed_members
+        .iter()
+        .map(|member| member.as_str())
+        .collect();
     let require_pkce = created_pkce_requirement(&body.client_type, body.require_pkce);
     let client_id = generate_client_id(&state.pool, &body.client_name).await?;
     let secret = hash::random_token(32);
@@ -396,10 +548,18 @@ async fn create_client(
         None
     };
     let mut tx = state.pool.begin().await?;
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO oauth_clients \
-         (client_id, client_secret_hash, client_name, description, client_type, redirect_uris, grant_types, scopes, access_token_validity, refresh_token_validity, require_pkce) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+         (client_id, client_secret_hash, client_name, description, client_type, redirect_uris, grant_types, scopes, access_token_validity, refresh_token_validity, require_pkce, id, subject_mode, allowed_member_types) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id",
     )
     .bind(&client_id)
     .bind(&secret_hash)
@@ -412,6 +572,9 @@ async fn create_client(
     .bind(body.access_token_validity)
     .bind(body.refresh_token_validity)
     .bind(require_pkce)
+    .bind(crate::util::uuid7::new_uuid())
+    .bind(subject_mode.as_str())
+    .bind(&allowed_members)
     .fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
@@ -443,6 +606,7 @@ async fn create_client(
         "redirectUris": body.redirect_uris, "grantTypes": body.grant_types, "scopes": body.scopes,
         "accessTokenValidity": body.access_token_validity, "refreshTokenValidity": body.refresh_token_validity,
         "status": "ENABLED", "clientSecret": secret, "applicationId": null,
+        "subjectMode": subject_mode.as_str(), "allowedMemberTypes": allowed_members, "accessPolicyVersion": 1,
     })))
 }
 
@@ -459,6 +623,14 @@ where
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ClientUpdate {
+    #[serde(default, deserialize_with = "admission_policy::present_value")]
+    subject_mode: Option<SubjectMode>,
+    #[serde(default, deserialize_with = "admission_policy::present_value")]
+    allowed_member_types: Option<Vec<MemberType>>,
+    #[serde(default)]
+    access_policy_version: Option<i64>,
+    #[serde(default)]
+    reason: Option<String>,
     #[serde(default)]
     client_name: Option<String>,
     #[serde(default)]
@@ -492,7 +664,7 @@ async fn update_client(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(t) = &body.client_type {
         if !["CONFIDENTIAL", "PUBLIC"].contains(&t.as_str()) {
@@ -528,7 +700,7 @@ async fn update_client(
                 Some(None)
             } else {
                 let app: Uuid = raw
-                    .parse()
+                    .parse_uuid7()
                     .map_err(|_| AppError::bad_request("applicationId 格式错误"))?;
                 let exists: bool =
                     sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM applications WHERE id = $1)")
@@ -543,20 +715,66 @@ async fn update_client(
         }
     };
     let mut tx = state.pool.begin().await?;
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     lock_client_applications(&mut tx, id, application_id).await?;
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     // Partial updates must validate the resulting combination. In particular,
     // switching only the type cannot retain a machine grant on a public client.
-    let (current_kind, current_grants, current_pkce): (String, String, bool) = sqlx::query_as(
-        "SELECT client_type, COALESCE(grant_types,''), require_pkce FROM oauth_clients WHERE id=$1",
+    let (current_kind, current_grants, current_pkce, subject_mode, current_allowed_members, policy_version):
+        (String, String, bool, String, Vec<String>, i64) = sqlx::query_as(
+        "SELECT client_type, COALESCE(grant_types,''), require_pkce, subject_mode, allowed_member_types, access_policy_version FROM oauth_clients WHERE id=$1",
     )
     .bind(id)
     .fetch_one(&mut *tx)
     .await?;
+    let explicit_policy = body.subject_mode.is_some() || body.allowed_member_types.is_some();
+    admission_policy::check_version(body.access_policy_version, policy_version, explicit_policy)?;
+    let policy_reason = if explicit_policy {
+        Some(admission_policy::reason(body.reason.as_deref())?)
+    } else {
+        None
+    };
+    let final_mode = body
+        .subject_mode
+        .map(SubjectMode::as_str)
+        .unwrap_or(&subject_mode);
+    if final_mode == "LEGACY_MIXED" && subject_mode != "LEGACY_MIXED" {
+        return Err(AppError::bad_request(
+            "新客户端禁止使用 LEGACY_MIXED 主体模式",
+        ));
+    }
+    let allowed_members = body
+        .allowed_member_types
+        .clone()
+        .map(|members| admission_policy::member_strings(members, final_mode == "MACHINE"))
+        .transpose()?
+        .unwrap_or(current_allowed_members);
     let grants = body
         .grant_types
         .clone()
         .unwrap_or_else(|| split_csv(&current_grants));
     validate_client_grants(
+        body.client_type.as_deref().unwrap_or(&current_kind),
+        &grants,
+    )?;
+    validate_stored_subject_policy(
+        final_mode,
+        &allowed_members,
         body.client_type.as_deref().unwrap_or(&current_kind),
         &grants,
     )?;
@@ -567,6 +785,22 @@ async fn update_client(
         body.require_pkce,
     );
     let before = client_audit_snapshot(&mut tx, id).await?;
+    if before["clientId"] == "platform-console-legacy"
+        && (final_mode != "USER"
+            || allowed_members != ["EMPLOYEE"]
+            || body.client_type.as_deref().unwrap_or(&current_kind) != "PUBLIC"
+            || grants != ["authorization_code"]
+            || !require_pkce
+            || application_id.flatten().is_some()
+            || body
+                .redirect_uris
+                .as_ref()
+                .is_some_and(|values| !values.is_empty()))
+    {
+        return Err(AppError::bad_request(
+            "内置控制台来源客户端必须保持员工专用及固定登录用途",
+        ));
+    }
     let private_changes: (bool, bool, bool) = sqlx::query_as(
         "SELECT redirect_uris IS DISTINCT FROM COALESCE($2,redirect_uris), \
          scopes IS DISTINCT FROM COALESCE($3,scopes), \
@@ -584,10 +818,11 @@ async fn update_client(
          scopes = COALESCE($6, scopes), access_token_validity = COALESCE($7, access_token_validity), \
          refresh_token_validity = COALESCE($8, refresh_token_validity), description = COALESCE($9, description), \
          application_id = CASE WHEN $10 THEN $11::uuid ELSE application_id END, require_pkce=$12, \
+         subject_mode=$13,allowed_member_types=$14, \
          updated_at = now() WHERE id = $1 \
          RETURNING id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
-         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce",
+         COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce, subject_mode, allowed_member_types, access_policy_version",
     )
     .bind(id)
     .bind(body.client_name.as_deref().map(str::trim))
@@ -601,12 +836,17 @@ async fn update_client(
     .bind(application_id.is_some())
     .bind(application_id.flatten())
     .bind(require_pkce)
+    .bind(final_mode)
+    .bind(&allowed_members)
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("客户端不存在"))?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let mut after = client_audit_snapshot(&mut tx, id).await?;
+    if row.access_policy_version != policy_version {
+        crate::credential_binding::revoke_client_policy_in_tx(&mut tx, id).await?;
+    }
     for (field, changed) in [
         ("redirectUrisChanged", private_changes.0),
         ("scopesChanged", private_changes.1),
@@ -617,6 +857,9 @@ async fn update_client(
         }
     }
     if before != after {
+        if let Some(reason) = policy_reason {
+            after["reason"] = json!(reason);
+        }
         let detail = audit::change_detail("oauth_client", id, before, after);
         audit::write_in_tx(
             &mut tx,
@@ -658,10 +901,30 @@ async fn delete_client(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     let before = client_audit_snapshot(&mut tx, id).await?;
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
+    if before["clientId"] == "platform-console-legacy" {
+        return Err(AppError::bad_request("内置控制台来源客户端不能删除"));
+    }
     let (_client_id,): (String,) =
         sqlx::query_as("DELETE FROM oauth_clients WHERE id = $1 RETURNING client_id")
             .bind(id)
@@ -698,12 +961,29 @@ async fn regenerate_secret(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let secret = hash::random_token(32);
     let secret_hash = hash::sha256_hex(&secret);
     let mut tx = state.pool.begin().await?;
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
     let before = client_audit_snapshot(&mut tx, id).await?;
+    session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    require_oauth_menu(&state, &user, CLIENT_MENU).await?;
     let (_client_id,): (String,) = sqlx::query_as(
         "UPDATE oauth_clients SET client_secret_hash = $2, updated_at = now() \
          WHERE id = $1 AND client_type = 'CONFIDENTIAL' RETURNING client_id",
@@ -713,6 +993,7 @@ async fn regenerate_secret(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::not_found("客户端不存在或为 PUBLIC 类型无需密钥"))?;
+    crate::credential_binding::revoke_client_policy_in_tx(&mut tx, id).await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let mut after = client_audit_snapshot(&mut tx, id).await?;
@@ -913,7 +1194,7 @@ async fn revoke_token(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before: Value = sqlx::query_scalar(
@@ -976,8 +1257,21 @@ async fn kick_sessions(
     state.require_platform(&user).await?;
     let target: Uuid = body
         .user_id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("userId 格式错误"))?;
+    if state.remote_accounts.is_some() {
+        return super::users::remote::mutate(
+            &state,
+            &headers,
+            &user,
+            target,
+            "REVOKE_ALL",
+            json!({}),
+            None,
+        )
+        .await
+        .map(Json);
+    }
     // Serialize ordinary refresh with user-first revocation; no gap between
     // retiring platform sessions and the OAuth credentials they can renew.
     let mut tx = state.pool.begin().await?;
@@ -991,7 +1285,10 @@ async fn kick_sessions(
     .execute(&mut *tx)
     .await?
     .rows_affected();
-    let platform_revoked = session::revoke_all_in_tx(&mut tx, target, None).await?;
+    let platform_revoked = {
+        let mut accounts = crate::authentication::PostgresAccountTransaction::new(&mut tx);
+        state.accounts.revoke_all(&mut accounts, target).await?
+    };
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
     let detail = audit::change_detail(
@@ -1092,7 +1389,7 @@ async fn revoke_device_code(
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, TOKEN_MENU).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before: Value = sqlx::query_scalar(
@@ -1230,6 +1527,48 @@ mod client_policy_tests {
         assert!(validate_client_grants("CONFIDENTIAL", &body.grant_types).is_ok());
         body.grant_types = vec!["unsupported_grant".into()];
         assert!(validate_client_body(&body).is_err());
+    }
+
+    #[test]
+    fn existing_management_dto_creates_only_single_purpose_clients() {
+        let body = client_body();
+        assert_eq!(
+            new_client_subject_policy(&body.client_type, &body.grant_types).unwrap(),
+            (SubjectMode::User, vec![MemberType::Employee])
+        );
+        let machine = vec!["client_credentials".to_owned()];
+        assert_eq!(
+            new_client_subject_policy("CONFIDENTIAL", &machine).unwrap(),
+            (SubjectMode::Machine, vec![])
+        );
+        assert!(new_client_subject_policy("PUBLIC", &machine).is_err());
+        let mixed = vec!["client_credentials".to_owned(), "password".to_owned()];
+        assert!(new_client_subject_policy("CONFIDENTIAL", &mixed).is_err());
+        let mut body = client_body();
+        body.grant_types = mixed;
+        assert!(validate_client_body(&body).is_err());
+    }
+
+    #[test]
+    fn partial_edits_validate_the_stored_subject_mode() {
+        let employee = vec!["EMPLOYEE".to_owned()];
+        let human = vec!["authorization_code".to_owned(), "refresh_token".to_owned()];
+        let machine = vec!["client_credentials".to_owned()];
+        let mixed = vec!["client_credentials".to_owned(), "password".to_owned()];
+        assert!(validate_stored_subject_policy("USER", &employee, "PUBLIC", &human).is_ok());
+        assert!(
+            validate_stored_subject_policy("USER", &employee, "CONFIDENTIAL", &machine).is_err()
+        );
+        assert!(validate_stored_subject_policy("MACHINE", &[], "CONFIDENTIAL", &machine).is_ok());
+        assert!(validate_stored_subject_policy("MACHINE", &[], "PUBLIC", &machine).is_err());
+        assert!(validate_stored_subject_policy("MACHINE", &[], "CONFIDENTIAL", &human).is_err());
+        assert!(
+            validate_stored_subject_policy("LEGACY_MIXED", &employee, "CONFIDENTIAL", &mixed)
+                .is_ok()
+        );
+        assert!(
+            validate_stored_subject_policy("LEGACY_MIXED", &employee, "PUBLIC", &mixed).is_err()
+        );
     }
 
     #[test]

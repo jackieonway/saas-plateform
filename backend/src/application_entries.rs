@@ -185,6 +185,7 @@ async fn read(
     Path(id): Path<Uuid>,
     Query(query): Query<EntryQuery>,
 ) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
     authorize(&state, &user).await?;
     let environment = releases::validate_environment(&query.environment)?;
     let mut tx = state.pool.begin().await?;
@@ -208,6 +209,7 @@ async fn save(
     Query(query): Query<EntryQuery>,
     ApiJson(body): ApiJson<EntryBody>,
 ) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
     authorize(&state, &user).await?;
     let environment = releases::validate_environment(&query.environment)?;
     let policy = FetchPolicy::new(&state.config, &environment)?;
@@ -245,7 +247,7 @@ async fn save(
         "INSERT INTO application_url_entries(application_id,environment,entry_url,proxy_enabled,revision,updated_by) \
          VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(application_id,environment) DO UPDATE \
          SET entry_url=EXCLUDED.entry_url,proxy_enabled=EXCLUDED.proxy_enabled,revision=EXCLUDED.revision,updated_by=EXCLUDED.updated_by,updated_at=now()",
-    ).bind(id).bind(&environment).bind(url).bind(body.proxy_enabled).bind(Uuid::new_v4()).bind(user.user_id)
+    ).bind(id).bind(&environment).bind(url).bind(body.proxy_enabled).bind(crate::util::uuid7::new_uuid()).bind(user.user_id)
         .execute(&mut *tx).await?;
     let after = entry(&mut tx, id, &environment)
         .await?
@@ -277,6 +279,7 @@ async fn remove(
     Path(id): Path<Uuid>,
     Query(query): Query<EntryQuery>,
 ) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
     authorize(&state, &user).await?;
     let environment = releases::validate_environment(&query.environment)?;
     let mut tx = state.pool.begin().await?;
@@ -370,8 +373,8 @@ mod tests {
 
     #[test]
     fn proxy_entry_keeps_query_and_changes_identity_on_reconfiguration() {
-        let first = Uuid::new_v4();
-        let second = Uuid::new_v4();
+        let first = crate::util::uuid7::new_uuid();
+        let second = crate::util::uuid7::new_uuid();
         let url = browser_entry_url(
             "orders",
             "https://orders.example.com/app/?theme=dark&next=a?b",

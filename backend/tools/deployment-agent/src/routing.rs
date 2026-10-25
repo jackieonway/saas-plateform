@@ -150,11 +150,11 @@ mod tests {
         }))
         .unwrap();
         let w: Work = serde_json::from_value(serde_json::json!({
-            "jobId":"00000000-0000-0000-0000-000000000001", "releaseId":"release", "applicationCode":"stores-v1",
+            "jobId":"00000000-0000-7000-8000-000000000001", "releaseId":"00000000-0000-7000-8000-000000000003", "applicationCode":"stores-v1",
             "environment":"development", "version":"2", "targetId":"local", "templateId":"static-stores-v1",
             "imageRef":format!("registry.test/static@sha256:{}", "a".repeat(64)),
             "policyRevision":deployment_contract::revision(&c.policy), "operation":"DEPLOY", "attempt":1,
-            "nonce":"00000000-0000-0000-0000-000000000002"
+            "nonce":"00000000-0000-7000-8000-000000000002"
         }))
         .unwrap();
         (c, w)

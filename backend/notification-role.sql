@@ -28,7 +28,8 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM notification_ws;
 SELECT format('GRANT CONNECT ON DATABASE %I TO notification_ws', current_database()) \gexec
 GRANT USAGE ON SCHEMA public TO notification_ws;
 GRANT SELECT (id, user_id, tenant_id, organization_id, source_kind,
-  application_id, publication_id, type, title, content, link, created_at)
+  application_id, publication_id, type, title, content, link, created_at,
+  recipient_membership_id, recipient_member_type, recipient_identity_version)
   ON TABLE public.notifications TO notification_ws;
 COMMIT;
 -- Also audit PUBLIC grants in the actual database. REVOKE from a named role

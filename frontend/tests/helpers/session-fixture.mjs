@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { webcrypto } from 'node:crypto'
 import vm from 'node:vm'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -9,6 +10,19 @@ const require = createRequire(path.join(root, 'package.json'))
 const ts = require('typescript')
 export const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
 export const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+export const SESSION_KEY = 'platform-session-v2'
+export const identity = (patch = {}) => ({
+  userId: '019d0000-0000-7000-8000-000000000001', tenantId: '019d0000-0000-7000-8000-000000000002',
+  organizationId: '019d0000-0000-7000-8000-000000000003', membershipId: '019d0000-0000-7000-8000-000000000004',
+  memberType: 'EMPLOYEE', identityVersion: '1', accountVersion: '0', ...patch,
+})
+export const targetIdentity = identity({ organizationId: '019d0000-0000-7000-8000-000000000005', membershipId: '019d0000-0000-7000-8000-000000000006' })
+export const contextResponse = (accessToken, refreshToken, member = targetIdentity) => ({
+  accessToken, refreshToken, user: { id: member.userId, username: 'session-fixture' },
+  tenant: { id: member.tenantId }, organization: { id: member.organizationId }, applications: [],
+  membershipId: member.membershipId, memberType: member.memberType,
+  identityVersion: member.identityVersion, accountVersion: member.accountVersion,
+})
 
 /** A FIFO exclusive lock, shared durable storage, and independently evaluated
  * modules model separate pages without pretending that missing browser APIs work. */
@@ -43,10 +57,16 @@ export function sharedOrigin(options = {}) {
     const sandbox = vm.createContext({ Response, URLSearchParams, DOMException, AbortController, AbortSignal, Promise, console,
       setTimeout: settings.controlDeadline ? (callback, ms) => { const handle = ++id; timers.set(handle, { callback, ms }); return handle } : setTimeout,
       clearTimeout: settings.controlDeadline ? handle => timers.delete(handle) : clearTimeout,
-      crypto: { randomUUID: () => `test-session-${++id}` },
+      crypto: webcrypto,
       navigator: settings.noLocks ? {} : { locks }, localStorage: storageView, window,
       document: { visibilityState: 'visible', addEventListener: add, removeEventListener: remove },
-      fetch: async (url, config) => { calls.push({ url, options: config }); return handler(url, config) },
+      fetch: async (url, config) => {
+        // Legacy fixtures explicitly select their server mode without changing
+        // the request counts and controlled handlers owned by each scenario.
+        if (url === '/auth/config' && (config?.method ?? 'GET') === 'GET') return json(200, { mode: settings.authMode ?? 'LEGACY' })
+        calls.push({ url, options: config })
+        return handler(url, config)
+      },
     })
     const cache = new Map()
     function load(relative) {
@@ -64,8 +84,8 @@ export function sharedOrigin(options = {}) {
     if (settings.initialize !== false && state().initializeSessionCoordination) await state().initializeSessionCoordination()
     return { ...auth, api, state, storage, redirects, calls, load,
       fireDeadline: () => { for (const timer of [...timers.values()]) { if (timer.ms === 20_000) timer.callback() } },
-      event: kind => listeners.get(kind)?.forEach(fn => fn({ key: 'platform-session-v1' })),
-      record: () => JSON.parse(storage.get('platform-session-v1')),
+      event: kind => listeners.get(kind)?.forEach(fn => fn({ key: SESSION_KEY })),
+      record: () => JSON.parse(storage.get(SESSION_KEY)),
       denyWrites: () => { denyWrites = true },
     }
   }
@@ -75,6 +95,6 @@ export function sharedOrigin(options = {}) {
 export async function fixture(handler, settings = {}) {
   const shared = sharedOrigin(settings)
   const p = await shared.page(handler, settings)
-  if (settings.session !== false) await p.state().setSession('expired-access', 'psr_test-refresh')
+  if (settings.session !== false) await p.state().setSession('expired-access', 'psr_test-refresh', undefined, identity())
   return { ...p, shared }
 }

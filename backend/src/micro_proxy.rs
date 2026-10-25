@@ -18,7 +18,13 @@ use percent_encoding::percent_decode_str;
 use reqwest::{Client, Url};
 use tokio::sync::Semaphore;
 
-use crate::{config::Config, error::AppError, releases::FetchPolicy, state::AppState};
+use crate::{
+    config::Config,
+    error::AppError,
+    releases::FetchPolicy,
+    state::AppState,
+    util::uuid7::{is_uuid_v7, parse_uuid},
+};
 
 const MAX_BODY: usize = 16 * 1024 * 1024;
 const MAX_REDIRECTS: usize = 5;
@@ -131,6 +137,11 @@ async fn serve(
     {
         return Ok(static_error(StatusCode::NOT_FOUND));
     }
+    let revision_id =
+        parse_uuid(revision).map_err(|_| AppError::not_found("微应用入口版本无效"))?;
+    if revision != revision_id.to_string() {
+        return Err(AppError::not_found("微应用入口版本无效"));
+    }
     let entry = crate::application_entries::lookup_proxy_entry(
         &state.pool,
         code,
@@ -138,7 +149,7 @@ async fn serve(
     )
     .await?
     .ok_or_else(|| AppError::not_found("微应用代理入口不存在或未启用"))?;
-    if revision != entry.revision.to_string() {
+    if !is_uuid_v7(entry.revision) || revision_id != entry.revision {
         return Err(AppError::not_found("微应用入口版本已变更，请重新打开应用"));
     }
     let query = filtered_query(uri.query())?;
@@ -507,3 +518,41 @@ fn static_error(status: StatusCode) -> Response {
 #[cfg(test)]
 #[path = "micro_proxy/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod uuid_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn invalid_or_noncanonical_revision_is_rejected_before_database_lookup() {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://localhost/unused_proxy_uuid_test")
+            .unwrap();
+        let state = AppState::new(
+            pool,
+            Arc::new(Config::from_values(&Default::default()).unwrap()),
+        );
+        for revision in [
+            "not-a-uuid".into(),
+            uuid::Uuid::nil().to_string(),
+            uuid::Uuid::new_v4().to_string(),
+            "019a1163-0000-7000-c000-000000000001".into(),
+            "019A1163-0000-7000-8000-000000000001".into(),
+        ] {
+            let uri = format!("/micro-proxy/opaque-app-code/{revision}/")
+                .parse()
+                .unwrap();
+            assert!(matches!(
+                serve(
+                    &state,
+                    &ProxyRuntime::new(),
+                    &uri,
+                    &Method::GET,
+                    &HeaderMap::new()
+                )
+                .await,
+                Err(AppError::NotFound(_))
+            ));
+        }
+    }
+}

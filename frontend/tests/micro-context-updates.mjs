@@ -28,7 +28,7 @@ function context(extra = {}) {
     tenant: { id: 'tenant', name: 'Tenant', code: 't' }, organization: { id: 'org', name: 'Org', path: '/org/' },
     organizationScopeIds: ['org'], roles: [], permissions: ['order:read'], menus: [], dataGrants: [], ...extra }
 }
-const props = signal => { const { application: _entry, ...view } = context(); return ({ ...view, sdkVersion: '2.0.0', contractVersion: '2.0', contextEpoch: 1,
+const props = signal => { const { application: _entry, ...view } = context(); return ({ ...view, sdkVersion: '3.0.0', contractVersion: '2.0', contextEpoch: 1,
   token: 'app-token', tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
   expiresAt: new Date(Date.now() + 60_000).toISOString(), signal, theme: 'light', basePath: '/micro/orders', routePath: '/micro/orders',
   deploymentVersion: 'v1', entryVersionId: 'release-v1', onNavigate() {}, onNotify() {} }) }
@@ -117,6 +117,107 @@ test('a temporary 503 immediately removes old authorization and recovers with a 
   s.service.stop()
 })
 
+test('a valid context that expires in transit revokes old authorization and recovers without extending either deadline', async () => {
+  const delayed = deferred(), fresh = deferred(), receivedTokens = []
+  let calls = 0
+  const s = setup({ context: async token => {
+    receivedTokens.push(token)
+    if (++calls === 2) return delayed.promise
+    if (calls === 3) return fresh.promise
+    return context()
+  } })
+  await s.service.refresh(); const first = s.changes.at(-1)
+  const expiredContext = context({ expiresAt: new Date(s.time.now() + 500).toISOString() })
+  const pending = s.service.refresh()
+  await flush(); await s.time.advance(600)
+  delayed.resolve(expiredContext); await pending
+  assert.ok(first.signal.aborted, 'A delayed expired proof must retire the still-valid old snapshot')
+  assert.equal(s.changes.at(-1), null)
+  assert.equal(s.changes.filter(Boolean).length, 1, 'The expired response must never be delivered')
+  assert.deepEqual(s.errors, [])
+  assert.equal(s.issues(), 1)
+  await s.time.advance(499); assert.equal(s.issues(), 1)
+  await s.time.advance(1); const issuedAt = s.time.now()
+  assert.equal(s.issues(), 2)
+  assert.deepEqual(receivedTokens, ['token-1', 'token-1', 'token-2'], 'Recovery must discard even an unexpired old application token')
+  const freshExpiry = new Date(issuedAt + 10_000).toISOString()
+  await s.time.advance(200)
+  fresh.resolve(context({ expiresAt: freshExpiry })); await flush()
+  const recovered = s.changes.at(-1)
+  assert.equal(recovered.token, 'token-2')
+  assert.notEqual(recovered.signal, first.signal)
+  assert.equal(recovered.signal.aborted, false)
+  assert.ok(recovered.contextEpoch > first.contextEpoch)
+  assert.equal(recovered.context.expiresAt, freshExpiry)
+  assert.equal(recovered.tokenExpiresAt, new Date(issuedAt + 60_000).toISOString(), 'Wire time must consume the issued lease instead of extending it')
+  assert.deepEqual(s.errors, [])
+  s.service.stop()
+})
+
+test('a lease that expires in transit is reissued even when its returned context remains valid', async () => {
+  const delayed = deferred(); let issues = 0, contexts = 0
+  const s = setup({
+    issue: async () => ({ accessToken: `short-token-${++issues}`, expiresIn: 0.5, audience: 'orders' }),
+    context: async () => ++contexts === 1 ? delayed.promise : context(),
+  })
+  const pending = s.service.refresh()
+  await flush(); await s.time.advance(501)
+  delayed.resolve(context()); await pending
+  assert.equal(s.changes.some(Boolean), false)
+  assert.equal(s.changes.at(-1), null)
+  assert.deepEqual(s.errors, [])
+  await s.time.advance(499); assert.equal(issues, 1)
+  await s.time.advance(1)
+  const recovered = s.changes.at(-1)
+  assert.equal(issues, 2); assert.equal(contexts, 2)
+  assert.equal(recovered.token, 'short-token-2')
+  assert.equal(recovered.tokenExpiresAt, new Date(s.time.now() + 500).toISOString())
+  assert.ok(Date.parse(recovered.context.expiresAt) > s.time.now())
+  s.service.stop()
+})
+
+test('persistent valid but expired contexts exhaust exactly three retries without publishing or retrying forever', async () => {
+  const s = setup({ context: async () => context({ expiresAt: new Date(s.time.now()).toISOString() }) })
+  await s.service.refresh(); await s.time.advance(3500)
+  assert.equal(s.issues(), 4)
+  assert.deepEqual(s.recovery.filter(Boolean).map(value => value.delayMs), [500, 1000, 2000])
+  assert.equal(s.errors.length, 1)
+  assert.equal(s.changes.some(Boolean), false)
+  assert.equal(s.time.timers.size, 0)
+  await s.time.advance(60_000)
+  assert.equal(s.issues(), 4)
+})
+
+test('expired wire responses share the total recovery budget and cannot revive after its deadline', async () => {
+  const replies = []
+  const s = setup({ context: async () => {
+    const reply = deferred()
+    replies.push({ ...reply, value: context({ expiresAt: new Date(s.time.now() + 1000).toISOString() }) })
+    return reply.promise
+  } })
+  const startedAt = s.time.now(), pending = s.service.refresh()
+  await flush()
+  for (const [index, retryDelay] of [500, 1000, 2000].entries()) {
+    assert.equal(replies.length, index + 1)
+    await s.time.advance(4800)
+    replies[index].resolve(replies[index].value); await flush()
+    assert.equal(s.errors.length, 0)
+    assert.equal(s.changes.at(-1), null)
+    await s.time.advance(retryDelay)
+  }
+  assert.equal(s.issues(), 4); assert.equal(replies.length, 4)
+  const remaining = 20_000 - (s.time.now() - startedAt)
+  assert.ok(remaining > 0 && remaining < 5000, 'The final attempt must inherit the remaining budget')
+  await s.time.advance(remaining - 1); assert.equal(s.errors.length, 0)
+  await s.time.advance(1); await pending
+  assert.equal(s.time.now() - startedAt, 20_000)
+  assert.equal(s.errors.length, 1)
+  assert.equal(s.time.timers.size, 0)
+  replies[3].resolve(context({ expiresAt: new Date(s.time.now() + 60_000).toISOString() })); await flush()
+  assert.equal(s.changes.some(Boolean), false, 'A late proof cannot restart an exhausted recovery episode')
+  await s.time.advance(60_000); assert.equal(s.issues(), 4)
+})
+
 test('persistent transient failures stop after three bounded retries instead of continuing indefinitely', async () => {
   const s = setup({ context: async () => { throw transient() } })
   await s.service.refresh()
@@ -128,7 +229,7 @@ test('persistent transient failures stop after three bounded retries instead of 
   await s.time.advance(60_000); assert.equal(s.issues(), 4)
 })
 
-test('only an explicit network failure or 503 is retried; permanent and protocol failures remain denied', async () => {
+test('transport recovery remains limited to explicit network failures or 503 while permanent errors stay denied', async () => {
   for (const failure of [transient(401), transient(403), transient(404), transient(500), transient(0, 'INVALID_CONTEXT'),
     new TypeError('not a transport classification'), new Error('contract mismatch'), Object.assign(new Error('mode mismatch'), { code: 'MODE_MISMATCH' })]) {
     const s = setup({ context: async () => { throw failure } })
@@ -224,9 +325,16 @@ test('malformed issuance and context responses fail as protocol errors without a
     const s = setup({ issue }); await s.service.refresh(); await s.time.advance(20_000)
     assert.equal(s.errors.length, 1); assert.equal(s.time.timers.size, 0)
   }
-  for (const value of [null, {}, context({ contractVersion: '999.0' })]) {
+  const expired = new Date(0).toISOString()
+  for (const value of [null, {}, context({ contractVersion: '999.0' }),
+    context({ contractVersion: '999.0', expiresAt: expired }), context({ appCode: 'another-app', expiresAt: expired }),
+    context({ contextVersion: '', expiresAt: expired }), context({ contextVersion: undefined, expiresAt: expired }),
+    context({ contextVersion: 42, expiresAt: expired }), context({ expiresAt: 'not-a-date' })]) {
     const s = setup({ context: async () => value }); await s.service.refresh(); await s.time.advance(20_000)
     assert.equal(s.errors.length, 1); assert.equal(s.issues(), 1)
+    assert.equal(s.recovery.some(Boolean), false, 'Malformed proof must not be reclassified as an expired lease')
+    assert.equal(s.changes.some(Boolean), false)
+    assert.equal(s.time.timers.size, 0)
   }
 })
 

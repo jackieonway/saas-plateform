@@ -61,7 +61,7 @@ impl Database {
             .map_err(|_| anyhow!("test database administration connection failed"))?;
         let name = format!(
             "organization_subtree_reporting_test_{}",
-            Uuid::new_v4().simple()
+            crate::util::uuid7::new_uuid().simple()
         );
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
@@ -150,26 +150,27 @@ async fn organization(
     name: &str,
 ) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,parent_id,name,code) VALUES($1,$2,$3,$3) RETURNING id",
+        "INSERT INTO organizations(tenant_id,parent_id,name,code,id) VALUES($1,$2,$3,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(parent)
     .bind(name)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?)
 }
 
 async fn user(pool: &PgPool, name: &str, org: Uuid, super_admin: bool) -> Result<Uuid> {
     let user: Uuid = sqlx::query_scalar(
-        "INSERT INTO users(username,password_hash,is_super_admin) VALUES($1,'test-only',$2) RETURNING id",
+        "INSERT INTO users(username,password_hash,is_super_admin,id) VALUES($1,'test-only',$2,$3) RETURNING id",
     )
     .bind(name)
     .bind(super_admin)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
-    sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+    sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
         .bind(user)
         .bind(org)
+        .bind(crate::util::uuid7::new_uuid())
         .execute(pool)
         .await?;
     Ok(user)
@@ -181,12 +182,15 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
         .fetch_one(pool)
         .await?;
     let session: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) \
-         VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
@@ -259,12 +263,12 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
     let pool = &database.pool;
     let result = async {
         let tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code,is_platform) VALUES('report tenant',$1,$2) RETURNING id",
+            "INSERT INTO tenants(name,code,is_platform,id) VALUES('report tenant',$1,$2,$3) RETURNING id",
         ).bind(if platform_tenant { "admin-tenant" } else { "report-tenant" })
-            .bind(platform_tenant).fetch_one(pool).await?;
+            .bind(platform_tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let foreign_tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code) VALUES('report foreign tenant','report-foreign') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,id) VALUES('report foreign tenant','report-foreign',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let ancestor = organization(pool, tenant, None, "report ancestor").await?;
         let current = organization(pool, tenant, Some(ancestor), "report current").await?;
         let child = organization(pool, tenant, Some(current), "report descendant").await?;
@@ -274,16 +278,16 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
         let global_admin = user(pool, "report global admin", current, true).await?;
         for account in [manager, global_admin] {
             for org in [ancestor, sibling] {
-                sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
-                    .bind(account).bind(org).execute(pool).await?;
+                sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
+                    .bind(account).bind(org).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
             }
         }
         let app_id: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('report system','system') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,id) VALUES('report system','system',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let ancestor_only_app: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('report ancestor app','report-ancestor-app') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,id) VALUES('report ancestor app','report-ancestor-app',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         for app in [app_id, ancestor_only_app] {
             sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
                 .bind(tenant).bind(app).execute(pool).await?;
@@ -297,8 +301,8 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
         let mut menus = Vec::new();
         for permission in ["system:tenant", "system:user", "system:role", "system:organization", "system:audit", "system:monitor"] {
             let menu: Uuid = sqlx::query_scalar(
-                "INSERT INTO menus(application_id,title,permission,type) VALUES($1,$2,$2,'MENU') RETURNING id",
-            ).bind(app_id).bind(permission).fetch_one(pool).await?;
+                "INSERT INTO menus(application_id,title,permission,type,id) VALUES($1,$2,$2,'MENU',$3) RETURNING id",
+            ).bind(app_id).bind(permission).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
             menus.push(menu);
             sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
                 .bind(tenant).bind(menu).execute(pool).await?;
@@ -311,15 +315,15 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
         for (org, name) in [(ancestor,"report ancestor"),(current,"report current"),(child,"report descendant"),(sibling,"report sibling")] {
             user(pool, &format!("{name} user"), org, false).await?;
             let role: Uuid = sqlx::query_scalar(
-                "INSERT INTO roles(tenant_id,organization_id,name,code) VALUES($1,$2,$3,$3) RETURNING id",
-            ).bind(tenant).bind(org).bind(format!("{name} role")).fetch_one(pool).await?;
+                "INSERT INTO roles(tenant_id,organization_id,name,code,id) VALUES($1,$2,$3,$3,$4) RETURNING id",
+            ).bind(tenant).bind(org).bind(format!("{name} role")).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
             if org == ancestor { ancestor_role = role; }
             sqlx::query("INSERT INTO audit_logs(tenant_id,organization_id,username,organization_name,action,detail) \
                          VALUES($1,$2,$3,$3,'LOGIN',$3)")
                 .bind(tenant).bind(org).bind(name).execute(pool).await?;
-            sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,client_id,tenant_id,organization_id,expires_at) \
-                         VALUES($1,'access','report-client',$2,$3,now()+interval '1 hour')")
-                .bind(Uuid::new_v4().to_string()).bind(tenant).bind(org).execute(pool).await?;
+            sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,client_id,tenant_id,organization_id,expires_at,id) \
+                         VALUES($1,'access','report-client',$2,$3,now()+interval '1 hour',$4)")
+                .bind(crate::util::uuid7::new_uuid().to_string()).bind(tenant).bind(org).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         }
         user(pool, "report foreign user", foreign, false).await?;
         sqlx::query("INSERT INTO audit_logs(tenant_id,organization_id,username,organization_name,action,detail) \
@@ -328,6 +332,17 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
         sqlx::query("INSERT INTO audit_logs(tenant_id,username,action,detail) \
                      VALUES($1,'report unassigned','LOGIN','report unassigned')")
             .bind(tenant).execute(pool).await?;
+        // This disposable target-schema fixture exercises two concrete member
+        // relations without changing the deployment migration/creation gates.
+        sqlx::query("ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key")
+            .execute(pool).await?;
+        let customer = crate::util::uuid7::new_uuid();
+        sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,status) VALUES($1,$2,$3,'CUSTOMER','ENABLED')")
+            .bind(customer).bind(manager).bind(current).execute(pool).await?;
+        let current_counts: (i64, i64) = sqlx::query_as(
+            "SELECT count(*),count(DISTINCT user_id) FROM memberships WHERE organization_id=$1",
+        ).bind(current).fetch_one(pool).await?;
+        ensure!(current_counts == (4, 3), "dual fixture must preserve four relations for three accounts");
         sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
             .bind(manager).bind(ancestor_role).bind(ancestor).execute(pool).await?;
         for menu in menus {
@@ -343,6 +358,12 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
 
         for account in [manager, global_admin] {
             let token = session(pool, account, tenant, current).await?;
+            let organizations = call(&app, &token, Method::GET,
+                &format!("/api/organizations/tree?tenantId={tenant}"), None, StatusCode::OK).await?;
+            let current_row = organizations.as_array().and_then(|rows| rows.iter().find(|row| row["id"] == json!(current)))
+                .ok_or_else(|| anyhow!("current organization must remain the scoped tree root"))?;
+            ensure!(current_row["userCount"] == 3,
+                "same-account employee/customer rows were counted as two people: {organizations}");
             call(&app, &token, Method::GET, "/api/search?q=%00", None, StatusCode::BAD_REQUEST).await?;
             for query in ["%25", "_", "%5C"] {
                 let search = call(&app, &token, Method::GET, &format!("/api/search?q={query}&limit=10"), None, StatusCode::OK).await?;
@@ -399,6 +420,11 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
             "root totals did not include complete tree");
         call(&app, &root_token, Method::GET, "/api/monitor/overview", None,
             if platform_tenant { StatusCode::OK } else { StatusCode::FORBIDDEN }).await?;
+        let retained: (i64, bool) = sqlx::query_as(
+            "SELECT count(*),bool_or(id=$3 AND member_type='CUSTOMER' AND status='ENABLED') \
+             FROM memberships WHERE user_id=$1 AND organization_id=$2",
+        ).bind(manager).bind(current).bind(customer).fetch_one(pool).await?;
+        ensure!(retained == (2, true), "account counting must not delete or merge either concrete identity");
         Ok(())
     }.await;
     database.finish(result).await

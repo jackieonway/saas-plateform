@@ -98,10 +98,11 @@ async fn database() -> Result<Database> {
 
 async fn tenant(pool: &PgPool, code: &str, platform: bool) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO tenants(name,code,is_platform) VALUES($1,$1,$2) RETURNING id",
+        "INSERT INTO tenants(name,code,is_platform,id) VALUES($1,$1,$2,$3) RETURNING id",
     )
     .bind(code)
     .bind(platform)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?)
 }
@@ -113,27 +114,29 @@ async fn organization(
     name: &str,
 ) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,parent_id,name) VALUES($1,$2,$3) RETURNING id",
+        "INSERT INTO organizations(tenant_id,parent_id,name,id) VALUES($1,$2,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(parent)
     .bind(name)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?)
 }
 
 async fn person(pool: &PgPool, tenant: Uuid, org: Uuid, username: &str) -> Result<Person> {
     let user: Uuid = sqlx::query_scalar(
-        "INSERT INTO users(username,real_name,password_hash) VALUES($1,$1,'unused-owned-discovery-password') RETURNING id",
+        "INSERT INTO users(username,real_name,password_hash,id) VALUES($1,$1,'unused-owned-discovery-password',$2) RETURNING id",
     )
     .bind(username)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
     let membership = sqlx::query_scalar(
-        "INSERT INTO memberships(user_id,organization_id) VALUES($1,$2) RETURNING id",
+        "INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3) RETURNING id",
     )
     .bind(user)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     Ok(Person {
@@ -147,11 +150,15 @@ async fn person(pool: &PgPool, tenant: Uuid, org: Uuid, username: &str) -> Resul
 
 async fn actor(pool: &PgPool, person: Person, menus: &[Uuid]) -> Result<Actor> {
     let role: Uuid = sqlx::query_scalar(
-        "INSERT INTO roles(tenant_id,organization_id,name) VALUES($1,$2,$3) RETURNING id",
+        "INSERT INTO roles(tenant_id,organization_id,name,id) VALUES($1,$2,$3,$4) RETURNING id",
     )
     .bind(person.tenant)
     .bind(person.organization)
-    .bind(format!("owned-discovery-{}", Uuid::new_v4()))
+    .bind(format!(
+        "owned-discovery-{}",
+        crate::util::uuid7::new_uuid()
+    ))
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
@@ -167,8 +174,11 @@ async fn actor(pool: &PgPool, person: Person, menus: &[Uuid]) -> Result<Actor> {
             .execute(pool)
             .await?;
     }
-    let session: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id")
-        .bind(person.user).bind(person.tenant).bind(person.organization).fetch_one(pool).await?;
+    let session: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id")
+        .bind(person.user).bind(person.tenant).bind(person.organization).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let version = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
         .bind(person.user)
         .fetch_one(pool)
@@ -201,8 +211,9 @@ async fn actor(pool: &PgPool, person: Person, menus: &[Uuid]) -> Result<Actor> {
 
 async fn create_application(pool: &PgPool, code: &str) -> Result<Uuid> {
     Ok(
-        sqlx::query_scalar("INSERT INTO applications(name,code) VALUES($1,$1) RETURNING id")
+        sqlx::query_scalar("INSERT INTO applications(name,code,id) VALUES($1,$1,$2) RETURNING id")
             .bind(code)
+            .bind(crate::util::uuid7::new_uuid())
             .fetch_one(pool)
             .await?,
     )
@@ -219,7 +230,7 @@ async fn grant_application(pool: &PgPool, tenant: Uuid, orgs: &[Uuid], app: Uuid
 }
 
 async fn request(app: &Router, token: &str, path: &str) -> Result<Reply> {
-    let request_id = Uuid::new_v4();
+    let request_id = crate::util::uuid7::new_uuid();
     let request = Request::builder()
         .method(Method::GET)
         .uri(path)
@@ -427,13 +438,13 @@ impl Harness {
             "system:application",
             "system:authorization",
         ] {
-            let menu = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,visible) VALUES($1,'BUTTON',$2,$2,false) RETURNING id")
-                .bind(system).bind(permission).fetch_one(pool).await?;
+            let menu = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,visible,id) VALUES($1,'BUTTON',$2,$2,false,$3) RETURNING id")
+                .bind(system).bind(permission).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
             menus.push(menu);
         }
         for permission in ["ticket:read", "ticket:update"] {
-            sqlx::query("INSERT INTO menus(application_id,type,title,permission,visible) VALUES($1,'BUTTON',$2,$2,false)")
-                .bind(application).bind(permission).execute(pool).await?;
+            sqlx::query("INSERT INTO menus(application_id,type,title,permission,visible,id) VALUES($1,'BUTTON',$2,$2,false,$3)")
+                .bind(application).bind(permission).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         }
         for (tenant, orgs) in [
             (platform, vec![platform_root, platform_child]),
@@ -930,7 +941,7 @@ async fn options_strict_queries_literal_search_and_authorized_sql_pagination_are
         let absent = h
             .options(
                 &h.root_reader.token,
-                &format!("{base}&userId={}", Uuid::new_v4()),
+                &format!("{base}&userId={}", crate::util::uuid7::new_uuid()),
             )
             .await?;
         ensure!(

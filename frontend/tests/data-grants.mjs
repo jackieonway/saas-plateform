@@ -13,10 +13,14 @@ const ts = require('typescript')
 const source = fs.readFileSync(path.join(sourceRoot, 'src/lib/data-grants.ts'), 'utf8')
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
 const exports = {}
-vm.runInNewContext(`(function(exports){${output}\n})`, {})(exports)
+const uuidSource = fs.readFileSync(path.join(sourceRoot, 'src/lib/uuid.ts'), 'utf8')
+const uuidOutput = ts.transpileModule(uuidSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+const uuidExports = {}
+vm.runInNewContext(`(function(require,exports){${uuidOutput}\n})`, {})(require, uuidExports)
+vm.runInNewContext(`(function(require,exports){${output}\n})`, {})(name => name === '@/lib/uuid' ? uuidExports : require(name), exports)
 const { grantKey, createGrantDraft, buildGrantChange, canonicalGrantChange, changeFingerprint,
   assertPreviewMatches, parseDataGrantSnapshot, parseDataGrantPreview, parseDataGrantOptions } = exports
-const id = number => `10000000-0000-4000-8000-${number.toString().padStart(12, '0')}`
+const id = number => `10000000-0000-7000-8000-${number.toString().padStart(12, '0')}`
 const target = () => ({ tenantId: id(1), organizationId: id(2), userId: id(3), membershipId: id(4), applicationId: id(5) })
 const row = (resource, action, scope, number = 6) => ({ id: id(number), resource, action, scope, effectiveScope: scope === 'TENANT' ? 'ORG_SUBTREE' : scope, organizationIds: [id(2)] })
 const snapshot = () => ({ target: target(), version: 'a'.repeat(64),
@@ -143,6 +147,8 @@ test('preview mismatches cannot authorize confirmation of a different or incompl
 test('snapshot DTO rejects invalid identities, duplicate rows and malformed closed scope sets', () => {
   const corruptions = [
     value => { value.target.userId = 'user-a' },
+    value => { value.target.userId = '019c0000-0000-4000-8000-000000000001' }, // Intentional v4.
+    value => { value.target.userId = '019c0000-0000-7000-c000-000000000001' }, // Invalid variant.
     value => { value.version = 'unversioned' },
     value => { value.grants[0].id = null },
     value => { value.grants[0].effectiveScope = 'ALL' },

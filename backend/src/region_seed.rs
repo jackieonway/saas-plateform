@@ -65,8 +65,8 @@ pub async fn initialize(pool: &PgPool) -> anyhow::Result<()> {
         let menu_id = if let Some(id) = existing {
             id
         } else {
-            sqlx::query_scalar("INSERT INTO menus(application_id,parent_id,type,title,path,component,icon,permission,sort_order,visible) VALUES($1,$2,'MENU','地区管理','/system/regions','','MapPinned','system:region',3,true) RETURNING id")
-                .bind(app_id).bind(parent).fetch_one(&mut *tx).await?
+            sqlx::query_scalar("INSERT INTO menus(application_id,parent_id,type,title,path,component,icon,permission,sort_order,visible, id) VALUES($1,$2,'MENU','地区管理','/system/regions','','MapPinned','system:region',3,true, $3) RETURNING id")
+                .bind(app_id).bind(parent).bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx).await?
         };
         // Existing platform grants and built-in administrator roles receive the new menu.
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) SELECT id,$1 FROM tenants WHERE is_platform=true ON CONFLICT DO NOTHING")

@@ -3,21 +3,31 @@ mod app_organizations;
 mod app_token;
 mod application_entries;
 mod artifact_distribution;
+mod authentication;
 mod authorization;
+mod bff;
 mod bootstrap;
 mod client_ip;
 mod confidential_clients;
 mod config;
+mod credential_binding;
+mod customer_identity;
+mod customer_portal;
 mod data_grants;
-mod database;
+use saas_platform_backend::database;
 mod error;
 mod extractors;
+mod identity_policy;
 mod login_limits;
 mod managed_deployments;
+mod membership_lifecycle;
 mod micro_proxy;
+mod notification_context;
 mod notifications;
 mod oauth_issuance;
 mod observability;
+mod oidc;
+mod platform_accounts;
 mod platform_settings;
 mod public_contract;
 mod region_seed;
@@ -29,6 +39,7 @@ mod releases;
 mod routes;
 mod seed;
 mod session;
+mod sso;
 mod state;
 mod static_files;
 mod util;
@@ -43,6 +54,9 @@ mod release_tests;
 mod notification_tests;
 
 #[cfg(test)]
+mod notification_identity_tests;
+
+#[cfg(test)]
 mod production_security_tests;
 
 #[cfg(test)]
@@ -50,6 +64,39 @@ mod platform_settings_tests;
 
 #[cfg(test)]
 mod entity_creation_tests;
+
+#[cfg(test)]
+mod membership_lifecycle_tests;
+
+#[cfg(test)]
+mod identity_binding_tests;
+#[cfg(test)]
+mod identity_ui_tests;
+
+#[cfg(test)]
+mod customer_identity_tests;
+#[cfg(test)]
+mod customer_portal_tests;
+#[cfg(test)]
+mod identity_deployment_tests;
+
+#[cfg(test)]
+mod authentication_boundary_tests;
+
+#[cfg(test)]
+mod sso_session_tests;
+
+#[cfg(test)]
+mod oidc_tests;
+
+#[cfg(test)]
+mod bff_tests;
+
+#[cfg(test)]
+mod legacy_password_authority_tests;
+
+#[cfg(test)]
+mod employee_isolation_tests;
 
 #[cfg(test)]
 mod platform_session_refresh_tests;

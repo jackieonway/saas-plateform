@@ -135,8 +135,8 @@ async fn create(
         "{}/sub-apps/{code}/versions/{version}/",
         group.policy.public_origin
     );
-    let id:Uuid=sqlx::query_scalar("INSERT INTO zip_distribution_jobs(application_id,release_id,group_id,artifact_digest,manifest,policy_revision,policy,request_id,payload_sha256,created_by,public_root) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id")
-        .bind(app).bind(release).bind(&group.policy.id).bind(&digest).bind(json!(manifest)).bind(&revision).bind(json!(group.policy)).bind(key).bind(hash).bind(user.user_id).bind(root).fetch_one(&mut *tx).await?;
+    let id:Uuid=sqlx::query_scalar("INSERT INTO zip_distribution_jobs(application_id,release_id,group_id,artifact_digest,manifest,policy_revision,policy,request_id,payload_sha256,created_by,public_root, id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, $12) RETURNING id")
+        .bind(app).bind(release).bind(&group.policy.id).bind(&digest).bind(json!(manifest)).bind(&revision).bind(json!(group.policy)).bind(key).bind(hash).bind(user.user_id).bind(root).bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx).await?;
     for node in &group.policy.nodes {
         sqlx::query("INSERT INTO zip_distribution_nodes(job_id,node_id) VALUES($1,$2)")
             .bind(id)

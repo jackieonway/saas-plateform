@@ -22,17 +22,17 @@ async fn failed_deployment_retry_cannot_reopen_a_cleanup_fence() -> Result<()> {
         body["entryUrl"] = json!(&public);
         let release = release_id(&h.register(body).await?)?;
         let artifact: Uuid = sqlx::query_scalar(
-            "INSERT INTO managed_image_artifacts(application_id,version,target_id,template_id,image_ref,policy_revision,public_url,state) \
-             VALUES($1,'v1','edge','static','registry.test/demo@sha256:unused','policy',$2,'CLEANING') RETURNING id"
-        ).bind(h.main_app).bind(public).fetch_one(&database.pool).await?;
+            "INSERT INTO managed_image_artifacts(application_id,version,target_id,template_id,image_ref,policy_revision,public_url,state,id) \
+             VALUES($1,'v1','edge','static','registry.test/demo@sha256:unused','policy',$2,'CLEANING',$3) RETURNING id"
+        ).bind(h.main_app).bind(public).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         sqlx::query("INSERT INTO managed_deployment_bindings(release_id,artifact_id) VALUES($1,$2)")
             .bind(release).bind(artifact).execute(&database.pool).await?;
         let mut jobs = Vec::new();
         for operation in ["DEPLOY", "CLEANUP"] {
             let job: Uuid = sqlx::query_scalar(
-                "INSERT INTO managed_deployment_jobs(artifact_id,release_id,request_id,payload_sha256,operation,state,attempt,error_code,created_by) \
-                 VALUES($1,$2,gen_random_uuid(),'intent',$3,'FAILED',1,'ENGINE_FAILED',$4) RETURNING id"
-            ).bind(artifact).bind(release).bind(operation).bind(actor).fetch_one(&database.pool).await?;
+                "INSERT INTO managed_deployment_jobs(artifact_id,release_id,request_id,payload_sha256,operation,state,attempt,error_code,created_by,id) \
+                 VALUES($1,$2,$5,'intent',$3,'FAILED',1,'ENGINE_FAILED',$4,$6) RETURNING id"
+            ).bind(artifact).bind(release).bind(operation).bind(actor).bind(crate::util::uuid7::new_uuid()).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
             jobs.push(job);
         }
         let (status, response) = call(
@@ -74,9 +74,9 @@ async fn managed_version_files_cannot_bypass_historical_readiness_or_cleanup() -
         let h = Harness::create(&database.pool, origin).await?;
         let root = format!("{origin}/sub-apps/release-app/versions/v1/");
         let artifact: Uuid = sqlx::query_scalar(
-            "INSERT INTO managed_image_artifacts(application_id,version,target_id,template_id,image_ref,policy_revision,public_url) \
-             VALUES($1,'v1','retired-target','static','registry.test/demo@sha256:unused','retired-policy',$2) RETURNING id",
-        ).bind(h.main_app).bind(&root).fetch_one(&database.pool).await?;
+            "INSERT INTO managed_image_artifacts(application_id,version,target_id,template_id,image_ref,policy_revision,public_url,id) \
+             VALUES($1,'v1','retired-target','static','registry.test/demo@sha256:unused','retired-policy',$2,$3) RETURNING id",
+        ).bind(h.main_app).bind(&root).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
 
         let mut body = release_body("v1", "HTML");
         body["entryUrl"] = json!(format!("{root}index.html"));

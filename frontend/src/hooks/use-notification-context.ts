@@ -18,8 +18,10 @@ export function useNotificationContext(): NotificationContext | null {
 
 /** query/mutation 必须显式带捕获的 bearer，并把 query 的取消联动 context lifetime。 */
 export function notificationRequestOptions(scope: NotificationContext, signal?: AbortSignal) {
+  if (scope.signal.aborted || signal?.aborted || !scope.current()) throw new DOMException("通知成员上下文已变化", "AbortError")
   return { bearer: scope.token, sessionFence: capturePlatformSessionFence(scope.token), signal: signal ? AbortSignal.any([scope.signal, signal]) : scope.signal,
-    current: scope.current, context: { userId: scope.userId, tenantId: scope.tenantId, organizationId: scope.organizationId } }
+    current: scope.current, context: { userId: scope.userId, tenantId: scope.tenantId, organizationId: scope.organizationId,
+      membershipId: scope.membershipId, memberType: scope.memberType, identityVersion: scope.identityVersion, accountVersion: scope.accountVersion } }
 }
 
 if (import.meta.hot) import.meta.hot.dispose(() => store.dispose())

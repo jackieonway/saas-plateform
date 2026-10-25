@@ -59,7 +59,10 @@ impl Database {
             .connect_with(options.clone())
             .await
             .map_err(|_| anyhow!("test database administration connection failed"))?;
-        let name = format!("department_organizations_test_{}", Uuid::new_v4().simple());
+        let name = format!(
+            "department_organizations_test_{}",
+            crate::util::uuid7::new_uuid().simple()
+        );
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
             .await
@@ -140,26 +143,27 @@ async fn organization(
     name: &str,
 ) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,parent_id,name,code) VALUES($1,$2,$3,$3) RETURNING id",
+        "INSERT INTO organizations(tenant_id,parent_id,name,code,id) VALUES($1,$2,$3,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(parent)
     .bind(name)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?)
 }
 
 async fn user(pool: &PgPool, name: &str, org: Uuid, super_admin: bool) -> Result<Uuid> {
     let user: Uuid = sqlx::query_scalar(
-        "INSERT INTO users(username,password_hash,is_super_admin) VALUES($1,'test-only',$2) RETURNING id",
+        "INSERT INTO users(username,password_hash,is_super_admin,id) VALUES($1,'test-only',$2,$3) RETURNING id",
     )
     .bind(name)
     .bind(super_admin)
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
-    sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+    sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
         .bind(user)
         .bind(org)
+        .bind(crate::util::uuid7::new_uuid())
         .execute(pool)
         .await?;
     Ok(user)
@@ -171,12 +175,15 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
         .fetch_one(pool)
         .await?;
     let session: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) \
-         VALUES($1,$2,$3,now()+interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let now = chrono::Utc::now().timestamp();
@@ -197,6 +204,14 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
         },
         SECRET,
     )
+}
+
+fn signed_session_id(token: &str) -> Result<Uuid> {
+    jwt::verify(token, SECRET)?
+        .sid
+        .as_deref()
+        .and_then(|value| crate::util::uuid7::parse_uuid(value).ok())
+        .ok_or_else(|| anyhow!("fixture session is missing its bound session ID"))
 }
 
 async fn get(app: &Router, token: &str, path: &str, expected: StatusCode) -> Result<Value> {
@@ -236,11 +251,11 @@ async fn department_organization_choices() -> Result<()> {
     let pool = &database.pool;
     let result = async {
         let tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code) VALUES('部门组织测试','department-tenant') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,id) VALUES('部门组织测试','department-tenant',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let other_tenant: Uuid = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code) VALUES('其他租户','other-tenant') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,id) VALUES('其他租户','other-tenant',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let root = organization(pool, tenant, None, "ancestor").await?;
         let current = organization(pool, tenant, Some(root), "current").await?;
         let child = organization(pool, tenant, Some(current), "child").await?;
@@ -250,22 +265,22 @@ async fn department_organization_choices() -> Result<()> {
         let manager = user(pool, "department-only-manager", current, false).await?;
         let denied = user(pool, "no-department-permission", current, false).await?;
         let super_admin = user(pool, "super-admin", current, true).await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
-            .bind(manager).bind(leaf).execute(pool).await?;
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
+            .bind(manager).bind(leaf).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         let app_id: Uuid = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('系统管理','system') RETURNING id",
-        ).fetch_one(pool).await?;
+            "INSERT INTO applications(name,code,id) VALUES('系统管理','system',$1) RETURNING id",
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,permission,type) \
-             VALUES($1,'部门管理','system:department','BUTTON') RETURNING id",
-        ).bind(app_id).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,permission,type,id) \
+             VALUES($1,'部门管理','system:department','BUTTON',$2) RETURNING id",
+        ).bind(app_id).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let org_menu: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus(application_id,title,permission,type) \
-             VALUES($1,'组织管理','system:organization','BUTTON') RETURNING id",
-        ).bind(app_id).fetch_one(pool).await?;
+            "INSERT INTO menus(application_id,title,permission,type,id) \
+             VALUES($1,'组织管理','system:organization','BUTTON',$2) RETURNING id",
+        ).bind(app_id).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let role: Uuid = sqlx::query_scalar(
-            "INSERT INTO roles(tenant_id,organization_id,name) VALUES($1,$2,'部门管理员') RETURNING id",
-        ).bind(tenant).bind(current).fetch_one(pool).await?;
+            "INSERT INTO roles(tenant_id,organization_id,name,id) VALUES($1,$2,'部门管理员',$3) RETURNING id",
+        ).bind(tenant).bind(current).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
             .bind(tenant).bind(app_id).execute(pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
@@ -316,7 +331,7 @@ async fn department_organization_choices() -> Result<()> {
         ensure!(super_choices == choices, "super administrator or client parameters expanded the selector scope");
         let current_user = crate::extractors::CurrentUser {
             user_id: super_admin, username: "super-admin".into(), real_name: String::new(),
-            is_super_admin: true, tenant_id: tenant, org_id: current, session_id: Uuid::nil(),
+            is_super_admin: true, tenant_id: tenant, org_id: current, session_id: signed_session_id(&super_token)?,
         };
         let scoped_ids = state.scoped_org_ids(&current_user).await?.ok_or_else(|| anyhow!("ordinary context was unbounded"))?;
         ensure!(scoped_ids.len()==3 && [current,child,leaf].iter().all(|org|scoped_ids.contains(org)), "organization helper included ancestors or siblings");
@@ -330,8 +345,8 @@ async fn department_organization_choices() -> Result<()> {
             call(&app, &super_token, Method::DELETE, &format!("/api/organizations/{excluded}"), None, StatusCode::NOT_FOUND).await?;
             call(&app, &super_token, Method::POST, "/api/organizations", Some(json!({"tenantId":tenant,"parentId":excluded,"name":"forbidden child"})), StatusCode::NOT_FOUND).await?;
             call(&app, &super_token, Method::POST, "/api/departments", Some(json!({"organizationId":excluded,"name":"forbidden department"})), StatusCode::NOT_FOUND).await?;
-            let department: Uuid = sqlx::query_scalar("INSERT INTO departments(organization_id,name) VALUES($1,'excluded department') RETURNING id")
-                .bind(excluded).fetch_one(pool).await?;
+            let department: Uuid = sqlx::query_scalar("INSERT INTO departments(organization_id,name,id) VALUES($1,'excluded department',$2) RETURNING id")
+                .bind(excluded).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
             call(&app, &super_token, Method::PUT, &format!("/api/departments/{department}"), Some(json!({"name":"forbidden"})), StatusCode::NOT_FOUND).await?;
             call(&app, &super_token, Method::DELETE, &format!("/api/departments/{department}"), None, StatusCode::NOT_FOUND).await?;
         }
@@ -352,11 +367,8 @@ async fn department_organization_choices() -> Result<()> {
             ensure!(state.ensure_org_scope(&current_user, excluded, "组织").await.is_err(), "platform child helper allowed {excluded}");
             get(&app, &super_token, &format!("/api/departments/tree?organizationId={excluded}"), StatusCode::NOT_FOUND).await?;
         }
-        let root_user = crate::extractors::CurrentUser { org_id: root, ..current_user.clone() };
-        ensure!(state.is_platform_context(&root_user).await? && state.scoped_org_ids(&root_user).await?.is_none(), "actual platform root lost global management scope");
-        state.ensure_org_scope(&root_user, foreign, "组织").await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
-            .bind(super_admin).bind(root).execute(pool).await?;
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
+            .bind(super_admin).bind(root).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)")
             .bind(root).bind(app_id).execute(pool).await?;
         for granted in [menu,org_menu] {
@@ -364,17 +376,24 @@ async fn department_organization_choices() -> Result<()> {
                 .bind(root).bind(granted).execute(pool).await?;
         }
         let root_token = session(pool, super_admin, tenant, root).await?;
+        // Scope helpers now revalidate the concrete session. A root context
+        // needs a newly issued root-bound session, not the child's session ID.
+        let root_user = crate::extractors::CurrentUser {
+            org_id: root, session_id: signed_session_id(&root_token)?, ..current_user.clone()
+        };
+        ensure!(state.is_platform_context(&root_user).await? && state.scoped_org_ids(&root_user).await?.is_none(), "actual platform root lost global management scope");
+        state.ensure_org_scope(&root_user, foreign, "组织").await?;
         let root_profile = get(&app, &root_token, "/api/auth/profile", StatusCode::OK).await?;
         ensure!(root_profile["tenant"]["isPlatform"]==true && root_profile["platformContext"]==true,
             "platform root profile omitted global management context");
         get(&app, &root_token, &format!("/api/organizations/tree?tenantId={other_tenant}"), StatusCode::OK).await?;
         get(&app, &root_token, &format!("/api/departments/tree?organizationId={foreign}"), StatusCode::OK).await?;
-        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,application_id,scopes) VALUES('subtree-context-client','Subtree context client','CONFIDENTIAL',$1,'profile')")
-            .bind(app_id).execute(pool).await?;
+        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,application_id,scopes,id) VALUES('subtree-context-client','Subtree context client','CONFIDENTIAL',$1,'profile',$2)")
+            .bind(app_id).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         for organization_id in [root,current] {
-            sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) \
-                         SELECT id,$3,'records','read','TENANT' FROM memberships WHERE user_id=$1 AND organization_id=$2")
-                .bind(super_admin).bind(organization_id).bind(app_id).execute(pool).await?;
+            sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) \
+                         SELECT id,$3,'records','read','TENANT' ,$4 FROM memberships WHERE user_id=$1 AND organization_id=$2")
+                .bind(super_admin).bind(organization_id).bind(app_id).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         }
         let issued_child = call(&app, &super_token, Method::POST, "/api/oauth/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
         let issued_root = call(&app, &root_token, Method::POST, "/api/oauth/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;

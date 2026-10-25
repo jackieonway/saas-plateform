@@ -8,7 +8,9 @@ function deferred() {
   return { promise, resolve, reject }
 }
 
-const client = { id: 'client-a', clientId: 'public-a', clientName: 'Public A', clientType: 'PUBLIC', requirePkce: false, grantTypes: ['authorization_code'], scopes: ['profile'], redirectUris: ['https://client.test/callback'] }
+const client = { id: '01962345-6789-7abc-8def-000000000001', clientId: 'public-a', clientName: 'Public A', clientType: 'PUBLIC', requirePkce: false,
+  subjectMode: 'USER', allowedMemberTypes: ['EMPLOYEE'], accessPolicyVersion: 1,
+  grantTypes: ['authorization_code'], scopes: ['profile'], redirectUris: ['https://client.test/callback'] }
 
 function fixture(api, clients = []) {
   let values
@@ -55,6 +57,8 @@ test('new clients use type-specific PKCE defaults and submit explicit migration 
   await f.mutations[0].promise
   assert.equal(writes[0].clientType, 'PUBLIC')
   assert.equal(writes[0].requirePkce, false)
+  assert.equal(writes[0].subjectMode, 'USER')
+  assert.deepEqual(writes[0].allowedMemberTypes, ['EMPLOYEE'])
   assert.equal(f.messages.at(-1), '客户端创建成功')
 })
 
@@ -72,10 +76,12 @@ test('editing a legacy PUBLIC client preserves compatibility until the administr
   await f.mutations[0].promise
   assert.equal(writes[0][0], client.id)
   assert.equal(writes[0][1].requirePkce, true)
+  assert.equal('allowedMemberTypes' in writes[0][1], false, 'Ordinary client editing must not submit an unversioned admission change')
+  assert.equal('subjectMode' in writes[0][1], false, 'PKCE compatibility editing preserves the registered subject purpose')
 })
 
 test('client records show whether authorization-code requests require S256', () => {
-  const f = fixture({}, [client, { ...client, id: 'client-b', requirePkce: true }])
+  const f = fixture({}, [client, { ...client, id: '01962345-6789-7abc-8def-000000000002', requirePkce: true }])
   const tree = f.render('OAuthClientsPage')
   assert.match(JSON.stringify(tree), /PKCE · 兼容模式/)
   assert.match(JSON.stringify(tree), /PKCE · 强制 S256/)

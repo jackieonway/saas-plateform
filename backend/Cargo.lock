@@ -1834,6 +1834,7 @@ dependencies = [
  "percent-encoding",
  "rand 0.8.8",
  "reqwest",
+ "ring",
  "rustix",
  "scraper",
  "serde",

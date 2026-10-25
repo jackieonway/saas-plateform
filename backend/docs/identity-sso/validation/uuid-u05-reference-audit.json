@@ -1,0 +1,180 @@
+{
+  "format": "saas-uuid-u05-reference-audit/1",
+  "date": "2026-10-24",
+  "scope": "Local WSL Ubuntu preview and its U04 targets only; no remote development or production inventory",
+  "status": "READ_ONLY_AUDIT_COMPLETE_LOCAL_EXTERNAL_CLIENT_FENCE_APPLIED_RUNTIME_REJECTION_PENDING",
+  "method": {
+    "database_connections": 0,
+    "database_writes": 0,
+    "http_requests": 0,
+    "external_messages": 0,
+    "private_values_disclosed": false,
+    "inputs": [
+      "U01 catalog/reference contracts and U02 generation/negative-fixture records",
+      "Private source-before-runtime and target-before-runtime snapshots",
+      "Private credential handoff and six service input field sets",
+      "Generated platform environment field names and old platform environment field names",
+      "Current source routes, OAuth client update DTO/SQL, agent configuration loaders and targeted v4-generator scan"
+    ]
+  },
+  "private_snapshot_bindings": {
+    "target-before-runtime.private.json_sha256": "b50a455bc6a76c18b844ccc58afc67ec8064e8829f69a8ac5eef7e0b117a21ef",
+    "source-before-runtime.private.json_sha256": "b9c564e8df9808ddff2d9f218b966e607b21e0c01a762dff7f6fb38af8788ba6",
+    "credential-handoff.private.json_sha256_at_observation": "40bcc223ac92f74a6b63827a69fe6b513172151d6c52fe15f39462b20ae636bf"
+  },
+  "oauth_before_runtime_snapshot": {
+    "registered_clients": 14,
+    "enabled": 14,
+    "confidential": 12,
+    "public": 2,
+    "application_clients": 7,
+    "dedicated_preview_flow_clients": 3,
+    "other_seed_clients": 4,
+    "opaque_client_ids_preserved_from_source": 14,
+    "client_row_uuid_ids_rekeyed": 14,
+    "selected_backend_input_client_references": 5,
+    "selected_backend_input_distinct_clients": 5,
+    "local_application_codes": [
+      "work-orders",
+      "stores",
+      "vue-workshop",
+      "legacy-jquery",
+      "websocket-chat",
+      "report-center",
+      "oauth-playground"
+    ],
+    "preview_flow_roles": [
+      "authorization-code with PKCE and refresh",
+      "public device code and refresh",
+      "confidential client credentials"
+    ],
+    "meaning": "ENABLED is the recorded database configuration status. It does not prove an RP was contacted or any grant was used. This is a pre-runtime snapshot, not a new live database read."
+  },
+  "callbacks_and_rp": {
+    "nonloopback_callback_clients": 1,
+    "nonloopback_callback_urls": 1,
+    "external_callback_origin": "https://oauthdebugger.com",
+    "external_callback_path": "/callback",
+    "external_callback_source": "The existing seed definition also registers a localhost callback; neither endpoint contains a platform UUID in path/query.",
+    "external_callback_client_selected_by_six_service_inputs": false,
+    "remaining_unselected_seed_callbacks": "Two seed authorization clients include http://localhost:9000/callback; these are absent from the selected backend inputs.",
+    "dedicated_preview_auth_snapshot_callback": "http://127.0.0.1:3000/callback",
+    "dedicated_preview_auth_handoff_callback": "http://127.0.0.1:13000/callback",
+    "handoff_callback_matches_new_preview_origin": true,
+    "handoff_is_not_live_callback_update_evidence": true,
+    "old_application_entry_definitions": {
+      "count": 7,
+      "all_loopback": true,
+      "uuid_like_entry_path_or_query_count": 0,
+      "meaning": "Old application definitions are inventory evidence; current target URL entries and actual frontend consumption require separate U05 runtime verification."
+    },
+    "external_rp_contact_or_account_state_observed": false,
+    "external_owner_confirmation_obtained": false,
+    "external_subject_rebinding_verified": false,
+    "local_fence_decision": {
+      "decided_by": "Current root task within the authorized local maintenance scope",
+      "action": "Disable only the precisely identified unselected seed client with the external callback in the fixed local U04 platform target",
+      "execution_status": "APPLIED_BY_ROOT_CONTROLLED_LOCAL_TRANSACTION",
+      "execution_evidence": {
+        "file": "uuid-u05-external-rp-fence.json",
+        "sha256": "49286352b8816615b649dd84ae5a1cfd5323101c9d4d6be3b6e968db159c9348",
+        "clients_fenced": 1,
+        "before_status": "ENABLED",
+        "after_status": "DISABLED",
+        "all_other_client_fields_preserved": true,
+        "database_default_read_only_changed": false,
+        "external_network_requests": 0,
+        "first_default_read_only_attempt": "UPDATE rejected and transaction rolled back before mutation",
+        "successful_attempt": "Explicit BEGIN READ WRITE, exact target/client gates and private before/after journal",
+        "runtime_old_and_new_credential_rejection": "PENDING_SEPARATE_U05_EXECUTION_EVIDENCE"
+      },
+      "preserve": [
+        "client row and mapped UUID identity",
+        "opaque client_id",
+        "original redirect list",
+        "private before/after journal"
+      ],
+      "required_gates": [
+        "Exact target database OID and original ENABLED status",
+        "Exact single-row selection from the private inspected snapshot",
+        "No selected six-service input references the client",
+        "Transaction and post-update readback",
+        "Old and new credentials cannot obtain authority while DISABLED"
+      ],
+      "no_external_request_required_for_this_local_fence": true,
+      "does_not_claim_external_owner_approval_or_subject_migration": true
+    }
+  },
+  "oauth_status_api_gap": {
+    "route": "PUT /api/oauth/clients/{id}",
+    "status_field_in_update_dto": false,
+    "status_column_in_update_sql": false,
+    "dedicated_status_route_present": false,
+    "unknown_fields_rejected_by_update_dto": false,
+    "unsafe_assumption": "A status-only JSON body can be ignored and return a successful response without disabling the client.",
+    "current_root_decision": "Do not modify the frozen binary and do not send an ignored status DTO. Root applied the single-client fence through the controlled local maintenance transaction and retained private evidence.",
+    "reversibility": "Restoring ENABLED would be another explicit maintenance decision; original row, callbacks and client_id are retained. No such restoration is authorized or performed by this audit."
+  },
+  "agent_and_webhook_boundary": {
+    "generated_platform_DEPLOYMENT_CONFIG_FILE_present": false,
+    "generated_platform_ZIP_DISTRIBUTION_CONFIG_FILE_present": false,
+    "old_platform_DEPLOYMENT_CONFIG_FILE_present": false,
+    "old_platform_ZIP_DISTRIBUTION_CONFIG_FILE_present": false,
+    "default_managed_target_allowlist": "empty when DEPLOYMENT_CONFIG_FILE is absent",
+    "default_zip_group_allowlist": "empty when ZIP_DISTRIBUTION_CONFIG_FILE is absent",
+    "generated_or_old_platform_webhook_named_environment_fields": 0,
+    "webhook_symbol_hits_in_audited_service_Rust_sources": 0,
+    "u04_import_evidence_initial_task_rows": {
+      "application_release_operations": 0,
+      "managed_deployment_jobs": 0,
+      "zip_distribution_jobs": 0,
+      "zip_distribution_nodes": 0
+    },
+    "meaning": "No agent target/group is enabled by the inspected local configuration. Zero initial task counts are U04 evidence, not a fresh live runtime query. No historical external installation or publication effect is claimed."
+  },
+  "opaque_values_preserved_by_contract": [
+    "OAuth client_id and machine-grant sub",
+    "appCode and applicationCode",
+    "Business order numbers, idempotency keys and counters",
+    "Managed targetId/templateId/imageRef and ZIP groupId/nodeId/policyRevision/artifactSha256/version",
+    "Imported geographical source identifiers and third-party-owned identifiers",
+    "Canonical origin and callback URL semantics, except separately authorized owned runtime configuration changes"
+  ],
+  "typed_values_rekeyed_or_reissued_by_contract": [
+    "Platform user/tenant/organization/application/client-row/member/menu/role UUID identities and business entity references through their authority map",
+    "Owned application URL revision and registered work-order ticket route segments",
+    "Fresh session/jti/nonce/request identifiers under their separate validity and replay contracts"
+  ],
+  "residual_v4_boundary": {
+    "current_targeted_service_Rust_new_v4_hits": 10,
+    "current_targeted_service_Rust_runtime_v4_generator_hits": 0,
+    "classification": "All ten remaining matches are the already registered explicit rejection or historical schema/stage fixtures; line offsets may differ after independent identity work.",
+    "native_crypto_randomUUID_hits_in_current_frontend_src_and_sdk_src": 0,
+    "historical_migrations_and_sdk_releases": "Remain original evidence; no blanket text replacement and no claim that repository text contains zero v4 examples.",
+    "source_v4_databases_and_old_signed_material": "Retained under the source/freeze evidence policy; not valid new-epoch credentials or active target identity input.",
+    "unknown_active_uuid_paths": "Remain fail-closed under the reference registry; a regex match alone does not authorize conversion."
+  },
+  "limits": [
+    "No external owner or user confirmation has been inferred from seed configuration, lack of observed traffic or localhost bindings.",
+    "External debugger/RP account state and previous consumption of old sub are unknown; the local DISABLED fence does not prove their migration.",
+    "Remote development, production and integrations absent from the local snapshots remain unaudited.",
+    "Current callback updates, target service consumption, signature rotation and credential rejection are recorded separately by U05 execution evidence.",
+    "This file does not mark UUID-U05, UUID-U06 or Q4 as globally complete."
+  ],
+  "evidence": [
+    "uuid-u01.md",
+    "uuid-u02.md",
+    "uuid-u02-runtime-scan.json",
+    "uuid-u04.md",
+    "uuid-u04-summary.json",
+    "uuid-u05-sdk.md",
+    "uuid-u05-runtime-field-catalog.json",
+    "uuid-u05-external-rp-fence.json",
+    "../uuid-reference-contract.md",
+    "../../../ops/recovery/uuid-references-v2.json",
+    "../../../ops/recovery/scripts/prepare-uuid-u05-runtime.py",
+    "../../../src/routes/oauth_admin.rs",
+    "../../../src/managed_deployments/config.rs",
+    "../../../src/artifact_distribution/config.rs"
+  ]
+}

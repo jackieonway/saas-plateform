@@ -72,8 +72,7 @@ fn correlation_filter(
     key: &str,
 ) -> Result<Option<Uuid>, AppError> {
     match params.get(key).filter(|value| !value.is_empty()) {
-        Some(value) => value
-            .parse()
+        Some(value) => crate::util::uuid7::parse_uuid(value)
             .map(Some)
             .map_err(|_| AppError::bad_request(format!("{key} 参数非法"))),
         None => Ok(None),
@@ -88,7 +87,8 @@ fn tenant_filter_clause(tf: &str) -> Result<(&'static str, Option<Uuid>), AppErr
     } else if tf == "none" {
         Ok((" AND tenant_id IS NULL", None))
     } else {
-        let id = Uuid::parse_str(tf).map_err(|_| AppError::bad_request("tenant_id 参数非法"))?;
+        let id = crate::util::uuid7::parse_uuid(tf)
+            .map_err(|_| AppError::bad_request("tenant_id 参数非法"))?;
         Ok((" AND ($4::uuid IS NULL OR tenant_id = $4)", Some(id)))
     }
 }

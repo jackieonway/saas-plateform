@@ -75,7 +75,7 @@ export function useNotificationSocket(): {
   const prefsQuery = useQuery({
     queryKey: scope ? [...scope.key, "prefs"] : ["notifications", "inactive", "prefs"],
     queryFn: ({ signal }) => notificationsApi.getPrefs(notificationRequestOptions(scope!, signal)),
-    enabled: !!scope,
+    enabled: !!scope && scope.current(),
     staleTime: 30_000,
     retry: 1,
   })
@@ -101,7 +101,9 @@ export function useNotificationSocket(): {
       reconnectionDelayMax: 30_000,
       timeout: 10000,
     })
-    const live = () => !stopped && captured.current()
+    // Public Notification 1 does not carry the private member proof. Its
+    // callbacks are usable only inside this fully bound, uncancelled lifetime.
+    const live = () => !stopped && !captured.signal.aborted && captured.current()
     const timers = () => {
       if (expiryTimer !== null) clearTimeout(expiryTimer)
       if (authTimer !== null) clearTimeout(authTimer)
@@ -132,6 +134,7 @@ export function useNotificationSocket(): {
     captured.signal.addEventListener("abort", stop, { once: true })
     if (captured.signal.aborted) { stop(); return stop }
     const recover = () => {
+      if (!live()) return
       // 从 DB 恢复；fallback 列表即使铃铛未展开也补拉，绝不把这批记录转为 Toast。
       void Promise.allSettled([
         queryClient.invalidateQueries({ queryKey: captured.key, refetchType: "all" }),
@@ -153,7 +156,7 @@ export function useNotificationSocket(): {
     })
     socket.on("authenticated", (data: unknown) => {
       if (!live()) return
-      if (!isNotificationSocketContext(data, captured)) { stop(); return }
+      if (!isNotificationSocketContext(data, captured) || Object.keys(data).length !== 5) { stop(); return }
       timers()
       authenticated = data
       expiryTimer = setTimeout(stop, Math.max(1, Date.parse(data.expiresAt) - Date.now()))
@@ -169,7 +172,8 @@ export function useNotificationSocket(): {
     socket.on("connect_error", disconnected)
 
     socket.on("notification", async (data: unknown) => {
-      if (!live() || !authenticated || Date.parse(authenticated.expiresAt) <= Date.now() || !isRealtimeNotification(data, captured)) return
+      if (!live() || !authenticated || Date.parse(authenticated.expiresAt) <= Date.now() ||
+          !isRealtimeNotification(data, captured) || Object.keys(data).length !== 12) return
       const n = data
       if (seenIds.has(n.id)) return
       seenIds.add(n.id)
@@ -221,5 +225,5 @@ export function useNotificationSocket(): {
 
   const active = !!scope && scope.current() && state.scope === scope
   return { connected: active && state.connected, lastNotificationAt: active ? state.lastNotificationAt : 0,
-    prefs: scope ? prefsQuery.data : undefined }
+    prefs: scope?.current() ? prefsQuery.data : undefined }
 }

@@ -68,7 +68,10 @@ impl Database {
             .connect_with(options.clone())
             .await
             .map_err(|error| database_error("administration connection", &error))?;
-        let name = format!("notification_test_{}", Uuid::new_v4().simple());
+        let name = format!(
+            "notification_test_{}",
+            crate::util::uuid7::new_uuid().simple()
+        );
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
             .await
@@ -210,8 +213,11 @@ async fn session(
         .fetch_one(pool)
         .await?;
     let now = Utc::now().timestamp();
-    let id: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,to_timestamp($4)) RETURNING id")
-        .bind(user).bind(tenant).bind(org).bind((now + database_ttl) as f64).fetch_one(pool).await?;
+    let id: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,to_timestamp($4),$5,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id")
+        .bind(user).bind(tenant).bind(org).bind((now + database_ttl) as f64).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let token = jwt::sign(
         &jwt::Claims {
             sub: user.to_string(),
@@ -234,10 +240,11 @@ async fn session(
 
 async fn tenant(pool: &PgPool, name: &str, platform: bool) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO tenants(name,code,is_platform) VALUES($1,$1,$2) RETURNING id",
+        "INSERT INTO tenants(name,code,is_platform,id) VALUES($1,$1,$2,$3) RETURNING id",
     )
     .bind(name)
     .bind(platform)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?)
 }
@@ -249,26 +256,55 @@ async fn organization(
     parent: Option<Uuid>,
 ) -> Result<Uuid> {
     Ok(sqlx::query_scalar(
-        "INSERT INTO organizations(tenant_id,name,parent_id) VALUES($1,$2,$3) RETURNING id",
+        "INSERT INTO organizations(tenant_id,name,parent_id,id) VALUES($1,$2,$3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(name)
     .bind(parent)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?)
 }
 
 async fn user(pool: &PgPool, name: &str, super_admin: bool, orgs: &[Uuid]) -> Result<Uuid> {
-    let id: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,is_super_admin) VALUES($1,'isolated-unused-password',$2) RETURNING id")
-        .bind(name).bind(super_admin).fetch_one(pool).await?;
+    let id: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,is_super_admin,id) VALUES($1,'isolated-unused-password',$2,$3) RETURNING id")
+        .bind(name).bind(super_admin).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     for org in orgs {
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+        sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(id)
             .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(pool)
             .await?;
     }
     Ok(id)
+}
+
+async fn employee_proof(pool: &PgPool, user: Uuid, org: Uuid) -> Result<(Uuid, String, i64)> {
+    Ok(sqlx::query_as(
+        "SELECT id,member_type,identity_version FROM memberships WHERE user_id=$1 \
+         AND organization_id=$2 AND member_type='EMPLOYEE' AND status='ENABLED'",
+    )
+    .bind(user)
+    .bind(org)
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn system_notification(
+    pool: &PgPool,
+    user: Uuid,
+    tenant: Uuid,
+    org: Uuid,
+    title: &str,
+) -> Result<Uuid> {
+    let (membership, member_type, version) = employee_proof(pool, user, org).await?;
+    Ok(sqlx::query_scalar(
+        "INSERT INTO notifications(user_id,type,title,content,link,source_kind,tenant_id,organization_id,id, \
+         recipient_membership_id,recipient_member_type,recipient_identity_version) \
+         VALUES($1,'INFO',$2,'','','SYSTEM',$3,$4,$5,$6,$7,$8) RETURNING id",
+    ).bind(user).bind(title).bind(tenant).bind(org).bind(crate::util::uuid7::new_uuid())
+        .bind(membership).bind(member_type).bind(version).fetch_one(pool).await?)
 }
 
 async fn grant_application(pool: &PgPool, tenant: Uuid, org: Uuid, app: Uuid) -> Result<()> {
@@ -356,12 +392,12 @@ impl Harness {
         let mut applications = Vec::new();
         let mut menus = Vec::new();
         for code in [APP_CODE, OTHER_CODE] {
-            let app: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,entry_url) VALUES($1,$1,$2,'HTML',$3) RETURNING id")
-                .bind(code).bind(format!("/micro/{code}")).bind(format!("/sub-apps/{code}/index.html")).fetch_one(pool).await?;
-            let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON','Publish','notification:publish') RETURNING id")
-                .bind(app).fetch_one(pool).await?;
-            sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,grant_types,scopes,access_token_validity,application_id) VALUES($1,$2,$1,'CONFIDENTIAL','client_credentials','profile',300,$3)")
-                .bind(code).bind(hash::sha256_hex("notification-test-client-secret-only")).bind(app).execute(pool).await?;
+            let app: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,entry_url,id) VALUES($1,$1,$2,'HTML',$3,$4) RETURNING id")
+                .bind(code).bind(format!("/micro/{code}")).bind(format!("/sub-apps/{code}/index.html")).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+            let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,id) VALUES($1,'BUTTON','Publish','notification:publish',$2) RETURNING id")
+                .bind(app).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+            sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,subject_mode,allowed_member_types,grant_types,scopes,access_token_validity,application_id,id) VALUES($1,$2,$1,'CONFIDENTIAL','MACHINE',ARRAY[]::text[],'client_credentials','profile',300,$3,$4)")
+                .bind(code).bind(hash::sha256_hex("notification-test-client-secret-only")).bind(app).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
             for (tid, org) in [
                 (tenant_a, root),
                 (tenant_a, child),
@@ -382,10 +418,10 @@ impl Harness {
             applications.push(app);
             menus.push(menu);
         }
-        let root_role: Uuid = sqlx::query_scalar("INSERT INTO roles(tenant_id,organization_id,name) VALUES($1,$2,'Notification publisher') RETURNING id")
-            .bind(tenant_a).bind(root).fetch_one(pool).await?;
-        let remote_role: Uuid = sqlx::query_scalar("INSERT INTO roles(tenant_id,organization_id,name) VALUES($1,$2,'Remote publisher') RETURNING id")
-            .bind(tenant_b).bind(remote).fetch_one(pool).await?;
+        let root_role: Uuid = sqlx::query_scalar("INSERT INTO roles(tenant_id,organization_id,name,id) VALUES($1,$2,'Notification publisher',$3) RETURNING id")
+            .bind(tenant_a).bind(root).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+        let remote_role: Uuid = sqlx::query_scalar("INSERT INTO roles(tenant_id,organization_id,name,id) VALUES($1,$2,'Remote publisher',$3) RETURNING id")
+            .bind(tenant_b).bind(remote).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         for (uid, role, org) in [
             (publisher, root_role, root),
             (second_publisher, root_role, root),
@@ -407,8 +443,8 @@ impl Harness {
                     .await?;
             }
         }
-        let audit_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON','Audit','system:audit') RETURNING id")
-            .bind(applications[0]).fetch_one(pool).await?;
+        let audit_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,id) VALUES($1,'BUTTON','Audit','system:audit',$2) RETURNING id")
+            .bind(applications[0]).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
             .bind(tenant_a)
             .bind(audit_menu)
@@ -436,8 +472,8 @@ impl Harness {
             } else if permission == "system:audit" {
                 audit_menu
             } else {
-                sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON',$2,$2) RETURNING id")
-                    .bind(applications[0]).bind(permission).fetch_one(pool).await?
+                sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,id) VALUES($1,'BUTTON',$2,$2,$3) RETURNING id")
+                    .bind(applications[0]).bind(permission).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?
             };
             sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
                 .bind(platform)
@@ -501,8 +537,8 @@ impl Harness {
     }
 
     async fn grant(&self, user: Uuid, org: Uuid, app: Uuid, scope: &str) -> Result<()> {
-        let affected = sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) SELECT id,$3,'notification','publish',$4 FROM memberships WHERE user_id=$1 AND organization_id=$2 ON CONFLICT(membership_id,application_id,resource_code,action_code) DO UPDATE SET scope_type=EXCLUDED.scope_type")
-            .bind(user).bind(org).bind(app).bind(scope).execute(&self.pool).await?.rows_affected();
+        let affected = sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) SELECT id,$3,'notification','publish',$4 ,$5 FROM memberships WHERE user_id=$1 AND organization_id=$2 AND member_type='EMPLOYEE' AND status='ENABLED' ON CONFLICT(membership_id,application_id,resource_code,action_code) DO UPDATE SET scope_type=EXCLUDED.scope_type")
+            .bind(user).bind(org).bind(app).bind(scope).bind(crate::util::uuid7::new_uuid()).execute(&self.pool).await?.rows_affected();
         ensure!(affected == 1, "grant fixture has no direct membership");
         Ok(())
     }
@@ -562,6 +598,37 @@ fn id_of(body: &Value, field: &str) -> Result<Uuid> {
         .parse()
         .map_err(Into::into)
 }
+fn exact_fields(body: &Value, expected: &[&str]) -> Result<()> {
+    let mut actual: Vec<&str> = body
+        .as_object()
+        .ok_or_else(|| anyhow!("contract body is not an object"))?
+        .keys()
+        .map(String::as_str)
+        .collect();
+    let mut expected = expected.to_vec();
+    actual.sort_unstable();
+    expected.sort_unstable();
+    ensure!(actual == expected, "contract field set changed: {actual:?}");
+    Ok(())
+}
+
+async fn assert_new_system_proofs(pool: &PgPool) -> Result<()> {
+    let unbound: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notifications n WHERE n.source_kind='SYSTEM' AND NOT EXISTS( \
+         SELECT 1 FROM memberships m WHERE m.id=n.recipient_membership_id \
+         AND m.user_id=n.user_id AND m.organization_id=n.organization_id \
+         AND m.member_type='EMPLOYEE' AND m.member_type=n.recipient_member_type \
+         AND m.identity_version=n.recipient_identity_version)",
+    )
+    .fetch_one(pool)
+    .await?;
+    ensure!(
+        unbound == 0,
+        "new SYSTEM call site omitted or guessed its concrete recipient proof"
+    );
+    Ok(())
+}
+
 fn user_target(user: Uuid, org: Uuid) -> Value {
     json!({"kind":"USER","userId":user,"organizationId":org})
 }
@@ -688,9 +755,10 @@ async fn notification_tenant_grants_obey_selected_organization_subtree() -> Resu
         )
         .await?;
         for org in [platform_child, platform_leaf, platform_peer] {
-            sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+            sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
                 .bind(platform_user)
                 .bind(org)
+                .bind(crate::util::uuid7::new_uuid())
                 .execute(&db.pool)
                 .await?;
             grant_application(&db.pool, platform_tenant, org, h.main_app).await?;
@@ -870,6 +938,12 @@ async fn notification_idempotency_namespaces_concurrency_and_transaction_failure
         let a=a?; let b=b?;
         ensure!(a["publicationId"]==b["publicationId"] && a["duplicate"]!=b["duplicate"], "concurrent requests did not share one original publication");
         ensure!(h.counts("concurrent-key").await?==(1,1), "concurrent publication duplicated records");
+        let publisher_proof:(Uuid,String,i64)=sqlx::query_as("SELECT publisher_membership_id,publisher_member_type,publisher_identity_version FROM notification_publications WHERE id=$1")
+            .bind(id_of(&a,"publicationId")?).fetch_one(&db.pool).await?;
+        ensure!(publisher_proof==employee_proof(&db.pool,h.publisher,h.root).await?, "publication omitted its original publisher member proof");
+        let recipient_proof:(Uuid,String,i64)=sqlx::query_as("SELECT recipient_membership_id,recipient_member_type,recipient_identity_version FROM notifications WHERE publication_id=$1")
+            .bind(id_of(&a,"publicationId")?).fetch_one(&db.pool).await?;
+        ensure!(recipient_proof==employee_proof(&db.pool,h.recipient,h.root).await?, "delivery omitted its original recipient member proof");
         let mut normalized=body("normalized-key",user_target(h.recipient,h.root));normalized["content"]=json!("");
         let first_normalized=h.publish(&token,normalized.clone()).await?;
         normalized.as_object_mut().unwrap().remove("content");normalized.as_object_mut().unwrap().remove("link");normalized["title"]=json!("  通知测试  ");
@@ -900,7 +974,7 @@ async fn notification_idempotency_namespaces_concurrency_and_transaction_failure
         let t_second=h.app_token(&h.second_session.token,APP_CODE).await?;
         for (code,tok,uid,org) in [(APP_CODE,token.as_str(),h.publisher,h.root),(APP_CODE,t_child.as_str(),h.publisher,h.child),(APP_CODE,t_remote.as_str(),h.publisher,h.remote),(OTHER_CODE,t_other.as_str(),h.publisher,h.root),(APP_CODE,t_second.as_str(),h.second_publisher,h.root)] {
             let response=ok(&h.router,Method::POST,&format!("/api/apps/{code}/notifications"),tok,Some(body("namespace-key",user_target(uid,org)))).await?;
-            ensure!(response["duplicate"]==false, "five-part namespace incorrectly deduplicated separate identities");
+            ensure!(response["duplicate"]==false, "publisher member namespace incorrectly deduplicated separate identities");
         }
         ensure!(h.counts("namespace-key").await?==(5,5), "five namespaces did not remain independent");
         for (table,key) in [("notifications","insert-failure"),("audit_logs","audit-failure")] {
@@ -937,7 +1011,8 @@ async fn notification_idempotency_namespaces_concurrency_and_transaction_failure
                 } else { None };
                 (format!("/api/apps/{APP_CODE}/notifications"),fresh,expiry)
             };
-            let namespace=json!([h.tenant_a,h.root,h.main_app,h.publisher,case]).to_string();
+            let (publisher_membership,_,publisher_version)=employee_proof(&db.pool,h.publisher,h.root).await?;
+            let namespace=json!([h.tenant_a,h.root,h.main_app,h.publisher,publisher_membership,publisher_version,case]).to_string();
             let mut blocker=db.pool.begin().await?;
             sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,10))").bind(namespace).execute(&mut *blocker).await?;
             let queued_router=h.router.clone();let queued_bearer=queued_token.clone();
@@ -1013,20 +1088,24 @@ async fn notification_unowned_rows_and_context_inbox_boundaries() -> Result<()> 
         let no_membership=user(&db.pool,"notification-legacy-unassigned",false,&[]).await?;
         let mut legacy_ids=Vec::new();
         for (uid,read) in [(no_membership,false),(h.second_publisher,true),(h.recipient,false)] {
-            let id:Uuid=sqlx::query_scalar("INSERT INTO notifications(user_id,type,title,content,link,is_read,read_at,created_at) VALUES($1,'SECURITY','Legacy retained','旧通知原文','/profile',$2,CASE WHEN $2 THEN TIMESTAMPTZ '2024-01-02T00:00:00Z' ELSE NULL END,TIMESTAMPTZ '2024-01-01T00:00:00Z') RETURNING id")
-                .bind(uid).bind(read).fetch_one(&db.pool).await?; legacy_ids.push(id);
+            let id:Uuid=sqlx::query_scalar("INSERT INTO notifications(user_id,type,title,content,link,is_read,read_at,created_at,id) VALUES($1,'SECURITY','Legacy retained','旧通知原文','/profile',$2,CASE WHEN $2 THEN TIMESTAMPTZ '2024-01-02T00:00:00Z' ELSE NULL END,TIMESTAMPTZ '2024-01-01T00:00:00Z',$3) RETURNING id")
+                .bind(uid).bind(read).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?; legacy_ids.push(id);
         }
         let snapshot_sql="SELECT jsonb_agg(jsonb_build_object('id',id,'user',user_id,'title',title,'content',content,'link',link,'type',type,'read',is_read,'readAt',read_at,'createdAt',created_at) ORDER BY id) FROM notifications WHERE id=ANY($1)";
         let before:Value=sqlx::query_scalar(snapshot_sql).bind(&legacy_ids).fetch_one(&db.pool).await?;
         sqlx::migrate!("./migrations").run(&db.pool).await?;
         let after:Value=sqlx::query_scalar(snapshot_sql).bind(&legacy_ids).fetch_one(&db.pool).await?;
         ensure!(before==after, "restart altered message content or read timestamps");
-        let preserved:i64=sqlx::query_scalar("SELECT count(*) FROM notifications WHERE id=ANY($1) AND source_kind='LEGACY' AND tenant_id IS NULL AND organization_id IS NULL AND application_id IS NULL AND publication_id IS NULL")
+        let preserved:i64=sqlx::query_scalar("SELECT count(*) FROM notifications WHERE id=ANY($1) AND source_kind='LEGACY' AND tenant_id IS NULL AND organization_id IS NULL AND application_id IS NULL AND publication_id IS NULL AND recipient_membership_id IS NULL AND recipient_member_type IS NULL AND recipient_identity_version IS NULL")
             .bind(&legacy_ids).fetch_one(&db.pool).await?;
         ensure!(preserved==3, "unowned rows acquired notification ownership");
+        // A historical row with user/tenant/org still cannot prove which
+        // membership generation originally received it. Do not repair it.
+        let unbound_context:Uuid=sqlx::query_scalar("INSERT INTO notifications(user_id,title,source_kind,tenant_id,organization_id,id) VALUES($1,'Archived unbound context','SYSTEM',$2,$3,$4) RETURNING id")
+            .bind(h.recipient).bind(h.tenant_a).bind(h.root).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
         ensure!(inbox(&h,&h.second_session.token).await?["total"]==0 && unread(&h,&h.recipient_session.token).await?==0, "legacy data entered a contextual inbox");
         let legacy=ok(&h.router,Method::GET,"/api/notifications/legacy?page=1&size=100",&h.platform_session.token,None).await?;
-        ensure!(legacy["total"]==3, "platform legacy audit did not preserve the old rows");
+        ensure!(legacy["total"]==4 && legacy["records"].as_array().is_some_and(|rows|rows.iter().any(|row|row["id"]==json!(unbound_context))), "platform legacy audit did not preserve unbound historical rows");
         rejected(&h.router,Method::GET,"/api/notifications/legacy",&h.publisher_session.token,None,&[StatusCode::FORBIDDEN]).await?;
         let token=h.app_token(&h.publisher_session.token,APP_CODE).await?;
         rejected(&h.router,Method::GET,"/api/notifications/legacy",&token,None,&[StatusCode::UNAUTHORIZED]).await?;
@@ -1034,8 +1113,7 @@ async fn notification_unowned_rows_and_context_inbox_boundaries() -> Result<()> 
         let child=h.publish(&token,body("inbox-child",user_target(h.recipient,h.child))).await?;
         let root_id=notification_id(&db.pool,&root,h.root,h.recipient).await?;
         let child_id=notification_id(&db.pool,&child,h.child,h.recipient).await?;
-        let system:Uuid=sqlx::query_scalar("INSERT INTO notifications(user_id,type,title,content,link,source_kind,tenant_id,organization_id) VALUES($1,'INFO','Context system','','','SYSTEM',$2,$3) RETURNING id")
-            .bind(h.recipient).bind(h.tenant_a).bind(h.root).fetch_one(&db.pool).await?;
+        let system=system_notification(&db.pool,h.recipient,h.tenant_a,h.root,"Context system").await?;
         ensure!(inbox(&h,&h.recipient_session.token).await?["total"]==2 && unread(&h,&h.recipient_session.token).await?==2, "root inbox count/list differ");
         ensure!(inbox(&h,&h.recipient_child_session.token).await?["total"]==1 && unread(&h,&h.recipient_child_session.token).await?==1 && unread(&h,&h.recipient_remote_session.token).await?==0, "same user saw another organization or tenant's messages");
         let (status,_)=call(&h.router,Method::PUT,&format!("/api/notifications/{root_id}/read"),&h.recipient_child_session.token,None).await?;
@@ -1047,7 +1125,7 @@ async fn notification_unowned_rows_and_context_inbox_boundaries() -> Result<()> 
         let remaining:i64=sqlx::query_scalar("SELECT count(*) FROM notifications WHERE id=ANY($1)").bind(vec![root_id,child_id,legacy_ids[2]]).fetch_one(&db.pool).await?;
         ensure!(remaining==2, "batch delete removed another context or legacy record");
         ok(&h.router,Method::PUT,"/api/notifications/read-all",&h.recipient_session.token,None).await?;
-        ensure!(is_read(&db.pool,system).await? && !is_read(&db.pool,child_id).await? && unread(&h,&h.recipient_session.token).await?==0, "read-all exceeded current context");
+        ensure!(is_read(&db.pool,system).await? && !is_read(&db.pool,child_id).await? && !is_read(&db.pool,unbound_context).await? && unread(&h,&h.recipient_session.token).await?==0, "read-all exceeded current member generation");
         sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2").bind(h.child).bind(h.main_app).execute(&db.pool).await?;
         ensure!(inbox(&h,&h.recipient_child_session.token).await?["total"]==0 && unread(&h,&h.recipient_child_session.token).await?==0, "revoked app's historical notifications stayed visible");
         let retained:i64=sqlx::query_scalar("SELECT count(*) FROM notifications WHERE id=$1").bind(child_id).fetch_one(&db.pool).await?;
@@ -1056,8 +1134,21 @@ async fn notification_unowned_rows_and_context_inbox_boundaries() -> Result<()> 
         ok(&h.router,Method::PUT,"/api/notifications/prefs",&h.publisher_session.token,Some(preference)).await?;
         let theirs=ok(&h.router,Method::GET,"/api/notifications/prefs",&h.recipient_session.token,None).await?;
         ensure!(theirs["dndEnabled"]==false, "one user's preference changed another user");
-        let own=ok(&h.router,Method::GET,"/api/notifications/prefs",&h.child_session.token,None).await?;
-        ensure!(own["dndEnabled"]==true, "personal preferences were accidentally organization-specific");
+        let child_preference=ok(&h.router,Method::GET,"/api/notifications/prefs",&h.child_session.token,None).await?;
+        ensure!(child_preference["dndEnabled"]==false, "preferences crossed employee membership namespaces");
+        let reconnected=session(&db.pool,h.publisher,h.tenant_a,h.root,3600,3600).await?;
+        let own=ok(&h.router,Method::GET,"/api/notifications/prefs",&reconnected.token,None).await?;
+        ensure!(own["dndEnabled"]==true, "same member generation lost preferences on reconnect");
+        let (membership,_,version)=employee_proof(&db.pool,h.publisher,h.root).await?;
+        sqlx::query("UPDATE memberships SET identity_version=identity_version+1 WHERE id=$1")
+            .bind(membership).execute(&db.pool).await?;
+        let next_generation=session(&db.pool,h.publisher,h.tenant_a,h.root,3600,3600).await?;
+        let reset=ok(&h.router,Method::GET,"/api/notifications/prefs",&next_generation.token,None).await?;
+        ensure!(reset["dndEnabled"]==false, "preferences silently carried into a new member generation");
+        let retained:bool=sqlx::query_scalar("SELECT dnd_enabled FROM notification_member_prefs WHERE membership_id=$1 AND identity_version=$2")
+            .bind(membership).bind(version).fetch_one(&db.pool).await?;
+        ensure!(retained, "old member preference generation was overwritten");
+        rejected(&h.router,Method::GET,"/api/notifications/prefs",&h.publisher_session.token,None,&[StatusCode::UNAUTHORIZED]).await?;
         Ok(())
     }.await;
     db.finish(result).await
@@ -1071,8 +1162,10 @@ async fn notification_socket_context_validates_live_session_and_delivery_visibil
     let result:Result<()>=async {
         let h=Harness::create(&db.pool).await?;
         let path="/api/notifications/socket-context";
+        let proof_path="/api/internal/notifications/context-proof";
         let token=h.app_token(&h.publisher_session.token,APP_CODE).await?;
         rejected(&h.router,Method::GET,path,&token,None,&[StatusCode::UNAUTHORIZED]).await?;
+        rejected(&h.router,Method::GET,proof_path,&token,None,&[StatusCode::UNAUTHORIZED]).await?;
         let mut missing_sid=jwt::verify(&h.publisher_session.token,SECRET)?; missing_sid.sid=None;
         rejected(&h.router,Method::GET,path,&jwt::sign(&missing_sid,SECRET)?,None,&[StatusCode::UNAUTHORIZED]).await?;
         let mut wrong_binding=jwt::verify(&h.publisher_session.token,SECRET)?;wrong_binding.org=Some(h.child.to_string());
@@ -1089,21 +1182,49 @@ async fn notification_socket_context_validates_live_session_and_delivery_visibil
             let claims=jwt::verify(&fresh.token,SECRET)?;
             let expires:DateTime<Utc>=sqlx::query_scalar("SELECT expires_at FROM platform_sessions WHERE id=$1").bind(fresh.id).fetch_one(&db.pool).await?;
             let context=ok(&h.router,Method::GET,path,&fresh.token,None).await?;
+            exact_fields(&context,&["contractVersion","userId","tenantId","organizationId","sessionId","expiresAt"])?;
             ensure!(context["contractVersion"]=="1.0" && context["userId"]==h.recipient.to_string() && context["tenantId"]==h.tenant_a.to_string() && context["organizationId"]==h.root.to_string() && context["sessionId"]==fresh.id.to_string(), "socket context identity is not authoritative");
             let returned=DateTime::parse_from_rfc3339(context["expiresAt"].as_str().ok_or_else(||anyhow!("socket expiration missing"))?)?.timestamp();
             ensure!(returned==claims.exp.min(expires.timestamp()), "socket context did not use earlier JWT/database expiry");
+            let proof=ok(&h.router,Method::GET,proof_path,&fresh.token,None).await?;
+            exact_fields(&proof,&["proofVersion","contractVersion","userId","tenantId","organizationId","sessionId","expiresAt","membershipId","memberType","identityVersion","accountVersion"])?;
+            for shared in ["contractVersion","userId","tenantId","organizationId","sessionId","expiresAt"] {
+                ensure!(proof[shared]==context[shared], "internal notification proof changed public {shared}");
+            }
+            let (membership,member_type,identity_version,account_version):(Uuid,String,i64,i64)=sqlx::query_as(
+                "SELECT membership_id,member_type,identity_version,account_version FROM platform_sessions WHERE id=$1")
+                .bind(fresh.id).fetch_one(&db.pool).await?;
+            ensure!(proof["proofVersion"]=="1" && proof["membershipId"]==json!(membership)
+                && proof["memberType"]==member_type && member_type=="EMPLOYEE"
+                && proof["identityVersion"].as_i64()==Some(identity_version) && identity_version>=1
+                && proof["accountVersion"].as_i64()==Some(account_version) && account_version>=0,
+                "internal notification proof does not carry exact server identity generations as integers");
         }
+        let mut hints=sqlx::postgres::PgListener::connect_with(&db.pool).await?;
+        hints.listen("new_notification").await?;
         let published=h.publish(&token,body("socket-owned",user_target(h.recipient,h.root))).await?;
         let notification=notification_id(&db.pool,&published,h.root,h.recipient).await?;
+        let hint=tokio::time::timeout(Duration::from_secs(10),hints.recv()).await
+            .map_err(|_|anyhow!("notification identity hint was not delivered"))??;
+        let hint:Value=serde_json::from_str(hint.payload())?;
+        exact_fields(&hint,&["hintVersion","id","userId","tenantId","organizationId","membershipId","memberType","identityVersion"])?;
+        let (membership,_,identity_version)=employee_proof(&db.pool,h.recipient,h.root).await?;
+        ensure!(hint["hintVersion"]=="1" && hint["id"]==json!(notification) && hint["userId"]==json!(h.recipient)
+            && hint["tenantId"]==json!(h.tenant_a) && hint["organizationId"]==json!(h.root)
+            && hint["membershipId"]==json!(membership) && hint["memberType"]=="EMPLOYEE"
+            && hint["identityVersion"].as_i64()==Some(identity_version),
+            "private notification hint changed its concrete recipient proof");
         let delivery_path=format!("{path}?notificationId={notification}");
-        let system:Uuid=sqlx::query_scalar("INSERT INTO notifications(user_id,title,source_kind,tenant_id,organization_id) VALUES($1,'Socket system','SYSTEM',$2,$3) RETURNING id")
-            .bind(h.recipient).bind(h.tenant_a).bind(h.root).fetch_one(&db.pool).await?;
+        let system=system_notification(&db.pool,h.recipient,h.tenant_a,h.root,"Socket system").await?;
         let system_path=format!("{path}?notificationId={system}");
         ok(&h.router,Method::GET,&delivery_path,&h.recipient_session.token,None).await?;
+        ok(&h.router,Method::GET,&format!("{proof_path}?notificationId={notification}"),&h.recipient_session.token,None).await?;
         rejected(&h.router,Method::GET,&delivery_path,&h.recipient_child_session.token,None,&[StatusCode::NOT_FOUND]).await?;
+        rejected(&h.router,Method::GET,&format!("{proof_path}?notificationId={notification}"),&h.recipient_child_session.token,None,&[StatusCode::NOT_FOUND]).await?;
         rejected(&h.router,Method::GET,&delivery_path,&h.recipient_remote_session.token,None,&[StatusCode::NOT_FOUND]).await?;
-        let legacy:Uuid=sqlx::query_scalar("INSERT INTO notifications(user_id,title) VALUES($1,'isolated legacy') RETURNING id").bind(h.recipient).fetch_one(&db.pool).await?;
+        let legacy:Uuid=sqlx::query_scalar("INSERT INTO notifications(user_id,title,id) VALUES($1,'isolated legacy',$2) RETURNING id").bind(h.recipient).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
         rejected(&h.router,Method::GET,&format!("{path}?notificationId={legacy}"),&h.recipient_session.token,None,&[StatusCode::NOT_FOUND]).await?;
+        rejected(&h.router,Method::GET,&format!("{proof_path}?notificationId={legacy}"),&h.recipient_session.token,None,&[StatusCode::NOT_FOUND]).await?;
         sqlx::query("DELETE FROM organization_applications WHERE organization_id=$1 AND application_id=$2").bind(h.root).bind(h.main_app).execute(&db.pool).await?;
         rejected(&h.router,Method::GET,&delivery_path,&h.recipient_session.token,None,&[StatusCode::FORBIDDEN,StatusCode::NOT_FOUND]).await?;
         ok(&h.router,Method::GET,&system_path,&h.recipient_session.token,None).await?;
@@ -1114,6 +1235,7 @@ async fn notification_socket_context_validates_live_session_and_delivery_visibil
         sqlx::query("UPDATE applications SET status='ENABLED' WHERE id=$1").bind(h.main_app).execute(&db.pool).await?;
         sqlx::query("UPDATE platform_sessions SET revoked_at=now() WHERE id=$1").bind(h.recipient_session.id).execute(&db.pool).await?;
         rejected(&h.router,Method::GET,path,&h.recipient_session.token,None,&[StatusCode::UNAUTHORIZED]).await?;
+        rejected(&h.router,Method::GET,proof_path,&h.recipient_session.token,None,&[StatusCode::UNAUTHORIZED]).await?;
         ok(&h.router,Method::GET,path,&h.recipient_child_session.token,None).await?;
         sqlx::query("DELETE FROM memberships WHERE user_id=$1 AND organization_id=$2").bind(h.recipient).bind(h.child).execute(&db.pool).await?;
         rejected(&h.router,Method::GET,path,&h.recipient_child_session.token,None,&[StatusCode::UNAUTHORIZED]).await?;
@@ -1169,14 +1291,35 @@ async fn notification_input_limits_and_context_constraints_fail_before_partial_p
             .bind(id_of(&publication,"publicationId")?).fetch_one(&db.pool).await?;
         ensure!(saved.0.chars().count()==200 && saved.1.chars().count()==8192 && saved.2==unicode_link,
             "valid Unicode character boundaries or application link were rejected or altered");
-        let bad_owner=sqlx::query("INSERT INTO notifications(user_id,title,source_kind,tenant_id,organization_id) VALUES($1,'wrong owner','SYSTEM',$2,$3)")
-            .bind(h.recipient).bind(h.tenant_a).bind(h.remote).execute(&db.pool).await;
+        let (recipient_membership,recipient_type,recipient_version)=employee_proof(&db.pool,h.recipient,h.root).await?;
+        let bad_owner=sqlx::query("INSERT INTO notifications(user_id,title,source_kind,tenant_id,organization_id,id,recipient_membership_id,recipient_member_type,recipient_identity_version) VALUES($1,'wrong owner','SYSTEM',$2,$3,$4,$5,$6,$7)")
+            .bind(h.recipient).bind(h.tenant_a).bind(h.remote).bind(crate::util::uuid7::new_uuid())
+            .bind(recipient_membership).bind(&recipient_type).bind(recipient_version).execute(&db.pool).await;
         ensure!(bad_owner.as_ref().err().and_then(|e|e.as_database_error()).and_then(|e|e.code()).as_deref()==Some("23503"), "notification organization/tenant FK accepted cross-tenant ownership");
-        let partial=sqlx::query("INSERT INTO notifications(user_id,title,source_kind,tenant_id,organization_id,application_id) VALUES($1,'partial app','APP',$2,$3,$4)")
-            .bind(h.recipient).bind(h.tenant_a).bind(h.root).bind(h.main_app).execute(&db.pool).await;
+        let partial=sqlx::query("INSERT INTO notifications(user_id,title,source_kind,tenant_id,organization_id,application_id,id,recipient_membership_id,recipient_member_type,recipient_identity_version) VALUES($1,'partial app','APP',$2,$3,$4,$5,$6,$7,$8)")
+            .bind(h.recipient).bind(h.tenant_a).bind(h.root).bind(h.main_app).bind(crate::util::uuid7::new_uuid())
+            .bind(recipient_membership).bind(&recipient_type).bind(recipient_version).execute(&db.pool).await;
         ensure!(partial.as_ref().err().and_then(|e|e.as_database_error()).and_then(|e|e.code()).as_deref()==Some("23514"), "APP notification with missing publication was accepted or failed for an unrelated reason");
-        sqlx::query("INSERT INTO users(username,password_hash) SELECT 'notification-cap-'||g,'unused' FROM generate_series(1,1001) AS g").execute(&db.pool).await?;
-        sqlx::query("INSERT INTO memberships(user_id,organization_id) SELECT id,$1 FROM users WHERE username LIKE 'notification-cap-%'").bind(h.root).execute(&db.pool).await?;
+        // Every fanout fixture row receives its own application-generated ID.
+        let cap_users: Vec<_> = (1..=1001)
+            .map(|index| (crate::util::uuid7::new_uuid(), format!("notification-cap-{index}")))
+            .collect();
+        let mut users = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+            "INSERT INTO users(id,username,password_hash) ",
+        );
+        users.push_values(&cap_users, |mut row, (id, username)| {
+            row.push_bind(*id).push_bind(username).push_bind("unused");
+        });
+        users.build().execute(&db.pool).await?;
+        let mut memberships = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+            "INSERT INTO memberships(id,user_id,organization_id) ",
+        );
+        memberships.push_values(&cap_users, |mut row, (user, _)| {
+            row.push_bind(crate::util::uuid7::new_uuid())
+                .push_bind(*user)
+                .push_bind(h.root);
+        });
+        memberships.build().execute(&db.pool).await?;
         rejected(&h.router,Method::POST,&path,&token,Some(body("over-cap",org_target(h.root))),&[StatusCode::BAD_REQUEST]).await?;
         ensure!(h.counts("over-cap").await?==(0,0), "fanout cap truncated or partially published a notification");
         Ok(())
@@ -1190,7 +1333,7 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
     let db = Database::create().await?;
     let result:Result<()>=async {
         let h=Harness::create(&db.pool).await?;
-        let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON','Manage users','system:user') RETURNING id").bind(h.main_app).fetch_one(&db.pool).await?;
+        let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,id) VALUES($1,'BUTTON','Manage users','system:user',$2) RETURNING id").bind(h.main_app).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)").bind(h.tenant_a).bind(menu).execute(&db.pool).await?;
         sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)").bind(h.root).bind(menu).execute(&db.pool).await?;
         sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)").bind(h.root_role).bind(menu).execute(&db.pool).await?;
@@ -1206,8 +1349,15 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
         let reset_path=format!("/api/users/{uid}/reset-password");
         let roles_path=format!("/api/users/{}/roles",h.recipient);
         let role_body=json!({"items":[{"roleId":h.root_role,"organizationId":h.root}]});
-        let device:Uuid=sqlx::query_scalar("INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,scope,expires_at) VALUES($1,'NOTIFY-DEVICE',$2,'profile',now()+interval '10 minutes') RETURNING id")
-            .bind(hash::sha256_hex("notification-device-fixture")).bind(APP_CODE).fetch_one(&db.pool).await?;
+        // Device approval is a human flow; the application backend's MACHINE
+        // registration cannot stand in for this separate USER registration.
+        let device_client = "notification-user-device";
+        sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,subject_mode,allowed_member_types,grant_types,scopes,application_id) VALUES($1,$2,'Notification device fixture','PUBLIC','USER',ARRAY['EMPLOYEE']::text[],'urn:ietf:params:oauth:grant-type:device_code','profile',$3)")
+            .bind(crate::util::uuid7::new_uuid()).bind(device_client).bind(h.main_app).execute(&db.pool).await?;
+        let device:Uuid=sqlx::query_scalar("INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,scope,expires_at,id,client_policy_version,application_id,application_policy_version) \
+            SELECT $1,'NOTIFY-DEVICE',$2,'profile',now()+interval '10 minutes',$3,c.access_policy_version,c.application_id,a.access_policy_version \
+            FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id WHERE c.client_id=$2 RETURNING id")
+            .bind(hash::sha256_hex("notification-device-fixture")).bind(device_client).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
         sqlx::query("CREATE FUNCTION notification_system_test_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected SYSTEM failure'; END $$").execute(&db.pool).await?;
         sqlx::query("CREATE TRIGGER notification_system_test_failure BEFORE INSERT ON notifications FOR EACH ROW WHEN(NEW.source_kind='SYSTEM') EXECUTE FUNCTION notification_system_test_fail()").execute(&db.pool).await?;
         rejected(&h.router,Method::POST,"/api/users",&h.publisher_session.token,Some(json!({"username":"notification-rollback-created","password":"initial-test-password"})),&[StatusCode::INTERNAL_SERVER_ERROR]).await?;
@@ -1240,6 +1390,7 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
         ensure!(recipients==vec![(h.tenant_a,h.root,"SYSTEM".to_string())],"global reset sent into inactive or expired recipient contexts");
         let legacy:i64=sqlx::query_scalar("SELECT count(*) FROM notifications WHERE source_kind='LEGACY'").fetch_one(&db.pool).await?;
         ensure!(legacy==0,"new SYSTEM call sites created LEGACY rows");
+        assert_new_system_proofs(&db.pool).await?;
         Ok(())
     }.await;
     db.finish(result).await
@@ -1259,6 +1410,7 @@ async fn notification_seed_does_not_create_new_unowned_messages() -> Result<()> 
                 .fetch_one(&db.pool)
                 .await?;
         ensure!(legacy == 0, "seed created new unowned LEGACY notifications");
+        assert_new_system_proofs(&db.pool).await?;
         crate::seed::run(&db.pool).await?;
         let after: i64 = sqlx::query_scalar("SELECT count(*) FROM notifications")
             .fetch_one(&db.pool)
@@ -1275,8 +1427,8 @@ async fn notification_seed_does_not_create_new_unowned_messages() -> Result<()> 
 async fn app_members_setup(h: &Harness) -> Result<Vec<Uuid>> {
     let mut menus = Vec::new();
     for action in ["create", "update"] {
-        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON',$2,$3) RETURNING id")
-            .bind(h.main_app).bind(format!("工单 {action}")).bind(format!("ticket:{action}")).fetch_one(&h.pool).await?;
+        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,id) VALUES($1,'BUTTON',$2,$3,$4) RETURNING id")
+            .bind(h.main_app).bind(format!("工单 {action}")).bind(format!("ticket:{action}")).bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
             .bind(h.tenant_a)
             .bind(menu)
@@ -1300,8 +1452,8 @@ async fn app_members_setup(h: &Harness) -> Result<Vec<Uuid>> {
 }
 
 async fn app_members_grant(h: &Harness, org: Uuid, action: &str, scope: &str) -> Result<()> {
-    let changed = sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) SELECT id,$3,'ticket',$4,$5 FROM memberships WHERE user_id=$1 AND organization_id=$2 ON CONFLICT(membership_id,application_id,resource_code,action_code) DO UPDATE SET scope_type=EXCLUDED.scope_type")
-        .bind(h.publisher).bind(org).bind(h.main_app).bind(action).bind(scope).execute(&h.pool).await?.rows_affected();
+    let changed = sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) SELECT id,$3,'ticket',$4,$5 ,$6 FROM memberships WHERE user_id=$1 AND organization_id=$2 AND member_type='EMPLOYEE' AND status='ENABLED' ON CONFLICT(membership_id,application_id,resource_code,action_code) DO UPDATE SET scope_type=EXCLUDED.scope_type")
+        .bind(h.publisher).bind(org).bind(h.main_app).bind(action).bind(scope).bind(crate::util::uuid7::new_uuid()).execute(&h.pool).await?.rows_affected();
     ensure!(changed == 1, "ticket grant needs direct membership");
     Ok(())
 }
@@ -1464,15 +1616,15 @@ async fn app_members_registered_pair_is_not_a_ticket_special_case() -> Result<()
         let h = Harness::create(&db.pool).await?;
         // A protocol fixture pair proves the route consumes its declaration.
         // This does not implement a second business application or its schema.
-        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission) VALUES($1,'BUTTON','Assignment protocol fixture','record:assign') RETURNING id")
-            .bind(h.main_app).fetch_one(&h.pool).await?;
+        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,id) VALUES($1,'BUTTON','Assignment protocol fixture','record:assign',$2) RETURNING id")
+            .bind(h.main_app).bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)").bind(h.tenant_a).bind(menu).execute(&h.pool).await?;
         for org in [h.root,h.child,h.peer] {
             sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)").bind(org).bind(menu).execute(&h.pool).await?;
         }
         sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)").bind(h.root_role).bind(menu).execute(&h.pool).await?;
-        sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) SELECT id,$3,'record','assign','TENANT' FROM memberships WHERE user_id=$1 AND organization_id=$2")
-            .bind(h.publisher).bind(h.root).bind(h.main_app).execute(&h.pool).await?;
+        sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) SELECT id,$3,'record','assign','TENANT' ,$4 FROM memberships WHERE user_id=$1 AND organization_id=$2 AND member_type='EMPLOYEE' AND status='ENABLED'")
+            .bind(h.publisher).bind(h.root).bind(h.main_app).bind(crate::util::uuid7::new_uuid()).execute(&h.pool).await?;
         let policy = json!({"applications":[{"applicationId":h.main_app,"capabilities":[{"resource":"record","action":"assign","scopes":["TENANT"]}],"memberLookups":[{"resource":"record","action":"assign"}]}],"managementScopes":[]});
         let app = member_policy_router(&h, &policy)?;
         let token = h.app_token(&h.publisher_session.token, APP_CODE).await?;

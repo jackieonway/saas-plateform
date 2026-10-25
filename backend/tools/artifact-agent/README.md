@@ -52,6 +52,8 @@ saas-artifact-agent /srv/saas/private/artifact-node.json
 
 协议最多 49 个文件，单文件 4 MiB、解码总计 16 MiB、JSON 24 MiB。先认证后解析，请求期限 45 秒，并发请求槽 2 个；磁盘任务与版本根锁限制并发。安装通过私有暂存与同步后以 Linux 不覆盖 rename 发布。同摘要版本可重验复用，损坏或冲突内容不自动覆盖。
 
+安装与验证的 `jobId`、attempt `nonce` 通过公共契约严格检查 UUID v7 和 RFC variant，暂存目录也使用新生成的 UUID v7。v7 不替代节点 Bearer、attempt、nonce、策略和摘要复验；旧任务凭据在重建切换后不能借新 ID 继续执行。
+
 agent 将版本保存为 `rootDirectory/<app>/versions/<version>/`。上述示例的实际目录为 `/data/sub-apps/<app>/versions/<version>/`；仓库 micro-static 会剥离公开 `/sub-apps/` 前缀，所以其 `microRoot` 应为 `/data/sub-apps`。配置公共映射时拒绝 agent 元数据、点文件和暂存目录，静态服务返回真实 MIME 和缺资源 404。
 
 ## 配套与故障处理

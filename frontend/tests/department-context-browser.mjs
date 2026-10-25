@@ -10,6 +10,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
 import { waitState } from "./browser/wait.mjs"
+import { fixtureUuid, identityForProfile, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.DEPARTMENT_CONTEXT_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -27,11 +28,11 @@ const freePort = () => new Promise((resolve, reject) => {
   })
 })
 const org = (id, name, tenantId, parentId = null, children = []) => ({
-  id, name, code: id, tenantId, parentId, organizationType: "COMPANY", status: "ENABLED",
+  id: fixtureUuid(id), name, code: id, tenantId, parentId: parentId ? fixtureUuid(parentId) : null, organizationType: "COMPANY", status: "ENABLED",
   sortOrder: 0, description: "", children,
 })
-const tenantA = { id: "context-tenant-a", name: "部门验收租户甲", code: "tenant-a", isPlatform: true }
-const tenantB = { id: "context-tenant-b", name: "部门验收租户乙", code: "tenant-b", isPlatform: false }
+const tenantA = { id: fixtureUuid("context-tenant-a"), name: "部门验收租户甲", code: "tenant-a", isPlatform: true }
+const tenantB = { id: fixtureUuid("context-tenant-b"), name: "部门验收租户乙", code: "tenant-b", isPlatform: false }
 const deepChild = org("deep-child", "四级下属组织", tenantA.id, "grandchild")
 const grandchild = org("grandchild", "三级下属组织", tenantA.id, "child-a", [deepChild])
 const childA = org("child-a", "下属子公司甲", tenantA.id, "current-a", [grandchild])
@@ -44,8 +45,8 @@ const unrelated = org("unrelated", "禁止切换的独立组织", tenantA.id)
 const otherChild = org("other-child", "新租户下属公司", tenantB.id, "other-current")
 const otherCurrent = org("other-current", "新租户登录组织", tenantB.id, "other-root", [otherChild])
 const otherRoot = org("other-root", "新租户上级组织", tenantB.id, null, [otherCurrent])
-const profile = (tenant, organization) => ({
-  user: { id: "department-fixture-user", username: "department-fixture", realName: "部门验收管理员",
+const profile = (tenant, organization) => profileWithIdentity({
+  user: { id: fixtureUuid("department-fixture-user"), username: "department-fixture", realName: "部门验收管理员",
     email: "", phone: "", avatar: "", gender: "UNKNOWN", isSuperAdmin: true },
   tenant, organization: { id: organization.id, name: organization.name, path: `/${organization.id}` },
   applications: [], memberships: [],
@@ -58,7 +59,7 @@ const sessions = [
 const knownOrganizations = [currentA, childA, childB, grandchild, deepChild, sibling, siblingChild,
   otherCurrent, otherChild, ancestor, unrelated, otherRoot]
 const department = (organization) => ({
-  id: `department-${organization.id}`, name: `${organization.name}的部门`, code: `dept-${organization.id}`,
+  id: `department-${organization.id}`, name: `${organization.name}的部门`, code: `dept-${organization.code}`,
   organizationId: organization.id, parentId: null, sortOrder: 0, description: "", children: [],
 })
 let browser, vite, origin, startupOutput = "", scenarioCount = 0
@@ -92,10 +93,10 @@ async function fixture(options = {}) {
   Object.assign(state.organizations.get(sessions[0].token), options.organizations)
   Object.assign(state.departments.get(currentA.id), options.departments)
   page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.addInitScript((token) => {
-    if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: token, refreshToken: null }))
+  await installSession(context, sessions[0].token, identityForProfile(sessions[0].profile))
+  await context.addInitScript(() => {
     localStorage.setItem("platform-theme", "light")
-  }, sessions[0].token)
+  })
   await context.routeWebSocket(() => true, () => {})
   await context.route((url) => url.origin === origin && url.pathname === "/src/main.tsx", async (route) => {
     const response = await route.fetch()
@@ -104,12 +105,13 @@ async function fixture(options = {}) {
     assert.match(body, appImport, "Mount the production department page from the real Vite entry.")
     body = body.replace(appImport, 'import App from "/src/pages/system/departments/DepartmentsPage.tsx"')
     body = body.replace("ReactDOM.createRoot", `import { authStore } from "/src/stores/auth.ts";
+      import { requireContextIdentity } from "/src/lib/context-identity.ts";
       await authStore.getState().initializeSessionCoordination();
       authStore.getState().setProfile(${JSON.stringify(options.noProfile ? null : sessions[0].profile)});
       window.__departmentFixture = {
         refreshProfile: (profile) => authStore.getState().setProfile(profile),
         beginSwitch: () => authStore.getState().beginContextSwitch(),
-        finishSwitch: async (profile, token) => { await authStore.getState().setSession(token); authStore.getState().setProfile(profile); },
+        finishSwitch: async (profile, token) => { await authStore.getState().setSession(token, null, undefined, requireContextIdentity(profile)); authStore.getState().setProfile(profile); },
         invalidateOrganizations: () => queryClient.invalidateQueries({ queryKey: ["department-organizations"] }),
         invalidateDepartments: () => queryClient.invalidateQueries({ queryKey: ["dept-tree"] }),
       };
@@ -220,7 +222,9 @@ async function saveRootDepartment(f, organization) {
   const dialog = f.page.getByRole("dialog")
   await dialog.getByRole("heading", { name: "新增部门", exact: true }).waitFor()
   await dialog.locator('input[name="name"]').fill(`${organization.name}新增部门`)
-  await dialog.locator('input[name="code"]').fill(`create-${organization.id}`)
+  const code = `create-${organization.code}`
+  assert.match(code, /^[a-zA-Z0-9_-]{1,32}$/, "Fixture department codes remain distinct from UUID identity fields.")
+  await dialog.locator('input[name="code"]').fill(code)
   await dialog.getByRole("button", { name: "创建", exact: true }).click()
   await waitState(() => f.state.saves.length === previous + 1, "Create should submit the selected department organization.")
   await dialog.waitFor({ state: "hidden" })

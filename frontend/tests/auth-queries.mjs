@@ -13,10 +13,16 @@ const ts = require('typescript')
 const { QueryClient } = require('@tanstack/react-query')
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
 const node = (id, extra = {}) => ({ id, parentId: null, type: 'MENU', title: id, path: `/micro/app-a/${id}`, sortOrder: 0, visible: true, permission: null, icon: null, ...extra })
-const profile = () => ({ user: { id: 'user-a' }, tenant: { id: 'tenant-a' }, organization: { id: 'org-a' }, applications: [{ id: 'app-a', code: 'app-a', basePath: '/micro/app-a' }, { id: 'app-b', code: 'app-b', basePath: '/micro/app-b' }], memberships: [] })
+const id = (value) => `01962345-6789-7abc-8def-${value.toString(16).padStart(12, '0')}`
+const identity = () => ({ userId: id(1), tenantId: id(2), organizationId: id(3), membershipId: id(4), memberType: 'EMPLOYEE', identityVersion: '1', accountVersion: '0' })
+const namespace = (proof) => JSON.stringify([proof.userId, proof.tenantId, proof.organizationId, proof.membershipId, proof.memberType, proof.identityVersion, proof.accountVersion])
+const profile = (proof = identity()) => ({ user: { id: proof.userId }, tenant: { id: proof.tenantId }, organization: { id: proof.organizationId },
+  membershipId: proof.membershipId, memberType: proof.memberType, identityVersion: proof.identityVersion, accountVersion: proof.accountVersion,
+  applications: [{ id: 'app-a', code: 'app-a', basePath: '/micro/app-a' }, { id: 'app-b', code: 'app-b', basePath: '/micro/app-b' }], memberships: [] })
 
 function fixture(handler = async () => []) {
-  const state = { token: 'session-a', contextEpoch: 1, contextSwitching: false, profile: profile() }
+  const proof = identity()
+  const state = { token: 'session-a', contextEpoch: 1, contextSwitching: false, identity: proof, contextKey: namespace(proof), profile: profile(proof) }
   const calls = [], observed = { query: null, queries: [], results: [] }
   const store = selector => selector(state)
   store.getState = () => state
@@ -31,7 +37,8 @@ function fixture(handler = async () => []) {
     new vm.Script(`(function(require,exports){${compiled}\n})`, { filename: relative }).runInContext(sandbox)(name => {
       if (name === '@/stores/auth') return { useAuthStore: store }
       if (name === '@/api/auth') return { authApi: Object.fromEntries(['menus', 'profile', 'permissions'].map(method => [method, (...args) => { calls.push({ method, args }); return handler(method, ...args) }])) }
-      if (name === '@/lib/api') return { asArray: (data, key) => Array.isArray(data) ? data : Array.isArray(data?.[key]) ? data[key] : [] }
+      if (name === '@/lib/api') return { asArray: (data, key) => Array.isArray(data) ? data : Array.isArray(data?.[key]) ? data[key] : [],
+        switchPlatformContext: (...args) => { calls.push({ method: 'switch', args }); return Promise.resolve() } }
       if (name === '@tanstack/react-query') return { ...require(name), useQuery: options => { observed.query = options; return { ...options, status: 'success', data: { permissions: ['system:user'] } } }, useQueryClient: () => null, useQueries: ({ queries }) => { observed.queries = queries; return queries.map((_, i) => observed.results[i] ?? { status: 'pending', isPending: true, isSuccess: false, isError: false, dataUpdatedAt: 0 }) } }
       if (name === 'react') return { useMemo: callback => callback(), useCallback: callback => callback }
       if (name.startsWith('@/')) return load(`src/${name.slice(2)}.ts`)
@@ -53,7 +60,7 @@ test('sidebar and all-application menus use one epoch-scoped query key', () => {
   const single = f.observed.query
   f.allMenus()
   assert.deepEqual([...single.queryKey], [...f.observed.queries[0].queryKey])
-  assert.deepEqual([...single.queryKey], ['auth-menus', 'app-a', 1])
+  assert.deepEqual([...single.queryKey], ['auth-menus', 'app-a', f.state.contextKey, 1])
   assert.equal(f.observed.queries[0].staleTime, single.staleTime)
   assert.equal(f.observed.queries[0].refetchInterval, single.refetchInterval)
 })
@@ -107,7 +114,7 @@ test('profile, permission and menu reads reject changed identity and switching',
     const wait = deferred(), f = fixture(() => wait.promise), factory = f.factory(), session = factory.captureAuthSession()
     const options = kind === 'menus' ? factory.authMenusQueryOptions('app-a', session) : factory[kind === 'profile' ? 'authProfileQueryOptions' : 'authPermissionsQueryOptions'](session)
     const pending = options.queryFn({ signal: new AbortController().signal })
-    f.state.profile.organization.id = 'org-b'
+    f.state.profile.organization.id = id(30)
     wait.resolve(kind === 'menus' ? [] : {})
     await assert.rejects(pending, error => error.name === 'AbortError')
   }
@@ -165,7 +172,7 @@ test('current-application query selection does not request unrelated menus', () 
   assert.equal(selected.queries.length, 1)
   assert.equal(selected.queries[0].applicationId, 'app-a')
   assert.equal(f.observed.queries.length, 1)
-  assert.deepEqual([...f.observed.queries[0].queryKey], ['auth-menus', 'app-a', 1])
+  assert.deepEqual([...f.observed.queries[0].queryKey], ['auth-menus', 'app-a', f.state.contextKey, 1])
 })
 
 test('known positive path is available despite unrelated pending or failed menu query', () => {
@@ -197,4 +204,88 @@ test('same-timestamp failure, application removal and switching remove old autho
   assert.equal(authorized.useAuthorizedPaths({ enabled: false }).allowedPaths.size, 0)
   f.state.profile = null
   assert.equal(authorized.useAuthorizedPaths().allowedPaths.size, 0)
+})
+
+test('profile can load from a bound proof before profile exists, while menus and permissions wait', async () => {
+  const f = fixture(async () => profile()), factory = f.factory()
+  f.state.profile = null
+  const session = factory.captureAuthSession(), client = new QueryClient()
+  const options = factory.authProfileQueryOptions(session)
+  assert.equal(options.enabled, true)
+  assert.deepEqual([...options.queryKey], ['profile', f.state.contextKey, 1])
+  assert.equal(factory.authMenusQueryOptions('app-a', session).enabled, false)
+  assert.equal(factory.authPermissionsQueryOptions(session).enabled, false)
+  const result = await client.fetchQuery(options)
+  assert.equal(result.membershipId, f.state.identity.membershipId)
+  assert.equal(client.getQueryData(options.queryKey), result)
+  client.clear()
+})
+
+test('mismatched, incomplete and noncanonical profile proofs never enter the authorization cache', async () => {
+  for (const patch of [{ membershipId: id(40) }, { memberType: 'CUSTOMER' }, { identityVersion: '2' },
+    { accountVersion: '1' }, { membershipId: undefined }, { identityVersion: 1 }, { identityVersion: '01' },
+    { accountVersion: '00' }, { accountVersion: '-1' }, { identityVersion: '9223372036854775808' }]) {
+    const f = fixture(async () => ({ ...profile(), ...patch })), factory = f.factory(), client = new QueryClient()
+    f.state.profile = null
+    const options = factory.authProfileQueryOptions(factory.captureAuthSession())
+    await assert.rejects(client.fetchQuery(options), error => error.name === 'AbortError')
+    assert.equal(client.getQueryData(options.queryKey), undefined)
+    client.clear()
+  }
+})
+
+test('every auth cache key and pending read is fenced by concrete member, type and both versions', async () => {
+  for (const patch of [{ membershipId: id(40) }, { memberType: 'CUSTOMER' }, { identityVersion: '2' }, { accountVersion: '1' }]) {
+    for (const kind of ['profile', 'permissions', 'menus']) {
+      const wait = deferred(), f = fixture(() => wait.promise), factory = f.factory()
+      const original = factory.captureAuthSession()
+      const query = session => kind === 'menus' ? factory.authMenusQueryOptions('app-a', session) :
+        factory[kind === 'profile' ? 'authProfileQueryOptions' : 'authPermissionsQueryOptions'](session)
+      const options = query(original), pending = options.queryFn({ signal: new AbortController().signal })
+      const replacement = { ...f.state.identity, ...patch }
+      f.state.identity = replacement; f.state.contextKey = namespace(replacement); f.state.profile = profile(replacement)
+      assert.equal(factory.isCurrentAuthSession(original), false)
+      assert.notDeepEqual([...options.queryKey], [...query(factory.captureAuthSession()).queryKey])
+      wait.resolve(kind === 'profile' ? profile() : kind === 'menus' ? [node('old-member')] : { permissions: ['system:user'] })
+      await assert.rejects(pending, error => error.name === 'AbortError')
+    }
+  }
+})
+
+test('missing or inconsistent bound proof never falls back to user and organization', async () => {
+  for (const change of [state => { state.identity = null }, state => { state.contextKey = null },
+    state => { state.contextKey = 'user-and-org-only' }, state => { state.identity = { ...state.identity, identityVersion: '01' } },
+    state => { state.identity = { ...state.identity, memberType: 'CUSTOMER' }; state.contextKey = namespace(state.identity); state.profile = profile(state.identity) }]) {
+    const f = fixture(), factory = f.factory()
+    change(f.state)
+    const session = factory.captureAuthSession()
+    for (const options of [factory.authProfileQueryOptions(session), factory.authPermissionsQueryOptions(session), factory.authMenusQueryOptions('app-a', session)]) {
+      assert.equal(options.enabled, false)
+      await assert.rejects(options.queryFn({ signal: new AbortController().signal }), error => error.name === 'AbortError')
+    }
+    assert.equal(f.calls.length, 0)
+  }
+})
+
+test('a stale profile cannot enable employee menus or permissions and large versions remain exact strings', () => {
+  const f = fixture(), factory = f.factory()
+  f.state.profile.membershipId = id(40)
+  const mismatch = factory.captureAuthSession()
+  assert.equal(factory.authProfileQueryOptions(mismatch).enabled, true)
+  assert.equal(factory.authMenusQueryOptions('app-a', mismatch).enabled, false)
+  assert.equal(factory.authPermissionsQueryOptions(mismatch).enabled, false)
+  const proof = { ...identity(), identityVersion: '9007199254740993', accountVersion: '9223372036854775807' }
+  f.state.identity = proof; f.state.contextKey = namespace(proof); f.state.profile = profile(proof)
+  const exact = factory.captureAuthSession()
+  assert.equal(exact.profileReady, true)
+  assert.equal(exact.identity.identityVersion, '9007199254740993')
+  assert.equal(exact.identity.accountVersion, '9223372036854775807')
+  assert.equal(exact.namespace, namespace(proof))
+  assert.equal(factory.authPermissionsQueryOptions(exact).enabled, true)
+})
+
+test('context switching submits the selected membership alongside its organization', async () => {
+  const f = fixture()
+  await f.hooks.useSwitchContext()(id(3), id(4))
+  assert.deepEqual(f.calls, [{ method: 'switch', args: [id(3), id(4)] }])
 })

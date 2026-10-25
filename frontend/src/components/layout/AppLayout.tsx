@@ -28,6 +28,7 @@ export default function AppLayout() {
   const { platformName } = usePlatformBranding()
   const token = useAuthStore((s) => s.token)
   const contextEpoch = useAuthStore((s) => s.contextEpoch)
+  const contextKey = useAuthStore((s) => s.contextKey)
   const contextSwitching = useAuthStore((s) => s.contextSwitching)
   const profile = useAuthStore((s) => s.profile)
   const setProfile = useAuthStore((s) => s.setProfile)
@@ -216,8 +217,8 @@ export default function AppLayout() {
   }
 
   const userDisplayName = profile?.user.realName || profile?.user.username || ""
-  const navigationScope = profile && app
-    ? [profile.user.id, profile.tenant.id, profile.organization.id, app.id].map(encodeURIComponent).join(":")
+  const navigationScope = profile && app && contextKey
+    ? [contextKey, app.id].map(encodeURIComponent).join(":")
     : undefined
 
   const sidebar = (

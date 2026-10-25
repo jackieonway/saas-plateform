@@ -3,7 +3,7 @@ import { useApplicationEditor, isMicroApp } from "./use-application-editor"
 import * as React from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowRight, CheckCircle2, LayoutGrid, ListTree, MoreHorizontal, Pencil, Plus, Rocket, Trash2 } from "lucide-react"
+import { ArrowRight, CheckCircle2, LayoutGrid, ListTree, MoreHorizontal, Pencil, Plus, Rocket, ShieldCheck, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -19,6 +19,9 @@ import { StatusBadge } from "@/components/StatusBadge"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { CardGridSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { applicationsApi } from "@/api/applications"
+import { admissionMemberLabels, type AdmissionPolicySummary, type AdmissionPolicyTarget } from "@/api/admission-policies"
+import { AdmissionPolicyDialog } from "@/components/admission-policy-dialog"
+import { useAuthStore } from "@/stores/auth"
 import { asArray } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
@@ -33,12 +36,13 @@ export default function ApplicationsPage() {
 
   const listQuery = useQuery({
     queryKey: ["applications"],
-    queryFn: async () => asArray<ApplicationRecord>(await applicationsApi.list()),
+    queryFn: async () => asArray<ApplicationRecord & AdmissionPolicySummary>(await applicationsApi.list()),
     staleTime: 30_000,
     retry: 1,
   })
 
   const [createdApplication, setCreatedApplication] = React.useState<ApplicationRecord | null>(null)
+  const [policyTarget, setPolicyTarget] = React.useState<AdmissionPolicyTarget | null>(null)
   const openSetup = (application: ApplicationRecord, step: ApplicationSetupStep = "overview") => {
     setCreatedApplication(application)
     setParams(previous => {
@@ -137,6 +141,10 @@ export default function ApplicationsPage() {
               {a.description && (
                 <p className="line-clamp-2 text-xs text-muted-foreground">{a.description}</p>
               )}
+              <div className="flex flex-wrap gap-1.5" aria-label="允许的成员身份">
+                {a.allowedMemberTypes?.length ? a.allowedMemberTypes.map(type => <Badge key={type} variant="outline" className="text-[11px]">{admissionMemberLabels[type]}</Badge>) :
+                  <span className="text-xs text-muted-foreground">身份准入以当前策略为准</span>}
+              </div>
               <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t pt-3 text-xs text-muted-foreground">
                 <Badge variant="secondary" className="text-[11px] tabular-nums">{a.menuCount} 菜单</Badge>
                 <Badge variant="outline" className="text-[11px] tabular-nums">排序 {a.sortOrder}</Badge>
@@ -190,6 +198,9 @@ export default function ApplicationsPage() {
                   <span className="flex items-center gap-2"><Rocket className="size-3.5" />继续接入 / 检查配置</span><ArrowRight className="size-3.5" />
                 </Button>
               )}
+              <Button variant="outline" size="sm" className="w-full justify-between" onClick={() => setPolicyTarget({ kind: "application", id: a.id, name: a.name })}>
+                <span className="flex items-center gap-2"><ShieldCheck className="size-3.5" />身份准入</span><ArrowRight className="size-3.5" />
+              </Button>
               {isMicroApp(a) && !isQiankunApp(a) && <p className="text-xs leading-relaxed text-muted-foreground">请重新配置 qiankun 入口，当前应用不会运行。</p>}
               {isMicroApp(a) && (
                 <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => openSetup(a, "release")}>
@@ -235,6 +246,8 @@ export default function ApplicationsPage() {
 
       {/* 新建/编辑弹窗 */}
       <ApplicationEditorDialog editor={editor} />
+      {policyTarget && <AdmissionPolicyDialog key={policyTarget.id} target={policyTarget} onClose={() => setPolicyTarget(null)}
+        onSaved={fence => { useAuthStore.getState().retireAuthorizationProjection(fence); void queryClient.invalidateQueries({ queryKey: ["applications"] }) }} />}
 
       {setupApplication && (
         <ApplicationSetupPanel
@@ -272,7 +285,7 @@ function OnboardingGuide({ onCreate }: { onCreate: () => void }) {
       <div>
         <p className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-primary" />从一个首页开始接入</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">名称与编码 → 配置应用入口 → 配置访问范围</p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">使用 qiankun，路径和首页自动生成。按环境填写入口地址，也可上传构建包发布版本。</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">新建应用默认仅允许员工。创建后可在「身份准入」中独立设置员工与客户集合，再配置入口与发布版本。</p>
       </div>
       <Button variant="outline" className="shrink-0" onClick={onCreate}>开始接入<ArrowRight className="size-4" /></Button>
     </div>

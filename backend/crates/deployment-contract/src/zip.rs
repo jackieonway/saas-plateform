@@ -155,9 +155,14 @@ pub fn digest(value: &str) -> bool {
             .bytes()
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
-/// A UUID-shaped correlation key is one safe path-free value, never a filename.
+/// A UUIDv7 correlation key with the RFC variant, never a filename or a secret.
 pub fn correlation(value: &str) -> bool {
     value.len() == 36
+        && value.as_bytes()[14] == b'7'
+        && matches!(
+            value.as_bytes()[19],
+            b'8' | b'9' | b'a' | b'b' | b'A' | b'B'
+        )
         && value.bytes().enumerate().all(|(i, c)| {
             if [8, 13, 18, 23].contains(&i) {
                 c == b'-'
@@ -431,9 +436,9 @@ mod tests {
         assert!(validate_group(&g).is_ok());
         let w = Work {
             schema_version: 1,
-            job_id: "00000000-0000-0000-0000-000000000001".into(),
+            job_id: "00000000-0000-7000-8000-000000000001".into(),
             attempt: 1,
-            nonce: "00000000-0000-0000-0000-000000000002".into(),
+            nonce: "00000000-0000-7000-8000-000000000002".into(),
             group_id: g.id.clone(),
             policy_revision: revision(&g).unwrap(),
             node_id: "a".into(),
@@ -457,7 +462,7 @@ mod tests {
     #[test]
     fn altered_nonce_or_manifest_receipt_cannot_be_adopted() {
         let p = payload();
-        let w:Work=serde_json::from_value(serde_json::json!({"schemaVersion":1,"jobId":"00000000-0000-0000-0000-000000000001","attempt":1,"nonce":"00000000-0000-0000-0000-000000000002","groupId":"local","policyRevision":"a".repeat(64),"nodeId":"a","applicationCode":"stores","version":"v1","artifactSha256":p.manifest.artifact_sha256})).unwrap();
+        let w:Work=serde_json::from_value(serde_json::json!({"schemaVersion":1,"jobId":"00000000-0000-7000-8000-000000000001","attempt":1,"nonce":"00000000-0000-7000-8000-000000000002","groupId":"local","policyRevision":"a".repeat(64),"nodeId":"a","applicationCode":"stores","version":"v1","artifactSha256":p.manifest.artifact_sha256})).unwrap();
         let mut r = receipt(&w, &p.manifest, "VERIFY", true).unwrap();
         assert!(receipt_matches(&r, &w, &p.manifest, "VERIFY"));
         r.work.attempt = 2;

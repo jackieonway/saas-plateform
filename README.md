@@ -2,7 +2,7 @@
 
 平台由 React 管理宿主和 Rust/Axum API 组成，负责登录会话、多租户组织、角色菜单、功能权限、数据授权、应用入口、版本发布及通知收件箱。工单、门店、通知、SDK 和示例分别维护在独立仓库。
 
-独立微应用在 `/micro/{code}/*` 下通过 qiankun 加载，现行入口契约固定为 `HTML + TRUSTED`，公共 SDK 为 2.0.0。系统管理等平台内置页面仍由 React Router 渲染。外链展示页是单独的嵌入功能，不走微应用生命周期。
+独立微应用在 `/micro/{code}/*` 下通过 qiankun 加载，现行入口契约固定为 `HTML + TRUSTED`，活动公共 SDK 为 3.0.0（Context 1.0／MicroProps 2.0／Notification 1.0）；历史 SDK 发行归档保持原字节。系统管理等平台内置页面仍由 React Router 渲染。外链展示页是单独的嵌入功能，不走微应用生命周期。
 
 当前活动加载链、默认 CSP、业务接入配置与交付门禁已统一，旧宿主示例副本已清理。2026-10-23 的迁移验收快照、本地候选和正式上线条件见[迁移实施与验证](backend/docs/qiankun-audit.md)。
 

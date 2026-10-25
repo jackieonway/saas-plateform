@@ -11,7 +11,9 @@ import http from "node:http"
 import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { mkdir } from "node:fs/promises"
 import { launchBrowser, socketServer } from "./browser/runtime.mjs"
+import { fixtureUuid, profileWithIdentity, installSession } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const Server = socketServer
@@ -33,32 +35,37 @@ const freePort = () => new Promise((resolve, reject) => {
 })
 async function waitState(predicate, message, timeout = 10_000) {
   const deadline = Date.now() + timeout
-  while (!predicate() && Date.now() < deadline) await pause(35)
-  assert(predicate(), message)
+  while (!(await predicate()) && Date.now() < deadline) await pause(35)
+  assert(await predicate(), message)
 }
 
-const systemApplication = { id: "notification-test-system", code: "system", name: "系统管理", icon: "Bell", basePath: "/system",
+const systemApplication = { id: fixtureUuid("notification-test-system"), code: "system", name: "系统管理", icon: "Bell", basePath: "/system",
   entryType: "HTML", runtimeMode: "TRUSTED" }
-const user = { id: "notification-user", username: "notification-browser", realName: "通知浏览器用户",
+const user = { id: fixtureUuid("notification-user"), username: "notification-browser", realName: "通知浏览器用户",
   email: "", phone: "", avatar: "", gender: "UNKNOWN", isSuperAdmin: false }
-const owner = (group) => ({ userId: group === "C" ? "other-notification-user" : user.id,
-  tenantId: `notification-tenant-${group}`, organizationId: `notification-org-${group}` })
-const profile = (group) => ({ user: { ...user, id: owner(group).userId },
+const groups = ["A", "B", "C", "D", "E"]
+const owner = (group) => ({ userId: group === "C" ? fixtureUuid("other-notification-user") : user.id,
+  tenantId: fixtureUuid(`notification-tenant-${["D", "E"].includes(group) ? "A" : group}`),
+  organizationId: fixtureUuid(`notification-org-${["D", "E"].includes(group) ? "A" : group}`) })
+const proof = group => ({ ...owner(group), membershipId: fixtureUuid(`notification-membership-${group === "E" ? "A" : group}`),
+  memberType: "EMPLOYEE", identityVersion: group === "E" ? "2" : "1", accountVersion: group === "E" ? "1" : "0" })
+const profile = (group) => profileWithIdentity({ user: { ...user, id: owner(group).userId },
   tenant: { id: owner(group).tenantId, name: `租户 ${group}`, code: group, isPlatform: false },
-  organization: { id: owner(group).organizationId, name: `组织 ${group}`, path: `/notification-org-${group}/` },
-  applications: [systemApplication], memberships: ["A", "B"].map((value) => ({
+  organization: { id: owner(group).organizationId, name: `组织 ${group}`, path: `/${owner(group).organizationId}/` },
+  applications: [systemApplication], memberships: groups.filter(value => (value === group || value === "B") && owner(value).userId === owner(group).userId).map((value) => ({
+    ...proof(value), status: "ENABLED", consoleSelectable: true, selectionDisabledReason: null,
     organizationId: owner(value).organizationId, organizationName: `组织 ${value}`, organizationPath: `/notification-org-${value}/`,
     tenantId: owner(value).tenantId, tenantName: `租户 ${value}`,
   })),
-})
+}, proof(group))
 const notification = (group, title = `离线通知 ${group}`, id = `historical-${group}`) => ({
-  ...owner(group), id, sourceKind: "APP", applicationId: systemApplication.id, publicationId: `publication-${id}`,
+  ...owner(group), id: fixtureUuid(id), sourceKind: "APP", applicationId: systemApplication.id, publicationId: fixtureUuid(`publication-${id}`),
   applicationName: systemApplication.name, type: "INFO", title, content: "数据库收件箱夹具", link: "",
   isRead: false, readAt: null, createdAt: new Date().toISOString(),
 })
 // Match the public Socket.IO projection; HTTP-only source/read/applicationName fields are absent.
-const realtime = (group, id, title, extra = {}) => ({ contractVersion: "1.0", ...owner(group), id,
-  applicationId: systemApplication.id, publicationId: `publication-${id}`, type: "INFO", title,
+const realtime = (group, id, title, extra = {}) => ({ contractVersion: "1.0", ...owner(group), id: fixtureUuid(id),
+  applicationId: systemApplication.id, publicationId: fixtureUuid(`publication-${id}`), type: "INFO", title,
   content: "在线事件夹具", link: "/system/notifications", createdAt: new Date().toISOString(), ...extra })
 const defaultPrefs = { mutedTypes: [], dndEnabled: false, dndStart: "22:00", dndEnd: "08:00" }
 const authenticated = (group) => ({ contractVersion: "1.0", ...owner(group), expiresAt: new Date(Date.now() + 60_000).toISOString() })
@@ -117,11 +124,11 @@ async function fixture(options = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 } })
   const page = await context.newPage()
   page.setDefaultTimeout(12_000)
-  const state = { connections: [], requests: [], held: [], holds: new Set(), count: { A: 2, B: 8, C: 3 },
-    inbox: { A: [notification("A")], B: [notification("B")], C: [notification("C")] },
-    prefs: { A: { ...defaultPrefs }, B: { ...defaultPrefs }, C: { ...defaultPrefs } },
+  const state = { connections: [], requests: [], held: [], holds: new Set(), count: { A: 2, B: 8, C: 3, D: 5, E: 6 },
+    inbox: Object.fromEntries(groups.map(group => [group, [notification(group)]])),
+    prefs: Object.fromEntries(groups.map(group => [group, { ...defaultPrefs }])),
     authMode: "auto", canPublish: false, directoryRead: true, startPath: "/dashboard", publishFailures: 0, publishRequests: [], ...options }
-  const tokens = Object.fromEntries(["A", "B", "C"].map((group) => [group, `test-notification-session-${id}-${group}`]))
+  const tokens = Object.fromEntries(groups.map((group) => [group, `test-notification-session-${id}-${group}`]))
   for (const group of Object.keys(tokens)) tokenOwners.set(tokens[group], { state, group })
   const errors = []
   const consoleErrors = []
@@ -129,8 +136,8 @@ async function fixture(options = {}) {
   page.on("pageerror", (error) => errors.push(error.message))
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()) })
   page.on("requestfailed", (request) => failedRequests.push({ pathname: new URL(request.url()).pathname, error: request.failure()?.errorText }))
-  await context.addInitScript(({ token }) => {
-    if (!localStorage.getItem("platform-session-v1")) localStorage.setItem("platform-session-v1", JSON.stringify({ schema: 1, version: 1, sessionId: crypto.randomUUID(), status: "active", token: token, refreshToken: null }))
+  await installSession(context, tokens.A, proof("A"))
+  await context.addInitScript(() => {
     localStorage.setItem("platform-theme", "light")
     window.__notificationUi = { swings: 0 }
     const observed = new WeakSet()
@@ -142,9 +149,9 @@ async function fixture(options = {}) {
         for (const bell of bells) if (!observed.has(bell)) { observed.add(bell); window.__notificationUi.swings++ }
       }
     }).observe(document, { childList: true, subtree: true })
-  }, { token: tokens.A })
+  })
   // Expose the real QueryClient for cache assertions without replacing its behavior.
-  await context.route("**/src/main.tsx", async (route) => {
+  await context.route(url => url.origin === origin && url.pathname === "/src/main.tsx", async (route) => {
     const response = await route.fetch()
     const body = await response.text()
     assert.match(body, /const queryClient\s*=/, "The real host QueryClient must be present.")
@@ -182,7 +189,7 @@ async function fixture(options = {}) {
       if (!state.directoryRead) return fulfill(route, { code: "FORBIDDEN", message: "无用户目录权限" }, 403)
       assert.equal(url.searchParams.get("tenantId"), owner(group).tenantId)
       assert.equal(url.searchParams.get("organizationId"), owner(group).organizationId, "USER selection must explicitly bind its receiving organization.")
-      value = { records: [{ id: `recipient-${group}`, username: `receiver-${group}`, realName: `接收用户 ${group}` }], total: 1, page: 1, size: 100 }
+      value = { records: [{ id: fixtureUuid(`recipient-${group}`), username: `receiver-${group}`, realName: `接收用户 ${group}` }], total: 1, page: 1, size: 100 }
     }
     else if (url.pathname === "/api/auth/menus") value = [{ id: "notification-menu", parentId: null, type: "MENU", title: "通知中心",
       path: "/system/notifications", icon: "Bell", permission: "system:notification", sortOrder: 1, visible: true, children: [] }]
@@ -196,7 +203,7 @@ async function fixture(options = {}) {
         state.publishFailures--
         return fulfill(route, { code: "SERVICE_UNAVAILABLE", message: "发布结果尚未确认" }, 503)
       }
-      value = { sent: 1, publicationId: `fixture-publication-${state.publishRequests.length}`, recipientCount: 1,
+      value = { sent: 1, publicationId: fixtureUuid(`fixture-publication-${state.publishRequests.length}`), recipientCount: 1,
         deliveryCount: 1, duplicate: state.publishRequests.length === 2, createdAt: new Date().toISOString() }
     }
     else if (url.pathname === "/api/notifications/read-all") value = { updated: 88 }
@@ -255,10 +262,10 @@ async function settled(test) {
     .filter((query) => query.queryKey[0] === "notifications").every((query) => query.state.fetchStatus !== "fetching"))
 }
 async function setToken(test, group) {
-  await test.page.evaluate(async (token) => {
+  await test.page.evaluate(async ({ token, identity }) => {
     const { useAuthStore } = await import("/src/stores/auth.ts")
-    await useAuthStore.getState().setToken(token)
-  }, test.tokens[group])
+    await useAuthStore.getState().setToken(token, identity)
+  }, { token: test.tokens[group], identity: proof(group) })
 }
 async function beginSwitch(test) {
   return test.page.evaluate(async () => {
@@ -278,12 +285,17 @@ async function withFixture(options, run) {
     assert(!test.consoleErrors.some((message) => /Encountered two children with the same key/.test(message)),
       "Context-bound notification dialogs must retain distinct React identities.")
   } catch (error) {
+    console.error("Notification browser failure:", error)
+    const diagnostics = await Promise.allSettled([
+      test.page.locator("body").innerText(), cache(test.page),
+      test.page.locator('[role="combobox"]').evaluateAll((elements) => elements.map((element) => ({
+        text: element.textContent, label: element.getAttribute("aria-label"), labelledBy: element.getAttribute("aria-labelledby"), html: element.outerHTML.slice(0, 450) }))),
+    ])
+    const diagnostic = index => diagnostics[index].status === "fulfilled" ? diagnostics[index].value : { error: String(diagnostics[index].reason) }
     console.error("Notification browser diagnostic:", { pathname: new URL(test.page.url()).pathname,
-      errors: test.errors, consoleErrors: test.consoleErrors, body: (await test.page.locator("body").innerText()).slice(0, 3500),
+      errors: test.errors, consoleErrors: test.consoleErrors, body: typeof diagnostic(0) === "string" ? diagnostic(0).slice(0, 3500) : diagnostic(0),
       requests: test.state.requests, connections: test.state.connections.map(({ group, authenticated, disconnected, reason, transport }) =>
-        ({ group, authenticated, disconnected, reason, transport })), cache: await cache(test.page),
-      comboboxes: await test.page.locator('[role="combobox"]').evaluateAll((elements) => elements.map((element) => ({
-        text: element.textContent, label: element.getAttribute("aria-label"), labelledBy: element.getAttribute("aria-labelledby"), html: element.outerHTML.slice(0, 450) }))), viteOutput: startupOutput })
+        ({ group, authenticated, disconnected, reason, transport })), cache: diagnostic(1), comboboxes: diagnostic(2), viteOutput: startupOutput })
     throw error
   } finally { await test.close() }
 }
@@ -365,7 +377,7 @@ const scenarios = {
     const snapshots = await page.evaluate(() => window.__notificationSuccesses)
     assert(!snapshots.some(({ data }) => data?.count === 444 || data?.records?.some((item) => item.title === "迟到旧组织HTTP")), "Aborted old HTTP responses must never become successful notification cache data.")
     assert((await cache(page)).filter(({ key, status }) => key[3] === owner("B").organizationId && status === "success")
-      .every(({ key }) => key[1] === owner("B").userId && key[2] === owner("B").tenantId && typeof key[4] === "number"))
+      .every(({ key }) => key[1] === owner("B").userId && key[2] === owner("B").tenantId && key[4] === proof("B").membershipId && typeof key[8] === "number"))
   }),
   unauthorized: async () => withFixture({ authMode: "reject" }, async (test) => {
     const { page, state } = test
@@ -379,6 +391,57 @@ const scenarios = {
     await ready(test, "B")
     assert.equal(connection(state, "B").group, "B", "A fresh token must establish a fresh connection.")
   }),
+  identity: async () => {
+    for (const group of ["D", "E"]) await withFixture({ startPath: "/system/notifications" }, async (test) => {
+      const { page, state, context } = test
+      await ready(test); await openBell(test); await settled(test)
+      const sibling = await context.newPage()
+      await sibling.goto(`${origin}/dashboard`, { waitUntil: "domcontentloaded" })
+      await sibling.locator('header [aria-label="实时推送已连接"]').waitFor()
+      const originalConnections = state.connections.filter(entry => entry.group === "A" && !entry.disconnected)
+      assert(originalConnections.length >= 2, "Two browser pages own independent sockets for the same shared session")
+      state.inbox.A = [notification("A", "旧成员迟到收件箱")]
+      for (const endpoint of ["/api/notifications", "/api/notifications/unread-count"]) state.holds.add(`A:${endpoint}`)
+      await page.evaluate(() => { void window.__notificationQueryClient.invalidateQueries({ queryKey: ["notifications"] }) })
+      await waitState(() => state.held.length >= 2, "Old member HTTP results are held before the shared identity changes")
+      await setToken(test, group)
+      await ready(test, group)
+      await waitState(() => originalConnections.every(entry => entry.disconnected), "A shared member change retires old sockets in every page")
+      await waitState(async () => sibling.evaluate(async expected => {
+        const { useAuthStore } = await import("/src/stores/auth.ts")
+        const current = useAuthStore.getState()
+        return current.identity?.membershipId === expected.membershipId && current.identity?.identityVersion === expected.identityVersion &&
+          current.identity?.accountVersion === expected.accountVersion && current.profile?.membershipId === expected.membershipId &&
+          current.profile?.identityVersion === expected.identityVersion
+      }, proof(group)), "The sibling page loads its replacement member profile")
+      await sibling.locator('header [aria-label="实时推送已连接"]').waitFor()
+      for (const held of state.held) held.release.resolve()
+      for (const entry of originalConnections) entry.socket.emit("notification", realtime("A", "late-same-owner", "旧成员迟到实时提示"))
+      await pause(450)
+      await openBell(test, group)
+      assert.equal(await page.getByText("旧成员迟到收件箱", { exact: true }).count(), 0)
+      assert.equal(await page.getByText("旧成员迟到实时提示", { exact: true }).count(), 0)
+      const expected = proof(group)
+      for (const currentPage of [page, sibling]) {
+        const observed = await currentPage.evaluate(async () => {
+          const { useAuthStore } = await import("/src/stores/auth.ts")
+          return useAuthStore.getState().identity
+        })
+        assert.deepEqual(observed, expected)
+        const current = (await cache(currentPage)).filter(entry => entry.status === "success")
+        assert(current.length > 0)
+        assert(current.every(({ key }) => key[1] === expected.userId && key[2] === expected.tenantId && key[3] === expected.organizationId &&
+          key[4] === expected.membershipId && key[5] === expected.memberType && key[6] === expected.identityVersion && key[7] === expected.accountVersion),
+        "Same user/organization caches are namespaced by concrete member and both generations")
+      }
+      const screenshots = path.join(workspace, "target/phase05-browser")
+      await mkdir(screenshots, { recursive: true })
+      await page.screenshot({ path: path.join(screenshots, `notification-identity-${group}-desktop.png`), fullPage: true })
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.screenshot({ path: path.join(screenshots, `notification-identity-${group}-mobile.png`), fullPage: true })
+      await sibling.close()
+    })
+  },
   muted: async () => withFixture({ prefs: { A: { ...defaultPrefs, mutedTypes: ["WARNING"] }, B: { ...defaultPrefs }, C: { ...defaultPrefs } } }, async (test) => {
     await verifySilentPreference(test, "WARNING", "静音类型消息")
   }),
@@ -391,7 +454,7 @@ const scenarios = {
     await ready(test)
     await openBell(test)
     state.holds.add("A:/api/notifications/read-all")
-    state.holds.add("A:/api/notifications/historical-A/read")
+    state.holds.add(`A:/api/notifications/${notification("A").id}/read`)
     await page.getByRole("button", { name: "全部已读", exact: true }).click()
     await page.getByRole("button").filter({ hasText: "离线通知 A" }).click()
     await waitState(() => state.held.length === 2, "Read-all and read-one must both be held with their original session.")
@@ -424,14 +487,14 @@ const scenarios = {
     for (const held of state.held) held.release.resolve()
     await pause(450)
     assert.equal(await page.getByRole("option").filter({ hasText: "离线通知 A" }).count(), 0)
-    assert((await cache(page)).some(({ key, status }) => key[3] === owner("B").organizationId && key[5] === "palette" && status === "success"))
+    assert((await cache(page)).some(({ key, status }) => key[3] === owner("B").organizationId && key[4] === proof("B").membershipId && key[9] === "palette" && status === "success"))
     await setToken(test, "C")
     await ready(test, "C")
     await page.keyboard.press("Control+k")
     await page.getByRole("combobox").fill("离线")
     await page.getByRole("option").filter({ hasText: "离线通知 C" }).waitFor()
     assert.equal(await page.getByRole("option").filter({ hasText: "离线通知 B" }).count(), 0)
-    assert((await cache(page)).some(({ key, status }) => key[1] === owner("C").userId && key[2] === owner("C").tenantId && key[3] === owner("C").organizationId && key[5] === "palette" && status === "success"))
+    assert((await cache(page)).some(({ key, status }) => key[1] === owner("C").userId && key[2] === owner("C").tenantId && key[3] === owner("C").organizationId && key[4] === proof("C").membershipId && key[9] === "palette" && status === "success"))
   }),
   publish: async () => withFixture({ canPublish: true, startPath: "/system/notifications", publishFailures: 1 }, async (test) => {
     const { page, state } = test
@@ -449,7 +512,7 @@ const scenarios = {
     await dialog.getByRole("button", { name: "发送", exact: true }).click()
     await dialog.getByRole("button", { name: "重试发送", exact: true }).waitFor()
     const firstBody = { applicationId: systemApplication.id, idempotencyKey: firstKey,
-      target: { kind: "USER", userId: "recipient-A", organizationId: owner("A").organizationId },
+      target: { kind: "USER", userId: fixtureUuid("recipient-A"), organizationId: owner("A").organizationId },
       title: "用户发布通知", content: "第一行\n第二行", type: "INFO", link: "/micro/system/record/1" }
     assert.deepEqual(state.publishRequests[0].body, firstBody)
     assert.equal(state.publishRequests[0].group, "A")

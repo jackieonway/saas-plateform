@@ -58,6 +58,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
@@ -84,6 +85,7 @@ import { formatDateTime, formatRelative, generatePassword, useDebounced, GENDER_
 import { telephoneSchema } from "@/lib/contact"
 import { toast } from "sonner"
 import type { DeptNode, OrgNode, RoleRecord, TenantRecord, UserRecord } from "@/api/types"
+import { MembershipDirectory } from "./MembershipDirectory"
 
 const userSchema = z.object({
   username: z
@@ -112,7 +114,30 @@ const USER_COLUMNS: ColumnDef[] = [
   { key: "actions", label: "操作", required: true },
 ]
 
+type ManagedMembership = UserRecord["memberships"][number] & { memberType?: string; status?: string }
+function employeeMemberships(user: UserRecord, enabledOnly = false) {
+  return (user.memberships as ManagedMembership[]).filter(member => member.memberType === "EMPLOYEE" && (!enabledOnly || member.status === "ENABLED"))
+}
+
 export default function UsersPage() {
+  const namespace = useAuthStore(state => state.contextKey)
+  const [view, setView] = React.useState("EMPLOYEE")
+  return <div>
+    <PageHeader title="用户与成员" description="先选择员工或客户关系，再操作具体成员；全局账号单独维护。" icon={<Users className="size-5" />} />
+    <Tabs value={view} onValueChange={setView}>
+      <TabsList className="mb-4 h-10 w-full sm:w-fit" aria-label="用户成员视图">
+        <TabsTrigger value="EMPLOYEE">员工成员</TabsTrigger>
+        <TabsTrigger value="CUSTOMER">客户成员</TabsTrigger>
+        <TabsTrigger value="ACCOUNTS">全局账号</TabsTrigger>
+      </TabsList>
+      <TabsContent value="EMPLOYEE"><MembershipDirectory key={`${namespace}:EMPLOYEE`} memberType="EMPLOYEE" /></TabsContent>
+      <TabsContent value="CUSTOMER"><MembershipDirectory key={`${namespace}:CUSTOMER`} memberType="CUSTOMER" /></TabsContent>
+      <TabsContent value="ACCOUNTS"><AccountDirectory key={`${namespace}:ACCOUNTS`} /></TabsContent>
+    </Tabs>
+  </div>
+}
+
+function AccountDirectory() {
   const queryClient = useQueryClient()
   const grantAccess = useAuthorizedPaths()
   const canReadDataGrants = grantAccess.access("/system/data-grants").status === "allowed"
@@ -340,8 +365,8 @@ export default function UsersPage() {
   return (
     <div>
       <PageHeader
-        title="用户管理"
-        description="平台用户账号、成员关系与角色分配"
+        title="全局账号"
+        description="账号启停、密码和删除影响此账号的所有成员身份；单个员工或客户的启停请使用成员视图。"
         icon={<Users className="size-5" />}
         actions={
           <Button onClick={openCreate}>
@@ -602,7 +627,7 @@ export default function UsersPage() {
                   )}
                   <TableCell className="pr-5">
                     <div className="flex items-center justify-end gap-0.5">
-                      {canReadDataGrants && (
+                      {canReadDataGrants && employeeMemberships(u, true).length > 0 && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button asChild variant="ghost" size="icon" className="size-8">
@@ -628,28 +653,28 @@ export default function UsersPage() {
                         </TooltipTrigger>
                         <TooltipContent>详情</TooltipContent>
                       </Tooltip>
-                      <Tooltip>
+                      {employeeMemberships(u).length > 0 && <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-8"
-                            aria-label="成员关系"
+                            aria-label="员工成员批量维护"
                             onClick={() => setMembershipUser(u)}
                           >
                             <UsersRound className="size-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>成员关系</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
+                        <TooltipContent>仅批量维护员工关系</TooltipContent>
+                      </Tooltip>}
+                      {employeeMemberships(u, true).length > 0 && <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="icon" className="size-8" aria-label="分配角色" onClick={() => setRolesUser(u)}>
                             <Shield className="size-4" />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>分配角色</TooltipContent>
-                      </Tooltip>
+                      </Tooltip>}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="icon" className="size-8" aria-label="重置密码" onClick={() => openReset(u)}>
@@ -879,7 +904,7 @@ export default function UsersPage() {
 
       {/* 用户详情抽屉 */}
       <UserDetailDrawer
-        user={detailUser}
+        user={detailUser && employeeMemberships(detailUser, true).length > 0 ? detailUser : null}
         onOpenChange={(o) => !o && setDetailUser(null)}
         onEdit={(u) => {
           setDetailUser(null)
@@ -891,13 +916,20 @@ export default function UsersPage() {
         }}
         onRoles={(u) => {
           setDetailUser(null)
-          setRolesUser(u)
+          if (employeeMemberships(u, true).length > 0) setRolesUser(u)
         }}
         onResetPassword={(u) => {
           setDetailUser(null)
           openReset(u)
         }}
       />
+      <Dialog open={!!detailUser && employeeMemberships(detailUser, true).length === 0} onOpenChange={open => !open && setDetailUser(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>账号详情 · {detailUser?.realName || detailUser?.username}</DialogTitle><DialogDescription>该账号当前没有有效员工关系，员工角色和岗位入口不可用。客户关系请在客户成员视图中维护。</DialogDescription></DialogHeader>
+          <div className="space-y-3 text-sm"><p className="break-all font-mono text-xs">{detailUser?.id}</p><p>用户名：{detailUser?.username}</p><p>账号状态：{detailUser?.status === "ENABLED" ? "已启用" : "已禁用"}</p></div>
+          <DialogFooter><Button variant="outline" onClick={() => setDetailUser(null)}>关闭</Button><Button onClick={() => { const user = detailUser; setDetailUser(null); if (user) openEdit(user) }}>编辑账号</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!deleting}
@@ -966,9 +998,11 @@ function MembershipDialog({
 
   const query = useQuery({
     queryKey: ["user-memberships", user?.id],
-    queryFn: async () => asArray<{ organizationId: string; tenantId: string; departmentId: string | null; position: string }>(
-      await usersApi.memberships(user!.id)
-    ),
+    queryFn: async () => {
+      const rows = asArray<{ organizationId: string; tenantId: string; departmentId: string | null; position: string; memberType: string }>(await usersApi.memberships(user!.id))
+      if (rows.some(row => row.memberType !== "EMPLOYEE")) throw new Error("员工批量关系响应包含未确认的身份，请重新读取")
+      return rows
+    },
     enabled: !!user,
     retry: 1,
   })
@@ -1021,8 +1055,8 @@ function MembershipDialog({
     <Dialog open={!!user} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>成员关系 · {user?.realName || user?.username}</DialogTitle>
-          <DialogDescription>配置用户所属组织、部门与职位,一个用户可归属多个组织</DialogDescription>
+          <DialogTitle>员工成员关系 · {user?.realName || user?.username}</DialogTitle>
+          <DialogDescription>仅替换管理范围内的员工组织、部门与岗位。客户和范围外关系保留，已停用员工不会被自动启用；独立启停请使用成员视图。</DialogDescription>
         </DialogHeader>
 
         {query.isLoading ? (
@@ -1152,7 +1186,7 @@ function RoleAssignDialog({
 
   const orgIds = React.useMemo(() => {
     const ids = new Set<string>()
-    for (const m of user?.memberships ?? []) ids.add(m.organizationId)
+    for (const m of user ? employeeMemberships(user, true) : []) ids.add(m.organizationId)
     return [...ids]
   }, [user])
 

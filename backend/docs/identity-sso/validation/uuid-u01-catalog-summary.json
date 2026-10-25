@@ -1,0 +1,702 @@
+{
+  "format": "saas-uuid-inventory/1",
+  "environment": "local-preview",
+  "captured_at_unix_seconds": 1792814548,
+  "snapshot_contract": "independent-repeatable-read-read-only; NOT a coordinated export",
+  "reference_registry_sha256": "89d874d1e978eec23ee715b3894bebeccbe79ff492f42089eadb42907658e9b2",
+  "uninspected_environments": [
+    "remote-development",
+    "production"
+  ],
+  "private_report_sha256": "f8998835f4ded92d1b2b54318c51d7e6c9a8fca130ef7de45fced9a80baf0cff",
+  "databases": [
+    {
+      "kind": "platform",
+      "database": "qiankun_platform_preview_20261024",
+      "metadata": {
+        "current_timestamp": "2026-10-24T04:02:27.631594+00:00",
+        "current_user": "postgres",
+        "database": "qiankun_platform_preview_20261024",
+        "row_security": "off",
+        "server_address": null,
+        "server_port": null,
+        "server_version_num": 180006,
+        "table_scan_scope": "ONLY: physical rows; partition parents exclude descendants",
+        "transaction_isolation": "repeatable read",
+        "transaction_read_only": "on",
+        "uuid_values": "aggregate only; arrays recursively flattened; no raw UUID values"
+      },
+      "table_count": 40,
+      "table_row_counts": [
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 11,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "_sqlx_migrations"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "application_deployments"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "application_release_artifacts"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "application_release_operations"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "application_releases"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 7,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "application_url_entries"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 10,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "applications"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 188,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "audit_logs"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 6,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "departments"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "managed_deployment_bindings"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "managed_deployment_jobs"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "managed_image_artifacts"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 12,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "membership_data_grants"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 9,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "memberships"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 61,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "menus"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "notification_prefs"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "notification_publications"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "notifications"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "oauth_authorization_codes"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "oauth_authorization_requests"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 14,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "oauth_clients"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "oauth_device_codes"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 105,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "oauth_tokens"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 23,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "organization_applications"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 124,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "organization_menus"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 8,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "organizations"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 7,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "platform_session_refresh_tokens"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 7,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "platform_sessions"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 1,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "platform_settings"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 1,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "region_versions"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 665923,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "regions"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 111,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "role_menus"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 7,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "roles"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 12,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "tenant_applications"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 71,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "tenant_menus"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 2,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "tenants"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 8,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "user_roles"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 7,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "users"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "zip_distribution_jobs"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "zip_distribution_nodes"
+        }
+      ],
+      "uuid_columns": 107,
+      "non_null_uuid_cells": 2706,
+      "nil_cells": 0,
+      "uuid_v4_defaults": 23,
+      "uuid_domain_columns": 0,
+      "uuid_array_columns": 0,
+      "foreign_keys": 64,
+      "indexes": 114,
+      "triggers": 273,
+      "views": 0,
+      "functions": 52,
+      "migrations": [
+        {
+          "checksum": "44eff7f5d86c3a37a9b6e23f73ec059fc6c6e10ae814365359939461b68e8f58c60b66e75988f6e2571dc55a478004f6",
+          "description": "init",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "1"
+        },
+        {
+          "checksum": "70b0b3ad0a71f6f2dce86a85a6354c247756afa3c55a0598f8527b29dc4c34f24d75f0b744128dd582cc83fa22517391",
+          "description": "release artifacts",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "2"
+        },
+        {
+          "checksum": "85b05f5e7c9ba73d96c2f125fc0cde6ee12e39f15936c7d7971df2762e56ba5d5d912a931fb2b06717b679def1b49770",
+          "description": "oauth issuance",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "3"
+        },
+        {
+          "checksum": "eb652e9ee1bdbbb7aee8d787b71dc89169b5e5ee1ee3487f6af64ed8cc0f845470c35629acebfe52aeece07b41c187a7",
+          "description": "release operation protection",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "4"
+        },
+        {
+          "checksum": "cb2d00c0d4db283bc8c917fc17303053d941d00f3c624b145f4d93bb10bc2519413940bfdeba13199fbe21d9378bf308",
+          "description": "managed image deployments",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "5"
+        },
+        {
+          "checksum": "a46a42e6d514f3c9c821366c3cce4504eaf42474a111cc692c81f85ce03faa9caaac71d5870d1f8fd7c2f95ca077d81d",
+          "description": "zip distribution",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "6"
+        },
+        {
+          "checksum": "cfc66c5678b00f43565f8b2dea1b5a1026ed703f72d2cf25ca65eca013e8fde14189e90a5d550d11b58042b8d8c8bbb6",
+          "description": "oauth pkce policy",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "7"
+        },
+        {
+          "checksum": "57da11c6a21724b4a92161317ee75330d3d87291e23e6456b406c9480aff97a13e0c57b4e478d5fd4a4e53eb2084b086",
+          "description": "url entries",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "8"
+        },
+        {
+          "checksum": "ff6823fa5d5f42806cd2b0888120ff582afc7165c631781d7bd14190b12c17588aa7fd8e057f07ad3f29e50f9d6bcf47",
+          "description": "qiankun only",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "9"
+        },
+        {
+          "checksum": "9c11a003fd89b1717cf30a2a3e474475b429db08c1ec529ce2b80dde482d05c7b886fda4af31bc3a933de7ac333a6893",
+          "description": "unified application config",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "10"
+        },
+        {
+          "checksum": "3ca46fd76f3e9209d8c51f11c466ec6826b3f8ffc5cb49c2c6144d9bd899272e87bb9c492bd985e40dc377ae2bad9470",
+          "description": "store organizations",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "11"
+        }
+      ],
+      "schema_fingerprint_sha256": "2a16ccb1b285bb8613a56b33a84df02032ad8a190c2e5b20697ab35fd4b084c2",
+      "versions": [
+        {
+          "version": 4,
+          "variant": "RFC",
+          "nil": false,
+          "count": 2706
+        }
+      ]
+    },
+    {
+      "kind": "stores",
+      "database": "qiankun_stores_preview_20261024",
+      "metadata": {
+        "current_timestamp": "2026-10-24T04:02:28.098591+00:00",
+        "current_user": "postgres",
+        "database": "qiankun_stores_preview_20261024",
+        "row_security": "off",
+        "server_address": null,
+        "server_port": null,
+        "server_version_num": 180006,
+        "table_scan_scope": "ONLY: physical rows; partition parents exclude descendants",
+        "transaction_isolation": "repeatable read",
+        "transaction_read_only": "on",
+        "uuid_values": "aggregate only; arrays recursively flattened; no raw UUID values"
+      },
+      "table_count": 7,
+      "table_row_counts": [
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 2,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "_sqlx_migrations"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 1,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "_stores_schema_contract"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 1,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "_stores_schema_contract_v2"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 3,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "store_audit_events"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 1,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "store_daily_reports"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "store_staff"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 1,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "stores"
+        }
+      ],
+      "uuid_columns": 23,
+      "non_null_uuid_cells": 28,
+      "nil_cells": 0,
+      "uuid_v4_defaults": 0,
+      "uuid_domain_columns": 0,
+      "uuid_array_columns": 0,
+      "foreign_keys": 2,
+      "indexes": 15,
+      "triggers": 14,
+      "views": 0,
+      "functions": 8,
+      "migrations": [
+        {
+          "checksum": "cc4de705f0bfe1a53ecc40026fa128d9f98d3cc6cbe3f3b215ddeb8b20af57fc983e9f65e01db9ba28c5c1096a3c71d3",
+          "description": "stores",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "1"
+        },
+        {
+          "checksum": "04fe7e38b65a24f6214b2aed684171c7d2de5bfe02de98b9bdb826ff47a738c5384796c9eed3b7162b1979f69d483575",
+          "description": "platform owned store identity",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "2"
+        }
+      ],
+      "schema_fingerprint_sha256": "cdb1c3a42077033d8692afe8b09b8dc192c41a0491d327cc4fe686624843ba08",
+      "versions": [
+        {
+          "version": 4,
+          "variant": "RFC",
+          "nil": false,
+          "count": 28
+        }
+      ]
+    },
+    {
+      "kind": "work_orders",
+      "database": "qiankun_orders_preview_20261024",
+      "metadata": {
+        "current_timestamp": "2026-10-24T04:02:28.237049+00:00",
+        "current_user": "postgres",
+        "database": "qiankun_orders_preview_20261024",
+        "row_security": "off",
+        "server_address": null,
+        "server_port": null,
+        "server_version_num": 180006,
+        "table_scan_scope": "ONLY: physical rows; partition parents exclude descendants",
+        "transaction_isolation": "repeatable read",
+        "transaction_read_only": "on",
+        "uuid_values": "aggregate only; arrays recursively flattened; no raw UUID values"
+      },
+      "table_count": 6,
+      "table_row_counts": [
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 3,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "_sqlx_migrations"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "work_order_counters"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "work_order_create_idempotency"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 3,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "work_order_migrations"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "work_order_reminder_intents"
+        },
+        {
+          "is_partition": false,
+          "kind": "r",
+          "row_count": 0,
+          "scan_scope": "ONLY",
+          "schema": "public",
+          "table": "work_orders"
+        }
+      ],
+      "uuid_columns": 17,
+      "non_null_uuid_cells": 0,
+      "nil_cells": 0,
+      "uuid_v4_defaults": 0,
+      "uuid_domain_columns": 0,
+      "uuid_array_columns": 0,
+      "foreign_keys": 1,
+      "indexes": 9,
+      "triggers": 6,
+      "views": 0,
+      "functions": 2,
+      "migrations": [
+        {
+          "checksum": "ff16f24670efa508f9bb371ca813c1a1a233a659e6d387601acefc5f134b3e2d54f6fa0b68ea205370a43edca0d7ce31",
+          "description": "work orders",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "1"
+        },
+        {
+          "checksum": "49d5a4c87c3cb9704ca90aa9b30901b6f45999b227193d635c09104c50e69fb4ef572cb5e8fc7760c9b59f0d7e730626",
+          "description": "create idempotency",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "2"
+        },
+        {
+          "checksum": "52aa7689708a095db809b3f69e03729c8b157117234325710af6f932e4fe638acb90c6ab6619caaabc6f85d55c683f87",
+          "description": "reminder intents",
+          "schema": "public",
+          "success": true,
+          "table": "_sqlx_migrations",
+          "version": "3"
+        }
+      ],
+      "schema_fingerprint_sha256": "ce5768293dd291e16320641a31f8bef97e127acf83b21416fd5718d5a11be96c",
+      "versions": []
+    }
+  ],
+  "negative_cli_checks": [
+    {
+      "case": "existing-report",
+      "exit_code": 1,
+      "error": "recovery failed: absolute paths and a new report file are required"
+    },
+    {
+      "case": "remote-host",
+      "exit_code": 1,
+      "error": "recovery failed: only three explicit local preview sources are supported"
+    },
+    {
+      "case": "disk-report",
+      "exit_code": 1,
+      "error": "recovery failed: plaintext scratch must be tmpfs; no disk fallback"
+    }
+  ]
+}

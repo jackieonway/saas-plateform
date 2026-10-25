@@ -6,7 +6,6 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use serde_json::{json, Value};
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -91,12 +90,15 @@ async fn session(
         .fetch_one(pool)
         .await?;
     let session_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions (user_id, tenant_id, organization_id, expires_at) \
-         VALUES ($1, $2, $3, now() + interval '1 hour') RETURNING id",
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now() + interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
     )
     .bind(user)
     .bind(tenant)
     .bind(org)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let token = jwt::sign(
@@ -121,16 +123,18 @@ async fn session(
 
 async fn tenant(pool: &PgPool, suffix: &str, label: &str) -> Result<(Uuid, Uuid)> {
     let id: Uuid =
-        sqlx::query_scalar("INSERT INTO tenants (name, code) VALUES ($1, $2) RETURNING id")
+        sqlx::query_scalar("INSERT INTO tenants (name, code,id) VALUES ($1, $2,$3) RETURNING id")
             .bind(label)
             .bind(format!("scope-{suffix}"))
+            .bind(crate::util::uuid7::new_uuid())
             .fetch_one(pool)
             .await?;
     let org: Uuid = sqlx::query_scalar(
-        "INSERT INTO organizations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO organizations (tenant_id, name,id) VALUES ($1, $2,$3) RETURNING id",
     )
     .bind(id)
     .bind(format!("{label} Root"))
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     Ok((id, org))
@@ -138,24 +142,27 @@ async fn tenant(pool: &PgPool, suffix: &str, label: &str) -> Result<(Uuid, Uuid)
 
 async fn test_application(pool: &PgPool, suffix: &str) -> Result<(Uuid, String, String, String)> {
     let code = format!("scope-app-{suffix}");
-    let app_id: Uuid =
-        sqlx::query_scalar("INSERT INTO applications (code, name) VALUES ($1, $2) RETURNING id")
-            .bind(&code)
-            .bind(&code)
-            .fetch_one(pool)
-            .await?;
+    let app_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO applications (code, name,id) VALUES ($1, $2,$3) RETURNING id",
+    )
+    .bind(&code)
+    .bind(&code)
+    .bind(crate::util::uuid7::new_uuid())
+    .fetch_one(pool)
+    .await?;
     let client_id = format!("scope-client-{suffix}");
-    let secret = format!("s{}", Uuid::new_v4().simple());
+    let secret = format!("s{}", crate::util::uuid7::new_uuid().simple());
     sqlx::query(
         "INSERT INTO oauth_clients \
-        (client_id, client_secret_hash, client_name, client_type, grant_types, scopes, \
-         access_token_validity, refresh_token_validity, application_id) \
-         VALUES ($1, $2, $3, 'CONFIDENTIAL', 'client_credentials', 'profile', 7200, 604800, $4)",
+        (client_id, client_secret_hash, client_name, client_type, subject_mode, allowed_member_types, grant_types, scopes, \
+         access_token_validity, refresh_token_validity, application_id,id) \
+         VALUES ($1, $2, $3, 'CONFIDENTIAL', 'MACHINE', ARRAY[]::text[], 'client_credentials', 'profile', 7200, 604800, $4,$5)",
     )
     .bind(&client_id)
     .bind(hash::sha256_hex(&secret))
     .bind(&client_id)
     .bind(app_id)
+    .bind(crate::util::uuid7::new_uuid())
     .execute(pool)
     .await?;
     Ok((app_id, code, client_id, secret))
@@ -163,15 +170,17 @@ async fn test_application(pool: &PgPool, suffix: &str) -> Result<(Uuid, String, 
 
 async fn test_user(pool: &PgPool, suffix: &str, orgs: &[Uuid]) -> Result<Uuid> {
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (username, password_hash) VALUES ($1, 'test-only') RETURNING id",
+        "INSERT INTO users (username, password_hash,id) VALUES ($1, 'test-only',$2) RETURNING id",
     )
     .bind(format!("scope-{suffix}"))
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     for org in orgs {
-        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+        sqlx::query("INSERT INTO memberships (user_id, organization_id,id) VALUES ($1, $2,$3)")
             .bind(id)
             .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(pool)
             .await?;
     }
@@ -186,12 +195,12 @@ async fn grant_admin(
     suffix: &str,
 ) -> Result<Uuid> {
     let role: Uuid = sqlx::query_scalar(
-        "INSERT INTO roles (tenant_id, organization_id, name) VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO roles (tenant_id, organization_id, name,id) VALUES ($1, $2, $3,$4) RETURNING id",
     )
     .bind(tenant)
     .bind(org)
     .bind(format!("scope-admin-{suffix}"))
-    .fetch_one(pool)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(pool)
     .await?;
     let menus: Vec<(Uuid, Uuid)> =
         sqlx::query_as("SELECT id, application_id FROM menus WHERE permission = ANY($1)")
@@ -279,14 +288,13 @@ async fn login_and_select(
 }
 
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL pointing at an isolated PostgreSQL test database"]
+#[ignore = "creates, seeds and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn tenant_management_scope_matrix() -> Result<()> {
-    let url = std::env::var("TEST_DATABASE_URL")?;
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&url)
-        .await?;
-    let suffix = Uuid::new_v4().simple().to_string();
+    let database = crate::release_tests::TestDatabase::create().await?;
+    let pool = database.pool.clone();
+    let outcome: Result<()> = async {
+        crate::seed::run(&pool).await?;
+    let suffix = crate::util::uuid7::new_uuid().simple().to_string();
     let (tenant_a, org_a) = tenant(&pool, &format!("a-{suffix}"), "Scope A").await?;
     let (tenant_b, org_b) = tenant(&pool, &format!("b-{suffix}"), "Scope B").await?;
     let admin_a = test_user(&pool, &format!("admin-a-{suffix}"), &[org_a]).await?;
@@ -295,9 +303,10 @@ async fn tenant_management_scope_matrix() -> Result<()> {
     let role_a = grant_admin(&pool, tenant_a, org_a, admin_a, &suffix).await?;
     let role_b = grant_admin(&pool, tenant_b, org_b, admin_b, &format!("b-{suffix}")).await?;
     let dept_b: Uuid = sqlx::query_scalar(
-        "INSERT INTO departments (organization_id, name) VALUES ($1, 'B Dept') RETURNING id",
+        "INSERT INTO departments (organization_id, name,id) VALUES ($1, 'B Dept',$2) RETURNING id",
     )
     .bind(org_b)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(&pool)
     .await?;
     for (role, org) in [(role_a, org_a), (role_b, org_b)] {
@@ -319,19 +328,18 @@ async fn tenant_management_scope_matrix() -> Result<()> {
     .await?;
 
     let secret = "isolated-scope-test-only";
-    let mut config = Config::from_env();
-    config.database_url = url;
+    let mut config = Config::from_values(&Default::default())?;
     config.jwt_secret = secret.into();
     let app = Router::new()
         .merge(routes::api_router())
         .with_state(AppState::new(pool.clone(), Arc::new(config)));
     let (a, _) = session(&pool, admin_a, tenant_a, org_a, secret).await?;
     let (b, _) = session(&pool, admin_b, tenant_b, org_b, secret).await?;
-    let (platform, platform_session_id) =
+    let (platform, _platform_session_id) =
         session(&pool, platform_user, platform_tenant, platform_org, secret).await?;
     let created_username = format!("scope-created-{suffix}");
 
-    let result: Result<()> = async {
+    async {
         let (status, body) = call(&app, Method::GET, "/api/tenants?size=200", &a, None).await?;
         ensure!(status == StatusCode::OK && !body.to_string().contains(&tenant_b.to_string()), "A tenant list leaked B");
         let (status, body) = call(&app, Method::GET, "/api/tenants?size=200", &b, None).await?;
@@ -404,7 +412,7 @@ async fn tenant_management_scope_matrix() -> Result<()> {
         ensure!(status == StatusCode::FORBIDDEN, "A accessed global monitor");
         let (status, _) = call(&app, Method::GET, "/api/applications", &a, None).await?;
         ensure!(status == StatusCode::FORBIDDEN, "A accessed global application catalog");
-        let (status, _) = call(&app, Method::GET, "/api/menus/tree?applicationId=00000000-0000-0000-0000-000000000000", &a, None).await?;
+        let (status, _) = call(&app, Method::GET, "/api/menus/tree?applicationId=019a1163-0000-7000-8000-000000000001", &a, None).await?;
         ensure!(status == StatusCode::FORBIDDEN, "A accessed global menu catalog");
         let (status, body) = call(&app, Method::GET, "/api/monitor/tenant-insights", &a, None).await?;
         ensure!(status == StatusCode::OK && !body.to_string().contains(&tenant_b.to_string()), "A monitor leaked B data");
@@ -479,58 +487,38 @@ async fn tenant_management_scope_matrix() -> Result<()> {
             .bind(platform_user).bind(tenant_b).fetch_one(&pool).await?;
         ensure!(target_audit_count >= 2, "platform tenant status/delete audit omitted target tenant");
         Ok(())
+    }.await
     }.await;
-
-    sqlx::query("DELETE FROM audit_logs WHERE tenant_id = ANY($1)")
-        .bind([tenant_a, tenant_b])
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM tenants WHERE id = ANY($1)")
-        .bind([tenant_a, tenant_b])
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM users WHERE username = $1")
-        .bind(&created_username)
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-        .bind([admin_a, admin_b, shared])
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM platform_sessions WHERE id = $1")
-        .bind(platform_session_id)
-        .execute(&pool)
-        .await?;
-    result
+    database.finish(outcome).await
 }
-
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL pointing at an isolated PostgreSQL test database"]
+#[ignore = "creates, seeds and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn platform_session_lifecycle() -> Result<()> {
-    let url = std::env::var("TEST_DATABASE_URL")?;
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&url)
-        .await?;
-    let suffix = Uuid::new_v4().simple().to_string();
+    let database = crate::release_tests::TestDatabase::create().await?;
+    let pool = database.pool.clone();
+    let outcome: Result<()> = async {
+        crate::seed::run(&pool).await?;
+    let suffix = crate::util::uuid7::new_uuid().simple().to_string();
     let (tenant_id, root) = tenant(&pool, &format!("session-{suffix}"), "Session test").await?;
-    let child: Uuid = sqlx::query_scalar("INSERT INTO organizations (tenant_id, parent_id, name) VALUES ($1, $2, 'Child') RETURNING id")
-        .bind(tenant_id).bind(root).fetch_one(&pool).await?;
-    let unrelated: Uuid = sqlx::query_scalar("INSERT INTO organizations (tenant_id, parent_id, name) VALUES ($1, $2, 'Unrelated') RETURNING id")
-        .bind(tenant_id).bind(root).fetch_one(&pool).await?;
+    let child: Uuid = sqlx::query_scalar("INSERT INTO organizations (tenant_id, parent_id, name,id) VALUES ($1, $2, 'Child',$3) RETURNING id")
+        .bind(tenant_id).bind(root).bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
+    let unrelated: Uuid = sqlx::query_scalar("INSERT INTO organizations (tenant_id, parent_id, name,id) VALUES ($1, $2, 'Unrelated',$3) RETURNING id")
+        .bind(tenant_id).bind(root).bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
     let username = format!("session-user-{suffix}");
     let initial_hash = password::hash_password("StartPass123")?;
     let user_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO users (username, password_hash,id) VALUES ($1, $2,$3) RETURNING id",
     )
     .bind(&username)
     .bind(initial_hash)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(&pool)
     .await?;
     for org in [root, child] {
-        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+        sqlx::query("INSERT INTO memberships (user_id, organization_id,id) VALUES ($1, $2,$3)")
             .bind(user_id)
             .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(&pool)
             .await?;
     }
@@ -542,16 +530,15 @@ async fn platform_session_lifecycle() -> Result<()> {
     .fetch_one(&pool)
     .await?;
     let secret = "isolated-session-test-only";
-    let mut config = Config::from_env();
-    config.database_url = url;
+    let mut config = Config::from_values(&Default::default())?;
     config.jwt_secret = secret.into();
     let app = Router::new()
         .merge(routes::api_router())
         .with_state(AppState::new(pool.clone(), Arc::new(config)));
-    let (admin_token, admin_session_id) =
+    let (admin_token, _admin_session_id) =
         session(&pool, admin_id, admin_tenant, admin_org, secret).await?;
 
-    let result: Result<()> = async {
+    async {
         let (old_ticket, first) = login_and_select(&app, &username, "StartPass123", root).await?;
         let (_, second) = login_and_select(&app, &username, "StartPass123", root).await?;
         let (status, listing) =
@@ -780,9 +767,10 @@ async fn platform_session_lifecycle() -> Result<()> {
                 == StatusCode::UNAUTHORIZED,
             "member removal did not invalidate session"
         );
-        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+        sqlx::query("INSERT INTO memberships (user_id, organization_id,id) VALUES ($1, $2,$3)")
             .bind(user_id)
             .bind(root)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(&pool)
             .await?;
         ensure!(
@@ -971,37 +959,18 @@ async fn platform_session_lifecycle() -> Result<()> {
         );
         Ok(())
     }
-    .await;
-
-    sqlx::query("DELETE FROM audit_logs WHERE user_id = $1 OR tenant_id = $2")
-        .bind(user_id)
-        .bind(tenant_id)
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM tenants WHERE id = $1")
-        .bind(tenant_id)
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM users WHERE id = $1")
-        .bind(user_id)
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM platform_sessions WHERE id = $1")
-        .bind(admin_session_id)
-        .execute(&pool)
-        .await?;
-    result
+    .await
+    }.await;
+    database.finish(outcome).await
 }
-
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL pointing at an isolated PostgreSQL test database"]
+#[ignore = "creates, seeds and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn application_token_audience_and_revocation() -> Result<()> {
-    let url = std::env::var("TEST_DATABASE_URL")?;
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&url)
-        .await?;
-    let suffix = Uuid::new_v4().simple().to_string();
+    let database = crate::release_tests::TestDatabase::create().await?;
+    let pool = database.pool.clone();
+    let outcome: Result<()> = async {
+        crate::seed::run(&pool).await?;
+    let suffix = crate::util::uuid7::new_uuid().simple().to_string();
     let (tenant_a, org_a) = tenant(&pool, &format!("app-a-{suffix}"), "App tenant A").await?;
     let (tenant_b, org_b) = tenant(&pool, &format!("app-b-{suffix}"), "App tenant B").await?;
     let user_a = test_user(&pool, &format!("app-a-{suffix}"), &[org_a]).await?;
@@ -1020,8 +989,7 @@ async fn application_token_audience_and_revocation() -> Result<()> {
             .bind(org).bind(app_id).execute(&pool).await?;
     }
     let secret = "isolated-app-token-test-only";
-    let mut config = Config::from_env();
-    config.database_url = url;
+    let mut config = Config::from_values(&Default::default())?;
     config.jwt_secret = secret.into();
     let config = Arc::new(config);
     let app = Router::new()
@@ -1035,7 +1003,7 @@ async fn application_token_audience_and_revocation() -> Result<()> {
     let (session_a, _) = session(&pool, user_a, tenant_a, org_a, secret).await?;
     let (session_b, _) = session(&pool, user_b, tenant_b, org_b, secret).await?;
 
-    let result: Result<()> = async {
+    async {
         let (status, issued) = call(&app, Method::POST, "/api/oauth/session-token", &session_a,
             Some(json!({"appCode":code_a}))).await?;
         ensure!(status == StatusCode::CREATED, "authorized app token issue failed: {status} {issued}");
@@ -1105,18 +1073,18 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(call(&app, Method::GET, &context_path, &token_b, None).await?.0 == StatusCode::FORBIDDEN,
             "B token accessed A context");
         let role_id: Uuid = sqlx::query_scalar(
-            "INSERT INTO roles (tenant_id, organization_id, name, code) \
-             VALUES ($1, $2, $3, 'APP_TEST') RETURNING id",
+            "INSERT INTO roles (tenant_id, organization_id, name, code,id) \
+             VALUES ($1, $2, $3, 'APP_TEST',$4) RETURNING id",
         ).bind(tenant_a).bind(org_a).bind(format!("app-test-{suffix}"))
-         .fetch_one(&pool).await?;
+         .bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
         let menu_id: Uuid = sqlx::query_scalar(
-            "INSERT INTO menus (application_id, type, title, permission, path) \
-             VALUES ($1, 'BUTTON', 'Read orders', 'order:read', '/orders') RETURNING id",
-        ).bind(app_a).fetch_one(&pool).await?;
+            "INSERT INTO menus (application_id, type, title, permission, path,id) \
+             VALUES ($1, 'BUTTON', 'Read orders', 'order:read', '/orders',$2) RETURNING id",
+        ).bind(app_a).bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
         sqlx::query(
-            "INSERT INTO menus (application_id, type, title, permission, path) \
-             VALUES ($1, 'BUTTON', 'Hidden admin action', 'order:admin', '/orders/admin')",
-        ).bind(app_a).execute(&pool).await?;
+            "INSERT INTO menus (application_id, type, title, permission, path,id) \
+             VALUES ($1, 'BUTTON', 'Hidden admin action', 'order:admin', '/orders/admin',$2)",
+        ).bind(app_a).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
         sqlx::query("INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3)")
             .bind(user_a).bind(role_id).bind(org_a).execute(&pool).await?;
         sqlx::query("INSERT INTO role_menus (role_id, menu_id) VALUES ($1, $2)")
@@ -1130,9 +1098,9 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ).bind(user_a).bind(org_a).fetch_one(&pool).await?;
         sqlx::query(
             "INSERT INTO membership_data_grants \
-             (membership_id, application_id, resource_code, action_code, scope_type) \
-             VALUES ($1, $2, 'order', 'read', 'ORG')",
-        ).bind(member_id).bind(app_a).execute(&pool).await?;
+             (membership_id, application_id, resource_code, action_code, scope_type,id) \
+             VALUES ($1, $2, 'order', 'read', 'ORG',$3)",
+        ).bind(member_id).bind(app_a).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
         let (_, context_with_grant) = call(&app, Method::GET, &context_path, &token_a, None).await?;
         ensure!(context_with_grant["permissions"] == json!(["order:read"])
             && context_with_grant["dataGrants"][0]["scope"] == "ORG"
@@ -1170,18 +1138,18 @@ async fn application_token_audience_and_revocation() -> Result<()> {
             "data grant deletion was not visible on next request");
 
         let child_org: Uuid = sqlx::query_scalar(
-            "INSERT INTO organizations (tenant_id, parent_id, name) \
-             VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO organizations (tenant_id, parent_id, name,id) \
+             VALUES ($1, $2, $3,$4) RETURNING id",
         ).bind(tenant_a).bind(org_a).bind(format!("child-{suffix}"))
-         .fetch_one(&pool).await?;
+         .bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
         let descendant: Uuid = sqlx::query_scalar(
-            "INSERT INTO organizations (tenant_id, parent_id, name) \
-             VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO organizations (tenant_id, parent_id, name,id) \
+             VALUES ($1, $2, $3,$4) RETURNING id",
         ).bind(tenant_a).bind(child_org).bind(format!("descendant-{suffix}"))
-         .fetch_one(&pool).await?;
+         .bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
         let child_member: Uuid = sqlx::query_scalar(
-            "INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2) RETURNING id",
-        ).bind(user_a).bind(child_org).fetch_one(&pool).await?;
+            "INSERT INTO memberships (user_id, organization_id,id) VALUES ($1, $2,$3) RETURNING id",
+        ).bind(user_a).bind(child_org).bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
         sqlx::query("INSERT INTO organization_applications (organization_id, application_id) VALUES ($1, $2)")
             .bind(child_org).bind(app_a).execute(&pool).await?;
         sqlx::query("INSERT INTO organization_menus (organization_id, menu_id) VALUES ($1, $2)")
@@ -1199,9 +1167,9 @@ async fn application_token_audience_and_revocation() -> Result<()> {
             "ancestor role was not inherited or implicitly granted data access");
         sqlx::query(
             "INSERT INTO membership_data_grants \
-             (membership_id, application_id, resource_code, action_code, scope_type) \
-             VALUES ($1, $2, 'order', 'read', 'ORG_SUBTREE')",
-        ).bind(child_member).bind(app_a).execute(&pool).await?;
+             (membership_id, application_id, resource_code, action_code, scope_type,id) \
+             VALUES ($1, $2, 'order', 'read', 'ORG_SUBTREE',$3)",
+        ).bind(child_member).bind(app_a).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
         let (_, child_context) = call(&app, Method::GET, &context_path, &child_token, None).await?;
         let allowed_orgs = child_context["dataGrants"][0]["organizationIds"].as_array()
             .ok_or_else(|| anyhow::anyhow!("missing subtree organization IDs"))?;
@@ -1209,9 +1177,9 @@ async fn application_token_audience_and_revocation() -> Result<()> {
             && !allowed_orgs.contains(&json!(org_a)) && !allowed_orgs.contains(&json!(org_b)),
             "subtree grant leaked parent or other tenant organization");
         let sibling_org: Uuid = sqlx::query_scalar(
-            "INSERT INTO organizations (tenant_id,parent_id,name) VALUES($1,$2,$3) RETURNING id",
+            "INSERT INTO organizations (tenant_id,parent_id,name,id) VALUES($1,$2,$3,$4) RETURNING id",
         ).bind(tenant_a).bind(org_a).bind(format!("sibling-{suffix}"))
-         .fetch_one(&pool).await?;
+         .bind(crate::util::uuid7::new_uuid()).fetch_one(&pool).await?;
         sqlx::query("UPDATE membership_data_grants SET scope_type='TENANT' WHERE membership_id=$1 AND application_id=$2")
             .bind(child_member).bind(app_a).execute(&pool).await?;
         let (_, capped_child_context) = call(&app, Method::GET, &context_path, &child_token, None).await?;
@@ -1232,9 +1200,9 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         sqlx::query("UPDATE membership_data_grants SET scope_type='TENANT' WHERE membership_id=$1 AND application_id=$2")
             .bind(child_member).bind(app_a).execute(&pool).await?;
         sqlx::query(
-            "INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) \
-             VALUES($1,$2,'order','read','TENANT')",
-        ).bind(member_id).bind(app_a).execute(&pool).await?;
+            "INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) \
+             VALUES($1,$2,'order','read','TENANT',$3)",
+        ).bind(member_id).bind(app_a).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
         let (_, ordinary_root_context) = call(&app, Method::GET, &context_path, &token_a2, None).await?;
         ensure!(ordinary_root_context["dataGrants"][0]["scope"]=="ORG_SUBTREE", "ordinary root app data scope was unbounded");
         ensure!(ordinary_root_context["organizationScopeIds"].as_array().is_some_and(|ids| ids.contains(&json!(org_a))
@@ -1258,11 +1226,11 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(call_form(&app, "/oauth/introspect", &client_b, &secret_b,
             &format!("token={legacy_token}")).await?.1["active"] == false,
             "B backend introspected A legacy OAuth token");
-        let refresh_probe = format!("refreshprobe{}", Uuid::new_v4().simple());
-        sqlx::query("INSERT INTO oauth_tokens (token_hash, token_type, user_id, client_id, expires_at) \
-                     VALUES ($1, 'refresh', $2, $3, now() + interval '1 hour')")
+        let refresh_probe = format!("refreshprobe{}", crate::util::uuid7::new_uuid().simple());
+        sqlx::query("INSERT INTO oauth_tokens (token_hash, token_type, user_id, client_id, expires_at,id) \
+                     VALUES ($1, 'refresh', $2, $3, now() + interval '1 hour',$4)")
             .bind(hash::sha256_hex(&refresh_probe)).bind(user_a).bind(&client_a)
-            .execute(&pool).await?;
+            .bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
         ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
             &format!("token={refresh_probe}")).await?.1["active"] == false,
             "refresh token was accepted as resource access token");
@@ -1387,8 +1355,8 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(call(&app, Method::POST, "/api/oauth/session-token", &fresh_session,
             Some(json!({"appCode":code_a}))).await?.0 == StatusCode::UNAUTHORIZED,
             "user without membership obtained app token");
-        sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
-            .bind(user_a).bind(org_a).execute(&pool).await?;
+        sqlx::query("INSERT INTO memberships (user_id, organization_id,id) VALUES ($1, $2,$3)")
+            .bind(user_a).bind(org_a).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
         ensure!(call_form(&app, "/oauth/introspect", &client_a, &secret_a,
             &format!("token={token_a8}")).await?.1["active"] == false,
             "re-adding member revived app token");
@@ -1399,36 +1367,7 @@ async fn application_token_audience_and_revocation() -> Result<()> {
         ensure!(audit_details.iter().all(|line| !line.contains(&secret_a) && !line.contains(&secret_b)),
             "audit log disclosed client secret");
         Ok(())
+    }.await
     }.await;
-
-    sqlx::query("DELETE FROM oauth_tokens WHERE client_id = ANY($1)")
-        .bind([&client_a, &client_b])
-        .execute(&pool)
-        .await?;
-    sqlx::query(
-        "DELETE FROM audit_logs WHERE tenant_id = ANY($1) OR user_id = ANY($2) \
-                 OR username = ANY($3)",
-    )
-    .bind([tenant_a, tenant_b])
-    .bind([user_a, user_b])
-    .bind([&client_a, &client_b])
-    .execute(&pool)
-    .await?;
-    sqlx::query("DELETE FROM oauth_clients WHERE client_id = ANY($1)")
-        .bind([&client_a, &client_b])
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM applications WHERE id = ANY($1)")
-        .bind([app_a, app_b])
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM tenants WHERE id = ANY($1)")
-        .bind([tenant_a, tenant_b])
-        .execute(&pool)
-        .await?;
-    sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-        .bind([user_a, user_b])
-        .execute(&pool)
-        .await?;
-    result
+    database.finish(outcome).await
 }

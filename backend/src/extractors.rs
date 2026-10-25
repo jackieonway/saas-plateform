@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::request::Parts;
 use axum::http::{header, HeaderMap};
@@ -9,7 +10,8 @@ use crate::session;
 use crate::state::AppState;
 use crate::util::jwt;
 
-/// 当前会话用户 (解析 Authorization: Bearer <session JWT>)
+/// 当前员工会话用户 (解析 Authorization: Bearer <session JWT>)。
+/// 成员及策略版本来自服务器会话记录；JWT 的 user/org 不构成员工资格。
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // real_name 保留供扩展
 pub struct CurrentUser {
@@ -48,22 +50,22 @@ impl FromRequestParts<AppState> for CurrentUser {
         }
         let user_id: Uuid = claims
             .sub
-            .parse()
+            .parse_uuid7()
             .map_err(|_| AppError::unauthorized("凭证无效"))?;
         let tenant_id: Uuid = claims
             .tenant
             .as_deref()
-            .and_then(|t| Uuid::parse_str(t).ok())
+            .and_then(|t| crate::util::uuid7::parse_uuid(t).ok())
             .ok_or_else(|| AppError::unauthorized("凭证缺少租户上下文"))?;
         let org_id: Uuid = claims
             .org
             .as_deref()
-            .and_then(|o| Uuid::parse_str(o).ok())
+            .and_then(|o| crate::util::uuid7::parse_uuid(o).ok())
             .ok_or_else(|| AppError::unauthorized("凭证缺少组织上下文"))?;
         let session_id: Uuid = claims
             .sid
             .as_deref()
-            .and_then(|sid| Uuid::parse_str(sid).ok())
+            .and_then(|sid| crate::util::uuid7::parse_uuid(sid).ok())
             .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
         let version = claims
             .ver
@@ -71,6 +73,7 @@ impl FromRequestParts<AppState> for CurrentUser {
         let (username, real_name, is_super_admin) =
             session::active_user(&state.pool, user_id, tenant_id, org_id, session_id, version)
                 .await?;
+        crate::bff::require_platform_session(state, session_id).await?;
         Ok(Self {
             user_id,
             username,

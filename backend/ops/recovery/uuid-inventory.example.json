@@ -1,0 +1,15 @@
+{
+  "profile": "uuid-local-preview",
+  "host": "/var/run/postgresql",
+  "port": 5432,
+  "user": "postgres",
+  "databases": [
+    {"kind": "platform", "name": "qiankun_platform_preview_20261024"},
+    {"kind": "stores", "name": "qiankun_stores_preview_20261024"},
+    {"kind": "work_orders", "name": "qiankun_orders_preview_20261024"}
+  ],
+  "scratch": "/dev/shm",
+  "reference_registry": "/srv/saas/source/backend/ops/recovery/uuid-references.json",
+  "report_file": "/dev/shm/saas-private/uuid-inventory-20261024.json",
+  "timeout_seconds": 60
+}

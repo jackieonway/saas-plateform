@@ -37,8 +37,11 @@ import { useDocumentTitle } from "@/hooks/use-document-title"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { ApiError } from "@/lib/api"
+import { ApiError, logoutPlatformSession, switchPlatformContext } from "@/lib/api"
+import { safeLegacyReturn, safePlatformReturn, startUnifiedLogin } from "@/lib/authentication-mode"
+import BffLoginPage from "./BffLoginPage"
 import type { LoginResp, Membership } from "@/api/types"
+import { canSelectConsoleMembership, membershipSelectionDisabledReason, membershipSelectionKey, requireContextIdentity } from "@/lib/context-identity"
 
 const REMEMBER_KEY = "platform-remember-username"
 
@@ -68,10 +71,43 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function LoginPage() {
+  const authMode = useAuthStore(state => state.authMode)
+  if (authMode === "BFF") return <BffLoginEntry />
+  if (authMode === "LEGACY") return <LegacyLoginPage />
+  return <main className="grid min-h-dvh place-items-center p-6" role="status">正在确认登录方式…</main>
+}
+
+function BffLoginEntry() {
+  const session = useAuthStore(state => state.bffSession)
+  const token = useAuthStore(state => state.token)
+  const reconcile = useAuthStore(state => state.reconcileSession)
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const returnTo = safePlatformReturn(params.get("return"))
+
+  React.useEffect(() => {
+    if (token) navigate(returnTo, { replace: true })
+  }, [token, returnTo, navigate])
+
+  return <BffLoginPage session={session} returnTo={returnTo}
+    onLogin={() => startUnifiedLogin(returnTo)}
+    onReload={reconcile}
+    onSelect={async member => {
+      const expected = captureSessionFence()
+      await switchPlatformContext(member.organizationId, member.membershipId, expected)
+      // Only the committed store token drives the effect above. In-flight or
+      // superseded selections cannot navigate from an unmounted login form.
+    }}
+    onLogout={async scope => {
+      if (await logoutPlatformSession(captureSessionFence(), scope)) navigate("/login?signedOut=1", { replace: true })
+    }} />
+}
+
+function LegacyLoginPage() {
   const { platformName, platformDescription, loginTitle, loginDescription, footerText } = usePlatformBranding()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const returnTo = params.get("return") || "/"
+  const returnTo = safeLegacyReturn(params.get("return"))
   const setSession = useAuthStore((s) => s.setSession)
   useDocumentTitle("登录")
 
@@ -152,19 +188,25 @@ export default function LoginPage() {
     }
   }
 
-  const selectContext = async (organizationId: string, data: LoginResp & { sessionFence: SessionFence }, userId?: string) => {
+  const selectContext = async (member: Membership, data: LoginResp & { sessionFence: SessionFence }) => {
+    if (!canSelectConsoleMembership(member)) {
+      setError(membershipSelectionDisabledReason(member))
+      return
+    }
     if (!data.ticket) {
       setError("登录票据缺失,请重新登录")
       setStep("form")
       return
     }
-    setSelecting(`${userId ?? ""}:${organizationId}`)
+    setSelecting(membershipSelectionKey(member))
     setError(null)
     try {
-      const ctx = await authApi.selectContext(organizationId, data.ticket, userId)
+      const ctx = await authApi.selectContext(member.organizationId, member.membershipId, data.ticket, member.userId)
+      const identity = requireContextIdentity(ctx)
+      if (membershipSelectionKey(identity) !== membershipSelectionKey(member)) throw new Error("登录响应与所选成员身份不一致，请重新登录")
       // The captured login intent cannot replace a login made by another page.
       // Epoch subscribers clear the prior cache only when this commit succeeds.
-      const committed = await setSession(ctx.accessToken, ctx.refreshToken, data.sessionFence)
+      const committed = await setSession(ctx.accessToken, ctx.refreshToken, data.sessionFence, identity)
       if (!committed) {
         setError("其他页面的登录已变化，请重新登录后选择组织")
         setStep("form")
@@ -408,9 +450,9 @@ export default function LoginPage() {
                       <span className={cn(step === "organization" && "font-medium text-primary")}>2 组织</span>
                     </span>
                   </div>
-                  <h2 className="text-xl font-semibold tracking-tight">{step === "tenant" ? "选择登录租户" : "选择登录组织"}</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">{step === "tenant" ? "选择登录租户" : "选择组织与身份"}</h2>
                   <p className="text-sm text-muted-foreground">
-                    {step === "tenant" ? "账号已验证，请先选择本次登录的租户" : "请选择组织，确认后进入系统"}
+                    {step === "tenant" ? "账号已验证，请先选择本次登录的租户" : "请选择有效员工身份进入控制台；客户身份使用独立入口"}
                   </p>
                 </div>
 
@@ -427,7 +469,7 @@ export default function LoginPage() {
                     <div className="min-w-0">
                       <p className="break-words text-sm font-medium">{selectedTenant.tenantName}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {new Set(selectedTenant.items.map((item) => item.organizationId)).size} 个可选组织
+                        {selectedTenant.items.filter(canSelectConsoleMembership).length} 个可选员工身份
                       </p>
                     </div>
                   </div>
@@ -442,7 +484,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="mb-2 text-xs text-muted-foreground" aria-live="polite">
-                  {step === "tenant" ? `${filteredTenants.length} 个租户` : `${filteredMemberships.length} 个组织登录选项`}
+                  {step === "tenant" ? `${filteredTenants.length} 个租户` : `${filteredMemberships.length} 个成员身份`}
                 </div>
                 <div className="max-h-[44vh] space-y-2 overflow-y-auto scroll-area pr-1">
                   {step === "tenant" ? filteredTenants.map((group) => (
@@ -461,10 +503,10 @@ export default function LoginPage() {
                     </button>
                   )) : filteredMemberships.map((m) => (
                     <button
-                      key={`${m.userId ?? ""}:${m.organizationId}`}
+                      key={membershipSelectionKey(m)}
                       type="button"
-                      disabled={selecting !== null}
-                      onClick={() => loginData && selectContext(m.organizationId, loginData, m.userId)}
+                      disabled={selecting !== null || !canSelectConsoleMembership(m)}
+                      onClick={() => loginData && selectContext(m, loginData)}
                       className="group flex w-full items-center gap-3 rounded-xl border bg-card p-3.5 text-left outline-none transition-all hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                     >
                       <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -473,7 +515,10 @@ export default function LoginPage() {
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className="text-sm font-medium">{m.organizationName}</span>
-                          {m.departmentName && (
+                          <span className="rounded border bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
+                            {m.memberType === "EMPLOYEE" ? "员工" : "客户"} · {m.status === "ENABLED" ? "有效" : "已停用"}
+                          </span>
+                          {m.memberType === "EMPLOYEE" && m.departmentName && (
                             <span className="rounded border bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
                               {m.departmentName}
                             </span>
@@ -485,8 +530,11 @@ export default function LoginPage() {
                         {(loginData?.accountCount ?? 1) > 1 && <span className="mt-0.5 block text-xs text-muted-foreground">
                           登录身份：{m.realName || m.username}（{m.username}）
                         </span>}
+                        {membershipSelectionDisabledReason(m) && <span className="mt-1 block text-xs text-muted-foreground">
+                          {membershipSelectionDisabledReason(m)}
+                        </span>}
                       </span>
-                      {selecting === `${m.userId ?? ""}:${m.organizationId}` ? (
+                      {selecting === membershipSelectionKey(m) ? (
                         <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
                       ) : (
                         <CheckCircle2 className="size-4 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-primary" />

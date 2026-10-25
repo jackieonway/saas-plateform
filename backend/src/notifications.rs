@@ -17,11 +17,14 @@ pub const DELIVERY_LIMIT: usize = 1000;
 pub enum Target {
     #[serde(rename_all = "camelCase")]
     User {
+        #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
         user_id: Uuid,
+        #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
         organization_id: Uuid,
     },
     #[serde(rename_all = "camelCase")]
     Organization {
+        #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
         organization_id: Uuid,
     },
     Tenant {},
@@ -48,6 +51,22 @@ pub struct Publisher {
     pub session_id: Uuid,
     pub token_hash: Option<String>,
     pub token_expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(sqlx::FromRow)]
+struct MemberProof {
+    membership_id: Uuid,
+    member_type: String,
+    identity_version: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct Recipient {
+    user_id: Uuid,
+    organization_id: Uuid,
+    membership_id: Uuid,
+    member_type: String,
+    identity_version: i64,
 }
 
 #[derive(Serialize)]
@@ -216,10 +235,14 @@ async fn publisher_access(
         "SELECT u.username,u.is_super_admin,a.name,a.code,t.is_platform AND o.parent_id IS NULL FROM users u \
          JOIN platform_sessions s ON s.user_id=u.id AND s.id=$5 \
            AND s.tenant_id=$2 AND s.organization_id=$3 AND s.revoked_at IS NULL AND s.expires_at>statement_timestamp() \
-         JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 \
+         JOIN memberships m ON m.id=s.membership_id AND m.user_id=u.id AND m.organization_id=$3 \
+           AND m.member_type='EMPLOYEE' AND m.status='ENABLED' \
+           AND m.identity_version=s.identity_version AND s.member_type='EMPLOYEE' \
+           AND platform_session_active(s.id) \
          JOIN organizations o ON o.id=m.organization_id AND o.tenant_id=$2 AND org_chain_active(o.id) AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>statement_timestamp()) \
          JOIN tenants t ON t.id=$2 AND t.status='ENABLED' AND (t.expires_at IS NULL OR t.expires_at>statement_timestamp()) \
          JOIN applications a ON a.id=$4 AND a.status='ENABLED' \
+           AND 'EMPLOYEE'=ANY(a.allowed_member_types) \
          JOIN tenant_applications ta ON ta.tenant_id=$2 AND ta.application_id=a.id \
          JOIN organization_applications oa ON oa.organization_id=$3 AND oa.application_id=a.id \
          WHERE u.id=$1 AND u.status='ENABLED' \
@@ -230,7 +253,15 @@ async fn publisher_access(
              WHERE tok.token_hash=$6 AND tok.token_use='app' AND tok.token_type='access' \
                AND NOT tok.revoked AND tok.expires_at>statement_timestamp() AND tok.user_id=$1 AND tok.tenant_id=$2 \
                AND tok.organization_id=$3 AND tok.application_id=$4 AND tok.platform_session_id=$5 \
-               AND tok.audience=a.code))"
+               AND tok.audience=a.code AND tok.membership_id=s.membership_id \
+               AND tok.member_type='EMPLOYEE' AND tok.identity_version=s.identity_version \
+               AND tok.account_version=s.account_version AND tok.client_policy_version=client.access_policy_version \
+               AND tok.application_policy_version=a.access_policy_version \
+               AND tok.origin_issuer=s.origin_issuer AND tok.origin_client_ref=s.origin_client_ref \
+               AND tok.origin_client_policy_version=s.origin_client_policy_version \
+               AND tok.application_service_client_ref=client.client_id \
+               AND tok.member_type=ANY(a.allowed_member_types) \
+               AND (client.subject_mode='MACHINE' OR tok.member_type=ANY(client.allowed_member_types))))"
     ).bind(actor.user_id).bind(actor.tenant_id).bind(actor.organization_id)
         .bind(actor.application_id).bind(actor.session_id).bind(&actor.token_hash).bind(actor.token_expires_at)
         .fetch_optional(&mut **tx).await?;
@@ -260,9 +291,12 @@ async fn publisher_access(
     }
     let scope: Option<String> = sqlx::query_scalar(
         "SELECT g.scope_type FROM membership_data_grants g JOIN memberships m ON m.id=g.membership_id \
+         JOIN platform_sessions s ON s.membership_id=m.id AND s.id=$4 \
          WHERE m.user_id=$1 AND m.organization_id=$2 AND g.application_id=$3 \
+         AND m.member_type='EMPLOYEE' AND m.status='ENABLED' AND s.member_type='EMPLOYEE' \
+         AND m.identity_version=s.identity_version AND platform_session_active(s.id) \
          AND g.resource_code='notification' AND g.action_code='publish'"
-    ).bind(actor.user_id).bind(actor.organization_id).bind(actor.application_id)
+    ).bind(actor.user_id).bind(actor.organization_id).bind(actor.application_id).bind(actor.session_id)
         .fetch_optional(&mut **tx).await?;
     let scope = scope.ok_or_else(|| AppError::forbidden("缺少 notification/publish 数据授权"))?;
     // A direct TENANT grant cannot expand the active organization's data boundary.
@@ -323,6 +357,18 @@ pub async fn publish(
 ) -> Result<Publication, AppError> {
     let mut tx = pool.begin().await?;
     let (username, app_name, app_code, scope) = publisher_access(&mut tx, &actor).await?;
+    let publisher_member: MemberProof = sqlx::query_as(
+        "SELECT membership_id,member_type,identity_version FROM platform_sessions \
+         WHERE id=$1 AND user_id=$2 AND tenant_id=$3 AND organization_id=$4 \
+         AND member_type='EMPLOYEE' AND platform_session_active(id)",
+    )
+    .bind(actor.session_id)
+    .bind(actor.user_id)
+    .bind(actor.tenant_id)
+    .bind(actor.organization_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::unauthorized("通知发布者成员身份已失效"))?;
     let normalized = normalize(&mut body, &app_code)?;
     target_scope(&mut tx, &actor, &body.target, &scope).await?;
     let request_hash = hash::sha256_hex(&normalized.to_string());
@@ -331,6 +377,8 @@ pub async fn publish(
         actor.organization_id,
         actor.application_id,
         actor.user_id,
+        publisher_member.membership_id,
+        publisher_member.identity_version,
         body.idempotency_key
     ])
     .to_string();
@@ -344,13 +392,18 @@ pub async fn publish(
     let prior: Option<(Uuid, String, i32, i32, DateTime<Utc>)> = sqlx::query_as(
         "SELECT id,request_hash,recipient_count,delivery_count,created_at FROM notification_publications \
          WHERE tenant_id=$1 AND publisher_organization_id=$2 AND application_id=$3 \
-         AND publisher_user_id=$4 AND idempotency_key=$5"
+         AND publisher_user_id=$4 AND idempotency_key=$5 \
+         AND publisher_membership_id=$6 AND publisher_member_type=$7 AND publisher_identity_version=$8"
     ).bind(actor.tenant_id).bind(actor.organization_id).bind(actor.application_id)
-        .bind(actor.user_id).bind(&body.idempotency_key).fetch_optional(&mut *tx).await?;
+        .bind(actor.user_id).bind(&body.idempotency_key).bind(publisher_member.membership_id)
+        .bind(&publisher_member.member_type).bind(publisher_member.identity_version)
+        .fetch_optional(&mut *tx).await?;
     if let Some((publication_id, prior_hash, recipient_count, delivery_count, created_at)) = prior {
         if prior_hash.trim_end() != request_hash {
             return Err(AppError::conflict("幂等键已用于不同通知内容"));
         }
+        let (_, _, _, final_scope) = publisher_access(&mut tx, &actor).await?;
+        target_scope(&mut tx, &actor, &body.target, &final_scope).await?;
         tx.commit().await?;
         return Ok(Publication {
             publication_id,
@@ -368,14 +421,20 @@ pub async fn publish(
         Target::Organization { organization_id } => (None, Some(organization_id)),
         Target::Tenant {} => (None, None),
     };
-    let deliveries: Vec<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT m.user_id,o.id FROM memberships m \
+    let deliveries: Vec<Recipient> = sqlx::query_as(
+        "SELECT m.user_id,o.id AS organization_id,m.id AS membership_id,m.member_type,m.identity_version \
+         FROM memberships m \
          JOIN users u ON u.id=m.user_id AND u.status='ENABLED' \
          JOIN organizations o ON o.id=m.organization_id AND o.tenant_id=$1 AND org_chain_active(o.id) AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>statement_timestamp()) \
+         JOIN tenants t ON t.id=o.tenant_id AND t.status='ENABLED' \
+           AND (t.expires_at IS NULL OR t.expires_at>statement_timestamp()) \
+         JOIN applications a ON a.id=$2 AND a.status='ENABLED' \
+           AND 'EMPLOYEE'=ANY(a.allowed_member_types) \
          JOIN organization_applications oa ON oa.organization_id=o.id AND oa.application_id=$2 \
          JOIN tenant_applications ta ON ta.tenant_id=o.tenant_id AND ta.application_id=$2 \
-         WHERE ($3::uuid IS NULL OR m.user_id=$3) AND ($4::uuid IS NULL OR o.id=$4) \
-         ORDER BY o.id,m.user_id LIMIT 1001"
+         WHERE m.member_type='EMPLOYEE' AND m.status='ENABLED' \
+         AND ($3::uuid IS NULL OR m.user_id=$3) AND ($4::uuid IS NULL OR o.id=$4) \
+         ORDER BY o.id,m.user_id,m.id LIMIT 1001"
     ).bind(actor.tenant_id).bind(actor.application_id).bind(target_user).bind(target_org)
         .fetch_all(&mut *tx).await?;
     if deliveries.is_empty() {
@@ -390,26 +449,32 @@ pub async fn publish(
     }
     let recipient_count = deliveries
         .iter()
-        .map(|(user, _)| *user)
+        .map(|recipient| recipient.user_id)
         .collect::<HashSet<_>>()
         .len() as i32;
     let delivery_count = deliveries.len() as i32;
     let (publication_id, created_at): (Uuid, DateTime<Utc>) = sqlx::query_as(
         "INSERT INTO notification_publications (tenant_id,publisher_organization_id,application_id, \
-         publisher_user_id,publisher_username,application_name,idempotency_key,request_hash,request_body,recipient_count,delivery_count) \
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,created_at"
+         publisher_user_id,publisher_username,application_name,idempotency_key,request_hash,request_body,recipient_count,delivery_count, \
+         id,publisher_membership_id,publisher_member_type,publisher_identity_version) \
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id,created_at"
     ).bind(actor.tenant_id).bind(actor.organization_id).bind(actor.application_id).bind(actor.user_id)
         .bind(&username).bind(app_name).bind(&body.idempotency_key).bind(request_hash)
         .bind(sqlx::types::Json(normalized)).bind(recipient_count).bind(delivery_count)
+        .bind(crate::util::uuid7::new_uuid()).bind(publisher_member.membership_id)
+        .bind(&publisher_member.member_type).bind(publisher_member.identity_version)
         .fetch_one(&mut *tx).await?;
-    for (user_id, organization_id) in deliveries {
+    for recipient in deliveries {
         let id: Uuid = sqlx::query_scalar(
-            "INSERT INTO notifications(user_id,type,title,content,link,source_kind,tenant_id,organization_id,application_id,publication_id) \
-             VALUES($1,$2,$3,$4,$5,'APP',$6,$7,$8,$9) RETURNING id"
-        ).bind(user_id).bind(&body.r#type).bind(&body.title).bind(&body.content).bind(&body.link)
-            .bind(actor.tenant_id).bind(organization_id).bind(actor.application_id).bind(publication_id)
+            "INSERT INTO notifications(user_id,type,title,content,link,source_kind,tenant_id,organization_id,application_id,publication_id, \
+             id,recipient_membership_id,recipient_member_type,recipient_identity_version) \
+             VALUES($1,$2,$3,$4,$5,'APP',$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id"
+        ).bind(recipient.user_id).bind(&body.r#type).bind(&body.title).bind(&body.content).bind(&body.link)
+            .bind(actor.tenant_id).bind(recipient.organization_id).bind(actor.application_id).bind(publication_id)
+            .bind(crate::util::uuid7::new_uuid()).bind(recipient.membership_id)
+            .bind(&recipient.member_type).bind(recipient.identity_version)
             .fetch_one(&mut *tx).await?;
-        notify_hint(&mut tx, id, actor.tenant_id, organization_id, user_id).await?;
+        notify_hint(&mut tx, id, actor.tenant_id, &recipient).await?;
     }
     audit::write_in_tx_for_app(
         &mut tx,
@@ -431,6 +496,11 @@ pub async fn publish(
         actor.application_id,
     )
     .await?;
+    // Recipient/publication FKs and audit writes can wait after the earlier
+    // advisory barrier. Recheck the publisher after those waits so revocation
+    // rolls back the complete publication and its transactional notify hints.
+    let (_, _, _, final_scope) = publisher_access(&mut tx, &actor).await?;
+    target_scope(&mut tx, &actor, &body.target, &final_scope).await?;
     tx.commit().await?;
     Ok(Publication {
         publication_id,
@@ -445,10 +515,15 @@ async fn notify_hint(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     tenant_id: Uuid,
-    organization_id: Uuid,
-    user_id: Uuid,
+    recipient: &Recipient,
 ) -> Result<(), AppError> {
-    let payload = json!({ "id": id, "tenantId": tenant_id, "organizationId": organization_id, "userId": user_id }).to_string();
+    let payload = json!({
+        "hintVersion":"1", "id":id,"tenantId":tenant_id,
+        "organizationId":recipient.organization_id,"userId":recipient.user_id,
+        "membershipId":recipient.membership_id,"memberType":recipient.member_type,
+        "identityVersion":recipient.identity_version,
+    })
+    .to_string();
     sqlx::query("SELECT pg_notify('new_notification',$1)")
         .bind(payload)
         .execute(&mut **tx)
@@ -465,18 +540,31 @@ pub async fn system_in_tx(
     content: &str,
     link: &str,
 ) -> Result<(), AppError> {
+    let mut seen = HashSet::new();
     for &(user_id, tenant_id, organization_id) in contexts {
-        let id: Option<Uuid> = sqlx::query_scalar(
-            "INSERT INTO notifications(user_id,type,title,content,link,source_kind,tenant_id,organization_id) \
-             SELECT $1,$2,$3,$4,$5,'SYSTEM',$6,$7 WHERE EXISTS( \
-             SELECT 1 FROM memberships m JOIN users u ON u.id=m.user_id AND u.status='ENABLED' \
+        if !seen.insert((user_id, tenant_id, organization_id)) {
+            continue;
+        }
+        let delivered: Option<(Uuid,Uuid,String,i64)> = sqlx::query_as(
+            "INSERT INTO notifications(user_id,type,title,content,link,source_kind,tenant_id,organization_id, \
+             id,recipient_membership_id,recipient_member_type,recipient_identity_version) \
+             SELECT $1,$2,$3,$4,$5,'SYSTEM',$6,$7,$8,m.id,m.member_type,m.identity_version \
+             FROM memberships m JOIN users u ON u.id=m.user_id AND u.status='ENABLED' \
              JOIN organizations o ON o.id=m.organization_id AND o.tenant_id=$6 AND org_chain_active(o.id) AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>statement_timestamp()) \
              JOIN tenants t ON t.id=o.tenant_id AND t.status='ENABLED' AND (t.expires_at IS NULL OR t.expires_at>statement_timestamp()) \
-             WHERE m.user_id=$1 AND m.organization_id=$7) RETURNING id"
+             WHERE m.user_id=$1 AND m.organization_id=$7 AND m.member_type='EMPLOYEE' AND m.status='ENABLED' \
+             RETURNING id,recipient_membership_id,recipient_member_type,recipient_identity_version"
         ).bind(user_id).bind(ntype).bind(title).bind(content).bind(link).bind(tenant_id).bind(organization_id)
-            .fetch_optional(&mut **tx).await?;
-        if let Some(id) = id {
-            notify_hint(tx, id, tenant_id, organization_id, user_id).await?;
+            .bind(crate::util::uuid7::new_uuid()).fetch_optional(&mut **tx).await?;
+        if let Some((id, membership_id, member_type, identity_version)) = delivered {
+            let recipient = Recipient {
+                user_id,
+                organization_id,
+                membership_id,
+                member_type,
+                identity_version,
+            };
+            notify_hint(tx, id, tenant_id, &recipient).await?;
         }
     }
     Ok(())

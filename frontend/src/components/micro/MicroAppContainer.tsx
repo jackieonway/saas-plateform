@@ -149,6 +149,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   const routePath = `${pathname}${search}${hash}`
   const profile = useAuthStore((s) => s.profile)
   const sessionId = useAuthStore((s) => s.sessionId)
+  const contextKey = useAuthStore((s) => s.contextKey)
   const contextEpoch = useAuthStore((s) => s.contextEpoch)
   const { resolvedTheme } = useTheme()
 
@@ -300,7 +301,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
   React.useEffect(() => {
     // Bind issuance to the identity that rendered this zone. Token-only
     // rotation uses the latest pair without disposing the mounted application.
-    const sessionFence = { sessionId, version: useAuthStore.getState().sessionVersion }
+    const sessionFence = { sessionId, version: useAuthStore.getState().sessionVersion, contextKey }
     if (trustedMicroRuntimeDomain.fault) {
       latchTrustedFault(trustedMicroRuntimeDomain.fault)
       return
@@ -326,7 +327,8 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
       issue: (signal) => {
         reconcileSessionSync()
         const current = useAuthStore.getState()
-        if (!current.token || current.contextSwitching || current.sessionId !== sessionId || current.contextEpoch !== contextEpoch) {
+        if (!current.token || current.contextSwitching || current.sessionId !== sessionId ||
+            current.contextKey !== contextKey || current.contextEpoch !== contextEpoch) {
           throw new DOMException("登录上下文已变化", "AbortError")
         }
         return api.post<OAuthSessionTokenResp>("/api/oauth/session-token",
@@ -389,7 +391,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
       runtime.stop()
       if (runtimeRef.current === runtime) runtimeRef.current = null
     }
-  }, [appCode, sessionId, contextEpoch, reloadNonce, profile?.user.id, profile?.tenant.id,
+  }, [appCode, sessionId, contextKey, contextEpoch, reloadNonce, profile?.user.id, profile?.tenant.id,
     profile?.organization.id, discovery.id, latchTrustedFault, disposeEntry])
 
   React.useEffect(() => {

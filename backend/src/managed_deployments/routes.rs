@@ -1,4 +1,5 @@
 use super::{audit, cleanup_protected, config, lock};
+use crate::util::uuid7::ParseUuid7;
 use crate::{
     error::AppError,
     extractors::{ApiJson, CurrentUser, RequirePermission},
@@ -32,7 +33,8 @@ pub(crate) fn routes() -> Router<AppState> {
 }
 
 fn uuid(s: &str) -> Result<Uuid, AppError> {
-    s.parse().map_err(|_| AppError::bad_request("ID格式错误"))
+    s.parse_uuid7()
+        .map_err(|_| AppError::bad_request("ID格式错误"))
 }
 async fn authorize(state: &AppState, user: &CurrentUser, write: bool) -> Result<(), AppError> {
     state.require_platform(user).await?;
@@ -132,8 +134,8 @@ async fn create(
     if foreign_url {
         return Err(AppError::conflict("公开版本入口已绑定其他目标"));
     }
-    sqlx::query("INSERT INTO managed_image_artifacts(application_id,version,target_id,template_id,image_ref,policy_revision,public_url) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(application_id,version,target_id) DO NOTHING")
-        .bind(app).bind(&version).bind(&intent.target_id).bind(&intent.template_id).bind(&intent.image_ref).bind(&rev).bind(&public).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO managed_image_artifacts(application_id,version,target_id,template_id,image_ref,policy_revision,public_url, id) VALUES($1,$2,$3,$4,$5,$6,$7, $8) ON CONFLICT(application_id,version,target_id) DO NOTHING")
+        .bind(app).bind(&version).bind(&intent.target_id).bind(&intent.template_id).bind(&intent.image_ref).bind(&rev).bind(&public).bind(crate::util::uuid7::new_uuid()).execute(&mut *tx).await?;
     let (artifact,image,template,policy,status):(Uuid,String,String,String,String)=sqlx::query_as("SELECT id,image_ref,template_id,policy_revision,state FROM managed_image_artifacts WHERE application_id=$1 AND version=$2 AND target_id=$3 FOR UPDATE")
         .bind(app).bind(&version).bind(&intent.target_id).fetch_one(&mut *tx).await?;
     if image != intent.image_ref
@@ -159,8 +161,8 @@ async fn create(
         return Err(AppError::conflict("该版本已有在途任务，请读取现有任务"));
     }
     sqlx::query("INSERT INTO managed_deployment_bindings(release_id,artifact_id) VALUES($1,$2) ON CONFLICT(release_id) DO NOTHING").bind(release).bind(artifact).execute(&mut *tx).await?;
-    let job:Uuid=sqlx::query_scalar("INSERT INTO managed_deployment_jobs(artifact_id,release_id,request_id,payload_sha256,operation,created_by) VALUES($1,$2,$3,$4,'DEPLOY',$5) RETURNING id")
-        .bind(artifact).bind(release).bind(key).bind(payload).bind(user.user_id).fetch_one(&mut *tx).await?;
+    let job:Uuid=sqlx::query_scalar("INSERT INTO managed_deployment_jobs(artifact_id,release_id,request_id,payload_sha256,operation,created_by, id) VALUES($1,$2,$3,$4,'DEPLOY',$5, $6) RETURNING id")
+        .bind(artifact).bind(release).bind(key).bind(payload).bind(user.user_id).bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx).await?;
     audit(&mut tx,app,Some(&user),"MANAGED_DEPLOYMENT_CREATE",&json!({"jobId":job,"releaseId":release,"targetId":intent.target_id,"imageRef":intent.image_ref})).await?;
     tx.commit().await?;
     Ok(Json(json!({"id":job,"reused":false})))
@@ -240,8 +242,8 @@ async fn cleanup(
             "版本被active/previous、其他环境、在途任务或保留窗口保护",
         ));
     }
-    let id:Uuid=sqlx::query_scalar("INSERT INTO managed_deployment_jobs(artifact_id,release_id,request_id,payload_sha256,operation,created_by) VALUES($1,$2,gen_random_uuid(),'cleanup','CLEANUP',$3) RETURNING id")
-        .bind(artifact).bind(release).bind(user.user_id).fetch_one(&mut *tx).await?;
+    let id:Uuid=sqlx::query_scalar("INSERT INTO managed_deployment_jobs(artifact_id,release_id,request_id,payload_sha256,operation,created_by, id) VALUES($1,$2,$4,'cleanup','CLEANUP',$3, $5) RETURNING id")
+        .bind(artifact).bind(release).bind(user.user_id).bind(crate::util::uuid7::new_uuid()).bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx).await?;
     sqlx::query("UPDATE managed_image_artifacts SET state='CLEANING' WHERE id=$1")
         .bind(artifact)
         .execute(&mut *tx)

@@ -1,4 +1,5 @@
 use super::{audit, cleanup_protected, config, lock};
+use crate::util::uuid7::ParseUuid7;
 use crate::{error::AppError, extractors::ApiJson, state::AppState};
 use axum::{
     extract::{Path, State},
@@ -73,7 +74,7 @@ impl Row {
             .filter(|value| *value <= 1000)
             .ok_or("ATTEMPTS_EXHAUSTED")?;
         let mut work = self.work();
-        let nonce = Uuid::new_v4();
+        let nonce = crate::util::uuid7::new_uuid();
         work.attempt = attempt;
         work.nonce = nonce.to_string();
         if !deployment_contract::work_allowed(&work, policy) {
@@ -148,7 +149,7 @@ async fn receipt(
     let config = config::load()?;
     let allowed = config::authenticate(&config, &target, &headers)?;
     let id: Uuid = job
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("任务ID无效"))?;
     let app:Option<Uuid>=sqlx::query_scalar("SELECT a.application_id FROM managed_deployment_jobs j JOIN managed_image_artifacts a ON a.id=j.artifact_id WHERE j.id=$1 AND a.target_id=$2").bind(id).bind(&target).fetch_optional(&state.pool).await?;
     let app = app.ok_or_else(|| AppError::not_found("任务不存在"))?;
@@ -267,10 +268,10 @@ mod tests {
             }],
         };
         let row = Row {
-            id: Uuid::new_v4(),
-            artifact_id: Uuid::new_v4(),
-            release_id: Uuid::new_v4(),
-            application_id: Uuid::new_v4(),
+            id: crate::util::uuid7::new_uuid(),
+            artifact_id: crate::util::uuid7::new_uuid(),
+            release_id: crate::util::uuid7::new_uuid(),
+            application_id: crate::util::uuid7::new_uuid(),
             application_code: "demo".into(),
             environment: "development".into(),
             version: "v1".into(),

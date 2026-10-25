@@ -1,12 +1,12 @@
-/** 通知展示及请求共享的捕获上下文；身份来自已验证的平台 profile。 */
-export interface NotificationContext {
+import { contextIdentityFromResponse, contextIdentityKey, isContextIdentity, sameContextIdentity, type ContextIdentity } from "./context-identity.ts"
+
+/** 通知展示及请求共享的捕获上下文；profile 必须与会话成员证明精确一致。 */
+export interface NotificationContext extends ContextIdentity {
   token: string
   contextEpoch: number
-  userId: string
-  tenantId: string
-  organizationId: string
+  namespace: string
   signal: AbortSignal
-  key: readonly ["notifications", string, string, string, number]
+  key: readonly ["notifications", string, string, string, string, "EMPLOYEE" | "CUSTOMER", string, string, number]
   current: () => boolean
 }
 
@@ -14,7 +14,9 @@ interface AuthSnapshot {
   token: string | null
   contextEpoch: number
   contextSwitching: boolean
-  profile: { user: { id: string }; tenant: { id: string }; organization: { id: string } } | null
+  identity: ContextIdentity | null
+  contextKey: string | null
+  profile: unknown
 }
 
 export function notificationAbortError(): DOMException {
@@ -41,10 +43,12 @@ export function createNotificationContextStore(
   let scope: NotificationContext | null = null
   let controller: AbortController | null = null
   const listeners = new Set<() => void>()
+  const identity = (state: AuthSnapshot): ContextIdentity | null => isContextIdentity(state.identity) &&
+    state.contextKey === contextIdentityKey(state.identity) &&
+    sameContextIdentity(contextIdentityFromResponse(state.profile), state.identity) ? state.identity : null
   const matches = (candidate: NotificationContext, state: AuthSnapshot) => !state.contextSwitching &&
     state.token === candidate.token && state.contextEpoch === candidate.contextEpoch &&
-    state.profile?.user.id === candidate.userId && state.profile?.tenant.id === candidate.tenantId &&
-    state.profile?.organization.id === candidate.organizationId
+    state.contextKey === candidate.namespace && sameContextIdentity(candidate, identity(state))
   const refresh = () => {
     const state = getState()
     if (scope && matches(scope, state)) return
@@ -52,16 +56,17 @@ export function createNotificationContextStore(
     scope = null
     controller = null
     previous?.abort()
-    if (state.token && !state.contextSwitching && state.profile?.user.id && state.profile?.tenant.id && state.profile?.organization.id) {
+    const proof = identity(state)
+    if (state.token && !state.contextSwitching && proof) {
       const lifetime = new AbortController()
       controller = lifetime
-      const captured: NotificationContext = {
-        token: state.token, contextEpoch: state.contextEpoch, userId: state.profile.user.id,
-        tenantId: state.profile.tenant.id, organizationId: state.profile.organization.id,
+      const captured: NotificationContext = Object.freeze({
+        ...proof, token: state.token, contextEpoch: state.contextEpoch, namespace: contextIdentityKey(proof),
         signal: lifetime.signal,
-        key: Object.freeze(["notifications", state.profile.user.id, state.profile.tenant.id, state.profile.organization.id, state.contextEpoch]),
+        key: Object.freeze(["notifications", proof.userId, proof.tenantId, proof.organizationId,
+          proof.membershipId, proof.memberType, proof.identityVersion, proof.accountVersion, state.contextEpoch] as const),
         current: () => !lifetime.signal.aborted && matches(captured, getState()),
-      }
+      })
       scope = captured
     }
     for (const listener of [...listeners]) listener()

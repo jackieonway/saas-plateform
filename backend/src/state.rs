@@ -57,6 +57,10 @@ pub struct AppState {
     pub pool: sqlx::PgPool,
     pub config: Arc<crate::config::Config>,
     pub passwords: crate::util::password::PasswordService,
+    pub(crate) authentication: Arc<dyn crate::platform_accounts::AuthenticationPort>,
+    pub(crate) accounts: Arc<dyn crate::platform_accounts::AccountAdministrationPort>,
+    pub(crate) remote_accounts: Option<Arc<crate::authentication::remote::RemoteAccounts>>,
+    pub(crate) identity_admin_slots: Arc<tokio::sync::Semaphore>,
     pub login_limits: Arc<crate::login_limits::LoginLimits>,
     pub map_client: reqwest::Client,
     /// 进程启动时刻 (GET /api/monitor/system 的 startedAt/uptimeSeconds 数据源)
@@ -68,22 +72,51 @@ pub struct AppState {
     introspection_attempts: RateMap,
     pub introspection_auth_slots: Arc<tokio::sync::Semaphore>,
     pub app_authorization_slots: Arc<tokio::sync::Semaphore>,
+    pub(crate) bff_transport: Arc<dyn crate::bff::OidcTransport>,
+    pub(crate) bff_authority_slots: Arc<tokio::sync::Semaphore>,
+    pub(crate) customer_portal_authority:
+        Arc<dyn crate::customer_portal::authority::AccountProofPort>,
+    pub(crate) customer_portal_slots: Arc<tokio::sync::Semaphore>,
 }
 
 impl AppState {
+    #[cfg(test)]
     pub fn new(pool: sqlx::PgPool, config: Arc<crate::config::Config>) -> Self {
+        Self::try_new(pool, config).expect("test runtime configuration")
+    }
+
+    pub fn try_new(pool: sqlx::PgPool, config: Arc<crate::config::Config>) -> anyhow::Result<Self> {
         let app_authorization_slots = Arc::new(tokio::sync::Semaphore::new(
             config.app_authorization_max_concurrent,
         ));
-        Self {
+        let passwords = crate::util::password::PasswordService::new(
+            config.password_concurrency,
+            config.password_queue_capacity,
+            Duration::from_millis(config.password_queue_timeout_ms),
+            Duration::from_millis(config.password_execution_timeout_ms),
+        );
+        let (authentication, accounts, remote_accounts) =
+            crate::authentication::new(pool.clone(), passwords.clone(), config.clone());
+        let bff_transport = crate::bff::configured_transport(&config);
+        let bff_authority_slots = Arc::new(tokio::sync::Semaphore::new(config.bff_max_concurrent));
+        let customer_portal_authority =
+            if config.identity_remote_enabled && config.customer_portal_port_enabled {
+                crate::customer_portal::remote_authority::configured(&config)?
+            } else {
+                crate::oidc::customer_portal_authority(pool.clone(), config.clone())
+            };
+        Ok(Self {
+            customer_portal_authority,
+            customer_portal_slots: Arc::new(tokio::sync::Semaphore::new(16)),
+            bff_transport,
+            bff_authority_slots,
             app_authorization_slots,
             pool,
-            passwords: crate::util::password::PasswordService::new(
-                config.password_concurrency,
-                config.password_queue_capacity,
-                Duration::from_millis(config.password_queue_timeout_ms),
-                Duration::from_millis(config.password_execution_timeout_ms),
-            ),
+            passwords,
+            authentication,
+            accounts,
+            remote_accounts,
+            identity_admin_slots: Arc::new(tokio::sync::Semaphore::new(16)),
             login_limits: Arc::new(crate::login_limits::LoginLimits::new(
                 crate::login_limits::LoginLimitOptions {
                     max_entries: config.login_max_entries,
@@ -106,7 +139,7 @@ impl AppState {
             introspection_failures: Arc::new(Mutex::new(HashMap::new())),
             introspection_attempts: Arc::new(Mutex::new(HashMap::new())),
             introspection_auth_slots: Arc::new(tokio::sync::Semaphore::new(32)),
-        }
+        })
     }
 
     pub fn check_map_rate(&self, identity: &str, limit: usize) -> Result<(), AppError> {
@@ -121,6 +154,7 @@ impl AppState {
     /// 权限口径与 GET /api/auth/menus 的非超管分支完全一致:
     /// 角色 ∩ 组织授权 ∩ 租户授权 —— 菜单(含 BUTTON 型操作权限码)必须同时被
     /// 当前组织与所属租户授权, 角色菜单才生效, 保证「组织只能看到/操作被授权的菜单与按钮」。
+    #[cfg(test)]
     pub async fn permissions_of(
         &self,
         user_id: Uuid,
@@ -168,18 +202,7 @@ impl AppState {
         user: &CurrentUser,
         path: &'static str,
     ) -> Result<(), AppError> {
-        let rows = if user.is_super_admin {
-            authorization::granted_menu_rows(&self.pool, user.tenant_id, user.org_id, None).await?
-        } else {
-            authorization::effective_menu_rows(
-                &self.pool,
-                user.user_id,
-                user.tenant_id,
-                user.org_id,
-                None,
-            )
-            .await?
-        };
+        let rows = authorization::context_menu_rows(&self.pool, user, None).await?;
         if rows
             .iter()
             .any(|menu| menu["type"] == "MENU" && menu["path"] == path)
@@ -193,6 +216,7 @@ impl AppState {
     /// 跨租户管理只在实际平台租户的根组织上下文生效。
     /// 切换到平台子组织时，也必须遵守当前组织子树的数据边界。
     pub async fn is_platform_context(&self, user: &CurrentUser) -> Result<bool, AppError> {
+        authorization::require_employee_context(&self.pool, user).await?;
         let platform: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM tenants t JOIN organizations o ON o.tenant_id=t.id \
              WHERE t.id=$1 AND o.id=$2 AND t.is_platform AND o.parent_id IS NULL)",
@@ -267,13 +291,8 @@ impl AppState {
         &self,
         user: &CurrentUser,
     ) -> Result<HashSet<String>, AppError> {
-        if user.is_super_admin {
-            let rows =
-                authorization::granted_menu_rows(&self.pool, user.tenant_id, user.org_id, None)
-                    .await?;
-            return Ok(authorization::permissions_of(&rows));
-        }
-        self.permissions_of(user.user_id, user.org_id).await
+        let rows = authorization::context_menu_rows(&self.pool, user, None).await?;
+        Ok(authorization::permissions_of(&rows))
     }
 
     /// 管理接口的资源归属检查。跨租户资源与不存在资源统一表现为 404。
@@ -301,6 +320,14 @@ impl AppState {
              JOIN roles r ON r.id = ur.role_id \
              JOIN anc ON anc.id = r.organization_id \
              WHERE ur.user_id = $2 AND r.status = 'ENABLED' \
+             AND EXISTS(SELECT 1 FROM memberships employee JOIN users subject ON subject.id=employee.user_id \
+                 JOIN organizations selected ON selected.id=employee.organization_id \
+                 JOIN tenants tenant ON tenant.id=selected.tenant_id \
+                 WHERE employee.user_id=$2 AND employee.organization_id=$1 \
+                 AND employee.member_type='EMPLOYEE' AND employee.status='ENABLED' \
+                 AND subject.status='ENABLED' AND tenant.status='ENABLED' AND r.tenant_id=tenant.id \
+                 AND (tenant.expires_at IS NULL OR tenant.expires_at>clock_timestamp()) \
+                 AND org_chain_active(selected.id)) \
              ORDER BY r.name",
             ORG_ANCESTORS_SQL
         );
@@ -313,6 +340,19 @@ impl AppState {
             .into_iter()
             .map(|(id, name, code)| RoleBrief { id, name, code })
             .collect())
+    }
+
+    /// Current-session role projection must prove its own employee identity.
+    pub(crate) async fn context_roles(
+        &self,
+        user: &CurrentUser,
+    ) -> Result<Vec<RoleBrief>, AppError> {
+        let before = authorization::require_employee_context(&self.pool, user).await?;
+        let roles = self.effective_roles(user.user_id, user.org_id).await?;
+        if authorization::require_employee_context(&self.pool, user).await? != before {
+            return Err(AppError::unauthorized("员工身份已在角色计算期间变更"));
+        }
+        Ok(roles)
     }
 
     /// 兼容现有写入调用；权限现在逐请求读取，不再有进程内正向缓存。

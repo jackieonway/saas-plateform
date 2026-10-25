@@ -1,3 +1,4 @@
+import { newUuid } from "@/lib/uuid"
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -1463,7 +1464,7 @@ function SendNotificationDialog({
   const canListOrganizations = permissions.has("system:organization")
   const [kind, setKind] = React.useState<TargetKind>("USER")
   const [applicationId, setApplicationId] = React.useState("")
-  const [idempotencyKey, setIdempotencyKey] = React.useState<string>(() => crypto.randomUUID())
+  const [idempotencyKey, setIdempotencyKey] = React.useState<string>(() => newUuid())
   const [userId, setUserId] = React.useState("")
   const [orgId, setOrgId] = React.useState<string | null>(null)
   const [title, setTitle] = React.useState("")
@@ -1526,7 +1527,7 @@ function SendNotificationDialog({
       onOpenChange(false)
       onSent()
       setRetryBody(null)
-      setIdempotencyKey(crypto.randomUUID())
+      setIdempotencyKey(newUuid())
       setTitle("")
       setContent("")
       setLink("")

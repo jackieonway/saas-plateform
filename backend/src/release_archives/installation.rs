@@ -323,6 +323,7 @@ fn open_lock(root: &Path) -> Result<File, AppError> {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StageOwner {
     schema_version: u32,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     staging_id: Uuid,
     application: String,
     version: String,
@@ -369,7 +370,7 @@ fn write_file(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
 }
 
 fn create_stage(root: &Path, app: &str, version: &str) -> Result<Stage, AppError> {
-    let id = Uuid::new_v4();
+    let id = crate::util::uuid7::new_uuid();
     let directory = root.join(STAGING_NAME).join(id.to_string());
     let builder = fs::DirBuilder::new();
     #[cfg(unix)]
@@ -778,9 +779,9 @@ pub(crate) fn maintain_staging(root: &str, apply: bool) -> Result<Value, AppErro
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        let recognized = Uuid::parse_str(&name)
+        let recognized = crate::util::uuid7::parse_uuid(&name)
             .ok()
-            .filter(|id| id.get_version_num() == 4 && id.to_string() == name);
+            .filter(|id| id.get_version_num() == 7 && id.to_string() == name);
         if let Some(id) = recognized {
             if known_stage(&entry.path(), id).is_ok() {
                 eligible.push(name.clone());

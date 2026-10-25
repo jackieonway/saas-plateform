@@ -63,6 +63,7 @@ pub(crate) struct Capability {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ApplicationPolicy {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub(crate) application_id: Uuid,
     pub(crate) capabilities: Vec<Capability>,
     /// Assignment lookup is an explicit additional use of a registered pair.
@@ -92,7 +93,9 @@ pub(crate) struct MemberLookup {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ManagementScope {
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub(crate) tenant_id: Uuid,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     pub(crate) organization_id: Uuid,
     pub(crate) include_descendants: bool,
     pub(crate) read: bool,
@@ -131,7 +134,8 @@ impl Policy {
         let mut applications = HashSet::new();
         for app in &mut policy.applications {
             anyhow::ensure!(
-                !app.application_id.is_nil() && applications.insert(app.application_id),
+                crate::util::uuid7::is_uuid_v7(app.application_id)
+                    && applications.insert(app.application_id),
                 "DATA_GRANT_POLICY application IDs must be non-nil and unique"
             );
             anyhow::ensure!(
@@ -200,7 +204,8 @@ impl Policy {
         let mut boundaries = HashSet::new();
         for boundary in &policy.management_scopes {
             anyhow::ensure!(
-                !boundary.tenant_id.is_nil() && !boundary.organization_id.is_nil(),
+                crate::util::uuid7::is_uuid_v7(boundary.tenant_id)
+                    && crate::util::uuid7::is_uuid_v7(boundary.organization_id),
                 "DATA_GRANT_POLICY management scope IDs must be non-nil"
             );
             anyhow::ensure!(
@@ -299,11 +304,11 @@ mod tests {
     fn fixture() -> Value {
         json!({
             "applications": [{
-                "applicationId": Uuid::from_u128(1),
+                "applicationId": crate::util::uuid7::fixture_uuid(1),
                 "capabilities": [{"resource":"ticket", "action":"read", "scopes":["SELF","ORG"]}]
             }],
             "managementScopes": [{
-                "tenantId":Uuid::from_u128(2), "organizationId":Uuid::from_u128(3),
+                "tenantId":crate::util::uuid7::fixture_uuid(2), "organizationId":crate::util::uuid7::fixture_uuid(3),
                 "includeDescendants":false, "read":true, "write":false
             }]
         })
@@ -325,12 +330,12 @@ mod tests {
         let parsed = parse(&value).unwrap();
         assert_eq!(serde_json::to_string(&parsed).unwrap(), old);
         assert!(parsed
-            .assignment_members(Uuid::from_u128(1), "ticket", "read")
+            .assignment_members(crate::util::uuid7::fixture_uuid(1), "ticket", "read")
             .is_none());
         value["applications"][0]["memberLookups"] = json!([{"resource":"ticket","action":"read"}]);
         let parsed = parse(&value).unwrap();
         let capability = parsed
-            .assignment_members(Uuid::from_u128(1), "ticket", "read")
+            .assignment_members(crate::util::uuid7::fixture_uuid(1), "ticket", "read")
             .unwrap();
         let wire = serde_json::to_value(capability).unwrap();
         assert_eq!(
@@ -342,10 +347,10 @@ mod tests {
             ["action", "resource", "scopes"]
         );
         assert!(parsed
-            .assignment_members(Uuid::from_u128(2), "ticket", "read")
+            .assignment_members(crate::util::uuid7::fixture_uuid(2), "ticket", "read")
             .is_none());
         assert!(parsed
-            .assignment_members(Uuid::from_u128(1), "ticket", "create")
+            .assignment_members(crate::util::uuid7::fixture_uuid(1), "ticket", "create")
             .is_none());
         assert_ne!(serde_json::to_string(&parsed).unwrap(), old);
     }
@@ -357,7 +362,7 @@ mod tests {
         assert!(!original.contains("organizationLookups"));
         assert!(parse(&value)
             .unwrap()
-            .organization_lookup(Uuid::from_u128(1), "ticket", "read")
+            .organization_lookup(crate::util::uuid7::fixture_uuid(1), "ticket", "read")
             .is_none());
         value["applications"][0]["organizationLookups"] = json!([]);
         assert_eq!(
@@ -368,11 +373,11 @@ mod tests {
         value["applications"][0]["organizationLookups"] = json!([valid]);
         assert!(parse(&value)
             .unwrap()
-            .organization_lookup(Uuid::from_u128(1), "ticket", "read")
+            .organization_lookup(crate::util::uuid7::fixture_uuid(1), "ticket", "read")
             .is_some());
         assert!(parse(&value)
             .unwrap()
-            .assignment_members(Uuid::from_u128(1), "ticket", "read")
+            .assignment_members(crate::util::uuid7::fixture_uuid(1), "ticket", "read")
             .is_none());
         for invalid in [
             json!([{"resource":"ticket","action":"read"}]),
@@ -405,7 +410,7 @@ mod tests {
         }
         let mut value = fixture();
         let mut other = value["applications"][0].clone();
-        other["applicationId"] = json!(Uuid::from_u128(2));
+        other["applicationId"] = json!(crate::util::uuid7::fixture_uuid(2));
         other["capabilities"][0]["action"] = json!("write");
         value["applications"].as_array_mut().unwrap().push(other);
         value["applications"][0]["memberLookups"] = json!([{"resource":"ticket","action":"write"}]);
@@ -435,7 +440,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&parsed).unwrap(), expected);
         assert_eq!(
             parsed
-                .assignment_members(Uuid::from_u128(1), "record-0", "assign")
+                .assignment_members(crate::util::uuid7::fixture_uuid(1), "record-0", "assign")
                 .unwrap()
                 .scopes,
             [GrantScope::Tenant]
@@ -593,14 +598,14 @@ mod tests {
         let mut value = fixture();
         value["applications"] = json!((1..=64)
             .map(|id| json!({
-                "applicationId":Uuid::from_u128(id), "capabilities":[]
+                "applicationId":crate::util::uuid7::fixture_uuid(id), "capabilities":[]
             }))
             .collect::<Vec<_>>());
         assert!(parse(&value).is_ok());
         value["applications"]
             .as_array_mut()
             .unwrap()
-            .push(json!({"applicationId":Uuid::from_u128(65),"capabilities":[]}));
+            .push(json!({"applicationId":crate::util::uuid7::fixture_uuid(65),"capabilities":[]}));
         assert!(parse(&value).is_err());
         let mut value = fixture();
         value["applications"][0]["capabilities"] = json!((0..128).map(|id| json!({
@@ -615,7 +620,7 @@ mod tests {
         let mut value = fixture();
         value["managementScopes"] = json!((1..=128)
             .map(|id| json!({
-                "tenantId":Uuid::from_u128(1),"organizationId":Uuid::from_u128(id),
+                "tenantId":crate::util::uuid7::fixture_uuid(1),"organizationId":crate::util::uuid7::fixture_uuid(id),
                 "includeDescendants":false,"read":true,"write":false
             }))
             .collect::<Vec<_>>());
@@ -624,7 +629,7 @@ mod tests {
             .as_array_mut()
             .unwrap()
             .push(json!({
-                "tenantId":Uuid::from_u128(1),"organizationId":Uuid::from_u128(129),
+                "tenantId":crate::util::uuid7::fixture_uuid(1),"organizationId":crate::util::uuid7::fixture_uuid(129),
                 "includeDescendants":false,"read":true,"write":false
             }));
         assert!(parse(&value).is_err());
@@ -635,7 +640,7 @@ mod tests {
     fn canonical_serialization_ignores_set_order_without_expanding_authority() {
         let mut value = fixture();
         let mut second_app = value["applications"][0].clone();
-        second_app["applicationId"] = json!(Uuid::from_u128(4));
+        second_app["applicationId"] = json!(crate::util::uuid7::fixture_uuid(4));
         second_app["capabilities"][0]["resource"] = json!("store");
         value["applications"]
             .as_array_mut()
@@ -648,7 +653,7 @@ mod tests {
             .unwrap()
             .push(second_capability);
         let mut second_boundary = value["managementScopes"][0].clone();
-        second_boundary["organizationId"] = json!(Uuid::from_u128(5));
+        second_boundary["organizationId"] = json!(crate::util::uuid7::fixture_uuid(5));
         second_boundary["read"] = json!(false);
         second_boundary["write"] = json!(true);
         value["managementScopes"]

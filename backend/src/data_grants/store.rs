@@ -9,7 +9,7 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{Target, MAX_GRANTS, MAX_ORGANIZATIONS};
-use crate::{error::AppError, extractors::CurrentUser};
+use crate::{authorization, error::AppError, extractors::CurrentUser};
 
 #[derive(Clone, Debug, sqlx::FromRow, Serialize)]
 pub(super) struct GrantRow {
@@ -53,6 +53,7 @@ pub(super) struct ActorRuntime {
     pub permissions: Vec<String>,
     pub subtree: Vec<Uuid>,
     pub ancestors: Vec<Uuid>,
+    pub identity: authorization::FreshEmployee,
 }
 
 /// Users precede memberships, matching the existing membership/password paths.
@@ -75,14 +76,17 @@ pub(super) async fn lock_target(
     if !locked.contains(&actor.user_id) {
         return Err(AppError::unauthorized("会话用户已失效"));
     }
+    authorization::require_employee_context_in_tx(tx, actor).await?;
     if !locked.contains(&target.user_id) {
         return Err(AppError::not_found("目标成员不存在"));
     }
-    let membership: Option<(Uuid, Uuid)> =
-        sqlx::query_as("SELECT user_id, organization_id FROM memberships WHERE id=$1 FOR UPDATE")
-            .bind(target.membership_id)
-            .fetch_optional(&mut **tx)
-            .await?;
+    let membership: Option<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT user_id, organization_id FROM memberships WHERE id=$1 \
+            AND member_type='EMPLOYEE' AND status='ENABLED' FOR UPDATE",
+    )
+    .bind(target.membership_id)
+    .fetch_optional(&mut **tx)
+    .await?;
     if membership != Some((target.user_id, target.organization_id)) {
         return Err(AppError::not_found("目标成员与用户或组织不匹配"));
     }
@@ -200,27 +204,14 @@ pub(super) async fn actor_runtime(
     tx: &mut Transaction<'_, Postgres>,
     actor: &CurrentUser,
 ) -> Result<ActorRuntime, AppError> {
-    let actor_identity: Option<(bool, i64)> = sqlx::query_as(
-        "SELECT u.is_super_admin,u.session_version FROM users u JOIN platform_sessions s ON s.user_id=u.id \
-         JOIN memberships m ON m.user_id=u.id AND m.organization_id=s.organization_id \
-         WHERE u.id=$1 AND u.status='ENABLED' AND s.id=$2 AND s.tenant_id=$3 AND s.organization_id=$4 \
-         AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()",
-    )
-    .bind(actor.user_id)
-    .bind(actor.session_id)
-    .bind(actor.tenant_id)
-    .bind(actor.org_id)
-    .fetch_optional(&mut **tx)
-    .await?;
-    let (super_admin, _actor_version) =
-        actor_identity.ok_or_else(|| AppError::unauthorized("会话已失效"))?;
+    let actor_identity = authorization::require_employee_context_in_tx(tx, actor).await?;
     let actor_tenant = tenant_state(tx, actor.tenant_id).await?;
     let actor_chain = organization_chain(tx, actor.tenant_id, actor.org_id).await?;
     let actor_platform_root = actor_tenant.is_platform
         && actor_chain
             .iter()
             .any(|node| node.id == actor.org_id && node.parent_id.is_none());
-    let permissions = actor_permissions(tx, actor, super_admin).await?;
+    let permissions = actor_permissions(tx, actor, actor_identity.is_super_admin).await?;
     let subtree = if actor_platform_root {
         Vec::new()
     } else {
@@ -228,11 +219,15 @@ pub(super) async fn actor_runtime(
     };
     let mut ancestors: Vec<Uuid> = actor_chain.iter().map(|node| node.id).collect();
     ancestors.sort_unstable();
+    if authorization::require_employee_context_in_tx(tx, actor).await? != actor_identity {
+        return Err(AppError::unauthorized("员工身份已在数据授权计算期间变更"));
+    }
     Ok(ActorRuntime {
         platform_root: actor_platform_root,
         permissions,
         subtree,
         ancestors,
+        identity: actor_identity,
     })
 }
 
@@ -273,10 +268,11 @@ pub(super) async fn runtime(
     registered_permissions: &[String],
 ) -> Result<Runtime, AppError> {
     let actor_runtime = actor_runtime(tx, actor).await?;
-    let target_version: Option<i64> = sqlx::query_scalar(
-        "SELECT u.session_version FROM users u JOIN memberships m ON m.user_id=u.id \
+    let target_version: Option<(i64,i64)> = sqlx::query_as(
+        "SELECT u.session_version,m.identity_version FROM users u JOIN memberships m ON m.user_id=u.id \
          JOIN organizations o ON o.id=m.organization_id WHERE u.id=$1 AND u.status='ENABLED' \
-         AND m.id=$2 AND m.organization_id=$3 AND o.tenant_id=$4",
+         AND m.id=$2 AND m.organization_id=$3 AND o.tenant_id=$4 \
+         AND m.member_type='EMPLOYEE' AND m.status='ENABLED'",
     )
     .bind(target.user_id)
     .bind(target.membership_id)
@@ -291,8 +287,8 @@ pub(super) async fn runtime(
         && target_chain
             .iter()
             .any(|node| node.id == target.organization_id && node.parent_id.is_none());
-    let app: Option<(String, DateTime<Utc>)> = sqlx::query_as(
-        "SELECT a.status,a.updated_at FROM applications a \
+    let app: Option<(String, DateTime<Utc>, Vec<String>,i64)> = sqlx::query_as(
+        "SELECT a.status,a.updated_at,a.allowed_member_types,a.access_policy_version FROM applications a \
          JOIN tenant_applications ta ON ta.application_id=a.id AND ta.tenant_id=$2 \
          JOIN organization_applications oa ON oa.application_id=a.id AND oa.organization_id=$3 WHERE a.id=$1",
     )
@@ -302,7 +298,7 @@ pub(super) async fn runtime(
     .fetch_optional(&mut **tx)
     .await?;
     let app = app.ok_or_else(|| AppError::forbidden("目标应用未授权给租户或组织"))?;
-    if app.0 != "ENABLED" {
+    if app.0 != "ENABLED" || !app.2.iter().any(|kind| kind == "EMPLOYEE") {
         return Err(AppError::forbidden("目标应用已停用"));
     }
     let registry: Vec<String> = sqlx::query_scalar(
@@ -346,8 +342,9 @@ async fn actor_permissions(
          JOIN organization_applications oa ON oa.application_id=a.id AND oa.organization_id=$1 \
          JOIN tenant_menus tm ON tm.menu_id=m.id AND tm.tenant_id=$2 \
          JOIN organization_menus om ON om.menu_id=m.id AND om.organization_id=$1 \
-         WHERE m.status='ENABLED' AND m.permission=ANY($5) AND ($4 OR EXISTS( \
-         SELECT 1 FROM role_menus rm JOIN roles r ON r.id=rm.role_id AND r.status='ENABLED' \
+         WHERE m.status='ENABLED' AND 'EMPLOYEE'=ANY(a.allowed_member_types) \
+         AND m.permission=ANY($5) AND ($4 OR EXISTS( \
+         SELECT 1 FROM role_menus rm JOIN roles r ON r.id=rm.role_id AND r.status='ENABLED' AND r.tenant_id=$2 \
          JOIN anc ON anc.id=r.organization_id JOIN user_roles ur ON ur.role_id=r.id AND ur.user_id=$3 \
          WHERE rm.menu_id=m.id)) ORDER BY m.permission",
     )
@@ -370,10 +367,10 @@ pub(super) async fn insert(
     scope: &str,
 ) -> Result<(), AppError> {
     let changed = sqlx::query(
-        "INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) \
-         VALUES($1,$2,$3,$4,$5)",
+        "INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type, id) \
+         VALUES($1,$2,$3,$4,$5, $6)",
     ).bind(target.membership_id).bind(target.application_id).bind(resource).bind(action).bind(scope)
-        .execute(&mut **tx).await?.rows_affected();
+        .bind(crate::util::uuid7::new_uuid()).execute(&mut **tx).await?.rows_affected();
     require_one(changed)
 }
 

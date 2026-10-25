@@ -71,7 +71,10 @@ impl Database {
             .connect_with(options.clone())
             .await
             .map_err(|error| database_error("administration connection", &error))?;
-        let name = format!("production_security_test_{}", Uuid::new_v4().simple());
+        let name = format!(
+            "production_security_test_{}",
+            crate::util::uuid7::new_uuid().simple()
+        );
         let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("target/production-security-tests");
         std::fs::create_dir_all(&directory)?;
@@ -391,14 +394,16 @@ impl Drop for HttpServer {
 }
 
 async fn fixture_client(pool: &PgPool, client_id: &str) -> Result<()> {
-    sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,grant_types,scopes,access_token_validity) VALUES($1,$2,$1,'CONFIDENTIAL','client_credentials','profile',300)")
-        .bind(client_id).bind(hash::sha256_hex(CLIENT_SECRET)).execute(pool).await?;
+    sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,subject_mode,allowed_member_types,grant_types,scopes,access_token_validity,id) VALUES($1,$2,$1,'CONFIDENTIAL','MACHINE',ARRAY[]::text[],'client_credentials','profile',300,$3)")
+        .bind(client_id).bind(hash::sha256_hex(CLIENT_SECRET)).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
     Ok(())
 }
 
 async fn fixture_token(pool: &PgPool, client_id: &str, token: &str) -> Result<Uuid> {
-    Ok(sqlx::query_scalar("INSERT INTO oauth_tokens(client_id,token_hash,token_type,token_use,scope,expires_at) VALUES($1,$2,'access','oauth','profile',now()+interval '5 minutes') RETURNING id")
-        .bind(client_id).bind(hash::sha256_hex(token)).fetch_one(pool).await?)
+    Ok(sqlx::query_scalar("INSERT INTO oauth_tokens(client_id,token_hash,token_type,token_use,scope,expires_at,id,client_policy_version,application_id,application_policy_version) \
+        SELECT $1,$2,'access','oauth','profile',now()+interval '5 minutes',$3,c.access_policy_version,c.application_id,a.access_policy_version \
+        FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id WHERE c.client_id=$1 RETURNING id")
+        .bind(client_id).bind(hash::sha256_hex(token)).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?)
 }
 
 async fn fixture_session(
@@ -413,8 +418,11 @@ async fn fixture_session(
         .fetch_one(pool)
         .await?;
     let now = chrono::Utc::now().timestamp();
-    let sid: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,to_timestamp($4)) RETURNING id")
-        .bind(user).bind(tenant).bind(org).bind((now+3600) as f64).fetch_one(pool).await?;
+    let sid: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,to_timestamp($4),$5,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id")
+        .bind(user).bind(tenant).bind(org).bind((now+3600) as f64).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     jwt::sign(
         &jwt::Claims {
             sub: user.to_string(),
@@ -443,20 +451,22 @@ async fn fixture_actor(
     menu: Uuid,
     grant: bool,
 ) -> Result<Uuid> {
-    let user: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,is_super_admin) VALUES($1,'synthetic-unusable-password',false) RETURNING id")
-        .bind(name).fetch_one(pool).await?;
-    sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+    let user: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,is_super_admin,id) VALUES($1,'synthetic-unusable-password',false,$2) RETURNING id")
+        .bind(name).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+    sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
         .bind(user)
         .bind(org)
+        .bind(crate::util::uuid7::new_uuid())
         .execute(pool)
         .await?;
     if grant {
         let role: Uuid = sqlx::query_scalar(
-            "INSERT INTO roles(tenant_id,organization_id,name) VALUES($1,$2,$3) RETURNING id",
+            "INSERT INTO roles(tenant_id,organization_id,name,id) VALUES($1,$2,$3,$4) RETURNING id",
         )
         .bind(tenant)
         .bind(org)
         .bind(name)
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
         sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
@@ -545,9 +555,12 @@ async fn production_bootstrap_is_minimal_explicit_and_idempotent() -> Result<()>
         let enabled_examples: i64 = sqlx::query_scalar("SELECT count(*) FROM applications WHERE status='ENABLED' AND code IN ('athena','vue-workshop','legacy-jquery','report-center')")
             .fetch_one(&database.pool).await?;
         ensure!(enabled_examples==0,"fresh production enabled demonstration applications");
-        let enabled_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients WHERE status='ENABLED'")
+        let enabled_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients WHERE status='ENABLED' AND client_id<>'platform-console-legacy'")
             .fetch_one(&database.pool).await?;
         ensure!(enabled_clients==0,"fresh production enabled a demonstration OAuth client");
+        let console: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM oauth_clients WHERE client_id='platform-console-legacy' AND status='ENABLED' AND subject_mode='USER' AND allowed_member_types=ARRAY['EMPLOYEE']::text[] AND application_id IS NULL AND grant_types='authorization_code' AND require_pkce AND COALESCE(redirect_uris,'')='')")
+            .fetch_one(&database.pool).await?;
+        ensure!(console,"fresh production omitted the protected employee console origin");
         let system_menus: i64 = sqlx::query_scalar("SELECT count(DISTINCT m.permission) FROM menus m JOIN applications a ON a.id=m.application_id WHERE a.code='system' AND m.permission IN ('system:tenant','system:organization','system:user','system:role','system:application','system:menu','system:oauth','system:audit','system:monitor')")
             .fetch_one(&database.pool).await?;
         ensure!(system_menus==9,"production bootstrap lacks required platform management menus");
@@ -603,10 +616,11 @@ async fn production_stock_user_credentials_are_rejected_without_mutation() -> Re
             ("renamed-installed-administrator", "admin123"),
         ] {
             let id: Uuid = sqlx::query_scalar(
-                "INSERT INTO users(username,password_hash) VALUES($1,$2) RETURNING id",
+                "INSERT INTO users(username,password_hash,id) VALUES($1,$2,$3) RETURNING id",
             )
             .bind(username)
             .bind(password::hash_password(plain)?)
+            .bind(crate::util::uuid7::new_uuid())
             .fetch_one(&database.pool)
             .await?;
             let before = snapshot(&database.pool).await?;
@@ -654,8 +668,8 @@ async fn production_stock_client_secrets_are_rejected_without_mutation() -> Resu
         sqlx::query("UPDATE users SET status='DISABLED' WHERE username=$1")
             .bind(ADMIN_NAME).execute(&database.pool).await?;
         for (client_id,plain) in [("platform-web","platform-web-secret"),("api-service","api-service-secret"),("resource-portal","resource-portal-secret"),("micro-vue-shell","micro-vue-shell-secret"),("micro-jquery-shell","micro-jquery-shell-secret"),("micro-report-shell","micro-report-shell-secret"),("renamed-installed-micro-client","micro-vue-shell-secret")] {
-            sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type) VALUES($1,$2,$1,'CONFIDENTIAL') ON CONFLICT(client_id) DO UPDATE SET client_secret_hash=EXCLUDED.client_secret_hash,status='ENABLED'")
-                .bind(client_id).bind(hash::sha256_hex(plain)).execute(&database.pool).await?;
+            sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,id) VALUES($1,$2,$1,'CONFIDENTIAL',$3) ON CONFLICT(client_id) DO UPDATE SET client_secret_hash=EXCLUDED.client_secret_hash,status='ENABLED'")
+                .bind(client_id).bind(hash::sha256_hex(plain)).bind(crate::util::uuid7::new_uuid()).execute(&database.pool).await?;
             let before = snapshot(&database.pool).await?;
             ensure!(seed::check_production_credentials(&database.pool).await.is_err(),"enabled known demonstration client secret was accepted");
             ensure!(before==snapshot(&database.pool).await?,"stock-client startup refusal mutated persisted rows");
@@ -683,7 +697,7 @@ async fn authenticated_introspection_quotas_isolate_clients_and_failed_authentic
         fixture_client(&database.pool, "quota-a").await?;
         fixture_client(&database.pool, "quota-b").await?;
         fixture_client(&database.pool, "quota-public").await?;
-        sqlx::query("UPDATE oauth_clients SET client_type='PUBLIC',client_secret_hash=NULL WHERE client_id='quota-public'")
+        sqlx::query("UPDATE oauth_clients SET subject_mode='USER',allowed_member_types=ARRAY['EMPLOYEE']::text[],grant_types='authorization_code',client_type='PUBLIC',client_secret_hash=NULL WHERE client_id='quota-public'")
             .execute(&database.pool).await?;
         let server = HttpServer::start(&database.pool, config).await?;
         let assertions = async {
@@ -881,20 +895,20 @@ async fn global_oauth_administration_requires_platform_context_and_operation_per
     let database = Database::create().await?;
     let result = async {
         let config = production_config()?;
-        let application: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path) VALUES('production-oauth-admin-gate','OAuth security gate','/gate') RETURNING id")
-            .fetch_one(&database.pool).await?;
-        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission) VALUES($1,'MENU','OAuth clients','/system/oauth/clients','system:oauth') RETURNING id")
-            .bind(application).fetch_one(&database.pool).await?;
-        let tokens_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission) VALUES($1,'MENU','OAuth tokens','/system/oauth/tokens','system:oauth') RETURNING id")
-            .bind(application).fetch_one(&database.pool).await?;
-        let platform: Uuid = sqlx::query_scalar("INSERT INTO tenants(code,name,is_platform) VALUES('oauth-admin-platform','Platform',true) RETURNING id")
-            .fetch_one(&database.pool).await?;
-        let ordinary: Uuid = sqlx::query_scalar("INSERT INTO tenants(code,name,is_platform) VALUES('oauth-admin-ordinary','Ordinary',false) RETURNING id")
-            .fetch_one(&database.pool).await?;
+        let application: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path,id) VALUES('production-oauth-admin-gate','OAuth security gate','/gate',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission,id) VALUES($1,'MENU','OAuth clients','/system/oauth/clients','system:oauth',$2) RETURNING id")
+            .bind(application).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let tokens_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission,id) VALUES($1,'MENU','OAuth tokens','/system/oauth/tokens','system:oauth',$2) RETURNING id")
+            .bind(application).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let platform: Uuid = sqlx::query_scalar("INSERT INTO tenants(code,name,is_platform,id) VALUES('oauth-admin-platform','Platform',true,$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let ordinary: Uuid = sqlx::query_scalar("INSERT INTO tenants(code,name,is_platform,id) VALUES('oauth-admin-ordinary','Ordinary',false,$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         let mut organizations = Vec::new();
         for tenant in [platform, ordinary] {
-            let org: Uuid = sqlx::query_scalar("INSERT INTO organizations(tenant_id,name) VALUES($1,'Root') RETURNING id")
-                .bind(tenant).fetch_one(&database.pool).await?;
+            let org: Uuid = sqlx::query_scalar("INSERT INTO organizations(tenant_id,name,id) VALUES($1,'Root',$2) RETURNING id")
+                .bind(tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
             organizations.push(org);
         }
         let platform_user = fixture_actor(&database.pool,platform,organizations[0],"oauth-platform-operator",application,menu,true).await?;
@@ -995,8 +1009,8 @@ async fn production_password_writes_reject_unsafe_values_without_mutation_and_re
             ensure!(password::verify_password(&initial_hash,INITIAL),"production user creation persisted an incorrect password hash");
             // Platform-created users are global accounts until an administrator
             // assigns membership; this explicit fixture enables actual sessions.
-            sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
-                .bind(user).bind(organization).execute(&database.pool).await?;
+            sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
+                .bind(user).bind(organization).bind(crate::util::uuid7::new_uuid()).execute(&database.pool).await?;
             let user_token = fixture_session(&database.pool,&config,user,tenant,organization).await?;
             let second_token = fixture_session(&database.pool,&config,user,tenant,organization).await?;
             for token in [&user_token,&second_token] {

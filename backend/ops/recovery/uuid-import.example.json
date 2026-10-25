@@ -1,0 +1,35 @@
+{
+  "profile": "uuid-local-preview",
+  "mode": "import",
+  "seed": false,
+  "host": "/run/postgresql",
+  "port": 5432,
+  "user": "postgres",
+  "databases": [
+    {
+      "kind": "platform",
+      "name": "qiankun_platform_uuid7_u04_20261024",
+      "owner": "qiankun_platform_uuid7_u04_owner_20261024",
+      "expected_schema_sha256": "REPLACE_WITH_REVIEWED_FRESH_PLATFORM_SCHEMA_SHA256"
+    },
+    {
+      "kind": "stores",
+      "name": "qiankun_stores_uuid7_u04_20261024",
+      "owner": "qiankun_stores_uuid7_u04_owner_20261024",
+      "expected_schema_sha256": "REPLACE_WITH_REVIEWED_FRESH_STORES_SCHEMA_SHA256"
+    },
+    {
+      "kind": "work_orders",
+      "name": "qiankun_orders_uuid7_u04_20261024",
+      "owner": "qiankun_orders_uuid7_u04_owner_20261024",
+      "expected_schema_sha256": "REPLACE_WITH_REVIEWED_FRESH_ORDERS_SCHEMA_SHA256"
+    }
+  ],
+  "source_dir": "/runtime/private/uuid-source",
+  "converted_dir": "/runtime/private/uuid-converted",
+  "registry": "/absolute/checkout/saas-plateform/backend/ops/recovery/uuid-references-v2.json",
+  "key_file": "/runtime/private/uuid-package-key",
+  "scratch": "/dev/shm/private-uuid-import",
+  "output_dir": "/runtime/private/uuid-u04-import-01",
+  "timeout_seconds": 1800
+}

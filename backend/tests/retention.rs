@@ -2,10 +2,15 @@ use chrono::{Duration, TimeZone, Utc};
 use saas_platform_backend::retention::{preview, Policy, Version};
 use uuid::Uuid;
 
+// Stable, valid v7 fixture identities; no runtime generation policy is exercised.
+fn fixture_uuid(value: u128) -> Uuid {
+    Uuid::from_u128(0x019a_1163_0000_7000_8000_0000_0000_0000 | value)
+}
+
 fn version(n: u128) -> Version {
     Version {
-        id: Uuid::from_u128(n),
-        application: Uuid::from_u128(1),
+        id: fixture_uuid(n),
+        application: fixture_uuid(1),
         environment: "production".into(),
         version: format!("v{n}"),
         created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap() - Duration::days(n as i64),
@@ -25,8 +30,8 @@ fn age_and_latest_are_a_union_and_parameters_cannot_shorten_candidates() {
     let result = preview(&rows, Policy::new(30, 5).unwrap(), now);
     assert!(result[0].reasons.is_empty());
     assert!(result[1..].iter().all(|r| !r.reasons.is_empty()));
-    for row in &mut rows {
-        row.created_at = now - Duration::days(100 + row.id.as_u128() as i64);
+    for (index, row) in rows.iter_mut().enumerate() {
+        row.created_at = now - Duration::days(101 + index as i64);
     }
     let result = preview(&rows, Policy::new(30, 5).unwrap(), now);
     assert_eq!(result.iter().filter(|r| r.reasons.is_empty()).count(), 3);

@@ -7,6 +7,11 @@ use saas_platform_backend::{
 };
 use uuid::Uuid;
 
+// Stable, valid v7 fixture identities; no runtime generation policy is exercised.
+fn fixture_uuid(value: u128) -> Uuid {
+    Uuid::from_u128(0x019a_1163_0000_7000_8000_0000_0000_0000 | value)
+}
+
 #[test]
 fn paging_has_stable_defaults_and_capped_checked_offsets() {
     assert_eq!(Paging::from_raw(None, None).parts(), (1, 10, 0));
@@ -28,8 +33,8 @@ fn paging_has_stable_defaults_and_capped_checked_offsets() {
 
 #[test]
 fn client_and_token_bindings_are_both_required() {
-    let a = Uuid::from_u128(1);
-    let b = Uuid::from_u128(2);
+    let a = fixture_uuid(1);
+    let b = fixture_uuid(2);
     assert!(application_binding(a, a, "stores", "stores"));
     assert!(!application_binding(a, b, "stores", "stores"));
     assert!(!application_binding(a, a, "work-orders", "stores"));
@@ -37,9 +42,9 @@ fn client_and_token_bindings_are_both_required() {
 
 #[test]
 fn member_grants_never_expand_a_separate_ceiling_or_self_owner() {
-    let org = Uuid::from_u128(1);
-    let child = Uuid::from_u128(2);
-    let peer = Uuid::from_u128(3);
+    let org = fixture_uuid(1);
+    let child = fixture_uuid(2);
+    let peer = fixture_uuid(3);
     let ids = [org, child];
     assert!(member_organization_allowed(
         MemberScope::OrgSubtree,

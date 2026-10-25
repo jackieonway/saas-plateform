@@ -1,3 +1,4 @@
+import { isUuidV7 } from "@/lib/uuid"
 import * as React from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
@@ -70,7 +71,7 @@ function GrantWorkspace({ session, canWrite, canAudit, canUsers, canAuthorizatio
   const [selected, setSelected] = React.useState("")
   const generation = React.useRef(0)
   const userId = params.get("userId") ?? undefined
-  const validUserFilter = !userId || (userId.length === 36 && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(userId))
+  const validUserFilter = !userId || isUuidV7(userId)
   const apps = useQuery({
     queryKey: ["data-grants", "options", "applications", session.epoch, userId ?? null],
     queryFn: ({ signal }) => readInView(current, () => dataGrantApi.options({ userId }, signal)),

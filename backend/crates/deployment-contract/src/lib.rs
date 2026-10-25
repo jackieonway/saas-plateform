@@ -134,6 +134,9 @@ pub fn route_config(work: &Work) -> String {
 /// Validate an operation against local policy before any engine or filesystem access.
 pub fn work_allowed(work: &Work, target: &Target) -> bool {
     segment(&target.id, 24)
+        && zip::correlation(&work.job_id)
+        && zip::correlation(&work.release_id)
+        && zip::correlation(&work.nonce)
         && work.target_id == target.id
         && segment(&work.application_code, 48)
         && segment(&work.version, 64)
@@ -168,8 +171,8 @@ mod tests {
     fn work() -> Work {
         let t = target();
         Work {
-            job_id: "job".into(),
-            release_id: "release".into(),
+            job_id: "00000000-0000-7000-8000-000000000001".into(),
+            release_id: "00000000-0000-7000-8000-000000000002".into(),
             application_code: "stores".into(),
             environment: "development".into(),
             version: "1.0.0".into(),
@@ -179,7 +182,7 @@ mod tests {
             policy_revision: revision(&t),
             operation: "DEPLOY".into(),
             attempt: 1,
-            nonce: "nonce".into(),
+            nonce: "00000000-0000-7000-8000-000000000003".into(),
         }
     }
     #[test]
@@ -221,6 +224,28 @@ mod tests {
         t = target();
         t.public_origin = "https://changed.test".into();
         assert!(!work_allowed(&w, &t));
+    }
+    #[test]
+    fn deployment_identity_rejects_old_or_invalid_uuid_correlations() {
+        let target = target();
+        for value in [
+            "00000000-0000-0000-0000-000000000000", // nil sentinel
+            "00000000-0000-4000-8000-000000000001", // legacy v4
+            "00000000-0000-7000-c000-000000000001", // wrong variant
+            "../path",
+            "job",
+        ] {
+            assert!(!zip::correlation(value));
+            let mut job = work();
+            job.job_id = value.into();
+            assert!(!work_allowed(&job, &target));
+            job = work();
+            job.nonce = value.into();
+            assert!(!work_allowed(&job, &target));
+            job = work();
+            job.release_id = value.into();
+            assert!(!work_allowed(&job, &target));
+        }
     }
     #[test]
     fn names_bind_version_and_digest_without_job_identity() {

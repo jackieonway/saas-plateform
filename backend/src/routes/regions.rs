@@ -9,7 +9,6 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::Row;
-use uuid::Uuid;
 
 use crate::region_selection::{
     resolve_local_regions, resolve_regions, township_parent, RegionRecord,
@@ -461,7 +460,7 @@ async fn create(
     if exists {
         return Err(AppError::bad_request("该版本中地区编码已存在"));
     }
-    let id = Uuid::new_v4().simple().to_string();
+    let id = crate::util::uuid7::new_uuid().simple().to_string();
     sqlx::query("INSERT INTO regions(version,source_id,code,parent_code,name,name_pinyin,name_short,level,type,type_name,post_code,source_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
         .bind(&b.version).bind(&id).bind(&b.code).bind(&b.parent_code).bind(&b.name)
         .bind(&b.name_pinyin).bind(&b.name_short).bind(b.level).bind(&b.kind).bind(&b.type_name)

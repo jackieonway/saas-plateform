@@ -1,0 +1,50 @@
+{
+  "format": "saas-uuid-u05-oauth-bff-public-summary/1",
+  "validation_date": "2026-10-24",
+  "scope": "real local platform OAuth endpoints and the running OAuth BFF",
+  "status": "PASS",
+  "fixture_upstream_used": false,
+  "direct_database_writes": false,
+  "shared_hq_session_switched_or_refreshed": false,
+  "script": {
+    "name": "validate-uuid-u05-oauth.mjs",
+    "sha256": "315bafe24b5d6d59dc1c880380f2c7597b8306d33999260861bbd6358f432bc1",
+    "modern_node_syntax_check": "PASS"
+  },
+  "evidence": {
+    "attempt": "oauth-validation-01",
+    "artifact": "result.private.json",
+    "sha256": "12af0ac408204fcbc9cb84ecf4fc6bc115b1b432133b71178c4623b2e298ffe0",
+    "stage": "COMPLETE",
+    "accepted_checks": 10,
+    "http_requests": 17,
+    "protocol_mutation_requests": 13,
+    "http_status_counts": {
+      "200": 14,
+      "302": 1,
+      "400": 2
+    }
+  },
+  "checks": {
+    "independent_login_and_application_specific_business_context": "PASS",
+    "independent_bff_session_cookie": "PASS",
+    "real_pkce_authorization_and_uuid_v7_consent": "PASS",
+    "real_bff_authorization_code_callback": "PASS",
+    "userinfo_subject_matches_selected_identity": "PASS",
+    "introspection_subject_matches_selected_identity": "PASS",
+    "callback_replay_returns_invalid_state": "PASS",
+    "bff_owned_refresh": "PASS",
+    "bff_revoke_and_subsequent_no_token": "PASS",
+    "validator_owned_platform_session_logout": "PASS"
+  },
+  "privacy": {
+    "private_attempt_directory_owned_mode": "0700",
+    "private_config_and_report_owned_mode": "0600",
+    "raw_token_state_code_cookie_or_subject_in_public_summary": false,
+    "shared_refresh_token_consumed": false
+  },
+  "limits": [
+    "This script validates the real HTTP BFF callback protocol. Browser callback HTML, URL clearing and user interaction are assessed by the separate browser validation."
+  ],
+  "phase_completion_asserted": false
+}

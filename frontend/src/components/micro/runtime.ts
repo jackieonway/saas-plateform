@@ -27,7 +27,13 @@ const RETRY_DELAYS_MS = [500, 1000, 2000] as const
 const ATTEMPT_TIMEOUT_MS = 5000
 const RECOVERY_BUDGET_MS = 20_000
 
+class LocalExpiredLeaseError extends Error {
+  readonly code = "LOCAL_CONTEXT_LEASE_EXPIRED"
+  constructor() { super("应用授权上下文已过期，请重新获取授权") }
+}
+
 function retryableContextFailure(error: unknown): boolean {
+  if (error instanceof LocalExpiredLeaseError) return true
   if (!error || typeof error !== "object") return false
   const failure = error as { status?: unknown; code?: unknown }
   return failure.status === 503 || (failure.status === 0 && failure.code === "NETWORK_ERROR")
@@ -105,10 +111,13 @@ export class MicroContextRuntime {
         const context = await this.options.context(lease.token, request.signal)
         if (!current()) return null
         const expires = context && Math.min(Date.parse(context.expiresAt), lease.expires)
-        if (!context || context.contractVersion !== CONTEXT_CONTRACT_VERSION || context.appCode !== this.options.appCode ||
-            !context.contextVersion || !Number.isFinite(expires) || expires <= this.now()) {
+        if (!context || typeof context !== "object" || Array.isArray(context) ||
+            context.contractVersion !== CONTEXT_CONTRACT_VERSION || context.appCode !== this.options.appCode ||
+            typeof context.contextVersion !== "string" || !context.contextVersion ||
+            typeof context.expiresAt !== "string" || !Number.isFinite(expires)) {
           throw new Error("应用授权上下文已过期或与目标应用不一致")
         }
+        if (expires <= this.now()) throw new LocalExpiredLeaseError()
         return { lease, context, expires }
       }
       const result = await new Promise<Awaited<ReturnType<typeof work>>>((resolve, reject) => {
@@ -125,6 +134,7 @@ export class MicroContextRuntime {
       })
       if (!current() || !result) return
       const { lease, context, expires } = result
+      if (expires <= this.now()) throw new LocalExpiredLeaseError()
       this.clear(this.attemptTimer)
       this.attemptTimer = null
       this.lease = lease

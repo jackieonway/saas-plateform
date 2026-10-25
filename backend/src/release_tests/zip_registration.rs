@@ -77,7 +77,10 @@ async fn storage(h: &Harness, version: &str) -> Result<Value> {
 }
 
 pub(super) fn owned_root() -> Result<std::path::PathBuf> {
-    let root = std::env::temp_dir().join(format!("zip-registration-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!(
+        "zip-registration-{}",
+        crate::util::uuid7::new_uuid()
+    ));
     std::fs::create_dir(&root)?;
     Ok(root)
 }

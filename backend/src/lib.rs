@@ -1,6 +1,7 @@
-//! Narrow, framework-independent authorization, paging and retention use cases.
-//! Database models and HTTP handlers stay private to the executable adapter.
+//! Narrow authorization, paging, retention and database initialization interfaces.
+//! Application models and HTTP handlers stay private to the executable adapter.
 pub mod authorization_policy;
+pub mod database;
 pub mod paging;
 pub mod retention;
 pub mod snapshot;

@@ -9,6 +9,8 @@ function useAuthQuerySession() {
   useAuthStore((s) => s.contextEpoch)
   useAuthStore((s) => s.contextSwitching)
   useAuthStore((s) => s.profile)
+  useAuthStore((s) => s.identity)
+  useAuthStore((s) => s.contextKey)
   return captureAuthSession()
 }
 
@@ -27,7 +29,8 @@ export function usePermissionsQuery(options: AuthQueryOptions = {}) {
 /** Observers and imperative navigation consume exactly the same menu options. */
 export function useApplicationMenusQueries(options: AuthQueryOptions & { applicationIds?: readonly string[] } = {}) {
   const session = useAuthQuerySession()
-  const profile = useAuthStore((s) => s.profile)
+  const storedProfile = useAuthStore((s) => s.profile)
+  const profile = session.profileReady ? storedProfile : null
   const apps = (profile?.applications ?? []).filter(app => !options.applicationIds || options.applicationIds.includes(app.id))
   const queries = useQueries({
     queries: apps.map(app => authMenusQueryOptions(app.id, session, options)),
@@ -42,5 +45,5 @@ export function useApplicationMenusQueries(options: AuthQueryOptions & { applica
 
 /** Refresh, old-view retirement and context replacement share one cross-page transaction. */
 export function useSwitchContext() {
-  return (organizationId: string) => switchPlatformContext(organizationId)
+  return (organizationId: string, membershipId: string) => switchPlatformContext(organizationId, membershipId)
 }

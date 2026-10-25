@@ -3,8 +3,12 @@ import test from 'node:test'
 import { componentFixture, success, pending, failure, elements, button } from './helpers/component-fixture.mjs'
 
 const role = { id: 'role-a', name: 'Role A', organizationId: 'org-a', organizationName: 'Org A' }
-const user = { id: 'user-a', memberships: [{ organizationId: 'org-a', organizationName: 'Org A' }] }
+const user = { id: 'user-a', memberships: [{ organizationId: 'org-a', organizationName: 'Org A', memberType: 'EMPLOYEE', status: 'ENABLED' }] }
 const props = value => ({ ...value, onClose() {}, onSaved() {} })
+const userPageFixture = (names, dependencies = {}) => componentFixture('src/pages/system/users/UsersPage.tsx', names, {
+  './MembershipDirectory': { MembershipDirectory: 'MembershipDirectory' },
+  ...dependencies,
+})
 
 test('role member replacement is blocked until existing assignments and candidates load successfully', async () => {
   const writes = []
@@ -48,7 +52,7 @@ test('background assignment refreshes do not discard unsaved role member edits',
 
 test('user role replacement waits for every candidate query and preserves existing roles outside candidates', async () => {
   const writes = []
-  const f = componentFixture('src/pages/system/users/UsersPage.tsx', ['RoleAssignDialog'], {
+  const f = userPageFixture(['RoleAssignDialog'], {
     '@/api/users': { usersApi: { saveRoles: async (...args) => { writes.push(args) } } },
   })
   f.queries.set('user-roles', success([{ roleId: 'retained', organizationId: 'other-org' }]))
@@ -69,7 +73,7 @@ test('user role replacement waits for every candidate query and preserves existi
 
 test('user role candidates load every page beyond the backend page limit', async () => {
   const pages = []
-  const f = componentFixture('src/pages/system/users/UsersPage.tsx', ['RoleAssignDialog'], {
+  const f = userPageFixture(['RoleAssignDialog'], {
     '@/api/roles': { rolesApi: { list: async ({ page }) => {
       pages.push(page)
       return { total: 201, records: Array.from({ length: page === 1 ? 200 : 1 }, (_, index) => ({ id: `role-${(page - 1) * 200 + index}` })) }
@@ -83,7 +87,7 @@ test('user role candidates load every page beyond the backend page limit', async
 
 test('membership replacement cannot submit before cached assignments initialize or after a read error', async () => {
   const writes = []
-  const f = componentFixture('src/pages/system/users/UsersPage.tsx', ['MembershipDialog'], {
+  const f = userPageFixture(['MembershipDialog'], {
     '@/api/users': { usersApi: { saveMemberships: async (...args) => { writes.push(args) } } },
   })
   f.queries.set('user-memberships', success([]))
@@ -94,6 +98,33 @@ test('membership replacement cannot submit before cached assignments initialize 
   f.queries.set('user-memberships', failure())
   tree = f.render('MembershipDialog', props({ user, allOrgTree: [] }))
   assert.equal(button(tree, '保存成员关系').props.disabled, true)
+})
+
+test('employee role candidates exclude customer and disabled employee organization projections', async () => {
+  const seen = []
+  const f = userPageFixture(['RoleAssignDialog'], {
+    '@/api/roles': { rolesApi: { list: async query => { seen.push(query.organizationId); return { total: 0, records: [] } } } },
+  })
+  f.queries.set('user-roles', success([]))
+  f.queries.set('roles', success([]))
+  f.render('RoleAssignDialog', props({ user: { ...user, memberships: [
+    { organizationId: 'employee-org', memberType: 'EMPLOYEE', status: 'ENABLED' },
+    { organizationId: 'employee-org', memberType: 'CUSTOMER', status: 'ENABLED' },
+    { organizationId: 'customer-only-org', memberType: 'CUSTOMER', status: 'ENABLED' },
+    { organizationId: 'disabled-org', memberType: 'EMPLOYEE', status: 'DISABLED' },
+  ] } }))
+  await f.queryOptions.get('roles').queryFn()
+  assert.deepEqual(seen, ['employee-org'])
+})
+
+test('legacy employee bulk refuses an unproven or customer response before destructive replacement', async () => {
+  for (const memberType of ['CUSTOMER', undefined]) {
+    const f = userPageFixture(['MembershipDialog'], {
+      '@/api/users': { usersApi: { memberships: async () => [{ organizationId: 'org-a', departmentId: null, position: '', memberType }] } },
+    })
+    f.render('MembershipDialog', props({ user, allOrgTree: [] }))
+    await assert.rejects(f.queryOptions.get('user-memberships').queryFn(), /未确认的身份/)
+  }
 })
 
 test('pending confirmation ignores duplicate destructive clicks', () => {

@@ -16,15 +16,15 @@ async fn qiankun_only_upgrade_preserves_archives_and_built_in_routes() -> Result
             ("system","/system","ESM","IFRAME"),
             ("hermes","/hermes","ESM","TRUSTED"),
         ] {
-            let id:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url) VALUES($1,$1,$2,$3,$4,'/legacy/index.html') RETURNING id")
-                .bind(code).bind(path).bind(kind).bind(mode).fetch_one(&database.pool).await?;
+            let id:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,id) VALUES($1,$1,$2,$3,$4,'/legacy/index.html',$5) RETURNING id")
+                .bind(code).bind(path).bind(kind).bind(mode).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
             ids.push(id);
         }
-        let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,title,path) VALUES($1,'Kept page','/micro/old-frame') RETURNING id")
-            .bind(ids[1]).fetch_one(&database.pool).await?;
-        let release:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at) \
-            VALUES($1,'development','old-v1','ESM','/legacy/old-v1/main.js','PASSED',now()) RETURNING id")
-            .bind(ids[2]).fetch_one(&database.pool).await?;
+        let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,title,path,id) VALUES($1,'Kept page','/micro/old-frame',$2) RETURNING id")
+            .bind(ids[1]).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let release:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) \
+            VALUES($1,'development','old-v1','ESM','/legacy/old-v1/main.js','PASSED',now(),$2) RETURNING id")
+            .bind(ids[2]).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         sqlx::query("INSERT INTO application_deployments(application_id,environment,active_release_id) VALUES($1,'development',$2)")
             .bind(ids[2]).bind(release).execute(&database.pool).await?;
         sqlx::raw_sql(include_str!("../../migrations/0009_qiankun_only.sql")).execute(&database.pool).await?;
@@ -47,8 +47,8 @@ async fn qiankun_only_upgrade_preserves_archives_and_built_in_routes() -> Result
         let builtin:String=sqlx::query_scalar("SELECT entry_url FROM application_effective_entry($1,'development')")
             .bind(ids[4]).fetch_one(&database.pool).await?;
         ensure!(builtin == "/legacy/index.html","built-in route metadata was erased");
-        let defaults:(String,String)=sqlx::query_as("INSERT INTO applications(code,name,base_path) VALUES('default-new','Default new','/micro/default-new') RETURNING entry_type,runtime_mode")
-            .fetch_one(&database.pool).await?;
+        let defaults:(String,String)=sqlx::query_as("INSERT INTO applications(code,name,base_path,id) VALUES('default-new','Default new','/micro/default-new',$1) RETURNING entry_type,runtime_mode")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         ensure!(defaults == ("HTML".into(),"TRUSTED".into()),"new database defaults are not qiankun");
         Ok(())
     }.await;
@@ -92,9 +92,9 @@ async fn qiankun_only_apis_require_explicit_reconfiguration_and_archive_esm_rele
         // Reconstruct a pre-upgrade archive without permitting it in the
         // current schema or API. The new check remains enforced for new rows.
         sqlx::query("ALTER TABLE application_releases DROP CONSTRAINT application_releases_entry_type_check").execute(&database.pool).await?;
-        let old:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at) \
-            VALUES($1,'development','archive-v1','ESM','/legacy/archive-v1/main.js','PASSED',now()) RETURNING id")
-            .bind(h.main_app).fetch_one(&database.pool).await?;
+        let old:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) \
+            VALUES($1,'development','archive-v1','ESM','/legacy/archive-v1/main.js','PASSED',now(),$2) RETURNING id")
+            .bind(h.main_app).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         sqlx::query("ALTER TABLE application_releases ADD CONSTRAINT application_releases_entry_type_check CHECK(entry_type='HTML') NOT VALID").execute(&database.pool).await?;
         for action in ["preflight","activate"] {
             let (status,_)=call(&h.app,Method::POST,&format!("/api/applications/{}/releases/{old}/{action}",h.main_app),&h.platform,None).await?;
@@ -119,24 +119,24 @@ async fn qiankun_only_unifies_builtin_metadata_and_ignores_archived_builtin_rele
 {
     let database = TestDatabase::create_through(9).await?;
     let result:Result<()>=async {
-        let h=Harness::create(&database.pool,"https://apps.example.test").await?;
-        let builtin:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url) VALUES('old-builtin','Preserved built in','/system-old','ESM','IFRAME','/src/old-builtin.tsx') RETURNING id")
-            .fetch_one(&database.pool).await?;
-        let null_builtin:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url) VALUES('null-builtin','Null path builtin',NULL,'ESM','IFRAME','/src/null-builtin.tsx') RETURNING id")
-            .fetch_one(&database.pool).await?;
-        let html_builtin:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url) VALUES('html-builtin','HTML metadata','/system-html','HTML','TRUSTED','/preserved/index.html') RETURNING id")
-            .fetch_one(&database.pool).await?;
-        let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,title,path) VALUES($1,'Preserved menu','/system-old') RETURNING id")
-            .bind(builtin).fetch_one(&database.pool).await?;
-        let historical_micro:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,status) VALUES('disabled-history','Disabled history','/micro/disabled-history','ESM','IFRAME','/src/history.tsx','DISABLED') RETURNING id")
-            .fetch_one(&database.pool).await?;
+        let mut h=Harness::create(&database.pool,"https://apps.example.test").await?;
+        let builtin:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,id) VALUES('old-builtin','Preserved built in','/system-old','ESM','IFRAME','/src/old-builtin.tsx',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let null_builtin:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,id) VALUES('null-builtin','Null path builtin',NULL,'ESM','IFRAME','/src/null-builtin.tsx',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let html_builtin:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,id) VALUES('html-builtin','HTML metadata','/system-html','HTML','TRUSTED','/preserved/index.html',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,title,path,id) VALUES($1,'Preserved menu','/system-old',$2) RETURNING id")
+            .bind(builtin).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let historical_micro:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,status,id) VALUES('disabled-history','Disabled history','/micro/disabled-history','ESM','IFRAME','/src/history.tsx','DISABLED',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         // Reconstruct one already-existing archive, then restore v9's exact
         // new-write constraint before exercising the real incremental upgrade.
         sqlx::query("ALTER TABLE application_releases DROP CONSTRAINT application_releases_entry_type_check").execute(&database.pool).await?;
-        let archived:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at) VALUES($1,'development','old-v1','ESM','/old/old-v1/entry.js','PASSED',now()) RETURNING id")
-            .bind(builtin).fetch_one(&database.pool).await?;
-        let null_archived:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at) VALUES($1,'development','old-v1','ESM','/old/old-v1/null-entry.js','PASSED',now()) RETURNING id")
-            .bind(null_builtin).fetch_one(&database.pool).await?;
+        let archived:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) VALUES($1,'development','old-v1','ESM','/old/old-v1/entry.js','PASSED',now(),$2) RETURNING id")
+            .bind(builtin).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
+        let null_archived:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) VALUES($1,'development','old-v1','ESM','/old/old-v1/null-entry.js','PASSED',now(),$2) RETURNING id")
+            .bind(null_builtin).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         sqlx::query("ALTER TABLE application_releases ADD CONSTRAINT application_releases_entry_type_check CHECK(entry_type='HTML') NOT VALID").execute(&database.pool).await?;
         sqlx::query("INSERT INTO application_deployments(application_id,environment,active_release_id) VALUES($1,'development',$2)")
             .bind(builtin).bind(archived).execute(&database.pool).await?;
@@ -146,7 +146,17 @@ async fn qiankun_only_unifies_builtin_metadata_and_ignores_archived_builtin_rele
             .fetch_one(&database.pool).await?;
         grant_application(&database.pool,tenant,org,builtin).await?;
         grant_application(&database.pool,tenant,org,null_builtin).await?;
-        sqlx::raw_sql(include_str!("../../migrations/0010_unified_application_config.sql")).execute(&database.pool).await?;
+        // Exercise exactly v10 first, with its real migration record. Current
+        // HTTP adapters need the later identity columns, so upgrade to the full
+        // schema only after asserting v10's historical-data contract below.
+        let v10 = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                sqlx::migrate!("./migrations").iter()
+                    .filter(|migration| migration.version <= 10).cloned().collect(),
+            ),
+            ..sqlx::migrate::Migrator::DEFAULT
+        };
+        v10.run(&database.pool).await?;
         let actual:(String,String,String,String,String,String)=sqlx::query_as("SELECT name,base_path,status,entry_type,runtime_mode,entry_url FROM applications WHERE id=$1")
             .bind(builtin).fetch_one(&database.pool).await?;
         ensure!(actual == ("Preserved built in".into(),"/system-old".into(),"ENABLED".into(),"HTML".into(),"TRUSTED".into(),"".into()),"built-in identity/status was lost or metadata remained legacy");
@@ -162,6 +172,18 @@ async fn qiankun_only_unifies_builtin_metadata_and_ignores_archived_builtin_rele
         let legacy:(String,String,String,String)=sqlx::query_as("SELECT status,entry_type,runtime_mode,entry_url FROM applications WHERE id=$1")
             .bind(historical_micro).fetch_one(&database.pool).await?;
         ensure!(legacy == ("DISABLED".into(),"ESM".into(),"IFRAME".into(),"/src/history.tsx".into()),"upgrade promoted or erased disabled micro history");
+        sqlx::migrate!("./migrations").run(&database.pool).await?;
+        ensure!(call(&h.app,Method::GET,"/api/auth/profile",&h.a,None).await?.0 == StatusCode::UNAUTHORIZED,
+            "upgrade accepted a historical session without signing-time identity proof");
+        // The data contract below uses newly issued fixture sessions. The old
+        // credentials stay revoked; the fixture never adds proof to those rows.
+        let account: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username='release-admin-a'")
+            .fetch_one(&database.pool).await?;
+        h.a=session(&database.pool,account,tenant,org).await?;
+        let (account,platform_tenant,platform_org): (Uuid,Uuid,Uuid) = sqlx::query_as(
+            "SELECT u.id,o.tenant_id,o.id FROM users u JOIN memberships m ON m.user_id=u.id JOIN organizations o ON o.id=m.organization_id WHERE u.username='release-platform' AND m.member_type='EMPLOYEE'",
+        ).fetch_one(&database.pool).await?;
+        h.platform=session(&database.pool,account,platform_tenant,platform_org).await?;
         let profile=h.profile(&h.a).await?;
         let app=profile_application(&profile,builtin)?;
         ensure!(app["entryType"] == "HTML" && app["runtimeMode"] == "TRUSTED" && app["entryUrl"] == "" && app["entryVersionId"].is_null()
@@ -181,8 +203,8 @@ async fn qiankun_only_unifies_builtin_metadata_and_ignores_archived_builtin_rele
         }
         let updated=successful_call(&h.app,Method::PUT,&path,&h.platform,Some(json!({"name":"Updated native page","entryUrl":""}))).await?;
         ensure!(updated["entryType"] == "HTML" && updated["runtimeMode"] == "TRUSTED" && updated["entryUrl"] == "","ordinary built-in metadata could not keep an empty URL");
-        expect_sqlstate(sqlx::query("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode) VALUES('db-old-built','DB old builtin','/native-old','ESM','TRUSTED')")
-            .execute(&database.pool).await,"23514","enabled legacy built-in database insert")?;
+        expect_sqlstate(sqlx::query("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,id) VALUES('db-old-built','DB old builtin','/native-old','ESM','TRUSTED',$1)")
+            .bind(crate::util::uuid7::new_uuid()).execute(&database.pool).await,"23514","enabled legacy built-in database insert")?;
         Ok(())
     }.await;
     database.finish(result).await

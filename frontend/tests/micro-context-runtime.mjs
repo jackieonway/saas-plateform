@@ -228,9 +228,14 @@ test('full prop signature notices same-length menu/permission changes and token 
     microPropsSignature({ ...props, organizationScopeIds: null }))
 })
 
+function sdkContext() {
+  return { ...context(Date.now()), user: { id: '019c0000-0000-7000-8000-000000000002' },
+    tenant: { id: '019c0000-0000-7000-8000-000000000003' }, organization: { id: '019c0000-0000-7000-8000-000000000004' } }
+}
+
 test('portable SDK aborts delayed JSON on renewal and sends only the current application token', async () => {
   const body = deferred(), requests = []
-  const props = { ...context(Date.now()), contractVersion: '2.0', contextEpoch: 1,
+  const props = { ...sdkContext(), contractVersion: '2.0', contextEpoch: 1,
     token: 'old-token', tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(), signal: new AbortController().signal }
   const client = createContextClient(props, async (_, options) => {
     requests.push(options)
@@ -251,7 +256,7 @@ test('portable SDK aborts delayed JSON on renewal and sends only the current app
 test('portable SDK rejects expired contexts and joins caller cancellation with host cancellation', async () => {
   const host = new AbortController(), caller = new AbortController(), body = deferred()
   let requestSignal
-  const props = { ...context(Date.now()), contractVersion: '2.0', contextEpoch: 1,
+  const props = { ...sdkContext(), contractVersion: '2.0', contextEpoch: 1,
     token: 'token', tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(), signal: host.signal }
   const client = createContextClient(props, async (_, options) => {
     requestSignal = options.signal

@@ -25,6 +25,7 @@ async fn navigation_fallback(request: Request, index: &std::path::Path) -> Respo
     let reserved = [
         "/api",
         "/oauth",
+        "/auth",
         "/sub",
         "/sub-apps",
         "/micro-assets",
@@ -83,7 +84,7 @@ mod tests {
         let target =
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/static-file-tests");
         tokio::fs::create_dir_all(&target).await?;
-        let directory = target.join(uuid::Uuid::new_v4().simple().to_string());
+        let directory = target.join(crate::util::uuid7::new_uuid().simple().to_string());
         tokio::fs::create_dir(&directory).await?;
         tokio::fs::write(
             directory.join("index.html"),

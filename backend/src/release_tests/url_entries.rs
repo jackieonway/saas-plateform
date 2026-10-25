@@ -115,9 +115,9 @@ async fn url_entries_resolve_environment_and_revision_consistently() -> Result<(
         oauth_client(&database.pool,h.main_app,"url-entry-client").await?;
         let app_token = h.app_token(&h.a,"release-app").await?;
         ensure!(current_context(&h,&app_token).await?["application"]["entryUrl"] == "/legacy/release-app/index.html","legacy fallback changed before URL configuration");
-        let prior_release:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at) \
-            VALUES($1,'development','prior-v1','HTML','/micro/prior-v1/index.html','PASSED',now()) RETURNING id")
-            .bind(h.main_app).fetch_one(&database.pool).await?;
+        let prior_release:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) \
+            VALUES($1,'development','prior-v1','HTML','/micro/prior-v1/index.html','PASSED',now(),$2) RETURNING id")
+            .bind(h.main_app).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
         sqlx::query("INSERT INTO application_deployments(application_id,environment,active_release_id) VALUES($1,'development',$2)")
             .bind(h.main_app).bind(prior_release).execute(&database.pool).await?;
         let path = entry_path(&h,ENVIRONMENT);

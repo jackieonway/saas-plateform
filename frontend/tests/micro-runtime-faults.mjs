@@ -31,7 +31,7 @@ function clock() {
   }
 }
 function props(controller = new AbortController(), epoch = 1) {
-  return { contractVersion: '2.0', sdkVersion: '2.0.0', contextVersion: 'context-' + epoch,
+  return { contractVersion: '2.0', sdkVersion: '3.0.0', contextVersion: 'context-' + epoch,
     contextEpoch: epoch, expiresAt: new Date(Date.now() + 60_000).toISOString(),
     tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(), token: 'application-token',
     signal: controller.signal, appCode: 'probe', basePath: '/micro/probe', routePath: '/micro/probe',

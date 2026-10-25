@@ -42,7 +42,7 @@ async fn read(
 ) -> Result<Snapshot<RequestContext>, AppError> {
     let claims = jwt::verify(token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
-    let binding = app_token::inspect(&state.pool, token, &claims)
+    let binding = app_token::inspect_authorized(state, token, &claims)
         .await?
         .ok_or_else(|| AppError::unauthorized("应用令牌无效或未获授权"))?;
     if let Some(caller) = caller {
@@ -56,6 +56,9 @@ async fn read(
         }
     } else if binding.audience != app_code {
         return Err(AppError::forbidden("应用受众不匹配"));
+    }
+    if binding.member_type != "EMPLOYEE" {
+        return Err(AppError::forbidden("当前应用授权入口仅允许员工身份"));
     }
     let data = store::load(&state.pool, &binding, &state.config.application_environment).await?;
     let version = revision(&data, &binding)?;
@@ -81,7 +84,7 @@ async fn fresh(
     let result = read(state, app_code, token, caller).await?;
     let claims = jwt::verify(token, &state.config.jwt_secret)
         .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
-    let binding = app_token::inspect(&state.pool, token, &claims)
+    let binding = app_token::inspect_authorized(state, token, &claims)
         .await?
         .ok_or_else(|| AppError::unauthorized("应用令牌已在上下文计算期间撤销"))?;
     if binding != result.value.binding {
@@ -175,6 +178,9 @@ pub(crate) async fn revalidate_context(
 }
 
 fn render(binding: app_token::AppTokenInfo, data: store::ContextRows) -> Result<Value, AppError> {
+    if binding.member_type != "EMPLOYEE" {
+        return Err(AppError::forbidden("客户身份不能消费员工角色和数据授权"));
+    }
     let store::ContextRows {
         identity,
         menu_rows,
@@ -228,6 +234,8 @@ fn render(binding: app_token::AppTokenInfo, data: store::ContextRows) -> Result<
     let version_input = json!({
         "user": binding.user_id, "tenant": binding.tenant_id,
         "organization": binding.organization_id, "application": binding.application_id,
+        "membership": binding.membership_id, "memberType":binding.member_type,
+        "identityVersion":binding.identity_version.to_string(), "accountVersion":binding.account_version.to_string(),
         "identity": identity, "roles": roles, "permissions": permissions,
         "menus": version_menus, "dataGrants": data_grants,
         "organizationScopeIds": if can_manage_platform { None } else { Some(&subtree) },

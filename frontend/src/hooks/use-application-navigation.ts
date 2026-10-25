@@ -12,17 +12,19 @@ import type { MenuNode, PermissionsResp } from "@/api/types"
 
 function currentPolicy(queryClient: ReturnType<typeof useQueryClient>): RouteAuthorizationInput {
   const state = useAuthStore.getState()
+  const session = captureAuthSession()
+  const profile = session.profileReady ? state.profile : null
   return {
-    profile: state.profile,
-    switching: state.contextSwitching,
+    profile,
+    switching: state.contextSwitching || !session.profileReady,
     permissions: {
-      status: queryClient.getQueryState(authQueryKeys.permissions(state.contextEpoch))?.status ?? "pending",
-      data: queryClient.getQueryData<PermissionsResp>(authQueryKeys.permissions(state.contextEpoch)),
+      status: queryClient.getQueryState(authQueryKeys.permissions(session.namespace, session.epoch))?.status ?? "pending",
+      data: queryClient.getQueryData<PermissionsResp>(authQueryKeys.permissions(session.namespace, session.epoch)),
     },
-    applicationMenus: (state.profile?.applications ?? []).map((app) => ({
+    applicationMenus: (profile?.applications ?? []).map((app) => ({
       applicationId: app.id,
-      status: queryClient.getQueryState(authQueryKeys.menus(app.id, state.contextEpoch))?.status ?? "pending",
-      data: queryClient.getQueryData<MenuNode[]>(authQueryKeys.menus(app.id, state.contextEpoch)),
+      status: queryClient.getQueryState(authQueryKeys.menus(app.id, session.namespace, session.epoch))?.status ?? "pending",
+      data: queryClient.getQueryData<MenuNode[]>(authQueryKeys.menus(app.id, session.namespace, session.epoch)),
     })),
   }
 }
@@ -40,9 +42,10 @@ export function useApplicationNavigation(options: { paths?: readonly string[] } 
   const selectApplication = React.useMemo(() => createApplicationNavigation({
     session: () => {
       const state = useAuthStore.getState()
+      const session = captureAuthSession()
       return { token: state.token, epoch: state.contextEpoch, switching: state.contextSwitching,
-        identity: captureAuthSession().identity,
-        currentApplicationId: state.currentApplicationId, applications: state.profile?.applications ?? [] }
+        identity: session.namespace,
+        currentApplicationId: state.currentApplicationId, applications: session.profileReady ? state.profile?.applications ?? [] : [] }
     },
     select: (id) => useAuthStore.getState().setCurrentApplication(id),
     menus: async (id) => {

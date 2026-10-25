@@ -1,0 +1,114 @@
+{
+  "format": "saas-uuid-u05-runtime-preparation/1",
+  "status": "PASS",
+  "scope": "local-preview-only",
+  "epoch": {
+    "accounts_version_incremented": 7,
+    "activated_at_utc": "2026-10-24T10:09:54.820717+00:00",
+    "confidential_clients_rotated": 12,
+    "epoch_prepared_sha256": "730868a57dab65ef5d28214914294b5b03ab5480ec44a0fc45cc6cd2f4e532c1",
+    "runtime_login_roles": 4,
+    "source_databases_modified": false,
+    "status": "ACTIVATED_FOR_ISOLATED_U05"
+  },
+  "roles": {
+    "database_default_read_only_preserved": true,
+    "business_roles_have_per_target_read_write_defaults": true,
+    "notification_role_read_only": true,
+    "validation": [
+      {
+        "kind": "platform",
+        "login_and_least_privilege": "PASS"
+      },
+      {
+        "kind": "stores",
+        "login_and_least_privilege": "PASS"
+      },
+      {
+        "kind": "work_orders",
+        "login_and_least_privilege": "PASS"
+      },
+      {
+        "kind": "notification",
+        "login_and_least_privilege": "PASS"
+      }
+    ],
+    "business_roles": [
+      {
+        "business_tables": 39,
+        "database": "qiankun_platform_uuid7_u04_20261024",
+        "ddl_or_temp_granted": false,
+        "kind": "platform",
+        "metadata_write_granted": false,
+        "role": "qiankun_platform_uuid7_u05_runtime_20261024",
+        "runtime_login": false
+      },
+      {
+        "business_tables": 4,
+        "database": "qiankun_stores_uuid7_u04_20261024",
+        "ddl_or_temp_granted": false,
+        "kind": "stores",
+        "metadata_write_granted": false,
+        "role": "qiankun_stores_uuid7_u05_runtime_20261024",
+        "runtime_login": false
+      },
+      {
+        "business_tables": 4,
+        "database": "qiankun_orders_uuid7_u04_20261024",
+        "ddl_or_temp_granted": false,
+        "kind": "work_orders",
+        "metadata_write_granted": false,
+        "role": "qiankun_orders_uuid7_u05_runtime_20261024",
+        "runtime_login": false
+      }
+    ]
+  },
+  "credential_counts": {
+    "counts": {
+      "source": {
+        "oauth_tokens": 105,
+        "platform_sessions": 7,
+        "oauth_device_codes": 0,
+        "oauth_authorization_codes": 0,
+        "oauth_authorization_requests": 0,
+        "platform_session_refresh_tokens": 7
+      },
+      "target_before_runtime": {
+        "oauth_tokens": 0,
+        "platform_sessions": 0,
+        "oauth_device_codes": 0,
+        "oauth_authorization_codes": 0,
+        "oauth_authorization_requests": 0,
+        "platform_session_refresh_tokens": 0
+      }
+    },
+    "sha256": "7c9a2d5d4a6ed9924385dd7a5d1a9c02c45944a755b015409427fdb54e712510"
+  },
+  "static_http_verification": {
+    "status": "PASS",
+    "served_files": 253,
+    "frontends": {
+      "platform": 207,
+      "stores": 7,
+      "work_orders": 7,
+      "vue-workshop": 7,
+      "legacy-jquery": 7,
+      "report-center": 8,
+      "websocket-chat": 4,
+      "oauth-playground": 6
+    },
+    "source_manifest_sha256": "e5af033d0ebb515baf8f70e6f1f8779263584b88a976ce376d5272218354e94e"
+  },
+  "private_journal_digests": {
+    "preparation-gates.private.json": "369685cdf3fba49e89b0e756f653f60ac27e0ef5491fbb7617b339cbfde4d9ab",
+    "runtime-role-preparation.private.json": "60502dd368b888d3a1f11174cec28193cbf010b66f6e9162c6fb1cbf204a612f",
+    "runtime-role-validation.private.json": "04e43aab0e1958145604a7267b80e202a70b810ce2eb073fb5c0247628af1338",
+    "epoch-prepared.private.json": "730868a57dab65ef5d28214914294b5b03ab5480ec44a0fc45cc6cd2f4e532c1",
+    "epoch-activated.private.json": "85f9322a8edd412c922a90f20187a78fbfe46080400482bdab8d864b66d3e600",
+    "static-http-verification.private.json": "c0f14f86ba24533637d81e5c68d498f4ba2979047599c4495f4391aa23f1c222"
+  },
+  "limitations": [
+    "This is U05 isolated runtime activation, not U06 final traffic cutover",
+    "Credential table zero counts are before runtime; legitimate fresh credentials are subsequently created"
+  ]
+}

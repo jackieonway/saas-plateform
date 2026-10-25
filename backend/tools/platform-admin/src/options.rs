@@ -4,7 +4,7 @@ use crate::{
 };
 use std::{collections::BTreeMap, path::Path};
 
-pub(crate) const USAGE: &str = "saas-platform-admin [plan|inspect|bootstrap|register|releases|release-reconcile|artifact-bind|artifact-verify|retention-preview|preflight|activate|deployments|rollback|grants-plan|grants-apply] [options]\nDefault: offline plan. Writes require --apply.\n--app-code work-orders|stores (default work-orders; grant manifest selects its app), --environment NAME (production), --app-id UUID, --timeout-ms 10..35000\nregister/release-reconcile --release-file FILE [--artifact-file ABS --inventory-dir ABS]; legacy register without the pair does not verify digest.\nartifact-bind/artifact-verify --release-file ABS --artifact-file ABS --inventory-dir ABS (offline; bind writes require --apply)\nretention-preview [--minimum-age-days 30..3650] [--keep-latest 5..1000] (remote GET only; apply unavailable)\npreflight/activate --release-id UUID\ngrants-plan/grants-apply --manifest FILE; explicit --app-code must match applicationCode\nDevelopment HTTP: --environment development --allow-loopback-http\nRemote environment: PLATFORM_API_ORIGIN, PLATFORM_ADMIN_BEARER; inspect/bootstrap also PLATFORM_CLIENT_ID.\nNo client secret, client creation, SQL execution or ZIP installation. Artifact bindings are local declarations, not platform digest metadata or Docker readiness.";
+pub(crate) const USAGE: &str = "saas-platform-admin [plan|inspect|bootstrap|access-policy-read|access-policy-save|register|releases|release-reconcile|artifact-bind|artifact-verify|retention-preview|preflight|activate|deployments|rollback|grants-plan|grants-apply] [options]\nDefault: offline plan. Writes require --apply.\n--app-code work-orders|stores (default work-orders; grant manifest selects its app), --environment NAME (production), --app-id UUID, --timeout-ms 10..35000\naccess-policy-read --policy-target application|client --policy-id UUID (remote GET only)\naccess-policy-save --manifest FILE (offline preview; --apply saves the explicit expected accessPolicyVersion)\nregister/release-reconcile --release-file FILE [--artifact-file ABS --inventory-dir ABS]; legacy register without the pair does not verify digest.\nartifact-bind/artifact-verify --release-file ABS --artifact-file ABS --inventory-dir ABS (offline; bind writes require --apply)\nretention-preview [--minimum-age-days 30..3650] [--keep-latest 5..1000] (remote GET only; apply unavailable)\npreflight/activate --release-id UUID\ngrants-plan/grants-apply --manifest FILE; explicit --app-code must match applicationCode\nDevelopment HTTP: --environment development --allow-loopback-http\nRemote environment: PLATFORM_API_ORIGIN, PLATFORM_ADMIN_BEARER; inspect/bootstrap also PLATFORM_CLIENT_ID.\nNo client secret, client creation, SQL execution or ZIP installation. Artifact bindings are local declarations, not platform digest metadata or Docker readiness.";
 
 pub(crate) struct Options {
     pub(crate) command: String,
@@ -18,6 +18,8 @@ pub(crate) struct Options {
     pub(crate) artifact_file: Option<String>,
     pub(crate) inventory_dir: Option<String>,
     pub(crate) manifest: Option<String>,
+    pub(crate) policy_target: Option<String>,
+    pub(crate) policy_id: Option<String>,
     pub(crate) timeout_ms: u64,
     pub(crate) minimum_age_days: u32,
     pub(crate) keep_latest: usize,
@@ -38,6 +40,8 @@ impl Options {
                 artifact_file: None,
                 inventory_dir: None,
                 manifest: None,
+                policy_target: None,
+                policy_id: None,
                 timeout_ms: 35000,
                 minimum_age_days: 30,
                 keep_latest: 5,
@@ -50,6 +54,8 @@ impl Options {
             "plan"
                 | "inspect"
                 | "bootstrap"
+                | "access-policy-read"
+                | "access-policy-save"
                 | "register"
                 | "artifact-bind"
                 | "artifact-verify"
@@ -79,6 +85,8 @@ impl Options {
                     | "--artifact-file"
                     | "--inventory-dir"
                     | "--manifest"
+                    | "--policy-target"
+                    | "--policy-id"
                     | "--apply"
                     | "--allow-loopback-http"
                     | "--timeout-ms"
@@ -119,6 +127,8 @@ impl Options {
             artifact_file: values.remove("--artifact-file"),
             inventory_dir: values.remove("--inventory-dir"),
             manifest: values.remove("--manifest"),
+            policy_target: values.remove("--policy-target"),
+            policy_id: values.remove("--policy-id"),
             minimum_age_days: values
                 .remove("--minimum-age-days")
                 .map(|v| v.parse().map_err(|_| SafeError::new("INVALID_ARGUMENT")))
@@ -159,6 +169,10 @@ impl Options {
                 .release_id
                 .as_ref()
                 .is_some_and(|id| !contract::is_uuid(id))
+            || result
+                .policy_id
+                .as_ref()
+                .is_some_and(|id| !contract::is_uuid(id))
         {
             return Err(SafeError::new("INVALID_ID"));
         }
@@ -168,6 +182,7 @@ impl Options {
                     command,
                     "plan"
                         | "inspect"
+                        | "access-policy-read"
                         | "retention-preview"
                         | "releases"
                         | "deployments"
@@ -189,7 +204,19 @@ impl Options {
                 )
             || matches!(command, "artifact-bind" | "artifact-verify")
                 && (result.artifact_file.is_none() || result.app_id.is_some())
-            || result.manifest.is_some() != matches!(command, "grants-plan" | "grants-apply")
+            || result.manifest.is_some()
+                != matches!(
+                    command,
+                    "grants-plan" | "grants-apply" | "access-policy-save"
+                )
+            || result.policy_id.is_some() != (command == "access-policy-read")
+            || result.policy_target.is_some() != (command == "access-policy-read")
+            || result
+                .policy_target
+                .as_deref()
+                .is_some_and(|target| !matches!(target, "application" | "client"))
+            || matches!(command, "access-policy-read" | "access-policy-save")
+                && (result.app_id.is_some() || result.app_code.is_some())
             || result.allow_loopback_http && result.environment != "development"
         {
             return Err(SafeError::new("INVALID_ARGUMENT"));
@@ -202,6 +229,7 @@ impl Options {
                 && !matches!(
                     self.command.as_str(),
                     "inspect"
+                        | "access-policy-read"
                         | "retention-preview"
                         | "releases"
                         | "deployments"

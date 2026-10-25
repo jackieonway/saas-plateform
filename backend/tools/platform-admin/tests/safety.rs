@@ -44,7 +44,7 @@ fn default_and_unapplied_commands_are_offline_even_with_invalid_secrets() {
         vec![
             "preflight",
             "--release-id",
-            "11111111-1111-1111-1111-111111111111",
+            "11111111-1111-7111-8111-111111111111",
         ],
     ] {
         let output = run(args(&values), &env).unwrap();
@@ -203,14 +203,14 @@ fn grants_use_manifest_app_and_reject_explicit_selection_conflicts_before_networ
         "../manifests/stores-grants.manifest.example.json"
     ))
     .unwrap();
-    manifest["applicationId"] = json!("11111111-1111-4111-8111-111111111111");
+    manifest["applicationId"] = json!("11111111-1111-7111-8111-111111111111");
     for (index, value) in manifest["menuIds"]
         .as_object_mut()
         .unwrap()
         .values_mut()
         .enumerate()
     {
-        *value = json!(format!("00000000-0000-4000-8000-{:012x}", index + 10));
+        *value = json!(format!("00000000-0000-7000-8000-{:012x}", index + 10));
     }
     let path = temp_json(&manifest);
     let environment =
@@ -221,7 +221,7 @@ fn grants_use_manifest_app_and_reject_explicit_selection_conflicts_before_networ
                 args(&[
                     command,
                     "--app-id",
-                    "22222222-2222-4222-8222-222222222222",
+                    "22222222-2222-7222-8222-222222222222",
                     "--manifest",
                     path.to_str().unwrap()
                 ]),
@@ -236,7 +236,7 @@ fn grants_use_manifest_app_and_reject_explicit_selection_conflicts_before_networ
                 args(&[
                     command,
                     "--app-id",
-                    "11111111-1111-4111-8111-111111111111",
+                    "11111111-1111-7111-8111-111111111111",
                     "--manifest",
                     path.to_str().unwrap()
                 ]),
@@ -311,14 +311,14 @@ fn grants_use_manifest_app_and_reject_explicit_selection_conflicts_before_networ
 
 #[test]
 fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client_writes() {
-    let app_id = "11111111-1111-4111-8111-111111111111";
-    let root = "00000000-0000-4000-8000-00000000000a";
+    let app_id = "11111111-1111-7111-8111-111111111111";
+    let root = "00000000-0000-7000-8000-00000000000a";
     let bootstrap: Value =
         serde_json::from_str(include_str!("../manifests/stores-bootstrap.manifest.json")).unwrap();
-    let app = json!({"id":app_id,"code":"stores","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/stores","status":"ENABLED"});
-    let client = json!({"id":"22222222-2222-4222-8222-222222222222","clientId":"owned-client","clientName":"stores-client",
+    let app = json!({"id":app_id,"code":"stores","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/stores","status":"ENABLED","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1});
+    let client = json!({"id":"22222222-2222-7222-8222-222222222222","clientId":"owned-client","clientName":"stores-client",
         "clientType":"CONFIDENTIAL","status":"ENABLED","grantTypes":["client_credentials"],"scopes":["openid"],"redirectUris":[],
-        "accessTokenValidity":300,"refreshTokenValidity":300,"applicationId":app_id,"clientSecret":"REMOTE_SECRET_CANARY"});
+        "accessTokenValidity":300,"refreshTokenValidity":300,"applicationId":app_id,"clientSecret":"REMOTE_SECRET_CANARY","subjectMode":"MACHINE","allowedMemberTypes":[],"accessPolicyVersion":1});
     let menus = bootstrap["menus"]
         .as_array()
         .unwrap()
@@ -330,7 +330,7 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
             object.remove("key");
             object.remove("parentKey");
             object.remove("status");
-            row["id"] = json!(format!("00000000-0000-4000-8000-{:012x}", index + 10));
+            row["id"] = json!(format!("00000000-0000-7000-8000-{:012x}", index + 10));
             row["applicationId"] = json!(app_id);
             row["parentId"] = if index == 0 { Value::Null } else { json!(root) };
             row

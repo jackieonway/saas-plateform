@@ -1,3 +1,4 @@
+import { newUuid } from "@/lib/uuid"
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { zipDistributionsApi as api, type ZipIntent } from "@/api/zip-distributions"
@@ -38,7 +39,7 @@ function Content({ app, code, environment, open }: Props) {
     event.preventDefault()
     if (!write || mutation.isPending) return
     const key = JSON.stringify([releaseId, groupId, epoch])
-    if (intent.current?.key !== key) intent.current = { key, body: { releaseId, groupId, requestId: crypto.randomUUID() } }
+    if (intent.current?.key !== key) intent.current = { key, body: { releaseId, groupId, requestId: newUuid() } }
     mutation.mutate({ kind: "create", body: intent.current.body })
   }
   const selectClass = "h-9 w-full rounded-md border bg-background px-2 text-sm"

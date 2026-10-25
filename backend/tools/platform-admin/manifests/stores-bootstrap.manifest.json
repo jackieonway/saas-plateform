@@ -11,11 +11,14 @@
     "autoCreateMenu": false,
     "description": "平台STORE组织的营业资料、实时组织成员及每日营业记录；组织身份与成员由平台统一维护",
     "sortOrder": 110,
-    "status": "ENABLED"
+    "status": "ENABLED",
+    "allowedMemberTypes": ["EMPLOYEE"]
   },
   "oauthClient": {
     "clientName": "stores-client",
     "clientType": "CONFIDENTIAL",
+    "subjectMode": "MACHINE",
+    "allowedMemberTypes": [],
     "grantTypes": [
       "client_credentials"
     ],

@@ -41,6 +41,7 @@ async fn one(
     headers: HeaderMap,
     query: Result<Query<LookupQuery>, QueryRejection>,
 ) -> Result<Json<Value>, AppError> {
+    let id = crate::util::uuid7::validate_uuid(id)?;
     let Query(query) = query.map_err(|_| AppError::bad_request("组织目录查询参数无效"))?;
     app_organizations::lookup(&state, &code, &headers, query, Some(id))
         .await

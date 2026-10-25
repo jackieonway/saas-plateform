@@ -1,5 +1,6 @@
 [package]
 name = "saas-platform-backend"
+default-run = "saas-platform-backend"
 version = "1.0.0"
 edition = "2021"
 description = "SaaS Platform 多租户多组织权限平台 Rust 后端 (Axum + SQLx + PostgreSQL)"
@@ -12,12 +13,14 @@ tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono", "migrate", "macros", "derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1", features = ["v7", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 jsonwebtoken = "9"
 argon2 = "0.5"
 password-hash = { version = "0.5", features = ["rand_core"] }
 rand = "0.8"
+# Existing locked TLS/JWT dependency; mature AEAD for recoverable server-only tokens.
+ring = "0.17.14"
 sha2 = "0.10"
 hex = "0.4"
 tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
@@ -40,6 +43,7 @@ tar = "0.4"
 rustix = { version = "1.1.5", features = ["fs"] }
 
 [dev-dependencies]
+uuid = { version = "1", features = ["v4"] }
 tower = { version = "0.5", features = ["util"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 

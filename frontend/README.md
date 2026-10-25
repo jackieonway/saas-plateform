@@ -1,6 +1,6 @@
 # SaaS 平台前端
 
-本目录是平台的 React 19、TypeScript、Vite 6 宿主，可以独立安装、检查、构建和制作静态镜像。独立微应用的运行入口为 `/micro/:appCode/*`，统一使用 qiankun 2.10.16 加载 HTML，并通过已固定的微应用 SDK 2.0.0 接收平台授权上下文。
+本目录是平台的 React 19、TypeScript、Vite 6 宿主，可以独立安装、检查、构建和制作静态镜像。独立微应用的运行入口为 `/micro/:appCode/*`，统一使用 qiankun 2.10.16 加载 HTML，并通过已固定的微应用 SDK 3.0.0 接收平台授权上下文。
 
 ## 运行边界
 
@@ -66,7 +66,7 @@ OAuth 演练代理会剥离平台 Authorization；API 只转发演练服务自�
 4. `qiankun.ts` 使用 `loadMicroApp` 和标准生命周期。子应用从 qiankun props 的 `platform` 获取严格的 MicroProps DTO，从 `services` 获取宿主能力，从 `container` 获取本次挂载节点。
 5. 授权变化走子应用可选 `update`；没有 `update` 时串行卸载并重新挂载。切换组织、离开页面、授权失效和到期会撤销旧 signal，迟到结果不能进入新上下文。
 
-MicroProps 使用 SDK `2.0.0`、契约 `2.0`，包括应用令牌、用户、租户、组织、组织范围、角色、权限、数据授权、菜单、上下文版本/序号、到期时间、路由、主题及通知/导航回调。`routePath` 完整保留 React Router 的 pathname、search、hash；只变化 query 或 hash 也会更新子应用。菜单授权仍单独按 pathname 归一化判断，query/hash 内容不能授予其他路径访问权。
+MicroProps 使用活动 SDK `3.0.0`、契约 `2.0`，包括应用令牌、用户、租户、组织、组织范围、角色、权限、数据授权、菜单、上下文版本/序号、到期时间、路由、主题及通知/导航回调。`routePath` 完整保留 React Router 的 pathname、search、hash；只变化 query 或 hash 也会更新子应用。菜单授权仍单独按 pathname 归一化判断，query/hash 内容不能授予其他路径访问权。
 
 新应用交付 HTML 与经典脚本/UMD，按平台接入合同导出 qiankun `bootstrap`、`mount`、`update`、`unmount` 四个生命周期；运行时仍为缺少 `update` 的既有应用保留上文所述重挂回退。`script[type=module]` 会被明确拒绝。资源加载禁用预取，剥离 Authorization/Cookie 并使用 `credentials: omit`；业务 API 必须通过应用令牌和 SDK 客户端访问。`services.downloadCsv` 另行检查有效上下文、导出权限、数据授权、文件名、大小和频率。
 

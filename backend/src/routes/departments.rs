@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
@@ -123,7 +124,7 @@ async fn tree_handler(
         .await?;
     let org_id: Uuid = params
         .get("organizationId")
-        .and_then(|v| Uuid::parse_str(v).ok())
+        .and_then(|v| crate::util::uuid7::parse_uuid(v).ok())
         .ok_or_else(|| AppError::bad_request("缺少 organizationId 参数"))?;
     state.ensure_org_scope(&user, org_id, "组织").await?;
     let rows: Vec<DeptRowTuple> = sqlx::query_as(
@@ -165,7 +166,7 @@ async fn create(
         .await?;
     let org_id: Uuid = body
         .organization_id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("organizationId 格式错误"))?;
     let org_tenant: Option<Uuid> =
         sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
@@ -179,7 +180,7 @@ async fn create(
         Some(p) if p.trim().is_empty() => None,
         Some(p) => {
             let pid: Uuid = p
-                .parse()
+                .parse_uuid7()
                 .map_err(|_| AppError::bad_request("parentId 格式错误"))?;
             let (parent_org,): (Uuid,) =
                 sqlx::query_as("SELECT organization_id FROM departments WHERE id = $1")
@@ -199,8 +200,8 @@ async fn create(
     }
     let mut tx = state.pool.begin().await?;
     let row: DeptRowTuple = sqlx::query_as(
-        "INSERT INTO departments (organization_id, parent_id, name, code, sort_order, description) \
-         VALUES ($1, $2, $3, $4, $5, $6) \
+        "INSERT INTO departments (organization_id, parent_id, name, code, sort_order, description, id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) \
          RETURNING id, organization_id, parent_id, name, COALESCE(code,'') AS code, sort_order, \
          COALESCE(description,'') AS description, status",
     )
@@ -210,7 +211,7 @@ async fn create(
     .bind(&body.code)
     .bind(body.sort_order)
     .bind(&body.description)
-    .fetch_one(&mut *tx)
+    .bind(crate::util::uuid7::new_uuid()).fetch_one(&mut *tx)
     .await?;
     let ip = audit::client_ip(&headers);
     let ua = audit::ua_of(&headers);
@@ -258,7 +259,7 @@ async fn update(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_dept_in_scope(&state, &user, id).await?;
     if let Some(name) = &body.name {
@@ -332,7 +333,7 @@ async fn delete(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     ensure_dept_in_scope(&state, &user, id).await?;
     let mut tx = state.pool.begin().await?;

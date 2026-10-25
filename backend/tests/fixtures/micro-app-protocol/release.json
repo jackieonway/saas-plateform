@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "2.0.0",
+  "sdkVersion": "3.0.0",
   "status": "REPOSITORY_CANDIDATE",
   "contracts": {
     "context": "1.0",
@@ -8,7 +8,7 @@
     "notification": "1.0"
   },
   "supportedSdkVersions": [
-    "2.0.0"
+    "3.0.0"
   ],
   "limits": {
     "maxJsonResponseBytes": 1048576,
@@ -23,7 +23,7 @@
     "authorized-http"
   ],
   "compatibility": {
-    "previousRelease": "1.0.0",
-    "policy": "Version 2 uses qiankun props and the authorization client only. Release 1.0.0 remains an immutable archive and is not an active compatibility runtime."
+    "previousRelease": "2.0.0",
+    "policy": "Version 3 requires RFC UUID v7 for system-owned identities and request IDs. Wire contract versions remain unchanged. Releases 1.0.0 and 2.0.0 remain immutable archives and are not active compatibility runtimes."
   }
 }

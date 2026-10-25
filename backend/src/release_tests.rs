@@ -39,8 +39,8 @@ mod zip_registration;
 const ENVIRONMENT: &str = "development";
 const JWT_SECRET: &str = "isolated-release-tests-only";
 
-struct TestDatabase {
-    pool: PgPool,
+pub(super) struct TestDatabase {
+    pub(super) pool: PgPool,
     admin: PgPool,
     name: String,
 }
@@ -78,11 +78,11 @@ fn database_error(stage: &str, error: &sqlx::Error) -> anyhow::Error {
 }
 
 impl TestDatabase {
-    async fn create() -> Result<Self> {
+    pub(super) async fn create() -> Result<Self> {
         Self::create_through(i64::MAX).await
     }
 
-    async fn create_through(version: i64) -> Result<Self> {
+    pub(super) async fn create_through(version: i64) -> Result<Self> {
         let options = test_database_options()?;
         let admin = PgPoolOptions::new()
             .max_connections(1)
@@ -91,7 +91,7 @@ impl TestDatabase {
             .connect_with(options.clone().database("postgres"))
             .await
             .map_err(|error| database_error("release test administration connection", &error))?;
-        let name = format!("release_test_{}", Uuid::new_v4().simple());
+        let name = format!("release_test_{}", crate::util::uuid7::new_uuid().simple());
         // The identifier is generated here and contains only ASCII letters, digits and '_'.
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
@@ -132,7 +132,7 @@ impl TestDatabase {
         Ok(database)
     }
 
-    async fn finish(self, result: Result<()>) -> Result<()> {
+    pub(super) async fn finish(self, result: Result<()>) -> Result<()> {
         eprintln!(
             "release test cleanup {}: assertions_ok={} pool_size={} idle={}",
             self.name,
@@ -230,15 +230,27 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
         .bind(user)
         .fetch_one(pool)
         .await?;
-    let sid: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions (user_id, tenant_id, organization_id, expires_at) \
-         VALUES ($1, $2, $3, now() + interval '1 hour') RETURNING id",
-    )
-    .bind(user)
-    .bind(tenant)
-    .bind(org)
-    .fetch_one(pool)
-    .await?;
+    // Historical migration fixtures create their credentials against the real
+    // pre-binding schema. The current-schema branch captures proof only when
+    // this new fixture credential is issued; it never repairs an existing row.
+    let bound_schema: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='platform_sessions' AND column_name='account_version')",
+    ).fetch_one(pool).await?;
+    let statement = if bound_schema {
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
+         SELECT $1,$2,$3,now() + interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
+         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
+         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id"
+    } else {
+        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id) VALUES($1,$2,$3,now()+interval '1 hour',$4) RETURNING id"
+    };
+    let sid: Uuid = sqlx::query_scalar(statement)
+        .bind(user)
+        .bind(tenant)
+        .bind(org)
+        .bind(crate::util::uuid7::new_uuid())
+        .fetch_one(pool)
+        .await?;
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
         &Claims {
@@ -261,17 +273,19 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
 
 async fn tenant(pool: &PgPool, code: &str, platform: bool) -> Result<(Uuid, Uuid)> {
     let tenant: Uuid = sqlx::query_scalar(
-        "INSERT INTO tenants (name, code, is_platform) VALUES ($1, $1, $2) RETURNING id",
+        "INSERT INTO tenants (name, code, is_platform,id) VALUES ($1, $1, $2,$3) RETURNING id",
     )
     .bind(code)
     .bind(platform)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     let org: Uuid = sqlx::query_scalar(
-        "INSERT INTO organizations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO organizations (tenant_id, name,id) VALUES ($1, $2,$3) RETURNING id",
     )
     .bind(tenant)
     .bind(format!("{code} root"))
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
     Ok((tenant, org))
@@ -279,16 +293,18 @@ async fn tenant(pool: &PgPool, code: &str, platform: bool) -> Result<(Uuid, Uuid
 
 async fn user(pool: &PgPool, username: &str, org: Uuid, super_admin: bool) -> Result<Uuid> {
     let user: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (username, password_hash, is_super_admin) \
-         VALUES ($1, 'test-only-unused-password', $2) RETURNING id",
+        "INSERT INTO users (username, password_hash, is_super_admin,id) \
+         VALUES ($1, 'test-only-unused-password', $2,$3) RETURNING id",
     )
     .bind(username)
     .bind(super_admin)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await?;
-    sqlx::query("INSERT INTO memberships (user_id, organization_id) VALUES ($1, $2)")
+    sqlx::query("INSERT INTO memberships (user_id, organization_id,id) VALUES ($1, $2,$3)")
         .bind(user)
         .bind(org)
+        .bind(crate::util::uuid7::new_uuid())
         .execute(pool)
         .await?;
     Ok(user)
@@ -296,12 +312,13 @@ async fn user(pool: &PgPool, username: &str, org: Uuid, super_admin: bool) -> Re
 
 async fn application(pool: &PgPool, code: &str, entry_url: &str) -> Result<Uuid> {
     sqlx::query_scalar(
-        "INSERT INTO applications (code, name, base_path, entry_type, runtime_mode, entry_url) \
-         VALUES ($1, $1, $2, 'HTML', 'TRUSTED', $3) RETURNING id",
+        "INSERT INTO applications (code, name, base_path, entry_type, runtime_mode, entry_url,id) \
+         VALUES ($1, $1, $2, 'HTML', 'TRUSTED', $3,$4) RETURNING id",
     )
     .bind(code)
     .bind(format!("/micro/{code}"))
     .bind(entry_url)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await
     .map_err(Into::into)
@@ -330,13 +347,14 @@ async fn grant_application(pool: &PgPool, tenant: Uuid, org: Uuid, app: Uuid) ->
 async fn oauth_client(pool: &PgPool, app: Uuid, client_id: &str) -> Result<()> {
     sqlx::query(
         "INSERT INTO oauth_clients \
-         (client_id, client_secret_hash, client_name, client_type, grant_types, scopes, \
-          access_token_validity, refresh_token_validity, application_id) \
-         VALUES ($1, $2, $1, 'CONFIDENTIAL', 'client_credentials', 'profile', 7200, 604800, $3)",
+         (client_id, client_secret_hash, client_name, client_type, subject_mode, allowed_member_types, grant_types, scopes, \
+          access_token_validity, refresh_token_validity, application_id,id) \
+         VALUES ($1, $2, $1, 'CONFIDENTIAL', 'MACHINE', ARRAY[]::text[], 'client_credentials', 'profile', 7200, 604800, $3,$4)",
     )
     .bind(client_id)
     .bind(hash::sha256_hex("isolated-release-client-secret-only"))
     .bind(app)
+    .bind(crate::util::uuid7::new_uuid())
     .execute(pool)
     .await?;
     Ok(())
@@ -344,11 +362,12 @@ async fn oauth_client(pool: &PgPool, app: Uuid, client_id: &str) -> Result<()> {
 
 async fn menu(pool: &PgPool, app: Uuid, permission: &str) -> Result<Uuid> {
     sqlx::query_scalar(
-        "INSERT INTO menus (application_id, title, path, permission, link_target) \
-         VALUES ($1, $2, '/micro/release-app', $2, 'MICRO') RETURNING id",
+        "INSERT INTO menus (application_id, title, path, permission, link_target,id) \
+         VALUES ($1, $2, '/micro/release-app', $2, 'MICRO',$3) RETURNING id",
     )
     .bind(app)
     .bind(permission)
+    .bind(crate::util::uuid7::new_uuid())
     .fetch_one(pool)
     .await
     .map_err(Into::into)
@@ -424,8 +443,8 @@ impl Harness {
         let other_app = application(pool, "release-other", "/legacy/other/index.html").await?;
         // Native management pages use the same metadata as micro apps, while
         // their platform route has no remote execution entry.
-        let system_app: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url) VALUES('release-system','Release management','/system','HTML','TRUSTED','') RETURNING id")
-            .fetch_one(pool).await?;
+        let system_app: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,id) VALUES('release-system','Release management','/system','HTML','TRUSTED','',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let tenant_only_app =
             application(pool, "release-tenant-only", "/legacy/tenant/index.html").await?;
         let org_only_app = application(pool, "release-org-only", "/legacy/org/index.html").await?;
@@ -438,11 +457,12 @@ impl Harness {
         let no_role_menu = menu(pool, no_role_app, "release:no-role").await?;
         for (tenant, org, user) in [(tenant_a, org_a, admin_a), (tenant_b, org_b, admin_b)] {
             let role: Uuid = sqlx::query_scalar(
-                "INSERT INTO roles (tenant_id, organization_id, name, code) \
-                 VALUES ($1, $2, 'Release administrator', 'release-admin') RETURNING id",
+                "INSERT INTO roles (tenant_id, organization_id, name, code,id) \
+                 VALUES ($1, $2, 'Release administrator', 'release-admin',$3) RETURNING id",
             )
             .bind(tenant)
             .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
             .fetch_one(pool)
             .await?;
             sqlx::query(
@@ -459,13 +479,14 @@ impl Harness {
             grant_menu(pool, tenant, org, Some(role), main_menu).await?;
             sqlx::query(
                 "INSERT INTO membership_data_grants \
-                 (membership_id, application_id, resource_code, action_code, scope_type) \
-                 SELECT id, $3, 'release', 'read', 'ORG' FROM memberships \
+                 (membership_id, application_id, resource_code, action_code, scope_type,id) \
+                 SELECT id, $3, 'release', 'read', 'ORG' ,$4 FROM memberships \
                  WHERE user_id = $1 AND organization_id = $2",
             )
             .bind(user)
             .bind(org)
             .bind(main_app)
+            .bind(crate::util::uuid7::new_uuid())
             .execute(pool)
             .await?;
         }
@@ -633,7 +654,10 @@ fn release_body(version: &str, entry_type: &str) -> Value {
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn release_archive_upload_registers_files_and_preserves_version_bytes() -> Result<()> {
     let database = TestDatabase::create().await?;
-    let root = std::env::temp_dir().join(format!("micro-release-upload-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!(
+        "micro-release-upload-{}",
+        crate::util::uuid7::new_uuid()
+    ));
     std::fs::create_dir(&root)?;
     let result: Result<()> = async {
         let h = Harness::create_with_upload_root(&database.pool, "http://127.0.0.1:7777",
@@ -2191,7 +2215,7 @@ async fn release_database_enforces_context_and_immutable_definition() -> Result<
             .bind(a).fetch_one(&database.pool).await?;
         // Every field in the immutable definition is checked; validation fields remain writable.
         for (change, label) in [
-            ("id = gen_random_uuid()", "release id mutation"),
+            ("id = $2", "release id mutation"),
             ("version = 'v2'", "version mutation"),
             ("entry_type = 'ESM'", "entry type mutation"),
             ("entry_url = '/micro/v1/other.html'", "entry URL mutation"),
@@ -2199,10 +2223,18 @@ async fn release_database_enforces_context_and_immutable_definition() -> Result<
             ("resources = '[{\"url\":\"/micro/v1/other.js\",\"kind\":\"SCRIPT\"}]'::jsonb", "resources mutation"),
             ("environment = 'production'", "environment mutation"),
             ("created_at = created_at + interval '1 second'", "creation timestamp mutation"),
-            ("created_by = gen_random_uuid()", "creator mutation"),
+            ("created_by = $2", "creator mutation"),
         ] {
-            expect_sqlstate(sqlx::query(&format!("UPDATE application_releases SET {change} WHERE id = $1"))
-                .bind(a).execute(&database.pool).await, "23514", label)?;
+            let sql = format!("UPDATE application_releases SET {change} WHERE id = $1");
+            let query = sqlx::query(&sql).bind(a);
+            // Use valid v7 mutations so the immutable-definition trigger, rather
+            // than a UUID CHECK, remains the behavior under test.
+            let query = if change.contains("$2") {
+                query.bind(crate::util::uuid7::new_uuid())
+            } else {
+                query
+            };
+            expect_sqlstate(query.execute(&database.pool).await, "23514", label)?;
         }
         expect_sqlstate(sqlx::query("UPDATE application_releases SET application_id = $2 WHERE id = $1")
             .bind(a).bind(h.other_app).execute(&database.pool).await, "23514", "application identity mutation")?;

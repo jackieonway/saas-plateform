@@ -1,3 +1,4 @@
+use crate::util::uuid7::ParseUuid7;
 use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
@@ -21,6 +22,10 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/tenants", get(list).post(create))
         .route("/api/tenants/options", get(options))
+        .route(
+            "/api/tenants/account-operations/{operationId}",
+            get(get_account_operation).post(recover_account_operation),
+        )
         .route("/api/tenants/{id}", put(update).delete(delete))
         .route("/api/tenants/{id}/status", put(update_status))
         .route(
@@ -292,7 +297,7 @@ async fn create(
     State(state): State<AppState>,
     headers: HeaderMap,
     user: CurrentUser,
-    ApiJson(body): ApiJson<TenantBody>,
+    ApiJson(mut body): ApiJson<TenantBody>,
 ) -> Result<Json<Value>, AppError> {
     RequirePermission("system:tenant")
         .check(&state, &user)
@@ -304,13 +309,91 @@ async fn create(
     }
     validate_tenant_identity(&name, body.code.trim(), false)?;
     validate_tenant_type(&body.tenant_type)?;
-    let contact = body.contact.normalized();
-    contact.validate(true)?;
+    body.contact = std::mem::take(&mut body.contact).normalized();
+    body.contact.validate(true)?;
     validate_coordinates(body.longitude, body.latitude)?;
+    let tenant_id = crate::util::uuid7::new_uuid();
+    let root_id = crate::util::uuid7::new_uuid();
+    let remote = if state.config.identity_remote_enabled {
+        Some(
+            onboarding::prepare_remote_contact(
+                &state,
+                &headers,
+                &user,
+                &body.contact,
+                &tenant_creation_requirements(),
+                json!({"kind":"ONBOARDING_TENANT_CREATE","entityId":tenant_id,
+                "organizationId":root_id,"body":tenant_body_json(&body)}),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    persist_tenant_creation(
+        &state,
+        &headers,
+        &user,
+        TenantCreation {
+            body,
+            tenant_id,
+            root_id,
+            remote,
+        },
+    )
+    .await
+}
+
+struct TenantCreation {
+    body: TenantBody,
+    tenant_id: Uuid,
+    root_id: Uuid,
+    remote: Option<onboarding::RemoteContact>,
+}
+
+fn tenant_creation_requirements() -> onboarding::RemoteRequirements {
+    onboarding::RemoteRequirements {
+        permission: "system:tenant",
+        initializing: false,
+        scope: onboarding::RemoteScope::Platform,
+    }
+}
+
+fn tenant_body_json(body: &TenantBody) -> Value {
+    json!({
+        "name":body.name,"code":body.code,"tenantType":body.tenant_type,"description":body.description,
+        "province":body.province,"city":body.city,"district":body.district,"township":body.township,
+        "village":body.village,"address":body.address,"longitude":body.longitude,"latitude":body.latitude,
+        "expiresAt":body.expires_at,"contactName":body.contact.contact_name,
+        "contactPhone":body.contact.contact_phone,"contactEmail":body.contact.contact_email,
+    })
+}
+
+async fn persist_tenant_creation(
+    state: &AppState,
+    headers: &HeaderMap,
+    user: &CurrentUser,
+    creation: TenantCreation,
+) -> Result<Json<Value>, AppError> {
+    let TenantCreation {
+        body,
+        tenant_id,
+        root_id,
+        mut remote,
+    } = creation;
+    let operation = remote.as_ref().and_then(|remote| remote.operation_id);
+    let result = async {
+    let name = body.name.trim().to_owned();
+    let contact = &body.contact;
     let mut tx = state.pool.begin().await?;
+    if let Some(remote) = remote.as_ref() {
+        onboarding::lock_operation_in_tx(&mut tx, remote).await?;
+        let scope = onboarding::require_remote_authority_in_tx(&mut tx, user, &tenant_creation_requirements()).await?;
+        onboarding::confirm_remote_contact_in_tx(&mut tx, contact, scope.as_deref(), remote).await?;
+    }
     let mut row: TenantRow = sqlx::query_as(
-        "INSERT INTO tenants (name, code, description, expires_at, province, city, district, township, village, address, longitude, latitude, tenant_type, contact_name, contact_phone, contact_email) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id, name, code, tenant_type, contact_name, contact_phone, contact_email, \
+        "INSERT INTO tenants (name, code, description, expires_at, province, city, district, township, village, address, longitude, latitude, tenant_type, contact_name, contact_phone, contact_email, id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id, name, code, tenant_type, contact_name, contact_phone, contact_email, \
          description, status, false AS is_platform, created_at, expires_at, province, city, district, township, village, address, longitude, latitude, \
          0::bigint AS organization_count, 0::bigint AS user_count, 0::bigint AS authorized_app_count"
     )
@@ -330,34 +413,38 @@ async fn create(
     .bind(&contact.contact_name)
     .bind(&contact.contact_phone)
     .bind(&contact.contact_email)
-    .fetch_one(&mut *tx)
+    .bind(tenant_id).fetch_one(&mut *tx)
     .await?;
     let root_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO organizations (tenant_id, name, code, province, city, district, township, village, address, longitude, latitude, organization_type, contact_name, contact_phone, contact_email) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id",
+        "INSERT INTO organizations (tenant_id, name, code, province, city, district, township, village, address, longitude, latitude, organization_type, contact_name, contact_phone, contact_email, id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id",
     ).bind(row.id).bind(&name).bind(body.code.trim())
         .bind(&row.province).bind(&row.city).bind(&row.district)
         .bind(&row.township).bind(&row.village).bind(&row.address)
         .bind(row.longitude).bind(row.latitude)
         .bind(root_organization_type(&body.tenant_type))
         .bind(&contact.contact_name).bind(&contact.contact_phone).bind(&contact.contact_email)
-        .fetch_one(&mut *tx).await?;
+        .bind(root_id).fetch_one(&mut *tx).await?;
     onboarding::initialize_tenant(&mut tx, row.id, root_id).await?;
-    let administrator = onboarding::provision_contact_administrator(
+    let administrator = if let Some(remote) = remote.as_mut() {
+        if let Some(account) = remote.account.take() {
+            Some(onboarding::attach_contact_administrator(&mut tx, &state.config, row.id, root_id, "tenant_admin", account).await?)
+        } else { None }
+    } else { onboarding::provision_contact_administrator(
         &mut tx,
-        (&state.config, &state.passwords),
+        (&state.config, state.accounts.as_ref()),
         row.id,
         root_id,
-        &contact,
+        contact,
         "tenant_admin",
         None,
     )
-    .await?;
+    .await? };
     row.organization_count = 1;
     row.user_count = i64::from(administrator.is_some());
     row.authorized_app_count = 1;
-    let ip = audit::client_ip(&headers);
-    let ua = audit::ua_of(&headers);
+    let ip = audit::client_ip(headers);
+    let ua = audit::ua_of(headers);
     let mut after = tenant_audit_snapshot(&mut tx, row.id).await?;
     after["rootOrganizationId"] = json!(root_id);
     if let Some(administrator) = &administrator {
@@ -379,6 +466,7 @@ async fn create(
         },
     )
     .await?;
+    onboarding::complete_operation_in_tx(&mut tx, operation).await?;
     tx.commit().await?;
     state.invalidate_perm_cache();
     let mut response = serde_json::to_value(&row).map_err(anyhow::Error::from)?;
@@ -387,6 +475,8 @@ async fn create(
             serde_json::to_value(administrator).map_err(anyhow::Error::from)?;
     }
     Ok(Json(response))
+    }.await;
+    result.map_err(|error| onboarding::followup_error(error, operation))
 }
 
 /// 三态可空字段反序列化: 键缺省 → None(不更新); 显式 null → Some(None)(清除置空); 有值 → Some(Some(v))
@@ -441,10 +531,29 @@ fn validate_tenant_identity(name: &str, code: &str, is_platform: bool) -> Result
 #[cfg(test)]
 mod coordinate_tests {
     use super::{
-        root_organization_type, validate_coordinates, validate_tenant_identity,
+        root_organization_type, tenant_body_json, validate_coordinates, validate_tenant_identity,
         validate_tenant_type, TenantBody, TenantUpdate,
     };
     use serde_json::json;
+
+    #[test]
+    fn durable_tenant_create_retains_full_business_input_without_credentials() {
+        let body: TenantBody = serde_json::from_value(json!({
+            "name":"恢复租户","code":"recover-tenant","tenantType":"GOVERNMENT",
+            "description":"待恢复","province":"甲省","city":"乙市","district":"丙区",
+            "township":"丁镇","village":"戊村","address":"一路1号",
+            "longitude":120.5,"latitude":30.5,"expiresAt":"2030-01-01T00:00:00Z",
+            "contactName":"联系人","contactPhone":"13800000000","contactEmail":"admin@example.test",
+        }))
+        .unwrap();
+        let saved = tenant_body_json(&body);
+        let recovered: TenantBody = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!(tenant_body_json(&recovered), saved);
+        assert_eq!(recovered.contact.contact_email, "admin@example.test");
+        assert_eq!(recovered.village, "戊村");
+        assert!(saved.get("password").is_none());
+        assert!(saved.get("initialPassword").is_none());
+    }
 
     #[test]
     fn tenant_creation_accepts_legacy_and_five_level_locations() {
@@ -583,7 +692,7 @@ async fn update(
         .await?;
     state.require_platform(&user).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     if let Some(name) = &body.name {
         if name.trim().is_empty() {
@@ -699,7 +808,7 @@ async fn delete(
         .await?;
     state.require_platform(&user).await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     // Deletion needs the stronger lock; ordinary edits leave FK checks free.
@@ -770,7 +879,7 @@ async fn update_status(
         return Err(AppError::bad_request("状态仅支持 ENABLED / DISABLED"));
     }
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let mut tx = state.pool.begin().await?;
     let before = tenant_configuration_snapshot(&mut tx, id).await?;
@@ -868,7 +977,7 @@ async fn get_authorizations(
         .await?;
     state.require_platform(&user).await?;
     let tenant_id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)")
         .bind(tenant_id)
@@ -948,7 +1057,7 @@ async fn put_authorizations(
         .await?;
     state.require_platform(&user).await?;
     let tenant_id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)")
         .bind(tenant_id)
@@ -963,7 +1072,7 @@ async fn put_authorizations(
     for item in &body.applications {
         let app: Uuid = item
             .application_id
-            .parse()
+            .parse_uuid7()
             .map_err(|_| AppError::bad_request("applicationId 格式错误"))?;
         app_ids.push(app);
         app_authed.push(item.authorized);
@@ -973,7 +1082,7 @@ async fn put_authorizations(
     for item in &body.menus {
         let menu: Uuid = item
             .menu_id
-            .parse()
+            .parse_uuid7()
             .map_err(|_| AppError::bad_request("menuId 格式错误"))?;
         menu_ids.push(menu);
         menu_authed.push(item.authorized);
@@ -1152,10 +1261,13 @@ async fn initialize_administrator(
         .check(&state, &user)
         .await?;
     let id: Uuid = id
-        .parse()
+        .parse_uuid7()
         .map_err(|_| AppError::bad_request("ID 格式错误"))?;
     state.require_platform(&user).await?;
     let existing_org_scope = state.scoped_org_ids(&user).await?;
+    if state.config.identity_remote_enabled {
+        return initialize_remote_administrator(&state, &headers, &user, id).await;
+    }
     let mut tx = state.pool.begin().await?;
     let before = tenant_audit_snapshot(&mut tx, id).await?;
     let (contact_name, contact_phone, contact_email): (String, String, String) = sqlx::query_as(
@@ -1183,7 +1295,7 @@ async fn initialize_administrator(
     .normalized();
     let administrator = onboarding::initialize_existing_administrator(
         &mut tx,
-        (&state.config, &state.passwords),
+        (&state.config, state.accounts.as_ref()),
         tenant_id,
         org_id,
         &contact,
@@ -1216,4 +1328,232 @@ async fn initialize_administrator(
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(Json(json!({"administrator": administrator})))
+}
+
+async fn tenant_initialization_contact(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: Uuid,
+) -> Result<(Uuid, Contact), AppError> {
+    let (contact_name, contact_phone, contact_email): (String, String, String) = sqlx::query_as(
+        "SELECT contact_name,contact_phone,contact_email FROM tenants WHERE id=$1 FOR NO KEY UPDATE",
+    ).bind(tenant_id).fetch_optional(&mut **tx).await?.ok_or_else(|| AppError::not_found("租户不存在"))?;
+    let roots: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM organizations WHERE tenant_id=$1 AND parent_id IS NULL ORDER BY id",
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    if roots.len() != 1 {
+        return Err(AppError::bad_request(
+            "租户需要唯一根组织，请先维护组织结构",
+        ));
+    }
+    Ok((
+        roots[0],
+        Contact {
+            contact_name,
+            contact_phone,
+            contact_email,
+        }
+        .normalized(),
+    ))
+}
+
+fn tenant_initialization_requirements(
+    tenant_id: Uuid,
+    organization_id: Uuid,
+) -> onboarding::RemoteRequirements {
+    onboarding::RemoteRequirements {
+        permission: "system:tenant",
+        initializing: true,
+        scope: onboarding::RemoteScope::ExistingOrganization {
+            tenant_id,
+            organization_id,
+        },
+    }
+}
+
+async fn initialize_remote_administrator(
+    state: &AppState,
+    headers: &HeaderMap,
+    user: &CurrentUser,
+    id: Uuid,
+) -> Result<Json<Value>, AppError> {
+    let mut tx = state.pool.begin().await?;
+    let (org_id, contact) = tenant_initialization_contact(&mut tx, id).await?;
+    onboarding::require_remote_authority_in_tx(
+        &mut tx,
+        user,
+        &tenant_initialization_requirements(id, org_id),
+    )
+    .await?;
+    if let Some(administrator) =
+        onboarding::existing_administrator(&mut tx, org_id, "tenant_admin").await?
+    {
+        tx.commit().await?;
+        return Ok(Json(json!({"administrator":administrator})));
+    }
+    tx.commit().await?;
+    if contact.is_empty() {
+        return Err(AppError::bad_request(
+            "请先保存联系人姓名，并至少填写电话或 Email",
+        ));
+    }
+    let remote = onboarding::prepare_remote_contact(state, headers, user, &contact,
+        &tenant_initialization_requirements(id, org_id), json!({
+            "kind":"ONBOARDING_TENANT_INITIALIZE","entityId":id,"organizationId":org_id,
+            "contact":{"contactName":contact.contact_name,"contactPhone":contact.contact_phone,"contactEmail":contact.contact_email},
+        })).await?;
+    persist_tenant_initialization(state, headers, user, id, org_id, contact, remote).await
+}
+
+async fn persist_tenant_initialization(
+    state: &AppState,
+    headers: &HeaderMap,
+    user: &CurrentUser,
+    id: Uuid,
+    org_id: Uuid,
+    contact: Contact,
+    mut remote: onboarding::RemoteContact,
+) -> Result<Json<Value>, AppError> {
+    let operation = remote.operation_id;
+    let result = async {
+        let mut tx = state.pool.begin().await?;
+        onboarding::lock_operation_in_tx(&mut tx, &remote).await?;
+        let scope = onboarding::require_remote_authority_in_tx(
+            &mut tx,
+            user,
+            &tenant_initialization_requirements(id, org_id),
+        )
+        .await?;
+        let before = tenant_audit_snapshot(&mut tx, id).await?;
+        let (current_org, current_contact) = tenant_initialization_contact(&mut tx, id).await?;
+        if current_org != org_id || !onboarding::same_contact(&contact, &current_contact) {
+            return Err(AppError::conflict(
+                "租户根组织或联系人已变更，请维护原账号操作",
+            ));
+        }
+        if onboarding::existing_administrator(&mut tx, org_id, "tenant_admin")
+            .await?
+            .is_some()
+        {
+            return Err(AppError::conflict("该组织已有管理员，请在用户管理中维护"));
+        }
+        onboarding::confirm_remote_contact_in_tx(&mut tx, &contact, scope.as_deref(), &remote)
+            .await?;
+        onboarding::ensure_administrator_role(&mut tx, id, org_id, &contact, "tenant_admin")
+            .await?;
+        let account = remote
+            .account
+            .take()
+            .ok_or_else(|| AppError::bad_request("联系人信息不完整"))?;
+        let administrator = onboarding::attach_contact_administrator(
+            &mut tx,
+            &state.config,
+            id,
+            org_id,
+            "tenant_admin",
+            account,
+        )
+        .await?;
+        let mut after = tenant_audit_snapshot(&mut tx, id).await?;
+        after["administratorUserId"] = json!(administrator.user_id);
+        after["administratorCreated"] = json!(administrator.created);
+        let detail = audit::change_detail("tenant", id, before, after);
+        audit::write_in_tx(
+            &mut tx,
+            audit::AuditInfo {
+                user_id: Some(user.user_id),
+                username: &user.username,
+                tenant_id: Some(id),
+                organization_id: Some(org_id),
+                action: "INITIALIZE_ADMINISTRATOR",
+                detail: &detail,
+                ip: &audit::client_ip(headers),
+                user_agent: &audit::ua_of(headers),
+            },
+        )
+        .await?;
+        onboarding::complete_operation_in_tx(&mut tx, operation).await?;
+        tx.commit().await?;
+        state.invalidate_perm_cache();
+        Ok(Json(json!({"administrator":administrator})))
+    }
+    .await;
+    result.map_err(|error| onboarding::followup_error(error, operation))
+}
+
+async fn get_account_operation(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(operation): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
+    state.require_platform(&user).await?;
+    let operation = operation
+        .parse_uuid7()
+        .map_err(|_| AppError::bad_request("操作编号格式错误"))?;
+    let pending =
+        onboarding::load_operation(&state, &user, operation, "ONBOARDING_TENANT_").await?;
+    Ok(Json(
+        json!({"operationId":operation,"state":pending.state,"entityId":pending.followup["entityId"],
+        "organizationId":pending.followup["organizationId"],"receiptConfirmed":pending.receipt.is_some()}),
+    ))
+}
+
+async fn recover_account_operation(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    user: CurrentUser,
+    Path(operation): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    RequirePermission("system:tenant")
+        .check(&state, &user)
+        .await?;
+    state.require_platform(&user).await?;
+    let operation = operation
+        .parse_uuid7()
+        .map_err(|_| AppError::bad_request("操作编号格式错误"))?;
+    let pending =
+        onboarding::load_operation(&state, &user, operation, "ONBOARDING_TENANT_").await?;
+    if pending.state == "COMPLETED" {
+        return Ok(Json(json!({"operationId":operation,"state":"COMPLETED"})));
+    }
+    let id = onboarding::followup_uuid(&pending.followup, "entityId")?;
+    let root_id = onboarding::followup_uuid(&pending.followup, "organizationId")?;
+    match pending.followup["kind"].as_str() {
+        Some("ONBOARDING_TENANT_CREATE") => {
+            let body: TenantBody = serde_json::from_value(pending.followup["body"].clone())
+                .map_err(|_| AppError::Unavailable)?;
+            let remote = onboarding::recover_contact(&state, &pending).await?;
+            persist_tenant_creation(
+                &state,
+                &headers,
+                &user,
+                TenantCreation {
+                    body,
+                    tenant_id: id,
+                    root_id,
+                    remote: Some(remote),
+                },
+            )
+            .await
+        }
+        Some("ONBOARDING_TENANT_INITIALIZE") => {
+            RequirePermission("system:user")
+                .check(&state, &user)
+                .await?;
+            RequirePermission("system:role")
+                .check(&state, &user)
+                .await?;
+            let contact: Contact = serde_json::from_value(pending.followup["contact"].clone())
+                .map_err(|_| AppError::Unavailable)?;
+            let remote = onboarding::recover_contact(&state, &pending).await?;
+            persist_tenant_initialization(&state, &headers, &user, id, root_id, contact, remote)
+                .await
+        }
+        _ => Err(AppError::not_found("账号操作不存在")),
+    }
 }

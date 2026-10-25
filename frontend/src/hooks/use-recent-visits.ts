@@ -1,4 +1,6 @@
 import * as React from "react"
+import { reconcileSessionSync, useAuthStore } from "@/stores/auth"
+import { contextIdentityFromResponse, sameContextIdentity } from "@/lib/context-identity"
 
 /** 最近访问记录(存 localStorage,个人工作台展示) */
 export interface RecentVisit {
@@ -12,14 +14,22 @@ export interface RecentVisit {
   count: number
 }
 
-const STORAGE_KEY = "platform-recent-visits"
+const STORAGE_PREFIX = "platform-recent-visits-v2:"
 const MAX_VISITS = 8
 /** 同窗口内自定义广播事件(storage 事件仅跨标签页触发) */
 const CHANGE_EVENT = "platform-recent-visits-change"
 
-function readVisits(): RecentVisit[] {
+function storageKey(): string | null {
+  reconcileSessionSync()
+  const state = useAuthStore.getState()
+  return state.token && !state.contextSwitching && state.contextKey &&
+    sameContextIdentity(state.identity, contextIdentityFromResponse(state.profile)) ? `${STORAGE_PREFIX}${state.contextKey}` : null
+}
+
+function readVisits(key = storageKey()): RecentVisit[] {
+  if (!key) return []
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(key)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -50,9 +60,10 @@ function normalizeCount(count: unknown): number {
     : 1
 }
 
-function writeVisits(visits: RecentVisit[]) {
+function writeVisits(visits: RecentVisit[], key = storageKey()) {
+  if (!key || key !== storageKey()) return
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(visits.slice(0, MAX_VISITS)))
+    localStorage.setItem(key, JSON.stringify(visits.slice(0, MAX_VISITS)))
   } catch {
     /* ignore */
   }
@@ -63,7 +74,9 @@ function writeVisits(visits: RecentVisit[]) {
  * 记录一次页面访问:按 path 去重(count 在旧值上 +1),最新在前,最多 8 条。
  */
 export function pushRecentVisit(entry: { path: string; title: string; icon?: string }) {
-  const prev = readVisits()
+  const key = storageKey()
+  if (!key) return
+  const prev = readVisits(key)
   const existing = prev.find((v) => v.path === entry.path)
   const rest = prev.filter((v) => v.path !== entry.path)
   const visit: RecentVisit = {
@@ -73,7 +86,7 @@ export function pushRecentVisit(entry: { path: string; title: string; icon?: str
     at: Date.now(),
     count: (existing?.count ?? 0) + 1,
   }
-  writeVisits([visit, ...rest].slice(0, MAX_VISITS))
+  writeVisits([visit, ...rest].slice(0, MAX_VISITS), key)
 }
 
 export function clearRecentVisits() {
@@ -82,15 +95,19 @@ export function clearRecentVisits() {
 
 /** 订阅最近访问列表(本窗口自定义事件 + 跨标签页 storage 事件) */
 export function useRecentVisits(): RecentVisit[] {
-  const [visits, setVisits] = React.useState<RecentVisit[]>(readVisits)
+  const contextKey = useAuthStore(state => state.contextKey)
+  const [snapshot, setSnapshot] = React.useState(() => ({ key: storageKey(), visits: readVisits() }))
   React.useEffect(() => {
-    const sync = () => setVisits(readVisits())
+    const sync = () => { const key = storageKey(); setSnapshot({ key, visits: readVisits(key) }) }
+    sync()
+    const unsubscribe = useAuthStore.subscribe(sync)
     window.addEventListener(CHANGE_EVENT, sync)
     window.addEventListener("storage", sync)
     return () => {
       window.removeEventListener(CHANGE_EVENT, sync)
       window.removeEventListener("storage", sync)
+      unsubscribe()
     }
   }, [])
-  return visits
+  return contextKey && snapshot.key === `${STORAGE_PREFIX}${contextKey}` ? snapshot.visits : []
 }

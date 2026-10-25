@@ -87,6 +87,7 @@ fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
 }
 
 struct Harness {
+    pool: PgPool,
     app: Router,
     user: Uuid,
     tenant: Uuid,
@@ -98,39 +99,46 @@ struct Harness {
 
 impl Harness {
     async fn create(pool: &PgPool) -> Result<Self> {
+        Self::create_with_user(pool, crate::util::uuid7::new_uuid()).await
+    }
+
+    async fn create_with_user(pool: &PgPool, user_id: Uuid) -> Result<Self> {
         let tenant = sqlx::query_scalar(
-            "INSERT INTO tenants(name,code,is_platform) VALUES('刷新测试平台','admin-tenant',true) RETURNING id"
-        ).fetch_one(pool).await?;
+            "INSERT INTO tenants(name,code,is_platform,id) VALUES('刷新测试平台','admin-tenant',true,$1) RETURNING id"
+        ).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let root = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,name) VALUES($1,'根组织') RETURNING id",
+            "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'根组织',$2) RETURNING id",
         )
         .bind(tenant)
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
         let child = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,parent_id,name) VALUES($1,$2,'下级组织') RETURNING id"
-        ).bind(tenant).bind(root).fetch_one(pool).await?;
+            "INSERT INTO organizations(tenant_id,parent_id,name,id) VALUES($1,$2,'下级组织',$3) RETURNING id"
+        ).bind(tenant).bind(root).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let other = sqlx::query_scalar(
-            "INSERT INTO organizations(tenant_id,parent_id,name) VALUES($1,$2,'其他组织') RETURNING id"
-        ).bind(tenant).bind(root).fetch_one(pool).await?;
+            "INSERT INTO organizations(tenant_id,parent_id,name,id) VALUES($1,$2,'其他组织',$3) RETURNING id"
+        ).bind(tenant).bind(root).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         let user = sqlx::query_scalar(
-            "INSERT INTO users(username,password_hash,is_super_admin) VALUES('refresh-test-admin','unused',true) RETURNING id"
-        ).fetch_one(pool).await?;
+            "INSERT INTO users(username,password_hash,is_super_admin,id) VALUES('refresh-test-admin','unused',true,$1) RETURNING id"
+        ).bind(user_id).fetch_one(pool).await?;
         for organization in [root, child, other] {
-            sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
+            sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
                 .bind(user)
                 .bind(organization)
+                .bind(crate::util::uuid7::new_uuid())
                 .execute(pool)
                 .await?;
         }
         let application = sqlx::query_scalar(
-            "INSERT INTO applications(name,code) VALUES('系统管理','system') RETURNING id",
+            "INSERT INTO applications(name,code,id) VALUES('系统管理','system',$1) RETURNING id",
         )
+        .bind(crate::util::uuid7::new_uuid())
         .fetch_one(pool)
         .await?;
-        sqlx::query("INSERT INTO menus(application_id,title,permission,type) VALUES($1,'用户管理','system:user','MENU')")
-            .bind(application).execute(pool).await?;
-        sqlx::query("INSERT INTO menus(application_id,title,permission,type,path) VALUES($1,'会话管理','system:oauth','MENU','/system/oauth/tokens')").bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO menus(application_id,title,permission,type,id) VALUES($1,'用户管理','system:user','MENU',$2)")
+            .bind(application).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
+        sqlx::query("INSERT INTO menus(application_id,title,permission,type,path,id) VALUES($1,'会话管理','system:oauth','MENU','/system/oauth/tokens',$2)").bind(application).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
             .bind(tenant)
             .bind(application)
@@ -159,6 +167,7 @@ impl Harness {
             .nest("/oauth", routes::oauth2::oauth_router())
             .with_state(AppState::new(pool.clone(), Arc::new(config)));
         Ok(Self {
+            pool: pool.clone(),
             app,
             user,
             tenant,
@@ -170,23 +179,8 @@ impl Harness {
     }
 
     async fn context(&self, org: Uuid) -> Result<Value> {
-        let ticket = jwt::sign(
-            &jwt::Claims {
-                sub: self.user.to_string(),
-                typ: "credential".into(),
-                tenant: None,
-                org: None,
-                cid: None,
-                scope: None,
-                sid: None,
-                ver: Some(0),
-                aud: None,
-                jti: None,
-                iat: Utc::now().timestamp(),
-                exp: Utc::now().timestamp() + 300,
-            },
-            SECRET,
-        )?;
+        let ticket =
+            crate::routes::auth::fixture_credential_ticket(&self.pool, self.user, SECRET).await?;
         let (status, value) = call(
             &self.app,
             Method::POST,
@@ -367,6 +361,44 @@ async fn expired_access_rotates_context_bound_refresh_once() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "creates and drops a pre-UUID-cutover PostgreSQL database using TEST_DATABASE_URL"]
+async fn legacy_v4_subject_cannot_refresh_or_use_platform_sessions() -> Result<()> {
+    let db = crate::release_tests::TestDatabase::create_through(11).await?;
+    let assertions = async {
+        // Intentional v4 user in a real pre-0012 schema, with otherwise valid
+        // v7 tenant, organization, session and refresh identifiers.
+        let h = Harness::create_with_user(&db.pool, Uuid::new_v4()).await?;
+        let session = crate::util::uuid7::new_uuid();
+        sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,$4,now()+interval '1 hour')")
+            .bind(session).bind(h.user).bind(h.tenant).bind(h.root).execute(&db.pool).await?;
+        // This historical schema intentionally has no identity-binding function.
+        // Persist the legacy fixture directly; production issuance must reject it.
+        let refresh_token = format!("psr_{}", "b".repeat(64));
+        sqlx::query("INSERT INTO platform_session_refresh_tokens(id,session_id,token_hash,session_version,expires_at) VALUES($1,$2,$3,0,now()+interval '1 hour')")
+            .bind(crate::util::uuid7::new_uuid()).bind(session).bind(hash::sha256_hex(&refresh_token))
+            .execute(&db.pool).await?;
+        let now = Utc::now().timestamp();
+        let access = jwt::sign(&jwt::Claims {
+            sub: h.user.to_string(), typ: "session".into(),
+            tenant: Some(h.tenant.to_string()), org: Some(h.root.to_string()),
+            cid: None, scope: None, sid: Some(session.to_string()), ver: Some(0),
+            aud: None, jti: None, iat: now, exp: now + 3600,
+        }, SECRET)?;
+        ensure!(h.profile_status(&access).await? == StatusCode::UNAUTHORIZED,
+            "legacy v4 user retained a platform session");
+        let (status, body) = refresh(&h.app, &refresh_token, "").await?;
+        ensure!(status == StatusCode::BAD_REQUEST && body["error"] == "invalid_grant",
+            "legacy v4 user refreshed a platform session: {status} {body}");
+        let counts: (i64, i64) = sqlx::query_as(
+            "SELECT (SELECT count(*) FROM platform_sessions),(SELECT count(*) FROM platform_session_refresh_tokens)",
+        ).fetch_one(&db.pool).await?;
+        ensure!(counts == (1, 1), "legacy v4 refresh produced new platform credentials");
+        Ok(())
+    }.await;
+    db.finish(assertions).await
+}
+
+#[tokio::test]
 #[ignore = "requires isolated PostgreSQL database creation privileges"]
 async fn membership_edits_preserve_retained_sessions_and_data_grants() -> Result<()> {
     let db = Database::create().await?;
@@ -377,10 +409,10 @@ async fn membership_edits_preserve_retained_sessions_and_data_grants() -> Result
         let other = h.context(h.other).await?;
         let membership: Uuid = sqlx::query_scalar("SELECT id FROM memberships WHERE user_id=$1 AND organization_id=$2")
             .bind(h.user).bind(h.root).fetch_one(&db.pool).await?;
-        sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type) VALUES($1,$2,'records','read','ORG')")
-            .bind(membership).bind(h.application).execute(&db.pool).await?;
-        let department: Uuid = sqlx::query_scalar("INSERT INTO departments(organization_id,name) VALUES($1,'新部门') RETURNING id")
-            .bind(h.root).fetch_one(&db.pool).await?;
+        sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) VALUES($1,$2,'records','read','ORG',$3)")
+            .bind(membership).bind(h.application).bind(crate::util::uuid7::new_uuid()).execute(&db.pool).await?;
+        let department: Uuid = sqlx::query_scalar("INSERT INTO departments(organization_id,name,id) VALUES($1,'新部门',$2) RETURNING id")
+            .bind(h.root).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
         h.replace_memberships(text(&root,"accessToken")?, &[h.root,h.child], Some(department)).await?;
         for retained in [&root, &child] {
             ensure!(h.profile_status(text(retained,"accessToken")?).await? == StatusCode::OK,
@@ -456,20 +488,20 @@ async fn platform_device_listing_includes_current_device_and_preserves_personal_
     let db = Database::create().await?;
     let assertions = async {
         let h = Harness::create(&db.pool).await?;
-        sqlx::query("INSERT INTO menus(application_id,title,permission,type) VALUES($1,'设备与会话','system:oauth','MENU')")
-            .bind(h.application).execute(&db.pool).await?;
-        let ordinary_tenant: Uuid = sqlx::query_scalar("INSERT INTO tenants(name,code) VALUES('设备范围租户','device-tenant') RETURNING id")
-            .fetch_one(&db.pool).await?;
-        let ordinary_org: Uuid = sqlx::query_scalar("INSERT INTO organizations(tenant_id,name) VALUES($1,'设备范围组织') RETURNING id")
-            .bind(ordinary_tenant).fetch_one(&db.pool).await?;
-        let other_user: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash) VALUES('another-device-user','unused') RETURNING id")
-            .fetch_one(&db.pool).await?;
+        sqlx::query("INSERT INTO menus(application_id,title,permission,type,id) VALUES($1,'设备与会话','system:oauth','MENU',$2)")
+            .bind(h.application).bind(crate::util::uuid7::new_uuid()).execute(&db.pool).await?;
+        let ordinary_tenant: Uuid = sqlx::query_scalar("INSERT INTO tenants(name,code,id) VALUES('设备范围租户','device-tenant',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
+        let ordinary_org: Uuid = sqlx::query_scalar("INSERT INTO organizations(tenant_id,name,id) VALUES($1,'设备范围组织',$2) RETURNING id")
+            .bind(ordinary_tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
+        let other_user: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,id) VALUES('another-device-user','unused',$1) RETURNING id")
+            .bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
         for user in [h.user, other_user] {
-            sqlx::query("INSERT INTO memberships(user_id,organization_id) VALUES($1,$2)")
-                .bind(user).bind(ordinary_org).execute(&db.pool).await?;
+            sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
+                .bind(user).bind(ordinary_org).bind(crate::util::uuid7::new_uuid()).execute(&db.pool).await?;
         }
-        let other_device: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,ip,user_agent) VALUES($1,$2,$3,now()+interval '1 hour','127.0.0.8','Other test device') RETURNING id")
-            .bind(other_user).bind(ordinary_tenant).bind(ordinary_org).fetch_one(&db.pool).await?;
+        let other_device: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,ip,user_agent,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) SELECT $1,$2,$3,now()+interval '1 hour','127.0.0.8','Other test device',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform',c.client_id,c.access_policy_version FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id")
+            .bind(other_user).bind(ordinary_tenant).bind(ordinary_org).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
         let platform = h.context(h.root).await?;
         let ordinary = h.context(ordinary_org).await?;
         let current_claims = jwt::verify(text(&platform,"accessToken")?, SECRET)?;
@@ -509,5 +541,91 @@ async fn platform_device_listing_includes_current_device_and_preserves_personal_
             "refresh created duplicate or removed current device records");
         Ok(())
     }.await;
+    db.finish(assertions).await
+}
+
+#[tokio::test]
+#[ignore = "identity generation and source policy regression on owned PostgreSQL"]
+async fn context_proofs_bind_membership_generations_and_source_policy() -> Result<()> {
+    let db = Database::create().await?;
+    let assertions = async {
+        let h = Harness::create(&db.pool).await?;
+        let membership: Uuid = sqlx::query_scalar(
+            "SELECT id FROM memberships WHERE user_id=$1 AND organization_id=$2 AND member_type='EMPLOYEE'",
+        ).bind(h.user).bind(h.root).fetch_one(&db.pool).await?;
+        let now = Utc::now().timestamp();
+        let legacy = jwt::sign(&jwt::Claims {
+            sub:h.user.to_string(),typ:"credential".into(),tenant:None,org:None,cid:None,
+            scope:None,sid:None,ver:Some(0),aud:None,jti:None,iat:now,exp:now+300,
+        },SECRET)?;
+        let (status, _) = call(&h.app,Method::POST,"/api/auth/context",Some(&legacy),
+            Some(json!({"organizationId":h.root}))).await?;
+        ensure!(status == StatusCode::UNAUTHORIZED,"old account-only proof was upgraded");
+
+        let ticket = crate::routes::auth::fixture_credential_ticket(&db.pool,h.user,SECRET).await?;
+        let (status, context) = call(&h.app,Method::POST,"/api/auth/context",Some(&ticket),
+            Some(json!({"membershipId":membership}))).await?;
+        ensure!(status == StatusCode::OK && context["membershipId"] == json!(membership)
+            && context["memberType"] == "EMPLOYEE" && context["identityVersion"] == "1",
+            "explicit membership did not bind a decimal-string generation: {status} {context}");
+        let (status, _) = call(&h.app,Method::POST,"/api/auth/context",Some(&ticket),
+            Some(json!({"membershipId":membership,"organizationId":h.child}))).await?;
+        ensure!(status == StatusCode::FORBIDDEN,"membership/org mismatch selected another identity");
+
+        let mut forged = jwt::verify(text(&context,"accessToken")?,SECRET)?;
+        forged.org = Some(h.child.to_string());
+        ensure!(h.profile_status(&jwt::sign(&forged,SECRET)?).await? == StatusCode::UNAUTHORIZED,
+            "JWT organization overrode the stored member context");
+
+        sqlx::query("UPDATE memberships SET identity_version=identity_version+1 WHERE id=$1")
+            .bind(membership).execute(&db.pool).await?;
+        ensure!(h.profile_status(text(&context,"accessToken")?).await? == StatusCode::UNAUTHORIZED,
+            "old session survived a membership generation change");
+        ensure!(refresh(&h.app,text(&context,"refreshToken")?,"").await?.0 == StatusCode::BAD_REQUEST,
+            "old refresh survived a membership generation change");
+        let (status, _) = call(&h.app,Method::POST,"/api/auth/context",Some(&ticket),
+            Some(json!({"membershipId":membership}))).await?;
+        ensure!(status == StatusCode::UNAUTHORIZED,"old proof captured the latest member generation");
+
+        let fresh = h.context(h.root).await?;
+        let policy_ticket = crate::routes::auth::fixture_credential_ticket(&db.pool,h.user,SECRET).await?;
+        sqlx::query("UPDATE oauth_clients SET access_policy_version=access_policy_version+1 WHERE client_id='platform-console-legacy'")
+            .execute(&db.pool).await?;
+        ensure!(h.profile_status(text(&fresh,"accessToken")?).await? == StatusCode::UNAUTHORIZED,
+            "source policy generation did not revoke its existing context");
+        let (status, _) = call(&h.app,Method::POST,"/api/auth/context",Some(&policy_ticket),
+            Some(json!({"membershipId":membership}))).await?;
+        ensure!(status == StatusCode::UNAUTHORIZED,"old source policy proof was upgraded");
+        let renewed = h.context(h.root).await?;
+        ensure!(h.profile_status(text(&renewed,"accessToken")?).await? == StatusCode::OK,
+            "fresh proof could not establish a context after policy change");
+        Ok(())
+    }.await;
+    db.finish(assertions).await
+}
+
+#[tokio::test]
+#[ignore = "authority storage failure regression on owned PostgreSQL"]
+async fn unavailable_session_authority_returns_503_before_business_handler() -> Result<()> {
+    let db = Database::create().await?;
+    let assertions = async {
+        let h = Harness::create(&db.pool).await?;
+        let context = h.context(h.root).await?;
+        db.pool.close().await;
+        let (status, body) = call(
+            &h.app,
+            Method::GET,
+            "/api/auth/profile",
+            Some(text(&context, "accessToken")?),
+            None,
+        )
+        .await?;
+        ensure!(
+            status == StatusCode::SERVICE_UNAVAILABLE && body["code"] == "SERVICE_UNAVAILABLE",
+            "unavailable authority returned {status} {body}"
+        );
+        Ok(())
+    }
+    .await;
     db.finish(assertions).await
 }

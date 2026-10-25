@@ -104,15 +104,15 @@ async function mount(page, { appCode = 'fixture', entry = prefix + 'entry.html' 
     const qa = window.__qa
     qa.scope = new AbortController()
     qa.lease = new AbortController()
-    qa.props = { sdkVersion: '2.0.0', contractVersion: '2.0', appCode, basePath: '/micro/' + appCode,
+    qa.props = { sdkVersion: '3.0.0', contractVersion: '2.0', appCode, basePath: '/micro/' + appCode,
       routePath: '/micro/' + appCode, contextVersion: 'fixture-1', contextEpoch: 1,
       expiresAt: new Date(Date.now() + 120_000).toISOString(), tokenExpiresAt: new Date(Date.now() + 120_000).toISOString(),
       signal: qa.lease.signal, token: 'isolated-application-token',
-      user: { id: 'fixture-user', username: 'fixture', displayName: 'Fixture' },
-      tenant: { id: 'fixture-tenant', name: 'Fixture tenant', code: 'fixture' },
-      organization: { id: 'fixture-org', name: 'Fixture organization', path: '/fixture-org/' }, organizationScopeIds: ['fixture-org'],
+      user: { id: '019c0000-0000-7000-8000-000000000002', username: 'fixture', displayName: 'Fixture' },
+      tenant: { id: '019c0000-0000-7000-8000-000000000003', name: 'Fixture tenant', code: 'fixture' },
+      organization: { id: '019c0000-0000-7000-8000-000000000004', name: 'Fixture organization', path: '/fixture-org/' }, organizationScopeIds: ['019c0000-0000-7000-8000-000000000004'],
       roles: [], permissions: [], dataGrants: [],
-      menus: [{ id: 'menu', parentId: null, type: 'MENU', title: 'Fixture', path: '/micro/' + appCode, icon: null, sortOrder: 1, visible: true }],
+      menus: [{ id: '019c0000-0000-7000-8000-000000000007', parentId: null, type: 'MENU', title: 'Fixture', path: '/micro/' + appCode, icon: null, sortOrder: 1, visible: true }],
       theme: 'light', onNavigate: path => { qa.navigation = path }, onNotify: message => { qa.notification = message } }
     qa.lifecycle = qa.createQiankunLifecycle({ appCode, entryUrl: entry, signal: qa.scope.signal,
       check: () => { if (qa.scope.signal.aborted || qa.lease.signal.aborted) throw new DOMException('Revoked', 'AbortError') } })

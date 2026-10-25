@@ -12,7 +12,6 @@ use axum::http::HeaderMap;
 use deployment_contract::zip;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
-use uuid::Uuid;
 
 fn entry(state: &AppState, row: &ReleaseRow) -> Result<String, AppError> {
     Ok(crate::managed_deployments::canonical_entry(
@@ -86,7 +85,7 @@ pub(crate) async fn verify_nodes(state: &AppState, row: &ReleaseRow) -> Result<(
     if j.state != "READY" {
         return Err(AppError::conflict("必需节点分发未完成，请读取任务并重试"));
     }
-    let nonce = Uuid::new_v4();
+    let nonce = crate::util::uuid7::new_uuid();
     let mut tx = state.pool.begin().await?;
     lock(&mut tx, j.application_id).await?;
     let changed = sqlx::query("UPDATE zip_distribution_jobs SET verification_nonce=$2,verified_at=NULL WHERE id=$1 AND state='READY' AND attempt=$3").bind(j.id).bind(nonce).bind(j.attempt).execute(&mut *tx).await?.rows_affected();

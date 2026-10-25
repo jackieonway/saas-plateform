@@ -11,7 +11,7 @@ fn remote_preview_uses_only_get_and_projects_safe_fields() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
     listener.set_nonblocking(true).unwrap();
-    let id = "11111111-1111-4111-8111-111111111111";
+    let id = "11111111-1111-7111-8111-111111111111";
     let handle = std::thread::spawn(move || {
         for index in 0..2 {
             let deadline = Instant::now() + Duration::from_secs(5);
@@ -45,9 +45,9 @@ fn remote_preview_uses_only_get_and_projects_safe_fields() {
                 format!("GET {expected} HTTP/1.1")
             );
             let body = if index == 0 {
-                serde_json::json!([{"id":id,"code":"work-orders","basePath":"/micro/work-orders","entryType":"HTML","runtimeMode":"TRUSTED","status":"ENABLED"}])
+                serde_json::json!([{"id":id,"code":"work-orders","basePath":"/micro/work-orders","entryType":"HTML","runtimeMode":"TRUSTED","status":"ENABLED","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1}])
             } else {
-                serde_json::json!({"applicationId":id,"mode":"DRY_RUN","applyAvailable":false,"deletionPermitted":false,"policy":{"minimumAgeDays":60,"keepLatest":8},"total":1,"protected":1,"manualReview":0,"records":[{"releaseId":"22222222-2222-4222-8222-222222222222","version":"v1","environment":"production","artifactKind":"ZIP","disposition":"PROTECTED","reasons":["ACTIVE"],"privatePath":"SECRET_SERVER_FIELD"}],"secret":"SECRET_SERVER_FIELD"})
+                serde_json::json!({"applicationId":id,"mode":"DRY_RUN","applyAvailable":false,"deletionPermitted":false,"policy":{"minimumAgeDays":60,"keepLatest":8},"total":1,"protected":1,"manualReview":0,"records":[{"releaseId":"22222222-2222-7222-8222-222222222222","version":"v1","environment":"production","artifactKind":"ZIP","disposition":"PROTECTED","reasons":["ACTIVE"],"privatePath":"SECRET_SERVER_FIELD"}],"secret":"SECRET_SERVER_FIELD"})
             }.to_string();
             write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",body.len()).unwrap();
         }

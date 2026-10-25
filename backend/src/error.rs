@@ -52,11 +52,31 @@ impl AppError {
 
 impl From<sqlx::Error> for AppError {
     fn from(e: sqlx::Error) -> Self {
-        if matches!(e, sqlx::Error::PoolTimedOut) {
+        if matches!(
+            e,
+            sqlx::Error::PoolTimedOut
+                | sqlx::Error::PoolClosed
+                | sqlx::Error::Io(_)
+                | sqlx::Error::Tls(_)
+                | sqlx::Error::WorkerCrashed
+        ) {
             return AppError::Unavailable;
         }
         if let sqlx::Error::Database(ref db) = e {
-            if matches!(db.code().as_deref(), Some("57014" | "55P03")) {
+            if db.code().is_some_and(|code| {
+                code.starts_with("08")
+                    || matches!(
+                        code.as_ref(),
+                        "57014"
+                            | "55P03"
+                            | "57P01"
+                            | "57P02"
+                            | "57P03"
+                            | "53300"
+                            | "53400"
+                            | "58030"
+                    )
+            }) {
                 return AppError::Unavailable;
             }
             if db.code().as_deref() == Some("23505") {
@@ -107,3 +127,31 @@ impl IntoResponse for AppError {
 
 #[allow(dead_code)]
 pub type ApiResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unavailable_authority_is_not_reported_as_an_authentication_failure() {
+        for error in [
+            sqlx::Error::PoolClosed,
+            sqlx::Error::PoolTimedOut,
+            sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionReset)),
+            sqlx::Error::WorkerCrashed,
+        ] {
+            let error = AppError::from(error);
+            assert!(matches!(error, AppError::Unavailable));
+            assert_eq!(
+                error.into_response().status(),
+                StatusCode::SERVICE_UNAVAILABLE
+            );
+        }
+        assert_eq!(
+            AppError::unauthorized("revoked credential")
+                .into_response()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+}

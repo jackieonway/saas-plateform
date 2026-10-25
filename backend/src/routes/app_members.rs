@@ -1,5 +1,8 @@
 //! Minimal direct-member view for business assignment, protected by the current
 //! application's operation permission and independent resource data grant.
+//! Legacy user-ID responses always resolve one enabled EMPLOYEE relationship;
+//! another relationship type can neither qualify nor duplicate that target.
+use crate::util::uuid7::ParseUuid7;
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::routing::get;
@@ -22,6 +25,7 @@ pub fn routes() -> Router<AppState> {
 struct MemberQuery {
     resource: String,
     action: String,
+    #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
     organization_id: Uuid,
     page: Option<i64>,
     size: Option<i64>,
@@ -29,6 +33,7 @@ struct MemberQuery {
 }
 
 fn validate(query: &MemberQuery, single: bool) -> Result<(i64, i64, String), AppError> {
+    crate::util::uuid7::validate_uuid(query.organization_id)?;
     if single && (query.page.is_some() || query.size.is_some() || query.q.is_some()) {
         return Err(AppError::bad_request("单成员校验不接受分页或搜索参数"));
     }
@@ -57,7 +62,7 @@ fn validate(query: &MemberQuery, single: bool) -> Result<(i64, i64, String), App
 fn uuid_of(ctx: &Value, parent: &str) -> Result<Uuid, AppError> {
     ctx[parent]["id"]
         .as_str()
-        .and_then(|value| value.parse().ok())
+        .and_then(|value| value.parse_uuid7().ok())
         .ok_or_else(|| AppError::unauthorized("应用上下文无效"))
 }
 
@@ -66,7 +71,9 @@ fn organization_ids(value: &Value) -> Option<Vec<Uuid>> {
     if ids.len() > 10_000 {
         return None;
     }
-    ids.iter().map(|id| id.as_str()?.parse().ok()).collect()
+    ids.iter()
+        .map(|id| id.as_str()?.parse_uuid7().ok())
+        .collect()
 }
 
 fn organization_allowed(
@@ -217,8 +224,8 @@ async fn list(
 ) -> Result<Json<Value>, AppError> {
     let (page, size, pattern) = validate(&query, false)?;
     let identity = authorized(&state, &app_code, &headers, &query).await?;
-    let predicate = "m.organization_id=$1 AND u.status='ENABLED' \
-        AND ($2='' OR COALESCE(NULLIF(trim(u.real_name),''),u.username) ILIKE $2 ESCAPE CHR(92))";
+    let predicate = "m.organization_id=$1 AND m.member_type='EMPLOYEE' AND m.status='ENABLED' \
+        AND u.status='ENABLED' AND ($2='' OR COALESCE(NULLIF(trim(u.real_name),''),u.username) ILIKE $2 ESCAPE CHR(92))";
     let total: i64 = sqlx::query_scalar(&format!(
         "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE {predicate}"
     ))
@@ -244,11 +251,13 @@ async fn one(
     headers: HeaderMap,
     Query(query): Query<MemberQuery>,
 ) -> Result<Json<Value>, AppError> {
+    let user_id = crate::util::uuid7::validate_uuid(user_id)?;
     validate(&query, true)?;
     let identity = authorized(&state, &app_code, &headers, &query).await?;
     let display: String = sqlx::query_scalar(
         "SELECT COALESCE(NULLIF(trim(u.real_name),''),u.username) FROM memberships m JOIN users u ON u.id=m.user_id \
-         WHERE m.organization_id=$1 AND m.user_id=$2 AND u.status='ENABLED'"
+         WHERE m.organization_id=$1 AND m.user_id=$2 AND m.member_type='EMPLOYEE' \
+         AND m.status='ENABLED' AND u.status='ENABLED'"
     ).bind(query.organization_id).bind(user_id).fetch_optional(&state.pool).await?
         .ok_or_else(|| AppError::not_found("有效直接成员不存在"))?;
     recheck(&state, &app_code, &headers, &query, &identity).await?;
@@ -266,7 +275,7 @@ mod tests {
         let mut query = MemberQuery {
             resource: "ticket".into(),
             action: "assign".into(),
-            organization_id: Uuid::from_u128(1),
+            organization_id: crate::util::uuid7::fixture_uuid(1),
             page: None,
             size: None,
             q: Some("alice\0bob".into()),
@@ -293,9 +302,9 @@ mod tests {
 
     #[test]
     fn assignment_scopes_intersect_a_separate_ceiling_and_self_stays_current() {
-        let org = Uuid::from_u128(1);
-        let child = Uuid::from_u128(2);
-        let peer = Uuid::from_u128(3);
+        let org = crate::util::uuid7::fixture_uuid(1);
+        let child = crate::util::uuid7::fixture_uuid(2);
+        let peer = crate::util::uuid7::fixture_uuid(3);
         for scope in ["SELF", "ORG_SUBTREE", "TENANT"] {
             let grant = json!({"scope":scope,"organizationIds":if scope=="TENANT" {vec![]} else {vec![org,child,peer]}});
             let ctx = json!({"organizationScopeIds":[org,child]});
