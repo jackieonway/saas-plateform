@@ -33,9 +33,23 @@ services:
       BIND_ADDR: 0.0.0.0:3001
       JWT_SECRET: ${JWT_SECRET:?Set a fresh random signing key}
       METRICS_TOKEN: ${PLATFORM_METRICS_TOKEN:?Set an independent metrics token}
-      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:?Set the initial administrator name}
-      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set the initial administrator password}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:?Set the exact public HTTPS origin}
+      IDENTITY_REMOTE_ENABLED: "true"
+      SSO_ENABLED: "false"
+      OIDC_ENABLED: "false"
+      OIDC_ISSUER: ${IDENTITY_SERVICE_URL:?Set the pinned identity HTTPS origin}
+      IDENTITY_SERVICE_URL: ${IDENTITY_SERVICE_URL}
+      IDENTITY_SERVICE_CLIENT_ID: ${IDENTITY_SERVICE_CLIENT_ID:?Set the ACCOUNT_COMMAND service registration}
+      IDENTITY_SERVICE_CLIENT_SECRET: ${IDENTITY_SERVICE_CLIENT_SECRET:?Set its separate opaque service secret}
+      IDENTITY_ADMIN_SERVICE_CLIENT_ID: ${IDENTITY_ADMIN_SERVICE_CLIENT_ID:?Set the OIDC_ADMIN service registration}
+      IDENTITY_ADMIN_SERVICE_CLIENT_SECRET: ${IDENTITY_ADMIN_SERVICE_CLIENT_SECRET:?Set its separate opaque service secret}
+      IDENTITY_SERVICE_CA_FILE: /run/identity/ca.pem
+      BFF_OIDC_ISSUER: ${IDENTITY_SERVICE_URL}
+      BFF_OIDC_CLIENT_ID: ${BFF_OIDC_CLIENT_ID:?Set the PLATFORM_CONSOLE RP registration}
+      BFF_OIDC_CLIENT_SECRET: ${BFF_OIDC_CLIENT_SECRET:?Set the opaque RP secret}
+      BFF_OIDC_REDIRECT_URI: ${PUBLIC_APP_URL}/auth/callback
+      BFF_TOKEN_KEY_FILE: /run/identity/bff-token-keys.json
+      BFF_CA_CERT_FILE: /run/identity/ca.pem
       MICRO_GATEWAY_ORIGIN: ${PUBLIC_APP_URL}
       MICRO_ALLOWED_ORIGINS: ${MICRO_ALLOWED_ORIGINS:-${PUBLIC_APP_URL}}
       MICRO_APPS_DIR: ""
@@ -46,6 +60,17 @@ services:
       OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE: ${OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE:-30}
       OAUTH_AUTO_PURGE: "false"
       RUST_LOG: info
+    volumes:
+      - type: bind
+        source: ${IDENTITY_CA_FILE:?Set the absolute identity CA path}
+        target: /run/identity/ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${BFF_TOKEN_KEY_FILE:?Set the absolute BFF keyring path}
+        target: /run/identity/bff-token-keys.json
+        read_only: true
+        bind: {create_host_path: false}
     depends_on: {postgres: {condition: service_healthy}}
     expose: ["3001"]
     read_only: true

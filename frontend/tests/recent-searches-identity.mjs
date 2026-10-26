@@ -24,7 +24,7 @@ test('retained search callbacks cannot read or write another member generation i
   const f = await setup(), oldKey = f.state().contextKey
   f.pushRecentSearch('prior generation', oldKey)
   const replacement = identity({ identityVersion: '2' })
-  await f.state().setSession('new-access', 'psr_new', undefined, replacement)
+  await f.authenticate('new-access', 'psr_new', undefined, replacement)
   f.state().setProfile(contextResponse('ignored', 'ignored', replacement), f.state().contextEpoch)
   const nextKey = f.state().contextKey
   f.pushRecentSearch('stale retained callback', oldKey)

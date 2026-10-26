@@ -255,7 +255,7 @@ async function ready(test, group = "A") {
 }
 async function openBell(test, group = "A") {
   await unread(test.page, test.state.count[group]).click()
-  await test.page.getByText(test.state.inbox[group][0].title, { exact: true }).waitFor()
+  await test.page.locator('[data-slot="popover-content"]').getByText(test.state.inbox[group][0].title, { exact: true }).waitFor()
 }
 async function settled(test) {
   await test.page.waitForFunction(() => window.__notificationQueryClient.getQueryCache().getAll()
@@ -264,7 +264,7 @@ async function settled(test) {
 async function setToken(test, group) {
   await test.page.evaluate(async ({ token, identity }) => {
     const { useAuthStore } = await import("/src/stores/auth.ts")
-    await useAuthStore.getState().setToken(token, identity)
+    await window.__replaceFixtureSession(token, identity)
   }, { token: test.tokens[group], identity: proof(group) })
 }
 async function beginSwitch(test) {

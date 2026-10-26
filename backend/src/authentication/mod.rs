@@ -160,8 +160,4 @@ impl AccountAdministrationPort for AccountService {
     ) -> AccountFuture<'a, u64> {
         tx.revoke_all(id, None)
     }
-
-    fn record_login(&self, id: Uuid) -> AccountFuture<'_, ()> {
-        Box::pin(async move { postgres::record_login(&self.pool, id).await })
-    }
 }

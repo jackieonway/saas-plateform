@@ -60,7 +60,7 @@ test('grant response from a retired logical session cannot return a successful s
   const f = await fixture(async () => { started.resolve(); await release.promise; return response(200, snapshot()) })
   const pending = assert.rejects(api(f).change(change()), error => error.name === 'AbortError')
   await started.promise
-  await f.state().setSession('replacement-platform-access', 'psr_replacement', undefined, identity())
+  await f.authenticate('replacement-platform-access', 'psr_replacement', undefined, identity())
   release.resolve()
   await pending
   assert.equal(f.state().token, 'replacement-platform-access')

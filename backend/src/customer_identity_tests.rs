@@ -18,7 +18,6 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::state::AppState;
 use crate::util::{hash, jwt, password, uuid7};
 
 const SECRET: &str = "identity-phase06-owned-fixture-signing-key";
@@ -125,7 +124,8 @@ fn app(pool: &PgPool, registration: Option<(Uuid, Uuid)>) -> Result<Router> {
             application.to_string(),
         );
     }
-    let state = AppState::new(pool.clone(), Arc::new(Config::from_values(&values)?));
+    let state =
+        crate::sso_test_fixture::state(pool.clone(), Arc::new(Config::from_values(&values)?));
     Ok(crate::routes::api_router()
         .nest("/oauth", crate::routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
@@ -742,11 +742,9 @@ async fn phase06_dual_identity_requires_exact_selection_and_keeps_credential_kin
         let employee_info = call(&harness.app, Method::GET, "/oauth/userinfo", Some(&employee_token.access), Value::Null).await?;
         expect(&employee_info, StatusCode::OK, "employee OAuth token remains independently valid")?;
         ensure!(employee_info.body["roles"] == json!(["Owned employee-only role"]), "employee role fixture lacks real authority");
-        let ticket = crate::routes::auth::fixture_credential_ticket(&db.pool, employee.user, SECRET).await?;
-        let context = call(&harness.app, Method::POST, "/api/auth/context", Some(&ticket), json!({"membershipId":employee.id})).await?;
-        expect(&context, StatusCode::OK, "real employee context issuance")?;
-        let session = context.body["accessToken"].as_str().ok_or_else(|| anyhow!("employee context lacks token"))?;
-        denied(&harness.app, session, StatusCode::UNAUTHORIZED, "platform session is not ordinary customer OAuth").await?;
+        let context = call(&harness.app, Method::POST, "/api/auth/context", Some("retired-credential-fixture"), json!({"membershipId":employee.id})).await?;
+        expect(&context, StatusCode::NOT_FOUND, "retired employee credential route")?;
+        let session = crate::sso_test_fixture::token(&db.pool, employee.user, employee.tenant, employee.org, SECRET).await?;
         let machine = client(&db.pool, harness.client.application, &[], true).await?;
         let machine_reply = form(&harness.app, &[
             ("grant_type", "client_credentials".into()),("client_id", machine.public_id.clone()),
@@ -756,9 +754,9 @@ async fn phase06_dual_identity_requires_exact_selection_and_keeps_credential_kin
         let machine_access = machine_reply.body["access_token"].as_str().ok_or_else(|| anyhow!("machine token missing"))?;
         let machine_registration = app(&db.pool, Some((machine.id, machine.application)))?;
         denied(&machine_registration, machine_access, StatusCode::UNAUTHORIZED, "registered machine client cannot claim customer membership").await?;
-        let app_reply = call(&harness.app, Method::POST, "/api/oauth/session-token", Some(session),
+        let app_reply = call(&harness.app, Method::POST, "/api/oauth/session-token", Some(&session),
             json!({"appCode":context_application_code(&db.pool,harness.client.application).await?,"applicationServiceClientRef":machine.public_id})).await?;
-        expect(&app_reply, StatusCode::CREATED, "real legacy employee application token issuance")?;
+        expect(&app_reply, StatusCode::CREATED, "SSO employee application token issuance")?;
         let app_access = app_reply.body["accessToken"].as_str().ok_or_else(|| anyhow!("application token missing"))?;
         denied(&harness.app, app_access, StatusCode::UNAUTHORIZED, "application token is not ordinary customer OAuth").await?;
         let after: String = sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(m) ORDER BY id)::text FROM memberships m WHERE user_id=$1")

@@ -62,12 +62,6 @@ export interface Membership {
   selectionDisabledReason: null | "CLIENT_MEMBER_TYPE_NOT_ALLOWED" | "MEMBERSHIP_DISABLED"
 }
 
-export interface LoginResp {
-  accountCount?: number
-  memberships: Membership[]
-  ticket?: string
-}
-
 export interface AuthUser {
   id: string
   username: string
@@ -111,8 +105,6 @@ export interface AppBrief {
 
 export interface ContextResp extends ContextMembershipProof {
   accessToken: string
-  refreshToken?: string
-  refreshExpiresIn?: number
   expiresIn: number
   user: AuthUser
   tenant: TenantBrief

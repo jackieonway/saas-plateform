@@ -1,30 +1,18 @@
 # SaaS 平台
 
-平台由 React 管理宿主和 Rust/Axum API 组成，负责登录会话、多租户组织、角色菜单、功能权限、数据授权、应用入口、版本发布及通知收件箱。工单、门店、通知、SDK 和示例分别维护在独立仓库。
+React/Vite 管理宿主与 Rust/Axum API，负责租户、组织、具体成员、角色菜单、数据授权、应用接入与发布、通知收件箱。账号认证由独立身份服务承担。
 
-独立微应用在 `/micro/{code}/*` 下通过 qiankun 加载，现行入口契约固定为 `HTML + TRUSTED`，活动公共 SDK 为 3.0.0（Context 1.0／MicroProps 2.0／Notification 1.0）；历史 SDK 发行归档保持原字节。系统管理等平台内置页面仍由 React Router 渲染。外链展示页是单独的嵌入功能，不走微应用生命周期。
+平台唯一登录方式为 SSO/OIDC BFF：平台 → 认证中心 → 平台回调 → 员工身份选择。浏览器使用 HttpOnly Cookie 恢复会话，短期业务 Bearer 仅保存在内存；没有本地密码登录或故障回退。
 
-当前活动加载链、默认 CSP、业务接入配置与交付门禁已统一，旧宿主示例副本已清理。2026-10-23 的迁移验收快照、本地候选和正式上线条件见[迁移实施与验证](backend/docs/qiankun-audit.md)。
-
-门店是平台组织的一种（`STORE`）。平台组织管理统一维护门店身份、名称、地址、层级及成员，门店应用按组织扩展营业资料、日报和统计。应用通过[受控组织目录](backend/docs/application-organization-directory.md)读取平台资料，业务数据继续由独立服务保存。
-
-## 工程入口
-
-| 路径 | 用途 |
+| 目录 | 内容 |
 | --- | --- |
-| [frontend](frontend/README.md) | React/Vite 宿主、SDK 固定副本、前端与浏览器测试 |
-| [backend](backend/README.md) | Axum API、PostgreSQL 增量迁移、应用发布控制面 |
-| [backend/docs](backend/docs/README.md) | 架构、开发、接入、授权、运维及审查导航 |
-| [backend/nginx](backend/nginx/README.md) | 网关配置生成与策略 |
-| [backend/tools](backend/tools/platform-admin/README.md) | 管理 CLI 与独立部署/制品代理 |
-| [backend/ops](backend/ops/README.md) | 监控和恢复工具 |
-| [.github](.github/README.md) | 独立仓库 CI 和结构门禁 |
-| [RELEASE.md](RELEASE.md) | 版本更新与安全升级记录 |
+| [frontend](frontend/README.md) | 管理宿主、SDK 固定副本、前端和浏览器测试 |
+| [backend](backend/README.md) | API 与唯一数据库初始化基线 |
+| [文档](backend/docs/README.md) | 当前架构、开发、部署及业务合同 |
+| [网关](backend/nginx/README.md) | HTTPS、来源与资源代理策略 |
+| [管理 CLI](backend/tools/platform-admin/README.md) | 应用登记、授权、制品及发布管理 |
+| [运维](backend/ops/README.md) | 监控、备份恢复和身份数据库权限 |
 
-## 本地运行
+从[全新安装](backend/docs/fresh-installation.md)开始准备数据库，再按[开发指南](backend/docs/development.md)配置身份服务与 HTTPS 网关。后端默认端口 3001，宿主默认端口 3000；相邻项目独立安装、构建和部署。
 
-按照[开发指南](backend/docs/development.md)准备专属 PostgreSQL 和后端环境，分别在 `backend` 执行 `cargo run --locked`、在 `frontend` 执行 `npm ci` 和 `npm run dev`。API 默认端口为 3001，宿主开发端口为 3000。
-
-空开发库使用演示 seed，登录方式见开发指南；空生产库通过启动配置显式初始化管理员。真实业务用户还需要租户、组织、角色菜单和资源数据授权。应用端 token 与平台管理会话分开使用。
-
-生产交付使用各自目录作为 Docker 上下文，见[部署指南](backend/docs/deployment.md)。本仓库没有根 npm 调度工程，也不在构建时读取相邻业务仓库源码。
+系统管理页面由 React Router 渲染；微应用在 `/micro/{code}/*` 使用 qiankun，入口固定为 `HTML + TRUSTED`，活动 SDK 为 3.0.0。门店身份由平台 `STORE` 组织维护，营业资料由独立门店 API 保存。

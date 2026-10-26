@@ -612,7 +612,7 @@ impl Fixture {
         // Apply the accepted Phase 6 target shape only to this owned, newly
         // migrated fixture. Production rollout receipt gates stay unchanged.
         sqlx::query(
-            "ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key",
+            "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
         )
         .execute(pool)
         .await?;
@@ -756,76 +756,79 @@ impl Fixture {
             ("LOGIN_SOURCE_REQUESTS".into(), "1000".into()),
             ("LOGIN_USER_FAILURES".into(), "1000".into()),
         ]))?;
-        let state = AppState::new(pool.clone(), Arc::new(settings));
-        let app = router(state.clone());
-        let login = call(
-            &app,
-            Method::POST,
-            "/api/auth/login",
-            None,
-            json!({"username":administrator.username,"password":PASSWORD}),
-        )
-        .await?;
-        expect(
-            &login,
-            StatusCode::OK,
-            "real platform administrator password login",
-        )?;
-        let context = call(
-            &app,
-            Method::POST,
-            "/api/auth/context",
-            Some(text(&login.body, "ticket")?),
-            json!({"membershipId":member,"organizationId":org}),
-        )
-        .await?;
-        expect(
-            &context,
-            StatusCode::OK,
-            "real platform employee management context",
-        )?;
-        let admin = text(&context.body, "accessToken")?.to_owned();
-        let admin_refresh = text(&context.body, "refreshToken")?.to_owned();
-        for (path, kid) in [
-            ("/api/oidc/keys/publish", "phase10-a"),
-            ("/api/oidc/keys/activate", "phase10-a"),
-            ("/api/oidc/keys/publish", "phase10-b"),
-        ] {
-            let reply = call(&app, Method::POST, path, Some(&admin), json!({"kid":kid})).await?;
-            ensure!(
-                reply.status.is_success(),
-                "owned OIDC signing-key setup did not succeed"
-            );
+        sqlx::query("INSERT INTO oidc_provider_settings(singleton,issuer,created_at) VALUES(true,$1,clock_timestamp())")
+            .bind(ORIGIN).execute(pool).await?;
+        // Provision the isolated authority fixture before any runtime login.
+        // Administrator setup must use the same SSO/BFF proof as every console user.
+        for (kid, n, active) in [("phase10-a", KEY_A_N, true), ("phase10-b", KEY_B_N, false)] {
+            sqlx::query("INSERT INTO oidc_signing_keys(kid,n,e,published_at,active,activated_at) VALUES($1,$2,'AQAB',clock_timestamp(),$3,CASE WHEN $3 THEN clock_timestamp() ELSE NULL END)")
+                .bind(kid).bind(n).bind(active).execute(pool).await?;
         }
-        let employee =
-            new_client(&app, &admin, "PLATFORM_CONSOLE", &["EMPLOYEE"], REDIRECT).await?;
-        let customer = new_client(
-            &app,
-            &admin,
-            "CUSTOMER_PORTAL",
-            &["CUSTOMER"],
-            CUSTOMER_REDIRECT,
-        )
-        .await?;
-        Ok(Self {
-            state,
-            admin,
-            admin_refresh,
+        let employee = provision_client(pool, "PLATFORM_CONSOLE", &["EMPLOYEE"], REDIRECT).await?;
+        let customer =
+            provision_client(pool, "CUSTOMER_PORTAL", &["CUSTOMER"], CUSTOMER_REDIRECT).await?;
+        let management_client =
+            provision_client(pool, "PLATFORM_CONSOLE", &["EMPLOYEE"], REDIRECT).await?;
+        let mut fixture = Self {
+            state: AppState::new(pool.clone(), Arc::new(settings)),
+            admin: String::new(),
+            admin_refresh: "psr_retired_public_fixture".into(),
             memberless,
             customer_only,
             dual,
             members,
             business,
             service_client,
-            employee,
+            employee: management_client,
             customer,
             _keys: keys,
-        })
+        };
+        let bff = Bff::new(&fixture)?;
+        let (_, signed_in) = bff.login(&fixture, &administrator).await?;
+        let selected = selected(
+            &bff,
+            &signed_in,
+            Member {
+                id: member,
+                org,
+                kind: "EMPLOYEE",
+            },
+        )
+        .await?;
+        fixture.admin = text(&selected.body, "accessToken")?.into();
+        fixture.state = bff.state.clone();
+        fixture.employee = employee;
+        Ok(fixture)
     }
 
     fn app(&self) -> Router {
         router(self.state.clone())
     }
+}
+
+async fn provision_client(
+    pool: &PgPool,
+    purpose: &str,
+    types: &[&str],
+    redirect: &str,
+) -> Result<Client> {
+    let id = uuid7::new_uuid();
+    let secret = crate::sso::opaque_secret()?;
+    let name = format!("Owned Phase 10 {purpose}");
+    let types = types
+        .iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>();
+    sqlx::query("INSERT INTO oidc_clients(id,name,purpose,secret_hash,allowed_member_types,redirect_uris,post_logout_redirect_uris,refresh_enabled,status,access_policy_version,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,true,'ENABLED',1,clock_timestamp(),clock_timestamp())")
+        .bind(id).bind(&name).bind(purpose).bind(crate::util::hash::sha256_hex(&secret)).bind(types)
+        .bind(vec![redirect.to_owned()]).bind(vec!["https://console.example.invalid/signed-out".to_owned()])
+        .execute(pool).await?;
+    Ok(Client {
+        id,
+        secret,
+        redirect: redirect.into(),
+        name,
+    })
 }
 
 async fn new_client(
@@ -1635,7 +1638,6 @@ impl Bff {
     fn new(fixture: &Fixture) -> Result<Self> {
         let key = TokenKeyFile::new()?;
         let mut config = (*fixture.state.config).clone();
-        config.bff_enabled = true;
         config.bff_oidc_issuer = Some(ORIGIN.into());
         config.bff_oidc_client_id = Some(fixture.employee.id);
         config.bff_oidc_client_secret = Some(fixture.employee.secret.clone());
@@ -1822,13 +1824,23 @@ async fn bff_real_provider_memberless_and_exact_employee_cookie_boundary() -> Re
         let fixture=Fixture::create(&db.pool).await?;
         let admin_claims=crate::util::jwt::verify(&fixture.admin,SECRET).map_err(|_|anyhow!("owned administrator bearer is invalid"))?;
         let admin_sid=Uuid::parse_str(admin_claims.sid.as_deref().ok_or_else(||anyhow!("owned administrator has no platform sid"))?)?;
-        let legacy:(String,String,i64)=sqlx::query_as("SELECT origin_issuer,origin_client_ref,origin_client_policy_version FROM platform_sessions WHERE id=$1")
+        let source:(String,String,i64)=sqlx::query_as("SELECT origin_issuer,origin_client_ref,origin_client_policy_version FROM platform_sessions WHERE id=$1")
             .bind(admin_sid).fetch_one(&db.pool).await?;
         let sources:(bool,bool,bool)=sqlx::query_as("SELECT platform_source_active($1,$2,1,'EMPLOYEE'),platform_source_active($3,$2,1,'EMPLOYEE'),platform_source_active($4,$5,$6,'EMPLOYEE')")
             .bind("https://wrong-issuer.example.invalid").bind(fixture.employee.id.to_string()).bind(ORIGIN)
-            .bind(&legacy.0).bind(&legacy.1).bind(legacy.2).fetch_one(&db.pool).await?;
-        ensure!(!sources.0&&sources.1&&sources.2&&legacy.0=="urn:saas:legacy-platform",
-            "platform source projection accepted an incorrect OIDC issuer or broke the exact legacy source");
+            .bind(&source.0).bind(&source.1).bind(source.2).fetch_one(&db.pool).await?;
+        ensure!(!sources.0&&sources.1&&sources.2&&source.0==ORIGIN,
+            "platform source projection accepted an incorrect OIDC issuer or broke the exact SSO source");
+        let retired = uuid7::new_uuid();
+        sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) SELECT $1,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,'urn:saas:legacy-platform','platform-console-legacy',1 FROM platform_sessions WHERE id=$2")
+            .bind(retired).bind(admin_sid).execute(&db.pool).await?;
+        let retired_proofs: (bool,bool) = sqlx::query_as("SELECT platform_source_active('urn:saas:legacy-platform','platform-console-legacy',1,'EMPLOYEE'),platform_session_active($1)")
+            .bind(retired).fetch_one(&db.pool).await?;
+        ensure!(retired_proofs == (false,false), "historical password-mode sources must not authorize any consumer");
+        let mut retired_claims = admin_claims.clone();
+        retired_claims.sid = Some(retired.to_string());
+        let retired_token = crate::util::jwt::sign(&retired_claims, SECRET)?;
+        expect(&call(&fixture.app(),Method::GET,"/api/auth/profile",Some(&retired_token),Value::Null).await?,StatusCode::UNAUTHORIZED,"signed historical sessions cannot bypass the SSO boundary")?;
         let bff=Bff::new(&fixture)?;
         let (_,memberless)=bff.login(&fixture,&fixture.memberless).await?;
         let anonymous_context=console_session(&bff.app,&memberless).await?;
@@ -1958,9 +1970,11 @@ async fn bff_rejects_real_token_claim_corruption_pkce_and_untrusted_discovery() 
                 bff.transport.count(crate::bff::Endpoint::Jwks) - before <= 1,
                 "untrusted ID Token triggered an unbounded JWKS retrieval"
             );
-            let sessions: i64 = sqlx::query_scalar("SELECT count(*) FROM bff_sessions")
-                .fetch_one(&db.pool)
-                .await?;
+            let sessions: i64 =
+                sqlx::query_scalar("SELECT count(*) FROM bff_sessions WHERE user_id=$1")
+                    .bind(fixture.dual.id)
+                    .fetch_one(&db.pool)
+                    .await?;
             ensure!(
                 sessions == 0,
                 "failed RP proof partially committed a BFF session"
@@ -2257,7 +2271,7 @@ async fn bff_shared_authority_budget_failure_closed_and_machine_compatibility() 
         expect(&timeout,StatusCode::SERVICE_UNAVAILABLE,"entire callback chain shares one authority budget")?;
         ensure!(elapsed>=Duration::from_millis(2700)&&elapsed<Duration::from_millis(3900),
             "callback restarted its three-second budget for each upstream endpoint");
-        let sessions:i64=sqlx::query_scalar("SELECT count(*) FROM bff_sessions").fetch_one(&db.pool).await?;
+        let sessions:i64=sqlx::query_scalar("SELECT count(*) FROM bff_sessions WHERE user_id=$1").bind(fixture.dual.id).fetch_one(&db.pool).await?;
         ensure!(sessions==0,"authority timeout partially committed authenticated state");
         for delay in &bff.transport.delays {delay.store(0,Ordering::SeqCst);}
         let (_,session)=bff.login(&fixture,&fixture.dual).await?;
@@ -2270,8 +2284,8 @@ async fn bff_shared_authority_budget_failure_closed_and_machine_compatibility() 
             expect(&call(&bff.app,Method::GET,path,Some(token),Value::Null).await?,StatusCode::SERVICE_UNAVAILABLE,"business consumers cannot trust cached BFF proof during outage")?;
         }
         expect(&call(&bff.app,Method::GET,"/api/apps/phase10-business/context",Some(&application),Value::Null).await?,StatusCode::SERVICE_UNAVAILABLE,"app consumer returns dependency outage distinctly")?;
-        rejected(&call(&bff.app,Method::POST,"/api/auth/login",None,json!({"username":fixture.dual.username,"password":PASSWORD})).await?,"disabled local password compatibility during outage")?;
-        rejected(&call(&bff.app,Method::POST,"/api/auth/context",Some(token),json!({"membershipId":fixture.members[0].id,"organizationId":fixture.members[0].org})).await?,"BFF context cannot enter legacy selection bridge")?;
+        expect(&call(&bff.app,Method::POST,"/api/auth/login",None,json!({"username":fixture.dual.username,"password":PASSWORD})).await?,StatusCode::NOT_FOUND,"retired password login remains absent during outage")?;
+        expect(&call(&bff.app,Method::POST,"/api/auth/context",Some(token),json!({"membershipId":fixture.members[0].id,"organizationId":fixture.members[0].org})).await?,StatusCode::NOT_FOUND,"retired credential selection remains absent")?;
         rejected(&form(&bff.app,"/oauth/token",&[("grant_type","refresh_token".into()),("refresh_token",fixture.admin_refresh.clone())]).await?,"public legacy platform refresh is explicitly disabled")?;
         let machine=form(&bff.app,"/oauth/token",&[("grant_type","client_credentials".into()),("client_id",fixture.service_client.clone()),("client_secret",SERVICE_SECRET.into())]).await?;
         expect(&machine,StatusCode::OK,"genuine machine grant retains its independent legacy contract")?;
@@ -2555,7 +2569,7 @@ async fn bff_real_short_id_expiry_cannot_commit_callback_or_rotated_refresh() ->
         let reply=tokio::time::timeout(Duration::from_secs(2),pending).await.map_err(|_|anyhow!("callback ID-expiry waiter did not finish"))???;
         waited?;
         expect(&reply,StatusCode::UNAUTHORIZED,"expired original signed ID cannot commit a callback session")?;
-        let callback_rows:(i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM bff_sessions),(SELECT count(*) FROM platform_sessions WHERE bff_session_id IS NOT NULL)")
+        let callback_rows:(i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM bff_sessions WHERE user_id=$1),(SELECT count(*) FROM platform_sessions WHERE bff_session_id IS NOT NULL AND user_id=$1)").bind(fixture.dual.id)
             .fetch_one(&db.pool).await?;
         ensure!(callback_rows==(0,0),"ID expiry partially committed callback or platform session state");
 

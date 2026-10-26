@@ -9,7 +9,7 @@ import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
-import { fixtureUuid, identityForProfile, installLegacyAuthMode, installSession, profileWithIdentity, SESSION_KEY } from "./browser/identity-fixture.mjs"
+import { fixtureUuid, identityForProfile, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.ENTITY_TYPES_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -365,100 +365,6 @@ async function verifyExplicitInitialization(kind) {
   console.log(`PASS ${kind}: explicit initialization confirmation/cancel and idempotent result`)
 }
 
-async function verifyLoginIdentitySelection(sameOrganization, singleMembership = false) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } })
-  await installLegacyAuthMode(context)
-  const page = await context.newPage()
-  page.setDefaultTimeout(12_000)
-  const state = { logins: 0, selections: [], errors: [], unexpected: [] }
-  const first = { userId: "10000000-0000-7000-8000-000000000001", username: "contact-a", realName: "联系人甲",
-    tenantId: "20000000-0000-7000-8000-000000000001", tenantName: "身份验收租户甲",
-    organizationId: "30000000-0000-7000-8000-000000000001", organizationName: "身份验收组织甲", organizationPath: "身份验收组织甲",
-    membershipId: fixtureUuid("entity-login-first"), memberType: "EMPLOYEE", identityVersion: "1", status: "ENABLED",
-    consoleSelectable: true, selectionDisabledReason: null }
-  const second = { ...first, userId: "10000000-0000-7000-8000-000000000002", username: "contact-b", realName: "联系人乙", membershipId: fixtureUuid("entity-login-second"),
-    ...(sameOrganization ? {} : { tenantId: "20000000-0000-7000-8000-000000000002", tenantName: "身份验收租户乙",
-      organizationId: "30000000-0000-7000-8000-000000000002", organizationName: "身份验收组织乙", organizationPath: "身份验收组织乙" }) }
-  const expected = singleMembership ? first : second
-  const manyOrganizations = Array.from({ length: 30 }, (_, index) => ({ ...first,
-    organizationId: fixtureUuid(`first-tenant-org-${index}`), membershipId: fixtureUuid(`first-tenant-member-${index}`), organizationName: `甲租户分公司 ${index}`,
-    organizationPath: `${first.organizationName} / 甲租户分公司 ${index}` }))
-  const fixtureMemberships = singleMembership ? [first] : sameOrganization ? [first, second] : [first, ...manyOrganizations, second]
-  page.on("pageerror", (error) => state.errors.push(error.message))
-  await context.routeWebSocket(() => true, () => {})
-  await context.route((url) => url.origin === origin && url.pathname === "/src/main.tsx", async (route) => {
-    const response = await route.fetch()
-    let body = await response.text()
-    body = body.replace(/import App from ["']\/src\/App\.tsx(?:\?[^"']*)?["']/, 'import App from "/src/pages/login/LoginPage.tsx"')
-    await route.fulfill({ response, body })
-  })
-  await context.route((url) => url.origin === origin && url.pathname.startsWith("/api/"), async (route) => {
-    const request = route.request(), url = new URL(request.url())
-    let value
-    if (url.pathname === "/api/platform/branding") value = { platformName: "联系人验收平台", platformDescription: "", logoUrl: "",
-      loginTitle: "联系人登录", loginDescription: "", footerText: "" }
-    else if (url.pathname === "/api/auth/login") {
-      assert.equal(request.postDataJSON().username, "13800138011")
-      state.logins++
-      value = { ticket: "verified-identity-fixture", accountCount: singleMembership ? 1 : 2, memberships: fixtureMemberships }
-    } else if (url.pathname === "/api/auth/context") {
-      assert.equal(request.headers().authorization, "Bearer verified-identity-fixture")
-      const payload = request.postDataJSON()
-      state.selections.push(payload)
-      assert.equal(payload.userId, expected.userId)
-      assert.equal(payload.organizationId, expected.organizationId)
-      assert.equal(payload.membershipId, expected.membershipId)
-      value = { accessToken: "selected-session-fixture", refreshToken: "selected-refresh-fixture",
-        user: { id: expected.userId, username: expected.username, realName: expected.realName },
-        tenant: { id: expected.tenantId }, organization: { id: expected.organizationId },
-        membershipId: expected.membershipId, memberType: expected.memberType, identityVersion: expected.identityVersion, accountVersion: "0", expiresIn: 3600 }
-    } else { state.unexpected.push(url.pathname); value = {} }
-    await route.fulfill({ contentType: "application/json", body: JSON.stringify(value) })
-  })
-  try {
-    await page.goto(`${origin}/login`, { waitUntil: "domcontentloaded" })
-    await page.locator("#username").fill("13800138011")
-    await page.locator("#password").fill("Fixture-login-password-123!")
-    assert.equal(await page.getByLabel("租户编码").count(), 0, "Tenant selection must happen after password verification.")
-    await page.getByRole("button", { name: "登 录", exact: true }).click()
-    await page.getByRole("heading", { name: "选择登录租户", exact: true }).waitFor()
-    assert.equal(state.selections.length, 0, "Even a single organization must wait for explicit selection.")
-    assert.equal(await page.getByRole("button").filter({ hasText: "登录身份：" }).count(), 0,
-      "Organization identities must not fill the tenant selection page.")
-    const tenantSearch = page.getByRole("textbox", { name: "搜索租户", exact: true })
-    await tenantSearch.fill("不存在的租户")
-    await page.getByText("未找到匹配的租户", { exact: true }).waitFor()
-    await tenantSearch.fill("")
-    await page.getByRole("button").filter({ hasText: first.tenantName }).click()
-    await page.getByRole("heading", { name: "选择组织与身份", exact: true }).waitFor()
-    assert.equal(state.selections.length, 0, "Tenant choice must not establish a business session.")
-    await page.getByRole("button", { name: "重新选择租户", exact: true }).click()
-    await page.getByRole("heading", { name: "选择登录租户", exact: true }).waitFor()
-    assert.equal(state.logins, 1, "Reselecting tenants reuses the verified credential ticket.")
-    assert.equal(state.selections.length, 0)
-    await page.getByRole("button").filter({ hasText: expected.tenantName }).click()
-    await page.getByRole("heading", { name: "选择组织与身份", exact: true }).waitFor()
-    if (!sameOrganization && !singleMembership) {
-      assert.equal(await page.getByRole("button").filter({ hasText: "甲租户分公司" }).count(), 0,
-        "The organization page only shows memberships in the chosen tenant.")
-    }
-    if (sameOrganization) assert.equal(await page.getByRole("button").filter({ hasText: first.organizationName }).count(), 2,
-      "Two verified account identities remain distinguishable within the same organization.")
-    const organizationSearch = page.getByRole("textbox", { name: "搜索组织或登录身份", exact: true })
-    await organizationSearch.fill("不存在的组织")
-    await page.getByText("未找到匹配的组织或登录身份", { exact: true }).waitFor()
-    await organizationSearch.fill(singleMembership ? expected.organizationName : expected.realName)
-    const choice = page.getByRole("button").filter({ hasText: singleMembership ? expected.organizationName : expected.realName })
-    await choice.click()
-    await waitState(() => state.selections.length === 1, "The selected account and organization must both be submitted.")
-    await page.waitForURL(`${origin}/`)
-    assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "null")?.refreshToken, SESSION_KEY), "selected-refresh-fixture",
-      "Login should retain the refresh token from the selected context.")
-    assert.deepEqual(state.errors, [])
-    assert.deepEqual(state.unexpected, [])
-  } finally { await context.close() }
-  console.log(`PASS login: explicit tenant then organization selection, search, reselect tenant without reauthentication; ${singleMembership ? "single membership never auto-enters" : sameOrganization ? "distinct verified identities within the same organization" : "large tenant membership lists stay separate"}`)
-}
 
 try {
   await startServer()
@@ -471,10 +377,7 @@ try {
     await verifyExplicitInitialization(kind)
   }
   await verifyStoreOrganization()
-  await verifyLoginIdentitySelection(false)
-  await verifyLoginIdentitySelection(true)
-  await verifyLoginIdentitySelection(false, true)
-  console.log("Entity contacts/types/login browser integration passed (27 scenarios); HTTP fixtures do not assert database/backend behavior.")
+  console.log("Entity contacts/types/login browser integration passed (24 scenarios); HTTP fixtures do not assert database/backend behavior.")
 } finally {
   await browser?.close()
   if (vite && vite.exitCode === null) {

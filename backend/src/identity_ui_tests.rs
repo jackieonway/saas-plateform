@@ -18,12 +18,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::state::AppState;
 use crate::util::{jwt, password, uuid7};
 
 const SECRET: &str = "identity-phase05-owned-fixture-signing-key";
 const PASSWORD: &str = "Owned-Phase05-Fixture-Password9!";
-const CUSTOMER_SOURCE: &str = "identity-phase05-customer-source";
 
 struct Database {
     pool: PgPool,
@@ -119,7 +117,7 @@ fn app(pool: &PgPool, lifecycle: bool, customer: bool, dual: bool) -> Result<Rou
         ("CUSTOMER_MEMBERSHIPS_ENABLED".into(), customer.to_string()),
         ("DUAL_MEMBERSHIPS_ENABLED".into(), dual.to_string()),
     ]))?;
-    let state = AppState::new(pool.clone(), Arc::new(config));
+    let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
     Ok(crate::routes::api_router()
         .nest("/oauth", crate::routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
@@ -257,28 +255,21 @@ async fn member(
 
 async fn allow_owned_dual_fixture(pool: &PgPool) -> Result<()> {
     // Phase 6 contraction is simulated only inside this newly owned database.
-    sqlx::query("ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key")
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
 async fn session(pool: &PgPool, member: Member) -> Result<String> {
-    let source = if member.kind == "EMPLOYEE" {
-        "platform-console-legacy"
+    let sid = if member.kind == "EMPLOYEE" {
+        crate::sso_test_fixture::session(pool, member.user, member.tenant, member.org).await?
     } else {
-        sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,grant_types,subject_mode,allowed_member_types) VALUES($1,$2,'Owned Phase 5 customer source','PUBLIC','authorization_code','USER',ARRAY['CUSTOMER']::text[]) ON CONFLICT(client_id) DO NOTHING")
-            .bind(uuid7::new_uuid()).bind(CUSTOMER_SOURCE).execute(pool).await?;
-        CUSTOMER_SOURCE
+        // A customer cannot acquire any platform session, even with a signed JWT.
+        uuid7::new_uuid()
     };
-    let sid = uuid7::new_uuid();
-    sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) VALUES($1,$2,$3,$4,now()+interval '1 hour',$5,$6,$7,$8,'urn:saas:legacy-platform',$9,1)")
-        .bind(sid).bind(member.user).bind(member.tenant).bind(member.org).bind(member.account_version)
-        .bind(member.id).bind(member.kind).bind(member.version).bind(source).execute(pool).await?;
-    ensure!(
-        session_active(pool, sid).await?,
-        "fixture session must be active"
-    );
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
         &jwt::Claims {
@@ -297,13 +288,6 @@ async fn session(pool: &PgPool, member: Member) -> Result<String> {
         },
         SECRET,
     )
-}
-
-async fn session_active(pool: &PgPool, id: Uuid) -> Result<bool> {
-    Ok(sqlx::query_scalar("SELECT platform_session_active($1)")
-        .bind(id)
-        .fetch_one(pool)
-        .await?)
 }
 
 fn proof(body: &Value, expected: Member) -> Result<()> {
@@ -406,37 +390,6 @@ fn choices(body: &Value, expected: &[Member]) -> Result<()> {
     Ok(())
 }
 
-async fn context_proof(pool: &PgPool, reply: &Reply, member: Member) -> Result<(String, Uuid)> {
-    expect(reply, StatusCode::OK, "select employee context")?;
-    proof(&reply.body, member)?;
-    let token = reply.body["accessToken"]
-        .as_str()
-        .ok_or_else(|| anyhow!("context lacks an access token"))?
-        .to_string();
-    let claims = jwt::verify(&token, SECRET)?;
-    let sid: Uuid = claims
-        .sid
-        .ok_or_else(|| anyhow!("session lacks sid"))?
-        .parse()?;
-    let actual: (Uuid, String, i64, i64, Uuid, Uuid, Uuid) = sqlx::query_as(
-        "SELECT membership_id,member_type,identity_version,account_version,user_id,tenant_id,organization_id FROM platform_sessions WHERE id=$1 AND platform_session_active(id)",
-    ).bind(sid).fetch_one(pool).await?;
-    ensure!(
-        actual
-            == (
-                member.id,
-                "EMPLOYEE".into(),
-                member.version,
-                member.account_version,
-                member.user,
-                member.tenant,
-                member.org
-            ),
-        "public context proof differs from the active server session"
-    );
-    Ok((token, sid))
-}
-
 async fn membership_snapshot(pool: &PgPool, user: Uuid) -> Result<String> {
     Ok(sqlx::query_scalar(
         "SELECT COALESCE(jsonb_agg(to_jsonb(m) ORDER BY m.id),'[]'::jsonb)::text FROM memberships m WHERE m.user_id=$1",
@@ -444,92 +397,20 @@ async fn membership_snapshot(pool: &PgPool, user: Uuid) -> Result<String> {
 }
 
 #[tokio::test]
-#[ignore = "requires explicit IDENTITY_PHASE05_TEST_DATABASE_URL and disposable database creation"]
-async fn phase05_login_and_profile_show_identity_metadata_without_expanding_ticket_authority(
+#[ignore = "requires isolated PostgreSQL"]
+async fn sso_profile_shows_identity_metadata_and_retired_selection_never_changes_memberships(
 ) -> Result<()> {
     let db = Database::create().await?;
-    let result: Result<()> = async {
+    let result = async {
         allow_owned_dual_fixture(&db.pool).await?;
         let (tenant, root) = tenant(&db.pool).await?;
         let child = organization(&db.pool, tenant, Some(root)).await?;
-        let disabled_org = organization(&db.pool, tenant, Some(root)).await?;
-        let user = user(&db.pool, "phase05-browser-metadata", 9, true).await?;
-        let employee = member(&db.pool, user, root, "EMPLOYEE", "ENABLED", 7).await?;
-        let customer = member(&db.pool, user, root, "CUSTOMER", "ENABLED", 13).await?;
-        let descendant = member(&db.pool, user, child, "EMPLOYEE", "ENABLED", 11).await?;
-        let disabled = member(&db.pool, user, disabled_org, "EMPLOYEE", "DISABLED", 17).await?;
-        let expected = [employee, customer, descendant, disabled];
+        let actor = user(&db.pool, "sso-browser-metadata", 9, true).await?;
+        let employee = member(&db.pool, actor, root, "EMPLOYEE", "ENABLED", 7).await?;
+        let customer = member(&db.pool, actor, root, "CUSTOMER", "ENABLED", 13).await?;
+        let descendant = member(&db.pool, actor, child, "EMPLOYEE", "ENABLED", 11).await?;
         let app = app(&db.pool, false, false, false)?;
-        let login = call(
-            &app,
-            Method::POST,
-            "/api/auth/login",
-            None,
-            json!({"username":"phase05-browser-metadata","password":PASSWORD}),
-        )
-        .await?;
-        expect(
-            &login,
-            StatusCode::OK,
-            "login with an employee and other identity choices",
-        )?;
-        choices(&login.body, &expected)?;
-        ensure!(
-            login.body["accountCount"] == 1,
-            "identity choices must not become account choices"
-        );
-        let ticket = login.body["ticket"]
-            .as_str()
-            .ok_or_else(|| anyhow!("login lacks ticket"))?;
-        let payload: Value = jwt::verify_payload(ticket, SECRET)?;
-        let accounts = payload["accounts"]
-            .as_array()
-            .ok_or_else(|| anyhow!("ticket lacks accounts"))?;
-        ensure!(
-            accounts.len() == 1 && accounts[0]["userId"] == json!(user),
-            "ticket account differs"
-        );
-        let snapshots = accounts[0]["memberships"]
-            .as_array()
-            .ok_or_else(|| anyhow!("ticket lacks membership snapshots"))?;
-        let actual: BTreeMap<Uuid, (Uuid, i64)> = snapshots
-            .iter()
-            .map(|snapshot| -> Result<_> {
-                Ok((
-                    snapshot["membershipId"]
-                        .as_str()
-                        .ok_or_else(|| anyhow!("ticket membership lacks ID"))?
-                        .parse()?,
-                    (
-                        snapshot["organizationId"]
-                            .as_str()
-                            .ok_or_else(|| anyhow!("ticket membership lacks organization"))?
-                            .parse()?,
-                        snapshot["identityVersion"]
-                            .as_i64()
-                            .ok_or_else(|| anyhow!("ticket membership lacks exact generation"))?,
-                    ),
-                ))
-            })
-            .collect::<Result<_>>()?;
-        ensure!(
-            snapshots.len() == 2
-                && actual
-                    == BTreeMap::from([
-                        (employee.id, (employee.org, employee.version)),
-                        (descendant.id, (descendant.org, descendant.version))
-                    ]),
-            "disabled or customer display choices expanded password ticket authority"
-        );
-        let selected = call(
-            &app,
-            Method::POST,
-            "/api/auth/context",
-            Some(ticket),
-            json!({"membershipId":employee.id}),
-        )
-        .await?;
-        let (token, _) = context_proof(&db.pool, &selected, employee).await?;
+        let token = session(&db.pool, employee).await?;
         let profile = call(
             &app,
             Method::GET,
@@ -538,206 +419,22 @@ async fn phase05_login_and_profile_show_identity_metadata_without_expanding_tick
             Value::Null,
         )
         .await?;
-        expect(&profile, StatusCode::OK, "read employee profile")?;
+        expect(&profile, StatusCode::OK, "SSO employee profile")?;
         proof(&profile.body, employee)?;
-        choices(&profile.body, &expected)?;
-        Ok(())
-    }
-    .await;
-    db.finish(result).await
-}
-
-#[tokio::test]
-#[ignore = "requires explicit IDENTITY_PHASE05_TEST_DATABASE_URL and disposable database creation"]
-async fn phase05_context_selection_is_exact_and_switching_does_not_modify_memberships() -> Result<()>
-{
-    let db = Database::create().await?;
-    let result: Result<()> = async {
-        allow_owned_dual_fixture(&db.pool).await?;
-        let (tenant, root) = tenant(&db.pool).await?;
-        let child = organization(&db.pool, tenant, Some(root)).await?;
-        let customer_org = organization(&db.pool, tenant, Some(root)).await?;
-        let disabled_org = organization(&db.pool, tenant, Some(root)).await?;
-        let actor = user(&db.pool, "phase05-switching", 4, false).await?;
-        let employee = member(&db.pool, actor, root, "EMPLOYEE", "ENABLED", 5).await?;
-        let customer = member(&db.pool, actor, root, "CUSTOMER", "ENABLED", 7).await?;
-        let descendant = member(&db.pool, actor, child, "EMPLOYEE", "ENABLED", 9).await?;
-        member(&db.pool, actor, customer_org, "CUSTOMER", "ENABLED", 3).await?;
-        let disabled = member(&db.pool, actor, disabled_org, "EMPLOYEE", "DISABLED", 11).await?;
-        let outsider = user(&db.pool, "phase05-other-user", 0, false).await?;
-        let foreign = member(&db.pool, outsider, root, "EMPLOYEE", "ENABLED", 1).await?;
-        let app = app(&db.pool, false, false, false)?;
-        let ticket =
-            crate::routes::auth::fixture_credential_ticket(&db.pool, actor, SECRET).await?;
+        choices(&profile.body, &[employee, customer, descendant])?;
         let before = membership_snapshot(&db.pool, actor).await?;
-        for (body, status, label) in [
-            (
-                json!({"membershipId":customer.id,"organizationId":root}),
-                StatusCode::FORBIDDEN,
-                "customer ID must not fall back to same-organization employee",
-            ),
-            (
-                json!({"membershipId":disabled.id}),
-                StatusCode::FORBIDDEN,
-                "disabled employee selection",
-            ),
-            (
-                json!({"membershipId":foreign.id}),
-                StatusCode::FORBIDDEN,
-                "another user's membership selection",
-            ),
-            (
-                json!({"membershipId":employee.id,"organizationId":child}),
-                StatusCode::FORBIDDEN,
-                "membership and organization mismatch",
-            ),
-            (
-                json!({"membershipId":employee.id,"userId":outsider}),
-                StatusCode::FORBIDDEN,
-                "membership and account mismatch",
-            ),
-            (
-                json!({"organizationId":customer_org}),
-                StatusCode::FORBIDDEN,
-                "organization-only customer fallback",
-            ),
-            (
-                json!({"membershipId":Uuid::new_v4()}),
-                StatusCode::BAD_REQUEST,
-                "UUID v4 membership",
-            ),
-            (
-                json!({"membershipId":employee.id,"userId":Uuid::new_v4()}),
-                StatusCode::BAD_REQUEST,
-                "UUID v4 account",
-            ),
-            (
-                json!({"organizationId":Uuid::new_v4()}),
-                StatusCode::BAD_REQUEST,
-                "UUID v4 organization",
-            ),
-            (
-                json!({"membershipId":employee.id,"memberType":"EMPLOYEE"}),
-                StatusCode::BAD_REQUEST,
-                "unknown selection field",
-            ),
-            (json!({}), StatusCode::BAD_REQUEST, "missing selection"),
+        for body in [
+            json!({"membershipId":employee.id}),
+            json!({"membershipId":customer.id}),
+            json!({"membershipId":descendant.id}),
         ] {
-            let reply = call(&app, Method::POST, "/api/auth/context", Some(&ticket), body).await?;
-            expect(&reply, status, label)?;
+            let retired = call(&app, Method::POST, "/api/auth/context", Some(&token), body).await?;
+            expect(&retired, StatusCode::NOT_FOUND, "retired context route")?;
         }
-        let compatible = call(
-            &app,
-            Method::POST,
-            "/api/auth/context",
-            Some(&ticket),
-            json!({"organizationId":root}),
-        )
-        .await?;
-        let (old_token, old_sid) = context_proof(&db.pool, &compatible, employee).await?;
-        let rejected = call(
-            &app,
-            Method::POST,
-            "/api/auth/context",
-            Some(&old_token),
-            json!({"membershipId":customer.id,"organizationId":root}),
-        )
-        .await?;
-        expect(
-            &rejected,
-            StatusCode::FORBIDDEN,
-            "session customer selection must not fall back",
-        )?;
         ensure!(
-            session_active(&db.pool, old_sid).await?,
-            "rejected selection revoked a valid session"
+            before == membership_snapshot(&db.pool, actor).await?,
+            "removed context route modified memberships"
         );
-        let switched = call(
-            &app,
-            Method::POST,
-            "/api/auth/context",
-            Some(&old_token),
-            json!({"membershipId":descendant.id,"organizationId":child,"userId":actor}),
-        )
-        .await?;
-        let (fresh_token, fresh_sid) = context_proof(&db.pool, &switched, descendant).await?;
-        ensure!(
-            old_sid != fresh_sid,
-            "context switch reused the old session"
-        );
-        ensure!(
-            !session_active(&db.pool, old_sid).await?,
-            "context switch left the old session active"
-        );
-        ensure!(
-            membership_snapshot(&db.pool, actor).await? == before,
-            "ordinary context selection mutated membership identity or status"
-        );
-        let old_profile = call(
-            &app,
-            Method::GET,
-            "/api/auth/profile",
-            Some(&old_token),
-            Value::Null,
-        )
-        .await?;
-        expect(
-            &old_profile,
-            StatusCode::UNAUTHORIZED,
-            "profile from revoked old context",
-        )?;
-        let fresh_profile = call(
-            &app,
-            Method::GET,
-            "/api/auth/profile",
-            Some(&fresh_token),
-            Value::Null,
-        )
-        .await?;
-        expect(
-            &fresh_profile,
-            StatusCode::OK,
-            "profile after context switch",
-        )?;
-        proof(&fresh_profile.body, descendant)?;
-
-        // A ticket may not silently select a replacement generation of its offered identity.
-        sqlx::query("UPDATE memberships SET identity_version=identity_version+1 WHERE id=$1")
-            .bind(descendant.id)
-            .execute(&db.pool)
-            .await?;
-        let stale = call(
-            &app,
-            Method::POST,
-            "/api/auth/context",
-            Some(&ticket),
-            json!({"membershipId":descendant.id}),
-        )
-        .await?;
-        expect(
-            &stale,
-            StatusCode::UNAUTHORIZED,
-            "ticket with a stale exact identity generation",
-        )?;
-        let ticket =
-            crate::routes::auth::fixture_credential_ticket(&db.pool, actor, SECRET).await?;
-        let current = call(
-            &app,
-            Method::POST,
-            "/api/auth/context",
-            Some(&ticket),
-            json!({"membershipId":descendant.id}),
-        )
-        .await?;
-        context_proof(
-            &db.pool,
-            &current,
-            Member {
-                version: descendant.version + 1,
-                ..descendant
-            },
-        )
-        .await?;
         Ok(())
     }
     .await;
@@ -843,14 +540,14 @@ async fn phase05_capabilities_reflect_server_gates_and_customer_console_access_s
         let app = app(&db.pool, true, true, true)?;
         let login = call(&app, Method::POST, "/api/auth/login", None,
             json!({"username":"phase05-capability-customer","password":PASSWORD})).await?;
-        expect(&login, StatusCode::FORBIDDEN, "customer-only legacy login")?;
-        let ticket = crate::routes::auth::fixture_credential_ticket(&db.pool, customer.user, SECRET).await?;
-        let context = call(&app, Method::POST, "/api/auth/context", Some(&ticket),
+        expect(&login, StatusCode::NOT_FOUND, "retired password login")?;
+        let ticket = "retired-credential-fixture";
+        let context = call(&app, Method::POST, "/api/auth/context", Some(ticket),
             json!({"membershipId":customer.id,"organizationId":root})).await?;
-        expect(&context, StatusCode::FORBIDDEN, "customer-only credential context")?;
+        expect(&context, StatusCode::NOT_FOUND, "retired credential context")?;
         let context = call(&app, Method::POST, "/api/auth/context", Some(&customer_token),
             json!({"organizationId":root})).await?;
-        expect(&context, StatusCode::UNAUTHORIZED, "customer-only session context")?;
+        expect(&context, StatusCode::NOT_FOUND, "retired session context")?;
         let profile = call(&app, Method::GET, "/api/auth/profile", Some(&customer_token), Value::Null).await?;
         expect(&profile, StatusCode::UNAUTHORIZED, "customer-only employee profile")?;
         Ok(())

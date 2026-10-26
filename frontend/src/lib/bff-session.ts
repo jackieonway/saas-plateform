@@ -1,7 +1,7 @@
 import type { ContextResp, Membership } from "@/api/types"
 import { canSelectConsoleMembership, contextIdentityFromResponse, contextIdentityKey, isContextIdentity, sameContextIdentity } from "@/lib/context-identity"
 import type { ContextIdentity } from "@/lib/context-identity"
-import type { SessionFence, SessionObservation, SessionRecord, SessionStatus } from "@/lib/session-coordinator"
+import type { SessionFence, SessionObservation, SessionRecord, SessionStatus } from "@/lib/session-types"
 
 /** Public account/context projection. Authentication material never enters this view. */
 export interface BffSessionView {
@@ -41,7 +41,7 @@ export class BffSessionError extends Error {
   }
 }
 
-const credentialKeys = ["platform-session-v2", "platform-session-v1", "platform-token", "platform-refresh-token"]
+const credentialKeys = ["platform-session-v2", "platform-session-v1", "platform-token", "platform-refresh-token", "platform-remember-username", "platform-current-app"]
 const uuid7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const i64Maximum = "9223372036854775807"
 const unavailableMessage = "无法确认统一登录状态，平台请求已暂停，请稍后重试或重新登录。"
@@ -168,10 +168,10 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
   function publish(status: SessionStatus, view = observation.session, token: string | null = null, expires: number | null = null, error: string | null = null) {
     if (disposed) return
     const identity = view?.context ?? null
-    const record: SessionRecord = { schema: 2, version: ++localVersion,
+    const record: SessionRecord = { version: ++localVersion,
       sessionId: view ? `${view.sessionId}:${view.version}` : null,
       status: status === "anonymous" ? "anonymous" : status === "unknown" || status === "unavailable" ? "unknown" : status === "switching" || status === "refreshing" ? "in-flight" : "active",
-      token, refreshToken: null, identity, contextKey: identity ? contextIdentityKey(identity) : null }
+      token, identity, contextKey: identity ? contextIdentityKey(identity) : null }
     observation = { record, status, error, session: view, tokenExpiresAt: expires }
     observers.forEach(observer => observer(observation))
   }

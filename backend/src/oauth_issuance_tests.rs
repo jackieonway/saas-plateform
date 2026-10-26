@@ -2,7 +2,6 @@
 //! Set TEST_DATABASE_URL explicitly; this suite never loads an environment file.
 //! Run `cargo test oauth_issuance_tests -- --ignored --test-threads=1 --nocapture`.
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,7 +12,6 @@ use axum::Router;
 use chrono::{DateTime, Utc};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde_json::Value;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::PgPool;
 use tokio::sync::Barrier;
 use tokio::task::JoinSet;
@@ -23,7 +21,6 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::entity_creation_tests::Database;
 use crate::routes;
-use crate::state::AppState;
 use crate::util::{hash, jwt};
 
 const SECRET: &str = "ordinary-oauth-disposable-database-test-secret";
@@ -144,7 +141,7 @@ impl Harness {
         let client = format!("oauth-client-{suffix}");
         sqlx::query(
             "INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,redirect_uris,grant_types,scopes,access_token_validity,refresh_token_validity,id) \
-             VALUES($1,$2,'OAuth test client',$3,'authorization_code,refresh_token,password,urn:ietf:params:oauth:grant-type:device_code','profile,email',3600,86400,$4)",
+             VALUES($1,$2,'OAuth test client',$3,'authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:device_code','profile,email',3600,86400,$4)",
         )
         .bind(&client)
         .bind(hash::sha256_hex(CLIENT_SECRET))
@@ -161,7 +158,10 @@ impl Harness {
         ]))?;
         let app = routes::api_router()
             .nest("/oauth", routes::oauth2::oauth_router())
-            .with_state(AppState::new(pool.clone(), Arc::new(config)));
+            .with_state(crate::sso_test_fixture::state(
+                pool.clone(),
+                Arc::new(config),
+            ));
         Ok(Self {
             app,
             client,
@@ -180,22 +180,6 @@ impl Harness {
         ];
         form.extend_from_slice(fields);
         request(&self.app, Method::POST, path, None, &form).await
-    }
-
-    async fn seed_unbound_refresh(&self, pool: &PgPool) -> Result<String> {
-        let token = hash::random_token(43);
-        sqlx::query(
-            "INSERT INTO oauth_tokens(token_hash,token_type,user_id,client_id,tenant_id,organization_id,scope,expires_at,id) \
-             VALUES($1,'refresh',$2,$3,$4,$5,'profile email',now()+interval '1 day',$6)",
-        )
-        .bind(hash::sha256_hex(&token))
-        .bind(self.user)
-        .bind(&self.client)
-        .bind(self.tenant)
-        .bind(self.org)
-        .bind(crate::util::uuid7::new_uuid()).execute(pool)
-        .await?;
-        Ok(token)
     }
 
     async fn seed_refresh(&self, pool: &PgPool) -> Result<String> {
@@ -595,10 +579,10 @@ async fn credential_consumption_and_both_token_writes_roll_back_together() -> Re
 
 #[tokio::test]
 #[ignore = "requires explicitly configured disposable PostgreSQL server"]
-async fn current_user_context_state_is_consistent_across_three_oauth_endpoints() -> Result<()> {
+async fn current_user_context_state_is_consistent_across_sso_derived_oauth_endpoints() -> Result<()>
+{
     let db = database().await?;
     let assertions = async {
-        let password_hash = crate::util::password::hash_password("synthetic-phase11-password")?;
         for state in [
             "user",
             "tenant_disabled",
@@ -616,24 +600,6 @@ async fn current_user_context_state_is_consistent_across_three_oauth_endpoints()
             ensure!(status == StatusCode::OK, "valid fixture failed issuance");
             let access = field(&pair, "access_token")?;
             h.assert_identity(access, true).await?;
-            sqlx::query("UPDATE users SET password_hash=$2 WHERE id=$1")
-                .bind(h.user)
-                .bind(&password_hash)
-                .execute(&db.pool)
-                .await?;
-            let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id=$1")
-                .bind(h.user)
-                .fetch_one(&db.pool)
-                .await?;
-            let password_form = [
-                ("grant_type", "password"),
-                ("username", username.as_str()),
-                ("password", "synthetic-phase11-password"),
-            ];
-            ensure!(
-                h.post("/oauth/token", &password_form).await?.0 == StatusCode::OK,
-                "valid password grant fixture failed issuance"
-            );
             let baseline = h.tokens(&db.pool).await?;
             match state {
                 "user" => {
@@ -728,22 +694,6 @@ async fn current_user_context_state_is_consistent_across_three_oauth_endpoints()
                     "{state} still issued tokens through {kind}"
                 );
             }
-            let (status, body) = h.post("/oauth/token", &password_form).await?;
-            ensure!(
-                status
-                    == if state == "client" {
-                        StatusCode::UNAUTHORIZED
-                    } else {
-                        StatusCode::BAD_REQUEST
-                    }
-                    && body["error"]
-                        == if state == "client" {
-                            "invalid_client"
-                        } else {
-                            "invalid_grant"
-                        },
-                "{state} still issued tokens through password grant"
-            );
             ensure!(
                 h.tokens(&db.pool).await? == baseline,
                 "{state} persisted more tokens after loss of identity"
@@ -811,37 +761,21 @@ async fn client_credentials_survive_unrelated_user_context_invalidation() -> Res
 #[tokio::test]
 #[ignore = "requires explicitly configured disposable PostgreSQL server"]
 async fn public_clients_cannot_issue_or_refresh_machine_credentials() -> Result<()> {
-    let db = crate::release_tests::TestDatabase::create_through(12).await?;
-    let assertions = async {
-        // A registered pre-expansion mixed client can have machine refresh
-        // credentials. Create it before 0013 rather than bypassing the new
-        // single-purpose registration constraints in the target schema.
-        let machine_client = Harness::create(&db.pool).await?;
-        sqlx::query("UPDATE oauth_clients SET grant_types='client_credentials,refresh_token' WHERE client_id=$1")
-            .bind(&machine_client.client).execute(&db.pool).await?;
-        sqlx::raw_sql(include_str!("../migrations/0013_membership_identity_policy.sql"))
-            .execute(&db.pool).await?;
-        sqlx::raw_sql(include_str!("../migrations/0014_credential_identity_binding.sql"))
-            .execute(&db.pool).await?;
-        let migrated_mode: String = sqlx::query_scalar("SELECT subject_mode FROM oauth_clients WHERE client_id=$1")
-            .bind(&machine_client.client).fetch_one(&db.pool).await?;
-        ensure!(migrated_mode == "LEGACY_MIXED", "pre-expansion mixed client lost its registered legacy purpose");
-        let (status, machine) = machine_client
-            .post("/oauth/token", &[("grant_type", "client_credentials")])
-            .await?;
-        ensure!(status == StatusCode::OK, "confidential fixture grant failed");
-        let refresh = field(&machine, "refresh_token")?;
-        let illegal_conversion = sqlx::query("UPDATE oauth_clients SET client_type='PUBLIC',client_secret_hash=NULL WHERE client_id=$1")
-            .bind(&machine_client.client).execute(&db.pool).await;
-        ensure!(matches!(illegal_conversion, Err(ref error) if error.as_database_error().and_then(|e| e.code()).as_deref()==Some("23514")),
-            "database allowed a public machine registration");
+    let db = database().await?;
+    let assertions=async {
+        let machine_client=Harness::create_machine(&db.pool).await?;
+        let (status,machine)=machine_client.post("/oauth/token",&[("grant_type","client_credentials")]).await?;
+        ensure!(status==StatusCode::OK,"machine fixture failed");
+        let foreign_access=field(&machine,"access_token")?;
+        let illegal_conversion=sqlx::query("UPDATE oauth_clients SET client_type='PUBLIC',client_secret_hash=NULL WHERE client_id=$1").bind(&machine_client.client).execute(&db.pool).await;
+        ensure!(illegal_conversion.is_err(),"database allowed a public machine registration");
         let h = Harness::create(&db.pool).await?;
         sqlx::query("UPDATE oauth_clients SET client_type='PUBLIC',client_secret_hash=NULL WHERE client_id=$1")
             .bind(&h.client).execute(&db.pool).await?;
         let original_count = h.tokens(&db.pool).await?;
         for (fields, expected_error) in [
             (vec![("client_id", h.client.as_str()), ("grant_type", "client_credentials")], "unauthorized_client"),
-            (vec![("client_id", h.client.as_str()), ("grant_type", "refresh_token"), ("refresh_token", refresh)], "invalid_grant"),
+            (vec![("client_id", h.client.as_str()), ("grant_type", "refresh_token"), ("refresh_token", foreign_access)], "invalid_grant"),
         ] {
             let (status, body) = request(&h.app, Method::POST, "/oauth/token", None, &fields).await?;
             ensure!(
@@ -925,12 +859,7 @@ async fn credential_approval_waiting_on_password_reset_rechecks_the_platform_ses
     let assertions = async {
         for kind in ["consent", "device"] {
             let h = Harness::create(&db.pool).await?;
-            let session: Uuid = sqlx::query_scalar(
-                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
-            ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
+            let session = crate::sso_test_fixture::session(&db.pool, h.user, h.tenant, h.org).await?;
             let now = Utc::now().timestamp();
             let access = jwt::sign(&jwt::Claims {
                 sub: h.user.to_string(), typ: "session".into(), tenant: Some(h.tenant.to_string()),
@@ -1136,12 +1065,7 @@ async fn approve_decision(h: &Harness, token: &str, path: &str) -> Result<Status
 }
 
 async fn consent_session(h: &Harness, pool: &PgPool) -> Result<String> {
-    let session: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
-    ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+    let session = crate::sso_test_fixture::session(pool, h.user, h.tenant, h.org).await?;
     let now = Utc::now().timestamp();
     jwt::sign(
         &jwt::Claims {
@@ -1506,12 +1430,7 @@ async fn pending_consent_rechecks_current_redirect_grant_and_scopes() -> Result<
     let assertions = async {
         for change in ["redirect", "grant", "scope"] {
             let h = Harness::create(&db.pool).await?;
-            let session: Uuid = sqlx::query_scalar(
-                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
-            ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
+            let session = crate::sso_test_fixture::session(&db.pool, h.user, h.tenant, h.org).await?;
             let now = Utc::now().timestamp();
             let access = jwt::sign(&jwt::Claims {
                 sub: h.user.to_string(), typ: "session".into(), tenant: Some(h.tenant.to_string()),
@@ -1574,12 +1493,7 @@ async fn consent_request_and_authorization_code_insert_commit_together() -> Resu
     let assertions = async {
         for stage in ["error", "skip"] {
             let h = Harness::create(&db.pool).await?;
-            let session: Uuid = sqlx::query_scalar(
-                "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-                 SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-                 FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-                 CROSS JOIN oauth_clients c WHERE u.id=$1 AND c.client_id='platform-console-legacy' RETURNING id",
-            ).bind(h.user).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
+            let session = crate::sso_test_fixture::session(&db.pool, h.user, h.tenant, h.org).await?;
             let now = Utc::now().timestamp();
             let access = jwt::sign(&jwt::Claims {
                 sub: h.user.to_string(), typ: "session".into(), tenant: Some(h.tenant.to_string()),
@@ -1621,219 +1535,6 @@ async fn consent_request_and_authorization_code_insert_commit_together() -> Resu
     db.finish(assertions).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires explicitly configured disposable PostgreSQL server"]
-async fn password_change_during_user_lock_wait_rejects_preverified_old_password() -> Result<()> {
-    let db = database().await?;
-    let assertions = async {
-        let h = Harness::create(&db.pool).await?;
-        let old_hash = crate::util::password::hash_password("phase11-old-password")?;
-        let new_hash = crate::util::password::hash_password("phase11-new-password")?;
-        sqlx::query("UPDATE users SET password_hash=$2 WHERE id=$1")
-            .bind(h.user)
-            .bind(old_hash)
-            .execute(&db.pool)
-            .await?;
-        let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id=$1")
-            .bind(h.user)
-            .fetch_one(&db.pool)
-            .await?;
-        let mut blocker = db.pool.begin().await?;
-        let blocker_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
-            .fetch_one(&mut *blocker)
-            .await?;
-        sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
-            .bind(h.user)
-            .execute(&mut *blocker)
-            .await?;
-        let (app, client) = (h.app.clone(), h.client.clone());
-        let pending = tokio::spawn(async move {
-            request(
-                &app,
-                Method::POST,
-                "/oauth/token",
-                None,
-                &[
-                    ("client_id", &client),
-                    ("client_secret", CLIENT_SECRET),
-                    ("grant_type", "password"),
-                    ("username", &username),
-                    ("password", "phase11-old-password"),
-                ],
-            )
-            .await
-        });
-        // Observe the real blocked SQL statement: verification has finished, but
-        // issuance cannot acquire its user-first lock until the password commits.
-        let waiting = tokio::time::timeout(Duration::from_secs(15), async {
-            loop {
-                let observed: bool = sqlx::query_scalar(
-                    "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() \
-                     AND wait_event_type='Lock' AND $1=ANY(pg_blocking_pids(pid)) \
-                     AND query LIKE '%FROM users%' AND query LIKE '%FOR UPDATE%')",
-                ).bind(blocker_pid).fetch_one(&db.pool).await?;
-                if observed {
-                    return Ok::<_, anyhow::Error>(());
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await;
-        if !matches!(waiting, Ok(Ok(()))) {
-            blocker.rollback().await?;
-            let _ = pending.await;
-            return Err(anyhow!(
-                "password request never reached the observed user-lock barrier"
-            ));
-        }
-        sqlx::query(
-            "UPDATE users SET password_hash=$2,session_version=session_version+1 WHERE id=$1",
-        )
-        .bind(h.user)
-        .bind(new_hash)
-        .execute(&mut *blocker)
-        .await?;
-        blocker.commit().await?;
-        let (status, body) = pending.await??;
-        ensure!(
-            status == StatusCode::BAD_REQUEST && body["error"] == "invalid_grant",
-            "preverified old password issued a token after the locked password changed"
-        );
-        ensure!(
-            h.tokens(&db.pool).await? == 0,
-            "password race persisted tokens"
-        );
-        Ok(())
-    }
-    .await;
-    db.finish(assertions).await
-}
-
-#[tokio::test]
-#[ignore = "requires explicitly configured disposable PostgreSQL server"]
-async fn password_grant_selects_an_active_membership_after_an_inactive_one() -> Result<()> {
-    let db = database().await?;
-    let assertions = async {
-        let password = "Synthetic-membership-password-8H!";
-        let password_hash = crate::util::password::hash_password(password)?;
-        for state in ["organization_disabled", "ancestor_expired", "tenant_disabled", "tenant_expired"] {
-            let h = Harness::create(&db.pool).await?;
-            let username: String = sqlx::query_scalar("UPDATE users SET password_hash=$2 WHERE id=$1 RETURNING username")
-                .bind(h.user).bind(&password_hash).fetch_one(&db.pool).await?;
-            sqlx::query("UPDATE memberships SET created_at=now()-interval '1 day' WHERE user_id=$1")
-                .bind(h.user).execute(&db.pool).await?;
-            let fallback_tenant: Uuid = sqlx::query_scalar(
-                "INSERT INTO tenants(name,code,id) VALUES('Active password context',$1,$2) RETURNING id",
-            ).bind(format!("active-{}", crate::util::uuid7::new_uuid().simple())).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
-            let fallback_org: Uuid = sqlx::query_scalar(
-                "INSERT INTO organizations(tenant_id,name,id) VALUES($1,'Active password organization',$2) RETURNING id",
-            ).bind(fallback_tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
-            sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
-                .bind(h.user).bind(fallback_org).bind(crate::util::uuid7::new_uuid()).execute(&db.pool).await?;
-            let (statement, id) = match state {
-                "organization_disabled" => ("UPDATE organizations SET status='DISABLED' WHERE id=$1", h.org),
-                "ancestor_expired" => ("UPDATE organizations SET expires_at=now()-interval '1 hour' WHERE id=$1", h.parent),
-                "tenant_disabled" => ("UPDATE tenants SET status='DISABLED' WHERE id=$1", h.tenant),
-                _ => ("UPDATE tenants SET expires_at=now()-interval '1 hour' WHERE id=$1", h.tenant),
-            };
-            sqlx::query(statement).bind(id).execute(&db.pool).await?;
-            let fields = [("grant_type", "password"), ("username", username.as_str()), ("password", password)];
-            let (status, pair) = h.post("/oauth/token", &fields).await?;
-            ensure!(status == StatusCode::OK, "inactive first membership blocked valid password context: {state}");
-            let claims = jwt::verify(field(&pair, "access_token")?, SECRET)?;
-            ensure!(claims.tenant.as_deref() == Some(fallback_tenant.to_string().as_str())
-                && claims.org.as_deref() == Some(fallback_org.to_string().as_str()),
-                "password grant selected an inactive context: {state}");
-            sqlx::query("UPDATE organizations SET status='DISABLED' WHERE id=$1")
-                .bind(fallback_org).execute(&db.pool).await?;
-            let (status, body) = h.post("/oauth/token", &fields).await?;
-            ensure!(status == StatusCode::BAD_REQUEST && body["error"] == "invalid_grant",
-                "password grant accepted an account without active memberships");
-        }
-        Ok(())
-    }.await;
-    db.finish(assertions).await
-}
-
-#[tokio::test]
-#[ignore = "requires explicitly configured disposable PostgreSQL server"]
-async fn pre_migration_plaintext_is_retained_but_requires_new_authentication() -> Result<()> {
-    let db = database().await?;
-    let assertions = async {
-        let name = format!("oauth_legacy_upgrade_{}", crate::util::uuid7::new_uuid().simple());
-        sqlx::query(&format!("CREATE DATABASE \"{name}\""))
-            .execute(&db.pool).await?;
-        let options = PgConnectOptions::from_str(&std::env::var("TEST_DATABASE_URL")?)
-            .map_err(|_| anyhow!("invalid isolated PostgreSQL test configuration"))?
-            .database(&name);
-        let pool = PgPoolOptions::new().max_connections(3).connect_with(options).await?;
-        let upgrade: Result<()> = async {
-            // Build the actual pre-0003 schema, then insert old credentials before
-            // running the unchanged migration under test.
-            sqlx::raw_sql(include_str!("../migrations/0001_init.sql")).execute(&pool).await?;
-            sqlx::raw_sql(include_str!("../migrations/0002_release_artifacts.sql")).execute(&pool).await?;
-            let h = Harness::create(&pool).await?;
-            // A historical PUBLIC client must keep compatibility after the
-            // opt-in PKCE migration, independently of managed creation defaults.
-            let public_client = format!("legacy-public-{}", crate::util::uuid7::new_uuid().simple());
-            sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,grant_types,scopes,redirect_uris,id) VALUES($1,'Historical public client','PUBLIC','authorization_code,refresh_token','profile',$2,$3)")
-                .bind(&public_client).bind(REDIRECT).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
-            let now = Utc::now().timestamp();
-            let legacy = jwt::sign(&jwt::Claims {
-                sub: h.user.to_string(), typ: "access".into(), tenant: Some(h.tenant.to_string()),
-                org: Some(h.org.to_string()), cid: Some(h.client.clone()), scope: Some("profile email".into()),
-                sid: None, ver: None, aud: None, jti: None, iat: now, exp: now+3600,
-            }, SECRET)?;
-            sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,user_id,client_id,tenant_id,organization_id,scope,expires_at,id) VALUES($1,'access',$2,$3,$4,$5,$6,'profile email',now()+interval '1 hour',$7)")
-                .bind(hash::sha256_hex(&legacy)).bind(&legacy).bind(h.user).bind(&h.client).bind(h.tenant).bind(h.org).bind(crate::util::uuid7::new_uuid()).execute(&pool).await?;
-            let refresh = h.seed_unbound_refresh(&pool).await?;
-            sqlx::raw_sql(include_str!("../migrations/0003_oauth_issuance.sql")).execute(&pool).await?;
-            let versions: Vec<i16> = sqlx::query_scalar("SELECT storage_version FROM oauth_tokens")
-                .fetch_all(&pool).await?;
-            ensure!(versions == vec![1,1], "migration did not mark both existing credentials as legacy");
-            // Exercise current routes only after upgrading the fixture through
-            // the real remaining migrations, including employee identity gates.
-            for migration in sqlx::migrate!("./migrations").iter().filter(|migration| migration.version > 3) {
-                sqlx::raw_sql(&migration.sql).execute(&pool).await?;
-            }
-            let public_requires_pkce: bool = sqlx::query_scalar("SELECT require_pkce FROM oauth_clients WHERE client_id=$1")
-                .bind(&public_client).fetch_one(&pool).await?;
-            ensure!(!public_requires_pkce, "PKCE migration forced a historical PUBLIC client into strict mode");
-            h.assert_identity(&legacy, false).await?;
-            let (status,rejected)=h.refresh(&refresh).await?;
-            ensure!(status==StatusCode::BAD_REQUEST && rejected["error"]=="invalid_grant", "migration restored an unbound refresh credential");
-            let password="Owned-reauthenticated-migration-password9!";
-            let password_hash=crate::util::password::hash_password(password)?;
-            let username:String=sqlx::query_scalar("UPDATE users SET password_hash=$2 WHERE id=$1 RETURNING username")
-                .bind(h.user).bind(password_hash).fetch_one(&pool).await?;
-            let (status,pair)=h.post("/oauth/token",&[("grant_type","password"),("username",&username),("password",password)]).await?;
-            ensure!(status==StatusCode::OK,"new password authentication failed after migration");
-            let new_version: i16 = sqlx::query_scalar("SELECT storage_version FROM oauth_tokens WHERE token_hash=$1")
-                .bind(hash::sha256_hex(field(&pair,"access_token")?)).fetch_one(&pool).await?;
-            ensure!(new_version == 2, "new issuance retained legacy storage semantics");
-            ensure!(h.post("/oauth/revoke", &[("token",&legacy)]).await?.0 == StatusCode::OK,
-                "migration check constraint prevented legacy plaintext row revocation");
-            h.assert_identity(&legacy, false).await?;
-            let retained: (Option<String>, bool, i16) = sqlx::query_as("SELECT jwt,revoked,storage_version FROM oauth_tokens WHERE token_hash=$1")
-                .bind(hash::sha256_hex(&legacy)).fetch_one(&pool).await?;
-            ensure!(retained == (Some(legacy),true,1), "migration deleted or rewrote historical token material");
-            let invalid = sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,jwt,client_id,expires_at,id) VALUES($1,'access','new plaintext forbidden',$2,now()+interval '1 hour',$3)")
-                .bind(hash::sha256_hex("synthetic-invalid-new-token")).bind(&h.client).bind(crate::util::uuid7::new_uuid()).execute(&pool).await;
-            ensure!(matches!(invalid, Err(ref error) if error.as_database_error().and_then(|e| e.code()).as_deref()==Some("23514")),
-                "new ordinary OAuth JWT plaintext was accepted by the database");
-            Ok(())
-        }.await;
-        pool.close().await;
-        // name is generated locally from a fixed prefix and UUID, never an input.
-        let cleanup = sqlx::query(&format!("DROP DATABASE \"{name}\" WITH (FORCE)"))
-            .execute(&db.pool).await;
-        upgrade?;
-        cleanup?;
-        Ok(())
-    }.await;
-    db.finish(assertions).await
-}
-
 #[tokio::test]
 #[ignore = "requires explicitly configured disposable PostgreSQL server"]
 async fn real_http_approval_keeps_parent_proof_through_exchange_and_revocation() -> Result<()> {
@@ -1841,10 +1542,6 @@ async fn real_http_approval_keeps_parent_proof_through_exchange_and_revocation()
     let assertions=async {
         for retirement in ["parent_logout","source_policy"] {
             let h=Harness::create(&db.pool).await?;
-            let password="Owned-independent-password-proof-9!";
-            let password_hash=crate::util::password::hash_password(password)?;
-            let username:String=sqlx::query_scalar("UPDATE users SET password_hash=$2 WHERE id=$1 RETURNING username")
-                .bind(h.user).bind(password_hash).fetch_one(&db.pool).await?;
             let parent=consent_session(&h,&db.pool).await?;
             let parent_id=Uuid::parse_str(jwt::verify(&parent,SECRET)?.sid.as_deref()
                 .ok_or_else(||anyhow!("owned parent session omitted its ID"))?)?;
@@ -1887,18 +1584,15 @@ async fn real_http_approval_keeps_parent_proof_through_exchange_and_revocation()
             ensure!(token_proofs.len()==2 && token_proofs.iter().all(|proof|proof==&expected),
                 "code exchange changed or discarded the original grant proof");
             h.assert_identity(access,true).await?;
-            // A separately proved password grant has no dependency on the parent
-            // console session or its source client. It must remain usable.
-            let (status,direct)=h.post("/oauth/token",&[("grant_type","password"),("username",&username),("password",password)]).await?;
-            ensure!(status==StatusCode::OK,"independent password proof failed issuance");
-            let direct_access=field(&direct,"access_token")?;
-            let direct_parent:Option<Uuid>=sqlx::query_scalar("SELECT platform_session_id FROM oauth_tokens WHERE token_hash=$1")
-                .bind(hash::sha256_hex(direct_access)).fetch_one(&db.pool).await?;
-            ensure!(direct_parent.is_none(),"direct password grant inherited an unrelated parent");
+            let independent_parent = consent_session(&h, &db.pool).await?;
+            let (_, pending) = pkce_authorize(&h, None).await?;
+            let independent_code = consent_code(&h, &independent_parent, pending["requestId"].as_str().unwrap().parse()?).await?;
+            let (status, direct) = h.exchange("code", &independent_code).await?;
+            ensure!(status == StatusCode::OK, "independent SSO grant failed issuance");
+            let direct_access = field(&direct, "access_token")?;
             match retirement {
-                "parent_logout"=>ensure!(request(&h.app,Method::POST,"/api/auth/logout",Some(&parent),&[]).await?.0==StatusCode::OK,
-                    "owned parent logout failed"),
-                _=>{sqlx::query("UPDATE oauth_clients SET status='DISABLED' WHERE client_id='platform-console-legacy'")
+                "parent_logout"=>{sqlx::query("UPDATE platform_sessions SET revoked_at=clock_timestamp() WHERE id=$1").bind(parent_id).execute(&db.pool).await?;}
+                _=>{sqlx::query("UPDATE oidc_clients SET status='DISABLED',access_policy_version=access_policy_version+1 WHERE id=(SELECT origin_client_ref::uuid FROM platform_sessions WHERE id=$1)").bind(parent_id)
                     .execute(&db.pool).await?;}
             }
             let unchanged:(String,i64)=sqlx::query_as("SELECT status,access_policy_version FROM oauth_clients WHERE client_id=$1")
@@ -1912,9 +1606,9 @@ async fn real_http_approval_keeps_parent_proof_through_exchange_and_revocation()
                 "unconsumed HTTP code survived its original parent retirement");
             ensure!(h.exchange("device",device_secret).await?.0==StatusCode::BAD_REQUEST,
                 "approved HTTP device survived its original parent retirement");
-            h.assert_identity(direct_access,true).await?;
-            ensure!(h.refresh(field(&direct,"refresh_token")?).await?.0==StatusCode::OK,
-                "parent retirement revoked the independent password grant");
+            h.assert_identity(direct_access, retirement == "parent_logout").await?;
+            if retirement == "parent_logout" { ensure!(h.refresh(field(&direct,"refresh_token")?).await?.0 == StatusCode::OK,
+                "parent retirement revoked the independent SSO browser grant"); }
         }
         Ok(())
     }.await;

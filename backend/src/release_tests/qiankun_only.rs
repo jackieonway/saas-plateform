@@ -3,60 +3,6 @@ use super::*;
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
-async fn qiankun_only_upgrade_preserves_archives_and_built_in_routes() -> Result<()> {
-    let database = TestDatabase::create_through(8).await?;
-    let result:Result<()>=async {
-        database_upgrade::historical_loader_constraints(&database.pool).await?;
-        let mut ids=Vec::new();
-        for (code,path,kind,mode) in [
-            ("old-esm","/micro/old-esm","ESM","TRUSTED"),
-            ("old-frame","/micro/old-frame","HTML","IFRAME"),
-            ("old-active","/micro/old-active","HTML","TRUSTED"),
-            ("valid","/micro/valid","HTML","TRUSTED"),
-            ("system","/system","ESM","IFRAME"),
-            ("hermes","/hermes","ESM","TRUSTED"),
-        ] {
-            let id:Uuid=sqlx::query_scalar("INSERT INTO applications(code,name,base_path,entry_type,runtime_mode,entry_url,id) VALUES($1,$1,$2,$3,$4,'/legacy/index.html',$5) RETURNING id")
-                .bind(code).bind(path).bind(kind).bind(mode).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-            ids.push(id);
-        }
-        let menu:Uuid=sqlx::query_scalar("INSERT INTO menus(application_id,title,path,id) VALUES($1,'Kept page','/micro/old-frame',$2) RETURNING id")
-            .bind(ids[1]).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        let release:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) \
-            VALUES($1,'development','old-v1','ESM','/legacy/old-v1/main.js','PASSED',now(),$2) RETURNING id")
-            .bind(ids[2]).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        sqlx::query("INSERT INTO application_deployments(application_id,environment,active_release_id) VALUES($1,'development',$2)")
-            .bind(ids[2]).bind(release).execute(&database.pool).await?;
-        sqlx::raw_sql(include_str!("../../migrations/0009_qiankun_only.sql")).execute(&database.pool).await?;
-        let rows:Vec<(Uuid,String,String,String)>=sqlx::query_as("SELECT id,status,entry_type,runtime_mode FROM applications WHERE id=ANY($1)")
-            .bind(&ids).fetch_all(&database.pool).await?;
-        for (index,id) in ids.iter().enumerate() {
-            let row=rows.iter().find(|row|row.0 == *id).unwrap();
-            ensure!(row.1 == if index<3 {"DISABLED"} else {"ENABLED"},"upgrade changed the wrong application status");
-            if index == 0 {ensure!(row.2 == "ESM" && row.3 == "TRUSTED","upgrade silently rewrote ESM trust");}
-            if index == 1 {ensure!(row.2 == "HTML" && row.3 == "IFRAME","upgrade silently granted iframe trust");}
-        }
-        let kept:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM menus WHERE id=$1) AND EXISTS(SELECT 1 FROM application_releases WHERE id=$2)")
-            .bind(menu).bind(release).fetch_one(&database.pool).await?;
-        ensure!(kept,"upgrade removed business menus or release archives");
-        for id in &ids[..3] {
-            let entry:String=sqlx::query_scalar("SELECT entry_url FROM application_effective_entry($1,'development')")
-                .bind(id).fetch_one(&database.pool).await?;
-            ensure!(entry.is_empty(),"historical incompatible micro entry remained executable");
-        }
-        let builtin:String=sqlx::query_scalar("SELECT entry_url FROM application_effective_entry($1,'development')")
-            .bind(ids[4]).fetch_one(&database.pool).await?;
-        ensure!(builtin == "/legacy/index.html","built-in route metadata was erased");
-        let defaults:(String,String)=sqlx::query_as("INSERT INTO applications(code,name,base_path,id) VALUES('default-new','Default new','/micro/default-new',$1) RETURNING entry_type,runtime_mode")
-            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        ensure!(defaults == ("HTML".into(),"TRUSTED".into()),"new database defaults are not qiankun");
-        Ok(())
-    }.await;
-    database.finish(result).await
-}
-
-#[tokio::test]
-#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
 async fn qiankun_only_apis_require_explicit_reconfiguration_and_archive_esm_releases() -> Result<()>
 {
     let database = TestDatabase::create().await?;

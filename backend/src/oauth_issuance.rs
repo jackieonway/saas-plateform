@@ -92,42 +92,6 @@ impl From<UserBinding> for StoredBinding {
     }
 }
 
-/// Capture only for new password authentication, never a stored grant exchange.
-/// The caller holds the user, application and client locks in that order.
-pub(crate) async fn capture_binding(
-    connection: &mut PgConnection,
-    user_id: Uuid,
-    tenant_id: Uuid,
-    org_id: Uuid,
-    membership_id: Uuid,
-    client_id: &str,
-) -> Result<Option<UserBinding>, sqlx::Error> {
-    let binding = sqlx::query_as::<_, UserBinding>(
-        "SELECT u.session_version AS account_version, m.id AS membership_id, m.member_type::text, \
-         m.identity_version, c.access_policy_version AS client_policy_version, c.application_id, \
-         a.access_policy_version AS application_policy_version, NULL::uuid AS platform_session_id \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.id=$2 \
-         JOIN oauth_clients c ON c.client_id=$3 \
-         LEFT JOIN applications a ON a.id=c.application_id WHERE u.id=$1",
-    )
-    .bind(user_id)
-    .bind(membership_id)
-    .bind(client_id)
-    .fetch_optional(&mut *connection)
-    .await?;
-    let Some(binding) = binding else {
-        return Ok(None);
-    };
-    if binding_identity(connection, user_id, tenant_id, org_id, client_id, &binding)
-        .await?
-        .is_some()
-    {
-        Ok(Some(binding))
-    } else {
-        Ok(None)
-    }
-}
-
 /// Validate exactly the proof stored at issuance; current state cannot repair it.
 pub(crate) async fn binding_identity(
     connection: &mut PgConnection,

@@ -546,7 +546,9 @@ async fn phase12_narrow_projections_and_command_fences_hold_exact_original_bindi
 {
     let mut db = Database::create().await?;
     let result=async {
-        let f=Fixture::create(&db.pool).await?;db.provision().await?;
+        let f=Fixture::create(&db.pool).await?;
+        bind_sso_fixture(&db.pool, &f).await?;
+        db.provision().await?;
         let identity=db.identity()?;let platform=db.platform()?;
         for table in ["public.platform_sessions","public.memberships"] {
             assert_definer_owner_privileges(identity,"public.platform_password_context_active(uuid,uuid,uuid,uuid,bigint)",&db.role("platform_owner"),table).await?;
@@ -621,6 +623,24 @@ async fn oidc_source(pool: &PgPool, user: Uuid, customer: bool) -> Result<OidcSo
         auth_time,
         expires,
     })
+}
+
+// Permission/fence fixtures use real SSO source rows; historical password-mode
+// sessions are no longer valid positive inputs after migration 0021.
+async fn bind_sso_fixture(pool: &PgPool, fixture: &Fixture) -> Result<()> {
+    let source = oidc_source(pool, fixture.user, false).await?;
+    let browser = uuid7::new_uuid();
+    let bff = uuid7::new_uuid();
+    let hash = hash::sha256_hex(&bff.to_string());
+    sqlx::query("INSERT INTO console_browsers(id,token_hash,generation,current_session_id,created_at,expires_at) VALUES($1,$2,1,$3,clock_timestamp(),clock_timestamp()+interval '1 hour')")
+        .bind(browser).bind(&hash).bind(bff).execute(pool).await?;
+    sqlx::query("INSERT INTO bff_sessions(id,browser_id,token_hash,csrf_hash,user_id,account_version,global_session_id,oidc_client_id,oidc_grant_id,oidc_client_policy_version,issuer,auth_time,nonce_hash,access_ciphertext,refresh_ciphertext,access_expires_at,version,selected_session_id,created_at,expires_at) VALUES($1,$2,$3,$3,$4,3,$5,$6,$7,1,$8,$9,$3,'owned-fixture-only','owned-fixture-only',$10,1,$11,clock_timestamp(),clock_timestamp()+interval '30 minutes')")
+        .bind(bff).bind(browser).bind(&hash).bind(fixture.user).bind(source.sid).bind(source.client)
+        .bind(source.grant).bind(ISSUER).bind(source.auth_time).bind(source.expires).bind(fixture.sessions[0])
+        .execute(pool).await?;
+    sqlx::query("UPDATE platform_sessions SET bff_session_id=$1,bff_context_version=1,origin_issuer=$2,origin_client_ref=$3,origin_client_policy_version=1 WHERE id=$4")
+        .bind(bff).bind(ISSUER).bind(source.client.to_string()).bind(fixture.sessions[0]).execute(pool).await?;
+    Ok(())
 }
 
 async fn customer_projection(pool: &PgPool, user: Uuid, source: &OidcSource) -> Result<bool> {

@@ -1051,9 +1051,11 @@ async fn expansion_api_contract(h: &Harness) -> Result<()> {
 async fn target_schema_contract(h: &Harness) -> Result<()> {
     // This contraction exists ONLY inside the owned, disposable test database.
     // The shipping migration intentionally keeps the old unique constraint.
-    sqlx::query("ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key")
-        .execute(&h.pool)
-        .await?;
+    sqlx::query(
+        "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
+    )
+    .execute(&h.pool)
+    .await?;
     let subject = user(&h.pool, "identity-dual-subject", false).await?;
     let employee = successful(&h.create_member(subject, h.child, "EMPLOYEE").await?)?;
     let second_path = format!("/api/memberships/{employee}/second-identity");
@@ -1480,61 +1482,6 @@ async fn membership_lifecycle_phase01_contract_matrix() -> Result<()> {
         Ok(())
     }
     .await;
-    database.finish(result).await
-}
-
-#[tokio::test]
-#[ignore = "creates a pre-expansion fixture then upgrades it inside an owned identity_phase01_* database"]
-async fn membership_lifecycle_phase01_existing_employee_upgrade() -> Result<()> {
-    let database = Database::create(12).await?;
-    let result = async {
-        let pre = uuid_baseline(&database.pool).await?;
-        let (_,org) = tenant(&database.pool,"identity-upgrade-fixture").await?;
-        let subject = user(&database.pool,"identity-upgrade-employee",false).await?;
-        let employee = new_uuid();
-        sqlx::query("INSERT INTO memberships(id,user_id,organization_id,position) VALUES($1,$2,$3,'Original employee')")
-            .bind(employee).bind(subject).bind(org).execute(&database.pool).await?;
-        let app_id = new_uuid();
-        sqlx::query("INSERT INTO applications(id,name,code) VALUES($1,'Upgrade fixture','identity-upgrade')")
-            .bind(app_id).execute(&database.pool).await?;
-        let grant = new_uuid();
-        sqlx::query("INSERT INTO membership_data_grants(id,membership_id,application_id,resource_code,action_code,scope_type) VALUES($1,$2,$3,'fixture','read','SELF')")
-            .bind(grant).bind(employee).bind(app_id).execute(&database.pool).await?;
-        let role = new_uuid();
-        sqlx::query("INSERT INTO roles(id,tenant_id,organization_id,name) SELECT $1,tenant_id,id,'Upgrade employee role' FROM organizations WHERE id=$2")
-            .bind(role).bind(org).execute(&database.pool).await?;
-        sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
-            .bind(subject).bind(role).bind(org).execute(&database.pool).await?;
-        for (client_id,grants) in [("identity-upgrade-user","authorization_code,refresh_token"),
-            ("identity-upgrade-machine","client_credentials"),("identity-upgrade-mixed","client_credentials,password")] {
-            sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,grant_types) VALUES($1,$2,$2,$3)")
-                .bind(new_uuid()).bind(client_id).bind(grants).execute(&database.pool).await?;
-        }
-        sqlx::migrate!("./migrations").run(&database.pool).await?;
-        let stored: (Uuid,String,String,i64,String) = sqlx::query_as("SELECT id,member_type,status,identity_version,position FROM memberships WHERE user_id=$1 AND organization_id=$2")
-            .bind(subject).bind(org).fetch_one(&database.pool).await?;
-        ensure!(stored == (employee,"EMPLOYEE".into(),"ENABLED".into(),1,"Original employee".into()),"upgrade changed employee identity, profile or safe defaults");
-        let saved_grant: Uuid = sqlx::query_scalar("SELECT membership_id FROM membership_data_grants WHERE id=$1")
-            .bind(grant).fetch_one(&database.pool).await?;
-        ensure!(saved_grant == employee,"upgrade broke authorization reference");
-        let role_preserved: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM user_roles WHERE user_id=$1 AND role_id=$2 AND organization_id=$3)")
-            .bind(subject).bind(role).bind(org).fetch_one(&database.pool).await?;
-        ensure!(role_preserved,"upgrade lost employee role binding");
-        let modes: Vec<(String,String,Vec<String>)> = sqlx::query_as("SELECT client_id,subject_mode,allowed_member_types FROM oauth_clients ORDER BY client_id")
-            .fetch_all(&database.pool).await?;
-        ensure!(modes == vec![
-            ("identity-upgrade-machine".into(),"MACHINE".into(),vec![]),
-            ("identity-upgrade-mixed".into(),"LEGACY_MIXED".into(),vec!["EMPLOYEE".into()]),
-            ("identity-upgrade-user".into(),"USER".into(),vec!["EMPLOYEE".into()]),
-            ("platform-console-legacy".into(),"USER".into(),vec!["EMPLOYEE".into()])],"upgrade misclassified client purpose or opened customer admission");
-        let post = uuid_baseline(&database.pool).await?;
-        let unique_keys: i64 = sqlx::query_scalar("SELECT count(*) FROM pg_constraint WHERE conrelid='memberships'::regclass AND conname IN ('memberships_user_id_organization_id_key','memberships_user_organization_type_key')")
-            .fetch_one(&database.pool).await?;
-        ensure!(unique_keys == 2,"upgrade did not retain both unique constraints");
-        db_reject(&database.pool,&format!("INSERT INTO users(id,username,password_hash) VALUES('{}','identity-upgrade-employee','fixture')",new_uuid()),"23505").await?;
-        eprintln!("identity_phase01 existing_employee_upgrade=PASS role_and_grant_references=PASS existing_client_classification=PASS pre_uuid_columns={} post_uuid_columns={} uuid_values={} foreign_keys={} defaults=0",pre.0,post.0,post.1,post.2);
-        Ok(())
-    }.await;
     database.finish(result).await
 }
 

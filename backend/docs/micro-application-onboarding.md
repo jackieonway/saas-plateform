@@ -30,7 +30,7 @@ qiankun 传参的职责如下：
 | `websocket-chat` | 示例 `websocket` | `http://127.0.0.1:3007/index.html` |
 | `oauth-playground` | 示例 `oauth-playground/frontend` | `http://127.0.0.1:3010/index.html` |
 
-各工程单独启动，平台不自动创建示例应用或授权。宿主旧 `public/sub-apps` Vue/jQuery 副本已删除；示例使用上述独立工程构建的产物。门店历史包保留原字节，本地发布工具只新增并验证 qiankun 版本，不覆盖历史目录，详见[实施与验证](qiankun-audit.md)。
+各工程单独启动，平台不自动创建示例应用或授权。宿主旧 `public/sub-apps` Vue/jQuery 副本已删除；示例使用上述独立工程构建的产物。门店历史包保留原字节，本地发布工具只新增并验证 qiankun 版本，不覆盖历史目录，详见[当前初始化与部署](fresh-installation.md)。
 
 ## 后台接入流程
 

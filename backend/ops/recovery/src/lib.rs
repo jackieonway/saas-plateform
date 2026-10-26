@@ -4,8 +4,6 @@ mod bundle;
 mod config;
 mod native;
 mod schema;
-mod uuid_inventory;
-mod uuid_rekey;
 mod workflow;
 
 pub use workflow::execute;

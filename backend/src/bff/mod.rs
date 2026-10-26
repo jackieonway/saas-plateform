@@ -21,12 +21,6 @@ use uuid::Uuid;
 const LOGIN_COOKIE: &str = "__Host-saas_console_login";
 const SESSION_COOKIE: &str = "__Host-saas_console";
 
-fn enabled(state: &AppState) -> Result<(), AppError> {
-    if !state.config.bff_enabled {
-        return Err(AppError::not_found("平台 BFF 未启用"));
-    }
-    Ok(())
-}
 fn secret() -> Result<String, AppError> {
     crate::sso::opaque_secret()
 }
@@ -66,7 +60,6 @@ fn unique<'a>(headers: &'a HeaderMap, name: &str) -> Result<Option<&'a str>, App
         .transpose()
 }
 fn origin(state: &AppState, headers: &HeaderMap, read: bool) -> Result<(), AppError> {
-    enabled(state)?;
     if headers.contains_key(header::AUTHORIZATION) {
         return Err(AppError::unauthorized("此入口只接受平台 BFF Cookie"));
     }
@@ -112,9 +105,8 @@ fn cookie(name: &str, value: &str, ttl: i64) -> String {
     )
 }
 
-/// Used only before caller-owned database transactions. Existing legacy
-/// sessions incur no network request; BFF-derived business credentials require
-/// a fresh, exact upstream account proof and never refresh on this path.
+/// Require a fresh, exact SSO account proof before caller-owned transactions.
+/// Unbound historical sessions are never accepted or refreshed on this path.
 pub(crate) async fn require_platform_session(state: &AppState, sid: Uuid) -> Result<(), AppError> {
     let bff: Option<Option<Uuid>> =
         sqlx::query_scalar("SELECT bff_session_id FROM platform_sessions WHERE id=$1")
@@ -123,11 +115,8 @@ pub(crate) async fn require_platform_session(state: &AppState, sid: Uuid) -> Res
             .await
             .map_err(|_| AppError::Unavailable)?;
     let Some(Some(id)) = bff else {
-        return Ok(());
+        return Err(AppError::unauthorized("平台会话必须来自统一登录"));
     };
-    if !state.config.bff_enabled {
-        return Err(AppError::Unavailable);
-    }
     let session = store::session_id(&state.pool, id, false)
         .await?
         .ok_or_else(|| AppError::unauthorized("平台认证已失效"))?;

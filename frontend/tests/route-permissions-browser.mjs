@@ -5,7 +5,7 @@ import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
-import { fixtureUuid, identityForProfile, installLegacyAuthMode, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
+import { fixtureUuid, identityForProfile, installSsoAuthMode, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.ROUTE_PERMISSIONS_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -86,7 +86,7 @@ async function fixture(pathname, options = {}) {
   state.releaseMenus = () => releaseMenus?.()
   page.on("pageerror", (error) => state.errors.push(error.message))
   if (options.authenticated !== false) await installSession(context, "guard-session", identityForProfile(state.profile))
-  else await installLegacyAuthMode(context)
+  else await installSsoAuthMode(context)
   await context.addInitScript(() => {
     localStorage.setItem("platform-theme", "light")
   })
@@ -212,7 +212,7 @@ try {
   })
   await check("unauthenticated deep link redirects before business mount", "/system/tenants", { authenticated: false }, async ({ page, state }) => {
     await page.waitForURL(/\/login\?return=/)
-    await page.getByLabel("登录账号").waitFor()
+    await page.getByRole("button", { name: "继续统一登录", exact: true }).waitFor()
     noBusinessRequests(state)
     assert.equal(state.requests.some((request) => request.pathname.startsWith("/api/auth/")), false)
   })
@@ -313,7 +313,7 @@ try {
     assert.equal(await page.getByText(tenant.name, { exact: true }).count(), 0)
     const before = state.requests.filter((request) => request.pathname === "/api/tenants").length
     state.permissions = []
-    await page.evaluate((proof) => window.__permissionAuth.getState().setSession("new-guard-session", "new-guard-refresh", undefined, proof), identityForProfile(state.profile))
+    await page.evaluate((proof) => window.__replaceFixtureSession("new-guard-session", proof), identityForProfile(state.profile))
     await page.getByText("无访问权限", { exact: true }).waitFor()
     assert.equal(await page.getByText(tenant.name, { exact: true }).count(), 0)
     assert.equal(state.requests.filter((request) => request.pathname === "/api/tenants").length, before)
@@ -511,12 +511,12 @@ try {
       { accountVersion: "1" },
     ].entries()) {
       state.profile = profileWithIdentity({ ...structuredClone(profile), ...patch })
-      await page.evaluate(({ proof, token }) => window.__permissionAuth.getState().setSession(token, null, undefined, proof),
+      await page.evaluate(({ proof, token }) => window.__replaceFixtureSession(token, proof),
         { proof: identityForProfile(state.profile), token: `other-menu-context-${index}` })
       await root.waitFor()
       assert.equal(await root.getAttribute("aria-expanded"), "true", "Another concrete member or generation uses its own fold preferences")
       state.profile = structuredClone(profile)
-      await page.evaluate(({ proof, token }) => window.__permissionAuth.getState().setSession(token, null, undefined, proof),
+      await page.evaluate(({ proof, token }) => window.__replaceFixtureSession(token, proof),
         { proof: identityForProfile(state.profile), token: `restored-menu-context-${index}` })
       await root.waitFor()
       assert.equal(await root.getAttribute("aria-expanded"), "false", "Original concrete identity restores its own fold preferences")

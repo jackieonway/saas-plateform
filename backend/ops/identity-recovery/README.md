@@ -1,14 +1,12 @@
 # 身份感知双库恢复作业
 
-本目录提供离线恢复原语和外部 witness 存储。Phase 13 的任务适配器位于 `local-identity-sso-phase13-qa/recovery-rehearsal.py`，由独占运行器显式调用 `run(context)`。模块导入不执行 I/O；runtime 服务不导入此目录，不增加启动 DDL、共享表权限或故障登录旁路。
-
-当前自动演练严格绑定任务 UUIDv7、专用 PostgreSQL cluster、两个精确新库名及其 comment。它不会接管 preview/UUID 专项数据库。此文件描述操作和限制；实际通过与否以当轮安全 receipt 和阶段验收记录为准。
+当前自动演练严格绑定部署 UUIDv7、专用 PostgreSQL cluster、精确新库名及其 comment。它不会接管 preview/UUID 专项数据库。此文件描述操作和限制；实际通过与否以当轮安全 receipt 和阶段验收记录为准。
 
 ## 执行职责
 
 恢复由唯一的受控离线作业执行。它需要能够恢复全部原 owner 和 grantor 的独立管理连接；现行数据库 migration owner 是 NOLOGIN，且不继承 identity/platform owner，不能把普通 migration owner 登录或任一 runtime 当成跨 owner 恢复管理员。不得临时授予 runtime owner、SET ROLE、CREATE、TRIGGER 或原始认证表权限。
 
-执行前由部署维护人停止接流、暂停自动重启，排空并停止 identity、platform、portal、notification 和候选实例，关闭所有指向两个任务库的非管理连接。恢复期间入口保持关闭。脚本只使用普通 DROP DATABASE，并检查全部目标的 cluster、数据库名、comment、owner/ACL 和零连接。生产恢复还需要真实资产登记、明确维护人、持续完整的库外 deny/highwater 日志与独立恢复授权；本任务绑定及一次本地演练不替代这些输入。
+执行前由部署维护人停止接流、暂停自动重启，排空并停止 identity、platform、portal、notification 和候选实例，关闭所有指向当前部署库的非管理连接。恢复期间入口保持关闭。脚本只使用普通 DROP DATABASE，并检查全部目标的 cluster、数据库名、comment、owner/ACL 和零连接。生产恢复还需要真实资产登记、明确维护人、持续完整的库外 deny/highwater 日志与独立恢复授权；本任务绑定及一次本地演练不替代这些输入。
 
 ## Checkpoint 与库外材料
 
@@ -18,7 +16,7 @@ RS256 keyset、console/portal 两 AEAD keyring、platform JWT key、各独立内
 
 每个 artifact 使用 AES-256-CBC 与 PBKDF2-HMAC-SHA256（210000次），再用独立 HMAC-SHA256 key 认证绑定 metadata 和全部密文。元数据包含任务、cluster、两库、issuer、checkpoint、原文大小/摘要和用途。解密前先认证；manifest 另有独立认证 sidecar，并由外部 witness 绑定其 SHA256。篡改密文会在解密之前拒绝。
 
-恢复库外材料时复制到恢复专用私有目录，不覆写 Phase 09 原始 keyset。先核验恢复字节与 checkpoint 所含材料一致，再轮换平台 JWT、两 BFF keyring、service/RP/resource/legacy client secret，以及全部四个数据库 runtime 密码和 notification metrics token。OIDC kid/public material仍受现有 immutable 约束，不把旧 kid 改为不同材料。
+恢复库外材料时复制到恢复专用私有目录，不覆写 原始 keyset。先核验恢复字节与 checkpoint 所含材料一致，再轮换平台 JWT、两 BFF keyring、service/RP/resource client secret，以及全部四个数据库 runtime 密码和 notification metrics token。OIDC kid/public material仍受现有 immutable 约束，不把旧 kid 改为不同材料。
 
 ## 不可回退的外部 witness
 
@@ -50,13 +48,5 @@ OIDC admin creation receipt保留：轮换service key后，旧service secret应4
 ## 记录与验证
 
 纯测试不连接数据库或启动服务：
-
-```text
-python3 local-identity-sso-phase13-qa/recovery-witness-tests.py
-python3 local-identity-sso-phase13-qa/recovery-core-tests.py
-python3 local-identity-sso-phase13-qa/recovery-rehearsal-tests.py
-```
-
-正式演练由root运行器统一启动与回收；context/callback见 `local-identity-sso-phase13-qa/integration-context.md`。失败也保存固定类别、部分stage、计数/摘要和完整扫描收据，不把raw stderr、PHC、密码、token、Cookie、连接串或私有fixture复制进报告。
 
 RTO从故障/停止接流算到外部对账、全部旧拒绝、新配置重启与新双RP业务全部完成。RPO使用checkpoint和故障前实际业务marker及其真实丢失情况，主动废弃认证状态单列。隔离任务24小时/4小时候选目标的实测通过，不被扩写为生产15分钟/60分钟、PITR、持续WAL、异地回读、固定备份频率或30日99.9%可用性。若生产要处理备份后的签名key吊销、全量策略或其他新安全对象，必须把相应完整生命周期加入外部deny日志并证明覆盖，不能直接套用本任务受控变更清单。

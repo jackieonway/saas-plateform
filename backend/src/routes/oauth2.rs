@@ -75,15 +75,7 @@ impl OAuthError {
     pub fn invalid_token(desc: &str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, "invalid_token", desc)
     }
-    fn rate_limited(retry: u64) -> Self {
-        let mut error = Self::new(
-            StatusCode::TOO_MANY_REQUESTS,
-            "temporarily_unavailable",
-            "认证请求过多，请稍后重试",
-        );
-        error.retry_after = Some(retry.max(1));
-        error
-    }
+
     pub fn unavailable(_e: impl std::fmt::Display) -> Self {
         Self::new(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -101,14 +93,6 @@ impl OAuthError {
             "server_error",
             "服务器内部错误",
         )
-    }
-
-    fn account_port(error: AppError) -> Self {
-        match error {
-            AppError::Unavailable => Self::unavailable("account authority unavailable"),
-            AppError::RateLimited(retry) => Self::rate_limited(retry),
-            other => Self::server(other),
-        }
     }
 }
 
@@ -134,30 +118,6 @@ impl From<sqlx::Error> for OAuthError {
 }
 
 // ===== 工具 =====
-
-/// Explicit legacy human consumers survive BFF rollout only by exact client ID.
-/// Application service credentials and machine grants have separate admission.
-pub(crate) fn require_legacy_human_client(
-    state: &AppState,
-    client_id: &str,
-) -> Result<(), AppError> {
-    if state.config.bff_enabled
-        && !state
-            .config
-            .bff_legacy_human_clients
-            .iter()
-            .any(|allowed| allowed == client_id)
-    {
-        return Err(AppError::forbidden("该旧用户授权客户端未获兼容准入"));
-    }
-    Ok(())
-}
-
-fn legacy_human_client(state: &AppState, client_id: &str) -> Result<(), OAuthError> {
-    require_legacy_human_client(state, client_id).map_err(|_| {
-        OAuthError::bad_request("unauthorized_client", "该旧用户授权客户端未获兼容准入")
-    })
-}
 
 fn platform_proof_error(error: AppError) -> OAuthError {
     match error {
@@ -318,7 +278,6 @@ async fn authorize(
         .get("client_id")
         .cloned()
         .ok_or_else(|| OAuthError::invalid_request("缺少 client_id"))?;
-    legacy_human_client(&state, &client_id)?;
     let redirect_uri = q
         .get("redirect_uri")
         .cloned()
@@ -427,7 +386,6 @@ async fn get_consent(
     let row = load_consent(&state.pool, id)
         .await?
         .ok_or_else(|| AppError::not_found("授权请求不存在或已失效"))?;
-    require_legacy_human_client(&state, &row.client_id)?;
     if row.consumed || row.expires_at < Utc::now() {
         return Err(AppError::not_found("授权请求不存在或已失效"));
     }
@@ -476,7 +434,6 @@ async fn decide_consent(
     let row = load_consent(&state.pool, id)
         .await?
         .ok_or_else(|| AppError::not_found("授权请求不存在或已失效"))?;
-    require_legacy_human_client(&state, &row.client_id)?;
     if row.consumed || row.expires_at < Utc::now() {
         return Err(AppError::not_found("授权请求不存在或已失效"));
     }
@@ -934,13 +891,11 @@ async fn begin_issuance<'a>(
     let mut client_ids = vec![client.client_id.clone()];
     if let Some(sid) = source_session_id {
         let owner = user_id.ok_or_else(|| OAuthError::invalid_grant("来源会话缺少账号"))?;
-        if let Some(source) = session::lock_oidc_source_in_tx(&mut tx, sid, owner)
+        session::lock_oidc_source_in_tx(&mut tx, sid, owner)
             .await
-            .map_err(platform_proof_error)?
-        {
-            client_ids.push(source);
-        }
+            .map_err(platform_proof_error)?;
     }
+
     client_ids.sort();
     client_ids.dedup();
     let locked: Vec<(String, String, i64, Option<Uuid>)> = sqlx::query_as(
@@ -1046,7 +1001,7 @@ async fn issue_tokens_in_tx(
     Ok(IssuedToken { response })
 }
 
-/// POST /oauth/token — 5 种授权模式
+/// POST /oauth/token — SSO 派生授权和机器授权
 async fn token(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1061,43 +1016,20 @@ async fn token(
     if grant.is_empty() {
         return Err(OAuthError::invalid_request("缺少 grant_type"));
     }
+    if grant == "password" {
+        return Err(OAuthError::bad_request(
+            "unsupported_grant_type",
+            "人员认证仅支持统一登录",
+        ));
+    }
     if grant == "refresh_token"
         && form
             .get("refresh_token")
             .is_some_and(|token| session::is_platform_refresh(token))
     {
-        if state.config.bff_enabled && !state.config.bff_legacy_login_enabled {
-            return Err(OAuthError::invalid_grant("请通过统一登录入口刷新会话"));
-        }
-        // Platform refresh grants are public browser sessions, never OAuth
-        // application grants. Supplying client credentials cannot convert one.
-        if form.contains_key("client_id")
-            || form.contains_key("client_secret")
-            || parse_basic_auth(&headers).is_some()
-        {
-            return Err(OAuthError::invalid_request(
-                "平台会话刷新不能携带 OAuth 客户端凭据",
-            ));
-        }
-        if form.contains_key("scope") {
-            return Err(OAuthError::invalid_request("平台会话刷新不能修改 scope"));
-        }
-        let refreshed = session::refresh(&state, &form["refresh_token"])
-            .await
-            .map_err(|error| match error {
-                AppError::Unavailable => OAuthError::unavailable("platform session refresh failed"),
-                AppError::Server(_) => OAuthError::server("platform session refresh failed"),
-                _ => OAuthError::invalid_grant("平台刷新令牌无效或已失效，请重新登录"),
-            })?;
-        return Ok((
-            [(header::CACHE_CONTROL, "no-store"), (header::PRAGMA, "no-cache")],
-            Json(json!({
-                "access_token": refreshed.access_token, "refresh_token": refreshed.refresh_token,
-                "expires_in": refreshed.expires_in, "refresh_expires_in": refreshed.refresh_expires_in,
-                "token_type": "Bearer",
-            })),
-        ).into_response());
+        return Err(OAuthError::invalid_grant("平台会话仅通过统一登录续期"));
     }
+
     let client = authenticate_client(&state, &headers, &form).await?;
     if !client.has_grant(&grant) {
         return Err(OAuthError::bad_request(
@@ -1109,7 +1041,6 @@ async fn token(
         "authorization_code" => grant_authorization_code(&state, &client, &form, &ip, &ua).await,
         "refresh_token" => grant_refresh_token(&state, &client, &form, &ip, &ua).await,
         "client_credentials" => grant_client_credentials(&state, &client, &form, &ip, &ua).await,
-        "password" => grant_password(&state, &client, &form, &ip, &ua).await,
         "urn:ietf:params:oauth:grant-type:device_code" => {
             grant_device_code(&state, &client, &form, &ip, &ua).await
         }
@@ -1152,7 +1083,6 @@ async fn grant_authorization_code(
     ip: &str,
     ua: &str,
 ) -> Result<IssuedToken, OAuthError> {
-    legacy_human_client(state, &client.client_id)?;
     let code = form
         .get("code")
         .ok_or_else(|| OAuthError::invalid_request("缺少 code"))?;
@@ -1273,9 +1203,6 @@ async fn grant_refresh_token(
         "SELECT user_id,platform_session_id FROM oauth_tokens WHERE token_hash=$1 AND token_type='refresh' AND token_use='oauth'",
     ).bind(&digest).fetch_optional(&state.pool).await?
      .ok_or_else(|| OAuthError::invalid_grant("刷新令牌无效"))?;
-    if owner.is_some() {
-        legacy_human_client(state, &client.client_id)?;
-    }
     let mut tx = begin_issuance(state, client, owner, parent_session).await?;
     let row = sqlx::query_as::<_, RefreshRow>(
         "SELECT id, user_id, client_id, tenant_id, organization_id, COALESCE(scope,'') AS scope, \
@@ -1403,135 +1330,6 @@ async fn grant_client_credentials(
     Ok(result)
 }
 
-async fn grant_password(
-    state: &AppState,
-    client: &ClientFull,
-    form: &HashMap<String, String>,
-    ip: &str,
-    ua: &str,
-) -> Result<IssuedToken, OAuthError> {
-    legacy_human_client(state, &client.client_id)?;
-    let username = form
-        .get("username")
-        .ok_or_else(|| OAuthError::invalid_request("缺少 username"))?;
-    let password = form
-        .get("password")
-        .ok_or_else(|| OAuthError::invalid_request("缺少 password"))?;
-    if username.is_empty()
-        || username.len() > state.config.login_identifier_max_bytes
-        || password.is_empty()
-        || password.len() > 1024
-    {
-        return Err(OAuthError::invalid_request("账号或密码超出允许长度"));
-    }
-    if let Some(retry) = state.login_limits.admit_source(ip) {
-        return Err(OAuthError::rate_limited(retry));
-    }
-    let input_key = format!("input:{}", hash::sha256_hex(username));
-    if let Some(retry) = state.login_limits.check_account(&input_key) {
-        return Err(OAuthError::rate_limited(retry));
-    }
-    let row = state
-        .authentication
-        .by_username(username)
-        .await
-        .map_err(OAuthError::account_port)?;
-    let Some(row) = row else {
-        state.login_limits.record_failure(&input_key);
-        return Err(OAuthError::invalid_grant("用户名或密码错误"));
-    };
-    let user_id = row.id;
-    let account_key = format!("user:{user_id}");
-    if let Some(retry) = state.login_limits.check_account(&account_key) {
-        return Err(OAuthError::rate_limited(retry));
-    }
-    if row.status != "ENABLED" {
-        return Err(OAuthError::invalid_grant("用户已被禁用"));
-    }
-    let verified = state
-        .authentication
-        .verify(&row, password)
-        .await
-        .map_err(OAuthError::account_port)?;
-    if !verified {
-        state.login_limits.record_failure(&input_key);
-        state.login_limits.record_failure(&account_key);
-        return Err(OAuthError::invalid_grant("用户名或密码错误"));
-    }
-    state.login_limits.clear_account(&input_key);
-    state.login_limits.clear_account(&account_key);
-    let requested_membership = form
-        .get("membership_id")
-        .map(|value| {
-            value
-                .parse_uuid7()
-                .map_err(|_| OAuthError::invalid_request("membership_id 无效"))
-        })
-        .transpose()?;
-    let mut contexts = sqlx::query_as::<_, (Uuid, Uuid, Uuid)>(
-        "SELECT o.tenant_id,m.organization_id,m.id FROM memberships m \
-         JOIN organizations o ON o.id=m.organization_id JOIN tenants t ON t.id=o.tenant_id \
-         WHERE m.user_id=$1 AND m.status='ENABLED' AND m.member_type=ANY($2) \
-           AND ($3::uuid IS NULL OR m.id=$3) AND t.status='ENABLED' \
-           AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) AND org_chain_active(o.id)",
-    )
-    .bind(user_id)
-    .bind(&client.allowed_member_types)
-    .bind(requested_membership)
-    .fetch_all(&state.pool)
-    .await?;
-    if contexts.len() != 1 {
-        return Err(OAuthError::invalid_grant(
-            "请选择唯一有效的 membership_id 后重新认证",
-        ));
-    }
-    let ctx = contexts.remove(0);
-    let scope = resolve_scope(form.get("scope"), client)?;
-    let mut tx = begin_issuance(state, client, Some(user_id), None).await?;
-    let matches = if state.remote_accounts.is_some() {
-        // The HTTPS password verification completed before begin_issuance took
-        // its user lock. Only the non-secret owner projection is read here.
-        sqlx::query_scalar::<_, bool>(
-            "SELECT status='ENABLED' AND session_version=$2 FROM users WHERE id=$1",
-        )
-        .bind(row.id)
-        .bind(row.account_version)
-        .fetch_optional(&mut *tx)
-        .await?
-        .unwrap_or(false)
-    } else {
-        let mut accounts = crate::authentication::PostgresAccountTransaction::new(&mut tx);
-        state
-            .authentication
-            .credential_matches(&mut accounts, &row)
-            .await
-            .map_err(OAuthError::account_port)?
-    };
-    if !matches {
-        return Err(OAuthError::invalid_grant("用户凭据已变更，请重新认证"));
-    }
-    let binding =
-        oauth_issuance::capture_binding(&mut tx, user_id, ctx.0, ctx.1, ctx.2, &client.client_id)
-            .await?
-            .ok_or_else(|| OAuthError::invalid_grant("成员准入已失效"))?;
-    let result = issue_tokens_in_tx(
-        &mut tx,
-        state,
-        client,
-        Some(user_id),
-        username,
-        Some(ctx.0),
-        Some(ctx.1),
-        binding.into(),
-        &scope,
-        ip,
-        ua,
-    )
-    .await?;
-    tx.commit().await?;
-    Ok(result)
-}
-
 #[derive(sqlx::FromRow)]
 struct DeviceRow {
     id: Uuid,
@@ -1555,7 +1353,6 @@ async fn grant_device_code(
     ip: &str,
     ua: &str,
 ) -> Result<IssuedToken, OAuthError> {
-    legacy_human_client(state, &client.client_id)?;
     let device_code = form
         .get("device_code")
         .ok_or_else(|| OAuthError::invalid_request("缺少 device_code"))?;
@@ -2072,7 +1869,6 @@ async fn device_authorization(
         return Ok(error.into_response());
     }
     let client = authenticate_client(&state, &headers, &form).await?;
-    legacy_human_client(&state, &client.client_id)?;
     if !client.has_grant("urn:ietf:params:oauth:grant-type:device_code") {
         return Err(OAuthError::bad_request(
             "unauthorized_client",
@@ -2132,7 +1928,7 @@ async fn discovery(State(state): State<AppState>, headers: HeaderMap) -> Json<Va
         "revocation_endpoint": format!("{}/oauth/revoke", base),
         "response_types_supported": ["code"],
         "grant_types_supported": [
-            "authorization_code", "refresh_token", "client_credentials", "password",
+            "authorization_code", "refresh_token", "client_credentials",
             "urn:ietf:params:oauth:grant-type:device_code"
         ],
         "subject_types_supported": ["public"],

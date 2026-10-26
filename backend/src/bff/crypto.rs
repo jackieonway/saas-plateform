@@ -41,6 +41,29 @@ fn valid_kid(kid: &str) -> bool {
 }
 
 impl CipherKeys {
+    #[cfg(test)]
+    pub(crate) fn fixture() -> Self {
+        Self {
+            active: "owned-domain-fixture".into(),
+            keys: vec![Material {
+                kid: "owned-domain-fixture".into(),
+                key: LessSafeKey::new(UnboundKey::new(&AES_256_GCM, &[73; 32]).unwrap()),
+            }],
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fixture_access(
+        &self,
+        record: Uuid,
+        issuer: &str,
+        client: Uuid,
+        access: &str,
+    ) -> String {
+        self.seal(record, issuer, client, "oidc-access", access)
+            .unwrap()
+    }
+
     pub(crate) fn load(path: &str) -> anyhow::Result<Self> {
         anyhow::ensure!(
             Path::new(path).is_absolute(),

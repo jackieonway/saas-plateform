@@ -56,4 +56,4 @@ cargo test --locked --bin saas-platform-backend micro_proxy::tests -- --test-thr
 node --test tests/nginx-render-policy.mjs
 ```
 
-HTTP 专项覆盖无凭据、MIME、GET/HEAD、query、404、重定向、大小与响应头。Windows 若 Rust 临时 HTTP fixture 超时，可为测试进程设置 `MICRO_PROXY_TEST_NODE` 为已有 Node 可执行文件的绝对路径，再重跑；它使用真实 Node HTTP fixture 调用相同 Rust 生产逻辑，不修改系统防火墙。测试结果与未运行的数据库/生产接线项见[审查报告](qiankun-audit.md)。
+HTTP 专项覆盖无凭据、MIME、GET/HEAD、query、404、重定向、大小与响应头。Windows 若 Rust 临时 HTTP fixture 超时，可为测试进程设置 `MICRO_PROXY_TEST_NODE` 为已有 Node 可执行文件的绝对路径，再重跑；它使用真实 Node HTTP fixture 调用相同 Rust 生产逻辑，不修改系统防火墙。测试结果与未运行的数据库/生产接线项见[当前初始化与部署](fresh-installation.md)。

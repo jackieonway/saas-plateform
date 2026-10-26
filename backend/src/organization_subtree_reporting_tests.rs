@@ -17,7 +17,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::routes;
-use crate::state::AppState;
 use crate::util::jwt;
 
 const SECRET: &str = "organization-subtree-reporting-tests-only";
@@ -181,18 +180,7 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
         .bind(user)
         .fetch_one(pool)
         .await?;
-    let session: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
-    )
-    .bind(user)
-    .bind(tenant)
-    .bind(org)
-    .bind(crate::util::uuid7::new_uuid())
-    .fetch_one(pool)
-    .await?;
+    let session = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
         &jwt::Claims {
@@ -354,7 +342,7 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
             ("DATABASE_URL".into(), "postgres://unused/reporting-test".into()),
             ("JWT_SECRET".into(), SECRET.into()),
         ]))?;
-        let app = routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config)));
+        let app = routes::api_router().with_state(crate::sso_test_fixture::state(pool.clone(), Arc::new(config)));
 
         for account in [manager, global_admin] {
             let token = session(pool, account, tenant, current).await?;

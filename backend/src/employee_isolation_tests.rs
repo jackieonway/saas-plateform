@@ -79,7 +79,7 @@ impl Database {
         // This is exclusively target-schema test preparation, not a published
         // Phase 6 contraction migration and never touches the default schema.
         if let Err(error) = sqlx::query(
-            "ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key",
+            "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
         )
         .execute(&db.pool)
         .await

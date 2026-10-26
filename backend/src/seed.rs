@@ -57,9 +57,6 @@ pub async fn check_production_credentials(pool: &PgPool) -> anyhow::Result<()> {
 }
 
 pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow::Result<()> {
-    if !config.is_production() {
-        return run(pool).await;
-    }
     let mut tx = pool.begin().await?;
     // Serialize first bootstrap across platform processes without deleting history.
     sqlx::query("SELECT pg_advisory_xact_lock(764351204988213)")
@@ -70,13 +67,16 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         .await?;
     if existing > 0 {
         tx.rollback().await?;
-        return check_production_credentials(pool).await;
+        if config.is_production() {
+            check_production_credentials(pool).await?;
+        }
+        return Ok(());
     }
     let username = config.bootstrap_admin_username.as_deref().ok_or_else(|| {
-        anyhow::anyhow!("BOOTSTRAP_ADMIN_USERNAME is required for an empty production database")
+        anyhow::anyhow!("BOOTSTRAP_ADMIN_USERNAME is required for an empty database")
     })?;
     let admin_password = config.bootstrap_admin_password.as_deref().ok_or_else(|| {
-        anyhow::anyhow!("BOOTSTRAP_ADMIN_PASSWORD is required for an empty production database")
+        anyhow::anyhow!("BOOTSTRAP_ADMIN_PASSWORD is required for an empty database")
     })?;
     anyhow::ensure!(
         admin_password.chars().count() >= 12 && !is_demo_password(admin_password),
@@ -287,7 +287,8 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
     Ok(())
 }
 
-/// 幂等种子: 仅当 users 表为空时执行 (backend/docs/architecture.md#data 种子计划)
+/// Owned test-only demo fixtures; runtime bootstrap never invokes this path.
+#[cfg(test)]
 pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     let existing: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(pool)
@@ -1123,10 +1124,10 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         "resource-portal",
         Some("resource-portal-secret"),
         "资源门户",
-        "资源密码模式演示客户端 (password)",
+        "资源门户客户端 (SSO 会话派生授权码)",
         "CONFIDENTIAL",
         "http://localhost:9000/callback",
-        "authorization_code,password,refresh_token",
+        "authorization_code,refresh_token",
         "profile,email",
         7200,
         604800,
@@ -1279,6 +1280,7 @@ async fn insert_org(
     .await?)
 }
 
+#[cfg(test)]
 async fn insert_dept(
     tx: &mut Transaction<'_, Postgres>,
     org: Uuid,
@@ -1448,6 +1450,7 @@ async fn grant_org_menu(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 async fn insert_client(
     tx: &mut Transaction<'_, Postgres>,
     client_id: &str,

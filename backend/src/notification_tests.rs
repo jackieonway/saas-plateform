@@ -17,7 +17,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::routes;
-use crate::state::AppState;
 use crate::util::{hash, jwt};
 
 const SECRET: &str = "notification-isolated-tests-only";
@@ -213,11 +212,12 @@ async fn session(
         .fetch_one(pool)
         .await?;
     let now = Utc::now().timestamp();
-    let id: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,to_timestamp($4),$5,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id")
-        .bind(user).bind(tenant).bind(org).bind((now + database_ttl) as f64).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+    let id = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
+    sqlx::query("UPDATE platform_sessions SET expires_at=to_timestamp($2) WHERE id=$1")
+        .bind(id)
+        .bind((now + database_ttl) as f64)
+        .execute(pool)
+        .await?;
     let token = jwt::sign(
         &jwt::Claims {
             sub: user.to_string(),
@@ -496,7 +496,10 @@ impl Harness {
                 "memberLookups":[{"resource":"ticket","action":"create"},{"resource":"ticket","action":"update"}]}],
             "managementScopes":[]
         }).to_string())?;
-        let router = routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config)));
+        let router = routes::api_router().with_state(crate::sso_test_fixture::state(
+            pool.clone(),
+            Arc::new(config),
+        ));
         let h = Self {
             pool: pool.clone(),
             router,
@@ -1573,7 +1576,12 @@ fn member_policy_router(h: &Harness, policy: &Value) -> Result<Router> {
         ("JWT_SECRET".into(), SECRET.into()),
         ("DATA_GRANT_POLICY".into(), policy.to_string()),
     ]))?;
-    Ok(routes::api_router().with_state(AppState::new(h.pool.clone(), Arc::new(config))))
+    Ok(
+        routes::api_router().with_state(crate::sso_test_fixture::state(
+            h.pool.clone(),
+            Arc::new(config),
+        )),
+    )
 }
 
 #[tokio::test]

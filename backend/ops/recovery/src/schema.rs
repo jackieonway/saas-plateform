@@ -1,6 +1,4 @@
-//! Restoring deparsed CHECK expressions is not always an AST roundtrip on PG17.
-//! Repair only known original/deparsed pairs in quarantined databases, then
-//! compare the complete portable source catalog. Never refresh stored contracts.
+//! Verify current restored schema fingerprints without historical DDL repair.
 use crate::{
     config::Config,
     native::{self, Scratch},

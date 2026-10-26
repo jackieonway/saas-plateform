@@ -91,11 +91,12 @@ test('Cookie recovery uses no stored credentials or Web Locks and exposes no CSR
   await f.coordinator.initialize()
   const current = f.coordinator.current()
   assert.equal(current.status, 'active'); assert.equal(current.record.token, 'owned-access-1')
-  assert.equal(current.record.refreshToken, null); assert.equal(current.record.sessionId, `${id(7)}:1`)
+  assert.equal('refreshToken' in current.record, false); assert.equal(current.record.sessionId, `${id(7)}:1`)
   assert.equal(current.tokenExpiresAt, instant + 300_000)
   assert.equal(JSON.stringify(current).includes(csrf), false)
   assert.equal(Object.hasOwn(current.session, 'csrfToken'), false)
-  assert.equal(f.removed.length, 4); assert.equal(f.notices.length, 0)
+  assert.deepEqual([...f.removed].sort(), ['platform-session-v2', 'platform-session-v1', 'platform-token', 'platform-refresh-token', 'platform-remember-username', 'platform-current-app'].sort())
+  assert.equal(f.notices.length, 0)
 })
 
 test('memberless authentication remains authenticated without inventing a context or requesting a bearer', async t => {

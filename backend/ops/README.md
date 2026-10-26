@@ -1,14 +1,12 @@
-# 平台运维工具
+# 运维工具
 
-本目录包含两个独立 Rust 工程，不参与平台前后端统一编译。它们提供固定范围的运行状态和恢复协议，实际目标、私有凭据、服务监督与调度由部署环境准备。
+当前运维内容覆盖数据库权限、监控、备份和恢复。系统从[全新基线](../docs/fresh-installation.md)安装；旧 UUID 搬迁、预览库冻结、成员收缩和阶段台账工具已退役。
 
-| 工程 | 当前能力 | 操作入口 |
-| --- | --- | --- |
-| `monitoring` | 探测最多四个已知服务健康路径，记录 DOWN/RECOVERED，接收备份事件，输出私有 Prometheus 指标 | [监控指南](monitoring/README.md) |
-| `recovery` | pilot 模式下平台、工单、门店共同停写备份，远端取回验证，加密集合恢复到新的隔离目标 | [恢复指南](recovery/README.md) |
+- [身份数据库 owner/ACL](identity-deployment/README.md)：共享平台库中的账号与业务权限隔离。
+- [监控](monitoring/README.md)：探针、指标、告警和受限运维入口。
+- [备份恢复](recovery/README.md)：加密快照、完整性核验与隔离恢复。
+- [身份感知恢复](identity-recovery/README.md)：恢复后的会话撤销与重新验收。
 
-平台镜像部署见[部署指南](../docs/deployment.md)。监控 Compose overlay 不公开指标端口、不挂载 Docker socket。两项工具均没有自动安装的 systemd 服务或定时器，外部告警投递需单独配置，production PITR 尚未实现。
+运维必须指定实际数据库、角色、来源和凭据，记录当前 schema/二进制/配置版本。数据库 readiness、在线身份 proof 和业务授权分别验证，不能用本地投影代替不可用的认证中心。
 
-当前前端运行方式为 qiankun。服务健康 200 只能证明相应 API 探针成功，不能证明宿主 CSP、HTML/UMD 生命周期、静态资源、组织上下文或业务权限正常。恢复工具仍强制固定的两业务各两版本及四份静态镜像材料；它不会自动收集数据库引用的任意 qiankun URL/ZIP 资源。运行与恢复验收需要覆盖真实前端入口和完整版本依赖。
-
-各工程在自己的目录执行 `cargo test --locked`、`cargo build --release --locked`。执行结果、跳过项与目标环境演练应分开记录，具体工程检查见[工程基线](../docs/engineering-baseline.md)。
+工具只处理明确范围的资源；凭据不写日志、命令行、业务清单或提交文件。删除数据、停止服务和清理资源遵守工作区 AGENTS.md 及用户的本次授权。

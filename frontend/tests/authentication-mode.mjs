@@ -20,7 +20,7 @@ function fixture(handler) {
 }
 const reply = (status, value) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } })
 
-for (const mode of ['BFF', 'LEGACY']) test(`authentication mode ${mode} requires an explicit server contract`, async () => {
+for (const mode of ['BFF']) test(`authentication mode ${mode} requires an explicit server contract`, async () => {
   const f = fixture(async () => reply(200, { mode }))
   assert.equal(await f.loadAuthenticationMode(), mode)
   assert.equal(f.calls.length, 1)
@@ -33,6 +33,7 @@ for (const mode of ['BFF', 'LEGACY']) test(`authentication mode ${mode} requires
 for (const [label, response] of [
   ['unavailable service', () => reply(503, { message: 'unavailable' })],
   ['anonymous response', () => reply(401, {})],
+  ['retired password mode', () => reply(200, { mode: 'LEGACY' })],
   ['unrecognized contract', () => reply(200, { mode: 'AUTOMATIC_FALLBACK' })],
   ['missing mode', () => reply(200, {})],
   ['unreadable response', () => new Response('not-json', { status: 200 })],
@@ -63,16 +64,4 @@ test('explicit unified login navigates to the local BFF entry with a bounded ret
   f.startUnifiedLogin('https://unregistered.invalid/callback')
   assert.deepEqual(f.redirects, ['/auth/login?return=%2Fsystem%2Fusers%3Fstatus%3DENABLED', '/auth/login?return=%2Fdashboard'])
   assert.deepEqual(f.calls, [])
-})
-
-test('legacy console navigation preserves query and page anchors while rejecting external paths and authentication loops', () => {
-  const f = fixture(async () => { throw new Error('navigation helper must not fetch credentials') })
-  for (const path of ['/', '/profile?login-check=1#security', '/micro/work-orders/tickets?status=open#details']) {
-    assert.equal(f.safeLegacyReturn(path), path)
-  }
-  for (const path of [null, '', 'https://unregistered.invalid', '//unregistered.invalid', '/\\unregistered.invalid',
-    '/%2funregistered.invalid', '/system/%2e%2e/auth/callback', '/auth/callback#retry', '/api/auth/login', '/login#retry', '/profile#bad\n']) {
-    assert.equal(f.safeLegacyReturn(path), '/')
-  }
-  assert.equal(f.safePlatformReturn('/profile?login-check=1#security'), '/dashboard', 'OIDC return paths retain their stricter contract')
 })

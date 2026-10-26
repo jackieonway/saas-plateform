@@ -2,9 +2,7 @@ import { api, logoutPlatformSession, qs, switchPlatformContext } from "@/lib/api
 import { capturePlatformSessionFence } from "@/stores/auth"
 import type { SessionFence } from "@/stores/auth"
 import type {
-  ContextResp,
   LoginHistoryPage,
-  LoginResp,
   MenuNode,
   MySessionsResp,
   PermissionsResp,
@@ -12,13 +10,6 @@ import type {
 } from "./types"
 
 export const authApi = {
-  login: (username: string, password: string) =>
-    api.post<LoginResp>("/api/auth/login", { username, password }, { skipAuth: true, suppress401: true }),
-
-  /** 选择租户、组织后:用 credential ticket 建立可刷新的会话 */
-  selectContext: (organizationId: string, membershipId: string, ticket: string, userId?: string) =>
-    api.post<ContextResp>("/api/auth/context", { organizationId, membershipId, userId }, { bearer: ticket, suppress401: true }),
-
   /** 已登录会话中切换组织 */
   switchContext: (organizationId: string, membershipId: string, token: string) => {
     const sessionFence = capturePlatformSessionFence(token)

@@ -479,16 +479,6 @@ impl AccountAdministrationPort for RemoteAccounts {
     ) -> AccountFuture<'a, u64> {
         Box::pin(async { Err(AppError::Unavailable) })
     }
-    fn record_login(&self, id: Uuid) -> AccountFuture<'_, ()> {
-        Box::pin(async move {
-            let current = self.snapshot(id).await?;
-            let response = self.request(Method::POST, "/internal/identity/accounts/login", Some(&json!({"id":id,"expectedAccountVersion":current.account_version.to_string()}))).await?;
-            if response != json!({"recorded":true}) {
-                return Err(AppError::Unavailable);
-            }
-            Ok(())
-        })
-    }
 }
 
 #[cfg(test)]

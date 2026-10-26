@@ -78,4 +78,4 @@ HTTP 接口包含 `GET /api/notifications`、`/{id}`、`/unread-count`、`/prefs
 
 ## 验证入口
 
-通知服务普通测试内嵌于各模块，独立 PostgreSQL／真实 binary 测试位于其 `tests/identity_isolation.rs`。平台 `src/notification_tests.rs` 保留原范围、幂等和事务合同，`src/notification_identity_tests.rs` 另覆盖双身份、旧结构升级、锁等待撤权及真实平台 HTTP＋外部通知 binary 联调。ignored 测试必须显式执行，源码覆盖不等于通过；身份绑定细节见[Phase 4 说明](identity-sso/phase-04-notification-binding.md)。部署参数、数据库最小权限及网关 path 配置结合[部署文档](deployment.md)与 `saas-notification/README.md` 核对。
+通知服务普通测试内嵌于各模块，独立 PostgreSQL／真实 binary 测试位于其 `tests/identity_isolation.rs`。平台 `src/notification_tests.rs` 保留原范围、幂等和事务合同，`src/notification_identity_tests.rs` 另覆盖双身份、旧结构升级、锁等待撤权及真实平台 HTTP＋外部通知 binary 联调。ignored 测试必须显式执行，源码覆盖不等于通过；身份绑定细节见[当前初始化与部署](fresh-installation.md)。部署参数、数据库最小权限及网关 path 配置结合[部署文档](deployment.md)与 `saas-notification/README.md` 核对。

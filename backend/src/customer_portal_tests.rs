@@ -126,7 +126,7 @@ impl Database {
         ))
         .execute(&mut *tx)
         .await?;
-        sqlx::query("ALTER TABLE public.memberships DROP CONSTRAINT memberships_user_id_organization_id_key")
+        sqlx::query("ALTER TABLE public.memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key")
             .execute(&mut *tx).await?;
         let exact:bool=sqlx::query_scalar(
             "SELECT NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass \

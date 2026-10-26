@@ -635,7 +635,6 @@ function OrgContextChip() {
 
 function UserMenu() {
   const profile = useAuthStore((s) => s.profile)
-  const bff = useAuthStore((s) => s.authMode === "BFF")
   const [confirmGlobal, setConfirmGlobal] = React.useState(false)
   const [globalPending, setGlobalPending] = React.useState(false)
   const navigate = useNavigate()
@@ -711,10 +710,10 @@ function UserMenu() {
           <LogOut className="size-4" />
           退出本平台
         </DropdownMenuItem>
-        {bff && <DropdownMenuItem variant="destructive" onClick={() => setConfirmGlobal(true)}>
+        <DropdownMenuItem variant="destructive" onClick={() => setConfirmGlobal(true)}>
           <LogOut className="size-4" />
           退出所有应用
-        </DropdownMenuItem>}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
     <AlertDialog open={confirmGlobal} onOpenChange={setConfirmGlobal}>

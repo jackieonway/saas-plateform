@@ -2,7 +2,7 @@
 
 环境 URL 入口让平台在某个环境加载一个可变地址的 qiankun HTML 微应用，适合独立部署和开发联调。它与固定版本 release 共存：URL 记录优先于该环境 active release，移除 URL 记录后恢复按 release 或应用默认入口解析。
 
-实现位于 `src/application_entries.rs`，解析函数由 `migrations/0010_unified_application_config.sql` 定义；静态资源代理位于 `src/micro_proxy.rs`。固定版本交付见[ZIP 分发与发布](zip-distribution-runbook.md)，代理行为见[微应用 URL 代理](micro-url-proxy.md)。
+实现位于 `src/application_entries.rs`，解析函数由 `migrations/0001_init.sql` 定义；静态资源代理位于 `src/micro_proxy.rs`。固定版本交付见[ZIP 分发与发布](zip-distribution-runbook.md)，代理行为见[微应用 URL 代理](micro-url-proxy.md)。
 
 ## 支持条件与选择顺序
 

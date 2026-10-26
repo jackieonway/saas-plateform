@@ -75,14 +75,6 @@ pub(super) async fn by_user_id(pool: &PgPool, id: Uuid) -> Result<AccountCredent
     Ok(row.into())
 }
 
-pub(super) async fn record_login(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
-    sqlx::query("UPDATE users SET last_login_at=now(), updated_at=now() WHERE id=$1")
-        .bind(id)
-        .execute(pool)
-        .await?;
-    Ok(())
-}
-
 /// Borrows the caller's connection without starting or committing a transaction.
 /// The caller supplies its existing transaction connection and retains all
 /// platform authorization, audit, notifications and final commit.

@@ -1,12 +1,9 @@
 import { isUuidV7 } from "@/lib/uuid"
 import { authStore, captureSessionFence, captureSessionSignal, reconcileSessionSync } from "@/stores/auth"
 import type { SessionFence } from "@/stores/auth"
-import { sessionCoordinator, SessionCoordinationError, SessionOperationError } from "@/lib/session-coordinator"
+import { SessionCoordinationError } from "@/lib/session-types"
 import { bffSessionCoordinator } from "@/lib/bff-session"
-import type { SessionRecord, SessionTokens } from "@/lib/session-coordinator"
 import type { ContextResp } from "@/api/types"
-import { isContextIdentity, requireContextIdentity } from "@/lib/context-identity"
-import type { ContextIdentity } from "@/lib/context-identity"
 
 export class ApiError extends Error {
   constructor(message: string, public code: string, public status: number, public requestId?: string) {
@@ -35,63 +32,13 @@ function redirectToLogin() {
 }
 function contextChanged(): DOMException { return new DOMException("登录上下文已变化", "AbortError") }
 
-/** Runs only under the common lock. Context operations call this directly to
- * avoid recursively acquiring their own lock through request(). */
-async function refreshPair(record: SessionRecord, signal: AbortSignal): Promise<SessionTokens> {
-  signal.throwIfAborted()
-  if (!isContextIdentity(record.identity) || record.identity.memberType !== "EMPLOYEE") throw new SessionOperationError("会话成员证明已失效，请重新登录", "invalid", 401)
-  if (!record.refreshToken) throw new SessionOperationError("会话已失效，请重新登录", "invalid", 401)
-  let response: Response
-  try {
-    response = await fetch("/oauth/token", { method: "POST", signal,
-      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: record.refreshToken }),
-    })
-  } catch { throw new SessionOperationError("会话刷新结果无法确认，请重新登录", "unknown") }
-  signal.throwIfAborted()
-  let data: Record<string, unknown>
-  try { data = await response.json() } catch { throw new SessionOperationError("会话刷新结果无法确认，请重新登录", "unknown", response.status) }
-  signal.throwIfAborted()
-  if (!response.ok) {
-    // There is no retry-safe 5xx/transport acknowledgement contract. Definite
-    // platform 400/401 rejections are the only responses that invalidate a pair.
-    throw new SessionOperationError("会话刷新失败，请重新登录", response.status === 400 || response.status === 401 ? "invalid" : "unknown", response.status)
-  }
-  if (typeof data.access_token !== "string" || !data.access_token || typeof data.refresh_token !== "string" || !data.refresh_token) {
-    throw new SessionOperationError("会话刷新响应无法确认，请重新登录", "unknown", 502)
-  }
-  return { token: data.access_token, refreshToken: data.refresh_token, identity: record.identity }
-}
-let renewal: (SessionFence & { promise: Promise<string> }) | null = null
 async function renewSession(fence: SessionFence): Promise<string> {
-  if (authStore.getState().authMode === "BFF") {
-    try { return await bffSessionCoordinator.renew(fence) }
-    catch (error) {
-      if (error instanceof Error && error.name === "AbortError") throw error
-      const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : 0
-      throw new ApiError(error instanceof Error ? error.message : "认证服务暂时不可用，请重新检查", "BFF_SESSION_RENEWAL_FAILED", status)
-    }
+  try { return await bffSessionCoordinator.renew(fence) }
+  catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error
+    const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : 0
+    throw new ApiError(error instanceof Error ? error.message : "认证服务暂时不可用，请重新检查", "BFF_SESSION_RENEWAL_FAILED", status)
   }
-  if (renewal?.sessionId === fence.sessionId && renewal.version === fence.version && renewal.contextKey === fence.contextKey) return renewal.promise
-  const entry = { ...fence, promise: Promise.resolve("") }
-  entry.promise = (async () => {
-    try {
-      const result = await sessionCoordinator.operation("refresh", fence, async ({ record, signal }) => {
-        const tokens = await refreshPair(record, signal)
-        return { value: tokens.token, tokens }
-      })
-      return typeof result === "string" ? result : (result as SessionRecord).token!
-    } catch (error) {
-      reconcileSessionSync()
-      if (error instanceof SessionOperationError) {
-        if (error.disposition === "invalid" && authStore.getState().sessionStatus === "anonymous") redirectToLogin()
-        throw new ApiError(error.message, error.disposition === "unknown" ? "SESSION_UNKNOWN" : "SESSION_REFRESH_FAILED", error.status)
-      }
-      throw error
-    }
-  })()
-  renewal = entry
-  try { return await entry.promise } finally { if (renewal === entry) renewal = null }
 }
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, rawBody, contentType, bearer, sessionFence, skipAuth, suppress401, signal, onResponse } = options
@@ -140,7 +87,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
   let response = await send()
   await checkContext()
-  if (response.status === 401 && sessionRequest && (initial.authMode === "BFF" || initial.refreshToken)) {
+  if (response.status === 401 && sessionRequest) {
     await renewSession(sentFence)
     await checkContext()
     response = await send() // Exactly one retry, using the latest complete pair.
@@ -179,89 +126,11 @@ export async function switchPlatformContext(organizationId: string, membershipId
   membershipId = membershipId.toLowerCase()
   const invoked = authStore.getState()
   const fence = expected ?? { sessionId: invoked.sessionId, version: invoked.sessionVersion, contextKey: invoked.contextKey }
-  if (invoked.authMode === "BFF") return bffSessionCoordinator.selectContext(organizationId, membershipId, fence)
-  if (invoked.authMode !== "LEGACY") throw new SessionCoordinationError("登录方式尚未确认，请稍后重新检查", "SESSION_UNAVAILABLE")
-  reconcileSessionSync()
-  const observed = authStore.getState()
-  if (observed.sessionId !== fence.sessionId || observed.contextKey !== fence.contextKey || observed.contextEpoch !== invoked.contextEpoch || observed.contextSwitching) throw contextChanged()
-  await authStore.getState().reconcileSession()
-  const result = await sessionCoordinator.operation("context", fence, async ({ record, signal, updateTokens }) => {
-    let token = record.token
-    const send = () => { signal.throwIfAborted(); return fetch("/api/auth/context", { method: "POST", signal,
-      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ organizationId, membershipId }),
-    }) }
-    let response: Response
-    try {
-      response = await send()
-      signal.throwIfAborted()
-      if (response.status === 401 && record.refreshToken) {
-        const tokens = await refreshPair(record, signal)
-        signal.throwIfAborted()
-        updateTokens(tokens)
-        token = tokens.token
-        response = await send()
-        signal.throwIfAborted()
-      }
-    } catch (error) {
-      if (error instanceof SessionOperationError || error instanceof SessionCoordinationError) throw error
-      throw new SessionOperationError("组织切换结果无法确认，请重新登录", "unknown")
-    }
-    let data: ContextResp & { message?: string }
-    try { data = await response.json() } catch { throw new SessionOperationError("组织切换响应无法确认，请重新登录", "unknown", response.status) }
-    signal.throwIfAborted()
-    if (!response.ok) throw new SessionOperationError(data.message ?? "组织切换失败",
-      response.status === 400 || response.status === 403 || response.status === 404 ? "safe" : response.status === 401 ? "invalid" : "unknown", response.status)
-    if (typeof data.accessToken !== "string" || !data.accessToken || typeof data.refreshToken !== "string" || !data.refreshToken) throw new SessionOperationError("组织切换响应无法确认，请重新登录", "unknown", 502)
-    let identity: ContextIdentity
-    try { identity = requireContextIdentity(data) } catch {
-      throw new SessionOperationError("成员切换响应缺少有效员工证明，请重新登录", "unknown", 502)
-    }
-    if (identity.organizationId !== organizationId || identity.membershipId !== membershipId) throw new SessionOperationError("成员切换响应与所选身份不符，请重新登录", "unknown", 502)
-    return { value: data, tokens: { token: data.accessToken, refreshToken: data.refreshToken, identity } }
-  })
-  return result as ContextResp
+  return bffSessionCoordinator.selectContext(organizationId, membershipId, fence)
 }
-/** Remote revoke and local clear share the lock and captured logical identity. */
 export async function logoutPlatformSession(expected = captureSessionFence(), scope: "PLATFORM" | "GLOBAL" = "PLATFORM"): Promise<boolean> {
-  if (authStore.getState().authMode === "BFF") return bffSessionCoordinator.logout(expected, scope)
-  if (authStore.getState().authMode !== "LEGACY") throw new SessionCoordinationError("登录方式尚未确认，请稍后重新检查", "SESSION_UNAVAILABLE")
-  if (scope === "GLOBAL") throw new ApiError("当前登录方式不支持退出所有应用", "GLOBAL_LOGOUT_UNAVAILABLE", 400)
-  try {
-    const result = await sessionCoordinator.operation("logout", expected, async ({ record, signal, updateTokens }) => {
-      let token = record.token
-      const send = () => {
-        signal.throwIfAborted()
-        return fetch("/api/auth/logout", { method: "POST", signal,
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` } })
-      }
-      let response = await send()
-      signal.throwIfAborted()
-      // An expired access JWT says nothing about the still-valid refresh pair.
-      // Renew under this same lock before revoking the server-side session.
-      if (response.status === 401 && record.refreshToken) {
-        let tokens: SessionTokens
-        try { tokens = await refreshPair(record, signal) }
-        catch (error) {
-          if (error instanceof SessionOperationError && error.disposition === "invalid") return { value: true }
-          throw error
-        }
-        signal.throwIfAborted()
-        updateTokens(tokens)
-        token = tokens.token
-        response = await send()
-      }
-      signal.throwIfAborted()
-      if (!response.ok && response.status !== 401) throw new SessionOperationError("退出结果无法确认，请重新登录", "unknown", response.status)
-      return { value: true }
-    })
-    return result === true
-  } catch (error) {
-    if (error instanceof SessionCoordinationError && error.code === "SESSION_CHANGED") return false
-    throw error
-  }
+  return bffSessionCoordinator.logout(expected, scope)
 }
-
 export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>

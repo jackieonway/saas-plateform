@@ -118,18 +118,7 @@ async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<S
         .bind(user)
         .fetch_one(pool)
         .await?;
-    let sid: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
-    )
-    .bind(user)
-    .bind(tenant)
-    .bind(org)
-    .bind(crate::util::uuid7::new_uuid())
-    .fetch_one(pool)
-    .await?;
+    let sid = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
         &jwt::Claims {
@@ -171,7 +160,7 @@ impl Harness {
             ),
             ("JWT_SECRET".into(), SECRET.into()),
         ]))?;
-        let state = AppState::new(pool.clone(), Arc::new(settings));
+        let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(settings));
         let password_hash = state.passwords.hash(PASSWORD).await?;
         let actor: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,is_super_admin,id) VALUES('audit-actor',$1,true,$2) RETURNING id")
             .bind(&password_hash).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
@@ -1935,7 +1924,7 @@ async fn release_matrix(mut h: Harness) -> Result<()> {
         .to_str()
         .ok_or_else(|| anyhow!("owned release audit temporary path is not UTF-8"))?
         .into();
-    h.state = AppState::new(h.pool.clone(), Arc::new(config));
+    h.state = crate::sso_test_fixture::state(h.pool.clone(), Arc::new(config));
     h.app = routes::api_router()
         .nest("/oauth", routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(

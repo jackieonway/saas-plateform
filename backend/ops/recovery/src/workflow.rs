@@ -111,34 +111,9 @@ impl Drop for Lock {
     }
 }
 /// Execute a bounded offline operation using a private, operator-owned config.
-/// `uuid-inventory` instead accepts the separate local-preview read-only config.
 /// Production PITR is deliberately rejected: this implementation accepts only
 /// the pilot 24h/4h dump profile. Errors retain any created targets and encrypted files.
 pub fn execute(operation: &str, path: &Path) -> Result<String> {
-    if operation == "uuid-config-rekey" {
-        return crate::uuid_rekey::config_rekey::execute(path);
-    }
-    if operation == "uuid-inventory" {
-        return crate::uuid_inventory::execute(path);
-    }
-    if operation == "uuid-export" {
-        return crate::uuid_rekey::export::execute(path);
-    }
-    if operation == "uuid-transform" {
-        return crate::uuid_rekey::transform::execute(path);
-    }
-    if operation == "uuid-verify-package" {
-        return crate::uuid_rekey::verify::execute(path);
-    }
-    if operation == "uuid-import" {
-        return crate::uuid_rekey::import::execute(path);
-    }
-    if operation == "uuid-seal-evidence" {
-        return crate::uuid_rekey::seal_evidence(path);
-    }
-    if operation == "uuid-open-evidence" {
-        return crate::uuid_rekey::evidence::execute(path);
-    }
     if !["backup", "backup-new", "verify", "age", "restore"].contains(&operation) {
         return Err(Error("unknown operation"));
     }

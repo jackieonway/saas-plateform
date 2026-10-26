@@ -111,7 +111,7 @@ async function fixture(options = {}) {
       window.__departmentFixture = {
         refreshProfile: (profile) => authStore.getState().setProfile(profile),
         beginSwitch: () => authStore.getState().beginContextSwitch(),
-        finishSwitch: async (profile, token) => { await authStore.getState().setSession(token, null, undefined, requireContextIdentity(profile)); authStore.getState().setProfile(profile); },
+        finishSwitch: async (profile, token) => { await window.__replaceFixtureSession(token, requireContextIdentity(profile), profile); authStore.getState().setProfile(profile); },
         invalidateOrganizations: () => queryClient.invalidateQueries({ queryKey: ["department-organizations"] }),
         invalidateDepartments: () => queryClient.invalidateQueries({ queryKey: ["dept-tree"] }),
       };

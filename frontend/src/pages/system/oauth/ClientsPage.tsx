@@ -55,7 +55,6 @@ const GRANT_TYPES = [
   "authorization_code",
   "refresh_token",
   "client_credentials",
-  "password",
   "urn:ietf:params:oauth:grant-type:device_code",
 ] as const
 const SCOPES = ["profile", "email", "phone", "roles", "read", "write"] as const

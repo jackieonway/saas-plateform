@@ -94,7 +94,7 @@ impl Database {
         // old binary key; the production contraction belongs to Phase 6.
         if target_schema {
             if let Err(error) = sqlx::query(
-                "ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key",
+                "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
             )
             .execute(&db.pool)
             .await
@@ -652,47 +652,6 @@ async fn notification_identity_phase04_public_payload_and_internal_context_proof
         let forged=jwt::sign(&forged,SECRET)?;
         expect(&h.api(&forged,Method::GET,PROOF_PATH,Value::Null).await?,StatusCode::UNAUTHORIZED,"JWT account version mismatch")?;
         expect(&h.api("invalid-owned-token",Method::GET,PROOF_PATH,Value::Null).await?,StatusCode::UNAUTHORIZED,"internal proof never accepts an unverified bearer")?;
-        Ok(())
-    }.await;
-    db.finish(result).await
-}
-
-#[tokio::test]
-#[ignore = "creates and drops identity_phase04_* databases using explicit IDENTITY_PHASE04_TEST_DATABASE_URL"]
-async fn notification_identity_phase04_upgrade_preserves_unbound_rows_without_guessing_recipients(
-) -> Result<()> {
-    let db = Database::create_through(14, false).await?;
-    let result=async {
-        let h=Harness::create(&db.pool).await?;
-        let employee=h.person("phase04-upgrade-owner",h.child,"EMPLOYEE","ENABLED").await?;
-        let employee_credentials=credentials(&h.pool,&employee,h.application).await?;
-        let legacy=new_uuid();let system=new_uuid();let app=new_uuid();let publication=new_uuid();
-        sqlx::query("INSERT INTO notifications(id,user_id,title,content,link,is_read,read_at,source_kind) VALUES($1,$2,'Old legacy','Old content','/old-legacy',true,'2025-01-02T03:04:05Z','LEGACY')").bind(legacy).bind(employee.user).execute(&h.pool).await?;
-        sqlx::query("INSERT INTO notifications(id,user_id,title,content,link,is_read,read_at,source_kind,tenant_id,organization_id) VALUES($1,$2,'Old system','Old system content','/old-system',true,'2025-01-02T03:04:05Z','SYSTEM',$3,$4)").bind(system).bind(employee.user).bind(h.tenant).bind(h.child).execute(&h.pool).await?;
-        sqlx::query("INSERT INTO notification_publications(id,tenant_id,publisher_organization_id,application_id,publisher_user_id,publisher_username,application_name,idempotency_key,request_hash,request_body,recipient_count,delivery_count) VALUES($1,$2,$3,$4,$5,'Old publisher','Old app','old-unbound-proof',$6,'{}'::jsonb,1,1)")
-            .bind(publication).bind(h.tenant).bind(h.child).bind(h.application).bind(employee.user).bind(hash::sha256_hex("Owned old request")).execute(&h.pool).await?;
-        sqlx::query("INSERT INTO notifications(id,user_id,title,content,link,is_read,read_at,source_kind,tenant_id,organization_id,application_id,publication_id) VALUES($1,$2,'Old app','Old app content',$3,true,'2025-01-02T03:04:05Z','APP',$4,$5,$6,$7)")
-            .bind(app).bind(employee.user).bind(format!("/micro/{CODE}/old")).bind(h.tenant).bind(h.child).bind(h.application).bind(publication).execute(&h.pool).await?;
-        let before:Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(n) ORDER BY id) FROM notifications n").fetch_one(&h.pool).await?;
-        db.migrate(i64::MAX).await?;
-        let preserved:Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(n)-'recipient_membership_id'-'recipient_member_type'-'recipient_identity_version' ORDER BY id) FROM notifications n").fetch_one(&h.pool).await?;
-        ensure!(before==preserved,"0015 rewrote legacy notification body, context, read state or timestamps");
-        let unbound:bool=sqlx::query_scalar("SELECT count(*)=3 AND bool_and(recipient_membership_id IS NULL AND recipient_member_type IS NULL AND recipient_identity_version IS NULL) FROM notifications").fetch_one(&h.pool).await?;
-        ensure!(unbound,"0015 backfilled old notifications from today's account/org employee relation");
-        let old_key:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='memberships'::regclass AND conname='memberships_user_id_organization_id_key')").fetch_one(&h.pool).await?;
-        ensure!(old_key,"0015 prematurely published the Phase 6 binary membership contraction");
-        sqlx::query("ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key").execute(&h.pool).await?;
-        let customer=member(&h.pool,employee.user,h.tenant,h.child,"CUSTOMER","ENABLED").await?;
-        let customer_credentials=credentials(&h.pool,&customer,h.application).await?;
-        for creds in [&employee_credentials,&customer_credentials]{
-            ensure!(ids(&h.list(creds).await?)?.is_empty(),"unbound old notifications were exposed to a current member inbox");
-            for id in [legacy,system,app]{
-                expect(&h.api(&creds.session,Method::GET,&format!("/api/notifications/{id}"),Value::Null).await?,StatusCode::NOT_FOUND,"old NULL-proof detail")?;
-                expect(&h.api(&creds.session,Method::GET,&format!("{PROOF_PATH}?notificationId={id}"),Value::Null).await?,StatusCode::NOT_FOUND,"old NULL-proof socket replay")?;
-            }
-        }
-        let archive=h.api(&h.admin.session,Method::GET,"/api/notifications/legacy?size=100",Value::Null).await?;expect(&archive,StatusCode::OK,"explicit NULL-proof administrator archive")?;
-        ensure!(ids(&archive.body)?==BTreeSet::from([legacy,system,app]),"archive lost an old unbound source shape");
         Ok(())
     }.await;
     db.finish(result).await

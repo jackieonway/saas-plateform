@@ -23,7 +23,6 @@ pub struct Config {
     pub bootstrap_admin_username: Option<String>,
     pub bootstrap_admin_password: Option<String>,
     pub session_ttl_hours: i64,
-    pub credential_ticket_ttl_minutes: i64,
     pub access_token_ttl_seconds: i64,
     pub refresh_token_ttl_seconds: i64,
     pub public_app_url: String,
@@ -53,7 +52,6 @@ pub struct Config {
     pub membership_lifecycle_enabled: bool,
     pub customer_memberships_enabled: bool,
     pub dual_memberships_enabled: bool,
-    pub(crate) membership_readiness: Option<crate::database::MembershipReadiness>,
     /// Explicit CUSTOMER_PROFILE registration uses internal OAuth client IDs.
     pub customer_profile_client_ref: Option<uuid::Uuid>,
     pub customer_profile_application_id: Option<uuid::Uuid>,
@@ -81,9 +79,6 @@ pub struct Config {
     pub oidc_token_ttl_seconds: i64,
     pub oidc_refresh_ttl_seconds: i64,
     pub oidc_interaction_ttl_seconds: i64,
-    pub bff_enabled: bool,
-    pub bff_legacy_login_enabled: bool,
-    pub bff_legacy_human_clients: Vec<String>,
     pub bff_oidc_issuer: Option<String>,
     pub bff_oidc_client_id: Option<uuid::Uuid>,
     pub bff_oidc_client_secret: Option<String>,
@@ -197,7 +192,7 @@ fn strong_secret(raw: &str, key: &str) -> anyhow::Result<()> {
 }
 
 fn bff_http_client(env: &HashMap<String, String>) -> anyhow::Result<Option<reqwest::Client>> {
-    if !boolean(env, "BFF_ENABLED", false)? {
+    if optional(env, "BFF_OIDC_ISSUER").is_none() {
         return Ok(None);
     }
     let mut builder = reqwest::Client::builder()
@@ -330,7 +325,7 @@ impl Config {
     /// Existing in-process tests use development defaults and replace fixture values.
     #[cfg(test)]
     pub fn from_env() -> Self {
-        Self::try_from_env().expect("invalid runtime configuration")
+        Self::from_values(&std::env::vars().collect()).expect("invalid test fixture configuration")
     }
     pub fn try_from_env() -> anyhow::Result<Self> {
         let values = std::env::vars_os()
@@ -342,10 +337,22 @@ impl Config {
                 ))
             })
             .collect::<anyhow::Result<HashMap<_, _>>>()?;
-        Self::from_values(&values)
+        let config = Self::from_values(&values)?;
+        config.require_sso_configuration()?;
+        Ok(config)
     }
 
     pub fn from_values(env: &HashMap<String, String>) -> anyhow::Result<Self> {
+        for retired in [
+            "BFF_ENABLED",
+            "BFF_LEGACY_LOGIN_ENABLED",
+            "BFF_LEGACY_HUMAN_CLIENTS",
+        ] {
+            anyhow::ensure!(
+                !env.contains_key(retired),
+                "RETIRED_AUTHENTICATION_OPTION: {retired}"
+            );
+        }
         let initialization_mode = env.get("PLATFORM_DATABASE_INIT_MODE").map(String::as_str);
         crate::database::ensure_server_initialization_mode(initialization_mode)?;
         let receipt_keys = [
@@ -374,22 +381,6 @@ impl Config {
         let app_env = value(env, "APP_ENV", "development");
         let application_environment = value(env, "APPLICATION_ENVIRONMENT", "development");
         let production = production_mode(&app_env, &application_environment);
-        let membership_readiness = match (
-            env.get("MEMBERSHIP_READINESS_RECEIPT"),
-            env.get("MEMBERSHIP_READINESS_MANIFEST_SHA256"),
-        ) {
-            (None, None) => None,
-            (Some(receipt), Some(manifest)) => Some(crate::database::MembershipReadiness::new(
-                receipt,
-                manifest,
-                if production {
-                    "production"
-                } else {
-                    app_env.as_str()
-                },
-            )?),
-            _ => anyhow::bail!("MEMBERSHIP_READINESS_CONFIGURATION_INVALID"),
-        };
         anyhow::ensure!(
             matches!(
                 app_env.trim().to_ascii_lowercase().as_str(),
@@ -498,7 +489,6 @@ impl Config {
             bootstrap_admin_username: optional(env, "BOOTSTRAP_ADMIN_USERNAME"),
             bootstrap_admin_password: optional(env, "BOOTSTRAP_ADMIN_PASSWORD"),
             session_ttl_hours: number(env, "SESSION_TTL_HOURS", 12, 1, 720)?,
-            credential_ticket_ttl_minutes: number(env, "CREDENTIAL_TICKET_TTL_MINUTES", 10, 1, 60)?,
             access_token_ttl_seconds: number(env, "ACCESS_TOKEN_TTL_SECONDS", 7200, 1, 86400)?,
             refresh_token_ttl_seconds: number(
                 env,
@@ -561,7 +551,6 @@ impl Config {
             membership_lifecycle_enabled: boolean(env, "MEMBERSHIP_LIFECYCLE_ENABLED", false)?,
             customer_memberships_enabled: boolean(env, "CUSTOMER_MEMBERSHIPS_ENABLED", false)?,
             dual_memberships_enabled: boolean(env, "DUAL_MEMBERSHIPS_ENABLED", false)?,
-            membership_readiness,
             customer_profile_client_ref: optional_v7(env, "CUSTOMER_PROFILE_CLIENT_REF")?,
             customer_profile_application_id: optional_v7(env, "CUSTOMER_PROFILE_APPLICATION_ID")?,
             customer_portal_port_enabled: boolean(env, "CUSTOMER_PORTAL_PORT_ENABLED", false)?,
@@ -621,14 +610,6 @@ impl Config {
                 30,
                 600,
             )?,
-            bff_enabled: boolean(env, "BFF_ENABLED", false)?,
-            bff_legacy_login_enabled: boolean(env, "BFF_LEGACY_LOGIN_ENABLED", false)?,
-            bff_legacy_human_clients: value(env, "BFF_LEGACY_HUMAN_CLIENTS", "")
-                .split(',')
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_owned)
-                .collect(),
             bff_oidc_issuer: optional(env, "BFF_OIDC_ISSUER"),
             bff_oidc_client_id: optional_v7(env, "BFF_OIDC_CLIENT_ID")?,
             bff_oidc_client_secret: optional(env, "BFF_OIDC_CLIENT_SECRET"),
@@ -638,7 +619,7 @@ impl Config {
             bff_max_concurrent: number(env, "BFF_MAX_CONCURRENT", 16, 1, 64)? as usize,
             bff_context_ttl_seconds: number(env, "BFF_CONTEXT_TTL_SECONDS", 300, 1, 300)?,
             bff_login_ttl_seconds: number(env, "BFF_LOGIN_TTL_SECONDS", 300, 30, 600)?,
-            bff_token_keys: if boolean(env, "BFF_ENABLED", false)? {
+            bff_token_keys: if optional(env, "BFF_TOKEN_KEY_FILE").is_some() {
                 Some(Arc::new(crate::bff::CipherKeys::load(
                     &optional(env, "BFF_TOKEN_KEY_FILE")
                         .ok_or_else(|| anyhow::anyhow!("BFF_TOKEN_KEY_FILE_REQUIRED"))?,
@@ -654,11 +635,6 @@ impl Config {
             || config.customer_memberships_enabled
             || config.dual_memberships_enabled
         {
-            anyhow::ensure!(
-                (config.app_env == "test" && !production)
-                    || config.membership_readiness.is_some(),
-                "MEMBERSHIP_READINESS_REQUIRED: identity writes require an environment-bound Phase 6 receipt"
-            );
             anyhow::ensure!(
                 config.membership_lifecycle_enabled,
                 "MEMBERSHIP_LIFECYCLE_ENABLED is required for customer or dual identity writes"
@@ -766,15 +742,7 @@ impl Config {
                 "OIDC_ISSUER must equal the exact HTTPS SSO_ORIGIN"
             );
         }
-        anyhow::ensure!(
-            config.bff_legacy_human_clients.len() <= 64
-                && config
-                    .bff_legacy_human_clients
-                    .iter()
-                    .all(|value| value.len() <= 256 && !value.chars().any(char::is_control)),
-            "BFF legacy client allowlist is invalid"
-        );
-        if config.bff_enabled {
+        if config.bff_oidc_issuer.is_some() {
             let platform = origins(&config.public_app_url, "PUBLIC_APP_URL", true)?;
             anyhow::ensure!(
                 platform.len() == 1 && platform[0] == config.public_app_url,
@@ -926,6 +894,24 @@ impl Config {
         }
         Ok(config)
     }
+    fn require_sso_configuration(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(self.bff_oidc_issuer.is_some(), "BFF_OIDC_ISSUER_REQUIRED");
+        anyhow::ensure!(
+            self.bff_oidc_client_id.is_some(),
+            "BFF_OIDC_CLIENT_ID_REQUIRED"
+        );
+        anyhow::ensure!(
+            self.bff_oidc_client_secret.is_some(),
+            "BFF_OIDC_CLIENT_SECRET_REQUIRED"
+        );
+        anyhow::ensure!(
+            self.bff_oidc_redirect_uri.is_some(),
+            "BFF_OIDC_REDIRECT_URI_REQUIRED"
+        );
+        anyhow::ensure!(self.bff_token_keys.is_some(), "BFF_TOKEN_KEY_FILE_REQUIRED");
+        anyhow::ensure!(self.bff_http_client.is_some(), "BFF_HTTPS_CLIENT_REQUIRED");
+        Ok(())
+    }
     pub fn is_production(&self) -> bool {
         production_mode(&self.app_env, &self.application_environment)
     }
@@ -950,6 +936,21 @@ mod tests {
             ("DATABASE_URL", "postgresql://service:private-canary@127.0.0.1:1/isolated_imported_target"),
             ("JWT_SECRET", "correct-Rust-imported-fixture-independent-key-39"),
         ].into_iter().map(|(key, value)| (key.into(), value.into())).collect()
+    }
+
+    #[test]
+    fn sso_configuration_is_required_and_retired_switches_are_rejected() {
+        let config = Config::from_values(&HashMap::new()).unwrap();
+        assert!(config.require_sso_configuration().is_err());
+        for key in [
+            "BFF_ENABLED",
+            "BFF_LEGACY_LOGIN_ENABLED",
+            "BFF_LEGACY_HUMAN_CLIENTS",
+        ] {
+            for value in ["true", "false", ""] {
+                assert!(Config::from_values(&HashMap::from([(key.into(), value.into())])).is_err());
+            }
+        }
     }
 
     #[test]
@@ -1028,32 +1029,27 @@ mod tests {
     }
 
     #[test]
-    fn identity_writes_are_closed_until_the_isolation_baseline() {
+    fn identity_writes_are_explicit_and_customer_requires_lifecycle() {
+        assert!(
+            !Config::from_values(&HashMap::new())
+                .unwrap()
+                .membership_lifecycle_enabled
+        );
         for key in [
             "MEMBERSHIP_LIFECYCLE_ENABLED",
             "CUSTOMER_MEMBERSHIPS_ENABLED",
             "DUAL_MEMBERSHIPS_ENABLED",
         ] {
-            for mode in ["development", "production"] {
-                let mut values = production();
-                values.insert("APP_ENV".into(), mode.into());
-                values.insert(key.into(), "true".into());
-                assert!(Config::from_values(&values).is_err());
-            }
-            let mut values = HashMap::from([
-                ("APP_ENV".into(), "test".into()),
-                ("MEMBERSHIP_LIFECYCLE_ENABLED".into(), "true".into()),
-                (key.into(), "true".into()),
-            ]);
+            let mut values = production();
+            values.insert("MEMBERSHIP_LIFECYCLE_ENABLED".into(), "true".into());
+            values.insert(key.into(), "true".into());
             assert!(Config::from_values(&values).is_ok());
-            values.insert("APPLICATION_ENVIRONMENT".into(), "production".into());
-            assert!(Config::from_values(&values).is_err());
         }
-        let missing_lifecycle = HashMap::from([
-            ("APP_ENV".into(), "test".into()),
-            ("CUSTOMER_MEMBERSHIPS_ENABLED".into(), "true".into()),
-        ]);
-        assert!(Config::from_values(&missing_lifecycle).is_err());
+        assert!(Config::from_values(&HashMap::from([(
+            "CUSTOMER_MEMBERSHIPS_ENABLED".into(),
+            "true".into()
+        )]))
+        .is_err());
     }
 
     #[test]
@@ -1172,27 +1168,11 @@ mod tests {
     }
 
     #[test]
-    fn non_fixture_identity_writes_require_a_receipt_before_database_admission() {
+    fn fresh_identity_writes_need_no_historical_rollout_receipt() {
         let mut values = production();
         values.insert("MEMBERSHIP_LIFECYCLE_ENABLED".into(), "true".into());
         values.insert("CUSTOMER_MEMBERSHIPS_ENABLED".into(), "true".into());
-        assert!(Config::from_values(&values).is_err());
-        values.insert(
-            "MEMBERSHIP_READINESS_RECEIPT".into(),
-            "019a1163-0000-7000-8000-000000000001".into(),
-        );
-        assert!(Config::from_values(&values).is_err());
-        values.insert(
-            "MEMBERSHIP_READINESS_MANIFEST_SHA256".into(),
-            "a".repeat(64),
-        );
         assert!(Config::from_values(&values).is_ok());
-        values.insert(
-            "MEMBERSHIP_READINESS_MANIFEST_SHA256".into(),
-            "private-canary".into(),
-        );
-        let error = Config::from_values(&values).err().unwrap().to_string();
-        assert!(!error.contains("private-canary"));
     }
     #[test]
     fn production_rejects_bad_config_without_echoing_values() {

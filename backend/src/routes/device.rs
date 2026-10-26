@@ -42,7 +42,6 @@ async fn get_device(
     .await?
     .ok_or_else(|| AppError::not_found("设备码不存在"))?;
     let (client_id, client_name, scope, status, expires_at) = row;
-    super::oauth2::require_legacy_human_client(&state, &client_id)?;
     Ok(Json(json!({
         "clientId": client_id, "clientName": client_name, "scope": scope,
         "status": status, "expiresAt": expires_at,
@@ -91,7 +90,6 @@ async fn decide_device(
     .map_err(|_| AppError::Unavailable)?;
     let (registered_client, registered_app) =
         registration.ok_or_else(|| AppError::not_found("设备码不存在"))?;
-    super::oauth2::require_legacy_human_client(&state, &registered_client)?;
     if let Some(application_id) = registered_app {
         sqlx::query_scalar::<_, Uuid>("SELECT id FROM applications WHERE id=$1 FOR SHARE")
             .bind(application_id)
@@ -99,11 +97,8 @@ async fn decide_device(
             .await
             .map_err(|_| AppError::Unavailable)?;
     }
-    let source_client =
-        crate::session::lock_oidc_source_in_tx(&mut tx, user.session_id, user.user_id).await?;
-    let clients: Vec<String> = std::iter::once(registered_client.clone())
-        .chain(source_client)
-        .collect();
+    crate::session::lock_oidc_source_in_tx(&mut tx, user.session_id, user.user_id).await?;
+    let clients = vec![registered_client.clone()];
     sqlx::query_scalar::<_, String>(
         "SELECT client_id FROM oauth_clients WHERE client_id=ANY($1) ORDER BY client_id FOR SHARE",
     )

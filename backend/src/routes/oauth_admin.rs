@@ -361,7 +361,6 @@ fn validate_grants(grants: &[String]) -> Result<(), AppError> {
             "authorization_code",
             "refresh_token",
             "client_credentials",
-            "password",
             "urn:ietf:params:oauth:grant-type:device_code",
         ]
         .contains(&grant.as_str())
@@ -785,22 +784,7 @@ async fn update_client(
         body.require_pkce,
     );
     let before = client_audit_snapshot(&mut tx, id).await?;
-    if before["clientId"] == "platform-console-legacy"
-        && (final_mode != "USER"
-            || allowed_members != ["EMPLOYEE"]
-            || body.client_type.as_deref().unwrap_or(&current_kind) != "PUBLIC"
-            || grants != ["authorization_code"]
-            || !require_pkce
-            || application_id.flatten().is_some()
-            || body
-                .redirect_uris
-                .as_ref()
-                .is_some_and(|values| !values.is_empty()))
-    {
-        return Err(AppError::bad_request(
-            "内置控制台来源客户端必须保持员工专用及固定登录用途",
-        ));
-    }
+
     let private_changes: (bool, bool, bool) = sqlx::query_as(
         "SELECT redirect_uris IS DISTINCT FROM COALESCE($2,redirect_uris), \
          scopes IS DISTINCT FROM COALESCE($3,scopes), \
@@ -922,9 +906,7 @@ async fn delete_client(
     )
     .await?;
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
-    if before["clientId"] == "platform-console-legacy" {
-        return Err(AppError::bad_request("内置控制台来源客户端不能删除"));
-    }
+
     let (_client_id,): (String,) =
         sqlx::query_as("DELETE FROM oauth_clients WHERE id = $1 RETURNING client_id")
             .bind(id)

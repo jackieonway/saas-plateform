@@ -236,6 +236,10 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
     let bound_schema: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='platform_sessions' AND column_name='account_version')",
     ).fetch_one(pool).await?;
+    let sso_schema: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.bff_sessions') IS NOT NULL")
+            .fetch_one(pool)
+            .await?;
     let statement = if bound_schema {
         "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
          SELECT $1,$2,$3,now() + interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
@@ -244,13 +248,17 @@ async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<S
     } else {
         "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id) VALUES($1,$2,$3,now()+interval '1 hour',$4) RETURNING id"
     };
-    let sid: Uuid = sqlx::query_scalar(statement)
-        .bind(user)
-        .bind(tenant)
-        .bind(org)
-        .bind(crate::util::uuid7::new_uuid())
-        .fetch_one(pool)
-        .await?;
+    let sid: Uuid = if sso_schema {
+        crate::sso_test_fixture::session(pool, user, tenant, org).await?
+    } else {
+        sqlx::query_scalar(statement)
+            .bind(user)
+            .bind(tenant)
+            .bind(org)
+            .bind(crate::util::uuid7::new_uuid())
+            .fetch_one(pool)
+            .await?
+    };
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
         &Claims {
@@ -512,9 +520,13 @@ impl Harness {
         config.micro_gateway_origin = origin.into();
         config.micro_allowed_origins = allowed_origins;
         config.micro_apps_dir = upload_root.unwrap_or("").into();
-        let app = Router::new()
-            .merge(routes::api_router())
-            .with_state(AppState::new(pool.clone(), Arc::new(config)));
+        let app =
+            Router::new()
+                .merge(routes::api_router())
+                .with_state(crate::sso_test_fixture::state(
+                    pool.clone(),
+                    Arc::new(config),
+                ));
         Ok(Self {
             pool: pool.clone(),
             app,

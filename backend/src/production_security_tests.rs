@@ -20,7 +20,6 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::routes::{self, oauth2};
 use crate::seed;
-use crate::state::AppState;
 use crate::util::{hash, jwt, password};
 
 const ADMIN_NAME: &str = "production-gate-admin";
@@ -248,7 +247,7 @@ impl HttpServer {
     async fn start(pool: &PgPool, config: Config) -> Result<Self> {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
         let url = format!("http://{}", listener.local_addr()?);
-        let state = AppState::new(pool.clone(), Arc::new(config));
+        let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
         let router = Router::new()
             .nest("/oauth", oauth2::oauth_router())
             .merge(routes::api_router())
@@ -418,11 +417,7 @@ async fn fixture_session(
         .fetch_one(pool)
         .await?;
     let now = chrono::Utc::now().timestamp();
-    let sid: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,to_timestamp($4),$5,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id")
-        .bind(user).bind(tenant).bind(org).bind((now+3600) as f64).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+    let sid = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
     jwt::sign(
         &jwt::Claims {
             sub: user.to_string(),
@@ -925,7 +920,7 @@ async fn global_oauth_administration_requires_platform_context_and_operation_per
         let platform_token = fixture_session(&database.pool,&config,platform_user,platform,organizations[0]).await?;
         let ordinary_token = fixture_session(&database.pool,&config,ordinary_user,ordinary,organizations[1]).await?;
         let unprivileged_token = fixture_session(&database.pool,&config,unprivileged,platform,organizations[0]).await?;
-        let state = AppState::new(database.pool.clone(),Arc::new(config.clone()));
+        let state = crate::sso_test_fixture::state(database.pool.clone(),Arc::new(config.clone()));
         ensure!(state.permissions_of(ordinary_user,organizations[1]).await?.contains("system:oauth"),"ordinary actor fixture lacks the explicit OAuth operation grant being tested");
         ensure!(state.permissions_of(platform_user,organizations[0]).await?.contains("system:oauth"),"platform actor fixture lacks an explicit OAuth operation grant");
         ensure!(!state.permissions_of(unprivileged,organizations[0]).await?.contains("system:oauth"),"unprivileged platform actor inherited unexpected OAuth operation permission");

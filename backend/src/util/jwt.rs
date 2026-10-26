@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 /// JWT 载荷 (HS256):
 /// - session:    sub=用户id, tenant/org, TTL 12h
-/// - credential: sub=用户id (登录票据, TTL 10min)
 /// - access:     sub=用户id或client_id, cid/tenant/org/scope
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
@@ -40,25 +39,6 @@ pub(crate) fn sign_payload<T: Serialize>(claims: &T, secret: &str) -> anyhow::Re
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(|e| anyhow::anyhow!("JWT 签发失败: {e}"))
-}
-
-pub(crate) fn verify_payload<T: serde::de::DeserializeOwned>(
-    token: &str,
-    secret: &str,
-) -> anyhow::Result<T> {
-    // Apply the same strict expiry check as every existing credential before
-    // decoding the signed account-selection payload.
-    verify(token, secret)?;
-    let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
-    validation.validate_aud = false;
-    validation.leeway = 0;
-    decode::<T>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )
-    .map(|data| data.claims)
-    .map_err(|_| anyhow::anyhow!("invalid login selection credential"))
 }
 
 pub fn verify(token: &str, secret: &str) -> anyhow::Result<Claims> {

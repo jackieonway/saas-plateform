@@ -1,6 +1,6 @@
 # 平台浏览器检查
 
-本目录维护独立的 Playwright 1.64.1 和 Socket.IO 4.8.4 工具依赖。它们不进入宿主生产依赖。测试使用真实 Vite/React 页面和隔离 HTTP fixture；通知场景另外创建隔离 Socket.IO 服务，不连接 PostgreSQL 或启动业务后端。
+本目录维护独立的 Playwright 1.64.1 和 Socket.IO 4.8.4 工具依赖。它们不进入宿主生产依赖。测试只使用 SSO／OIDC BFF 会话，使用真实 Vite/React 页面和隔离 HTTP fixture；通知场景另外创建隔离 Socket.IO 服务，不连接 PostgreSQL 或启动业务后端。
 
 以下命令均在 `frontend` 目录运行，使用 Node 24.22.1、npm 11.16.0：
 
@@ -28,7 +28,7 @@ node tests/browser/run.mjs --browser msedge
 | 通知 | `npm run test:notifications:browser` | HTTP/Socket.IO 上下文、通知交互 |
 | 平台设置 | `npm run test:platform:browser` | 配置页面与微应用上下文联动 |
 | 应用导航 | `npm run test:auth:navigation:browser` | 应用选择和授权导航 |
-| 登录会话 | `npm run test:auth:login:browser` | 真实表单登录、返回路由、刷新草稿与组织隔离 |
+| 登录会话 | `npm run test:auth:login:browser` | SSO 跳转、认证中心表单、平台回调、员工选择、返回路由、Cookie 刷新恢复及退出 |
 | 地区位置 | `npm run test:regions:browser` | 地区及位置交互 |
 | 实体类型 | `npm run test:entities:browser` | 实体表单与类型 |
 | 部门上下文 | `npm run test:departments:browser` | 组织切换与部门操作 |
@@ -97,7 +97,7 @@ npm run test:admission:policy:browser
 
 成员专项运行实际 `UsersPage` 与成员操作组件，验证分视图、创建开关、账号绑定、独立启停、第二身份／替换、旧版本拒绝及员工 bulk 保护。准入专项运行实际应用／客户端页面、宿主 session gate 和 QueryClient，验证集合与主体用途、版本冲突、影响确认，以及保存后立即撤下旧授权投影、清空缓存并中止活动请求。两者均保留 React StrictMode，生成 JSON 结果和桌面／手机截图。
 
-这些场景使用隔离 HTTP fixture。后端成员与角色、真实策略撤销、迁移及通知服务之间的安全结论，分别以 PostgreSQL 和真实双服务证据验收，见[身份台账](../../../backend/docs/identity-sso/task-ledger.md)及[Phase 5 验收](../../../backend/docs/identity-sso/validation/phase-05.md)。
+这些场景使用隔离 HTTP fixture。后端成员与角色、真实策略撤销、迁移及通知服务之间的安全结论，分别以 PostgreSQL 和真实双服务证据验收，见[当前初始化与部署](../../../backend/docs/fresh-installation.md)及[当前初始化与部署](../../../backend/docs/fresh-installation.md)。
 
 ## 结果解释
 

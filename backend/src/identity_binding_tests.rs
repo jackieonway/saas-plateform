@@ -689,7 +689,7 @@ async fn identity_binding_phase02_exact_member_revocation() -> Result<()> {
     let result = async {
         // Target-schema fixture only: the independently published contraction
         // migration remains a Phase 6 delivery.
-        sqlx::query("ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key").execute(&db.pool).await?;
+        sqlx::query("ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key").execute(&db.pool).await?;
         let (tenant, org) = tenant(&db.pool, "phase02-local-revoke").await?;
         let other_org = organization(&db.pool, tenant, Some(org), "phase02-other-org").await?;
         client(&db.pool, "phase02-employee", &["EMPLOYEE"], None).await?;

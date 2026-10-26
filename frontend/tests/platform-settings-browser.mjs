@@ -11,7 +11,7 @@ import net from "node:net"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { launchBrowser } from "./browser/runtime.mjs"
-import { fixtureUuid, identityForProfile, installLegacyAuthMode, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
+import { fixtureUuid, identityForProfile, installSsoAuthMode, installSession, profileWithIdentity } from "./browser/identity-fixture.mjs"
 
 const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bindHost = process.env.PLATFORM_BROWSER_BIND || (process.platform === "win32" ? "::1" : "127.0.0.1")
@@ -85,7 +85,7 @@ async function withFixture(options, run) {
     requests: [], saves: [], errors: [], routeErrors: [], failSave: false, theme: "light", ...options }
   page.on("pageerror", (error) => state.errors.push(error.message))
   if (state.authenticated) await installSession(context, "test-platform-settings-session", identityForProfile(profile(state)))
-  else await installLegacyAuthMode(context)
+  else await installSsoAuthMode(context)
   await context.addInitScript(({ theme }) => {
     localStorage.setItem("platform-theme", theme)
   }, { theme: state.theme })
@@ -176,12 +176,11 @@ async function expectTitle(page, title) {
   await page.waitForFunction((expected) => document.title === expected, title)
 }
 async function expectLogin(page, settings) {
-  await page.getByRole("heading", { name: settings.loginTitle, exact: true }).waitFor()
+  await page.getByRole("heading", { name: "继续统一登录", exact: true }).waitFor()
   await page.getByText(settings.platformName, { exact: true }).first().waitFor()
   await page.getByText(settings.platformDescription, { exact: true }).first().waitFor()
-  await page.getByText(settings.loginDescription, { exact: true }).waitFor()
   if (settings.footerText) await page.getByText(settings.footerText, { exact: true }).waitFor()
-  await expectTitle(page, `登录 · ${settings.platformName}`)
+  await expectTitle(page, `统一登录 · ${settings.platformName}`)
   assert.equal(await page.locator('meta[name="description"]').getAttribute("content"), settings.platformDescription)
   assert.equal(await page.locator('link[rel="icon"]').getAttribute("href"), settings.logoUrl || "/logo.svg")
 }
@@ -222,6 +221,7 @@ const scenarios = {
   }),
   authorization_branding: async () => withFixture({ startPath: "/device" }, async ({ page, state }) => {
     for (const [route, title] of [["/device", "设备授权"], ["/consent", "授权确认"]]) {
+      if (route !== "/login") await page.evaluate(({ proof, profile }) => window.__replaceFixtureSession("test-platform-settings-session", proof, profile), { proof: identityForProfile(profile(state)), profile: profile(state) })
       if (new URL(page.url()).pathname !== route) await page.goto(origin + route)
       await page.getByText(state.settings.platformName, { exact: true }).waitFor()
       await page.getByText(state.settings.platformDescription, { exact: true }).waitFor()
@@ -231,9 +231,10 @@ const scenarios = {
     }
     assert.equal(state.requests.some((request) => request.pathname === "/api/platform/settings"), false, "Device and consent branding must use the public branding contract.")
   }),
-  empty_footers: async () => withFixture({ startPath: "/login", settings: { ...originalSettings, footerText: "" } }, async ({ page, state }) => {
+  empty_footers: async () => withFixture({ authenticated: false, startPath: "/login", settings: { ...originalSettings, footerText: "" } }, async ({ page, state }) => {
     await expectLogin(page, state.settings)
-    for (const [route, title] of [["/login", "登录"], ["/device", "设备授权"], ["/consent", "授权确认"]]) {
+    for (const [route, title] of [["/login", "统一登录"], ["/device", "设备授权"], ["/consent", "授权确认"]]) {
+      if (route !== "/login") await page.evaluate(({ proof, profile }) => window.__replaceFixtureSession("test-platform-settings-session", proof, profile), { proof: identityForProfile(profile(state)), profile: profile(state) })
       if (new URL(page.url()).pathname !== route) await page.goto(origin + route)
       await page.getByText(state.settings.platformName, { exact: true }).first().waitFor()
       await expectTitle(page, `${title} · ${state.settings.platformName}`)
@@ -262,6 +263,7 @@ const scenarios = {
     assert.equal(await page.getByLabel("平台名称", { exact: true }).inputValue(), next.platformName)
     assert.equal(await page.getByRole("button", { name: "保存设置", exact: true }).isDisabled(), true)
     // Reload a public page to prove all saved branding is read through its public contract.
+    await page.evaluate(() => window.__replaceFixtureSession(null, null))
     await page.goto(origin + "/login")
     await expectLogin(page, state.settings)
     await page.locator(`img[src="${next.logoUrl}"]`).first().waitFor()
@@ -319,6 +321,7 @@ const scenarios = {
     assert.equal(state.saves[0].primaryColor, "#2563EB")
     await page.waitForFunction((original) => document.documentElement.style.getPropertyValue("--primary") !== original, originalPrimary)
     const savedPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue("--primary"))
+    await page.evaluate(() => window.__replaceFixtureSession(null, null))
     await page.goto(origin + "/login")
     await expectLogin(page, state.settings)
     await page.waitForFunction((primary) => document.documentElement.style.getPropertyValue("--primary") === primary, savedPrimary)

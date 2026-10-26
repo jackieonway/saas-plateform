@@ -17,7 +17,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::entity_creation_tests::Database;
-use crate::state::AppState;
 use crate::util::jwt;
 
 const SECRET: &str = "owned-phase15-discovery-signing-only";
@@ -78,6 +77,14 @@ struct Harness {
 
 fn config(policy: &Value) -> Result<Config> {
     Config::from_values(&HashMap::from([
+        (
+            "BOOTSTRAP_ADMIN_USERNAME".into(),
+            "owned-fresh-bootstrap".into(),
+        ),
+        (
+            "BOOTSTRAP_ADMIN_PASSWORD".into(),
+            "Owned-fresh-bootstrap-password9!".into(),
+        ),
         ("APPLICATION_ENVIRONMENT".into(), "development".into()),
         (
             "DATABASE_URL".into(),
@@ -174,11 +181,9 @@ async fn actor(pool: &PgPool, person: Person, menus: &[Uuid]) -> Result<Actor> {
             .execute(pool)
             .await?;
     }
-    let session: Uuid = sqlx::query_scalar("INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id")
-        .bind(person.user).bind(person.tenant).bind(person.organization).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
+    let session =
+        crate::sso_test_fixture::session(pool, person.user, person.tenant, person.organization)
+            .await?;
     let version = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
         .bind(person.user)
         .fetch_one(pool)
@@ -587,7 +592,7 @@ impl Harness {
                 {"tenantId":business,"organizationId":sibling_org,"includeDescendants":false,"read":true,"write":false},
                 {"tenantId":platform,"organizationId":platform_child,"includeDescendants":true,"read":true,"write":true},
                 {"tenantId":expired_tenant,"organizationId":expired_root,"includeDescendants":true,"read":true,"write":true}]});
-        let state = AppState::new(pool.clone(), Arc::new(config(&policy)?));
+        let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config(&policy)?));
         let app = crate::routes::api_router()
             .layer(middleware::from_fn_with_state(
                 state.clone(),

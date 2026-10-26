@@ -48,7 +48,6 @@ impl PreparedPassword {
 pub(crate) struct AccountCredential {
     pub(crate) id: Uuid,
     pub(crate) username: String,
-    pub(crate) real_name: String,
     pub(crate) status: String,
     pub(crate) account_version: i64,
     credential: CredentialHash,
@@ -58,7 +57,7 @@ impl AccountCredential {
     pub(crate) fn new(
         id: Uuid,
         username: String,
-        real_name: String,
+        _real_name: String,
         status: String,
         account_version: i64,
         credential: CredentialHash,
@@ -66,7 +65,6 @@ impl AccountCredential {
         Self {
             id,
             username,
-            real_name,
             status,
             account_version,
             credential,
@@ -200,6 +198,4 @@ pub(crate) trait AccountAdministrationPort: Send + Sync {
         tx: &'a mut dyn AccountMutationTx,
         id: Uuid,
     ) -> AccountFuture<'a, u64>;
-
-    fn record_login(&self, id: Uuid) -> AccountFuture<'_, ()>;
 }

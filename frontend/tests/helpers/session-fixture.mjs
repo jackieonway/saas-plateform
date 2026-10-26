@@ -18,8 +18,10 @@ export const identity = (patch = {}) => ({
 })
 export const targetIdentity = identity({ organizationId: '019d0000-0000-7000-8000-000000000005', membershipId: '019d0000-0000-7000-8000-000000000006' })
 export const contextResponse = (accessToken, refreshToken, member = targetIdentity) => ({
-  accessToken, refreshToken, user: { id: member.userId, username: 'session-fixture' },
-  tenant: { id: member.tenantId }, organization: { id: member.organizationId }, applications: [],
+  accessToken, ...(refreshToken === undefined ? {} : { refreshToken }),
+  user: { id: member.userId, username: 'session-fixture', realName: 'Fixture', email: '', phone: '', avatar: '', gender: '', isSuperAdmin: false },
+  tenant: { id: member.tenantId, name: 'Fixture tenant', code: 'fixture' },
+  organization: { id: member.organizationId, name: 'Fixture organization', path: '/Fixture' }, applications: [],
   membershipId: member.membershipId, memberType: member.memberType,
   identityVersion: member.identityVersion, accountVersion: member.accountVersion,
 })
@@ -41,6 +43,14 @@ export function sharedOrigin(options = {}) {
     const redirects = [], calls = [], listeners = new Map(), timers = new Map()
     const p = { listeners, disposed: false }
     let denyWrites = false
+    let proof = settings.session === false ? null : identity(), serial = 1, access = 'expired-access'
+    const sid = () => `019d0000-0000-7000-8000-${String(serial).padStart(12, '0')}`
+    const account = () => ({ id: proof?.userId ?? identity().userId, username: 'session-fixture', realName: 'Fixture', avatar: '' })
+    const member = p => ({ ...p, status: 'ENABLED', consoleSelectable: true, selectionDisabledReason: null,
+      tenantName: 'Fixture tenant', organizationName: 'Fixture organization', organizationPath: '/Fixture', departmentName: null })
+    const session = () => ({ sessionId: sid(), version: '1', csrfToken: 'a'.repeat(64), account: account(),
+      memberships: proof ? [member(proof), member(targetIdentity)] : [], context: proof, expiresAt: new Date(Date.now()+600000).toISOString() })
+
     const add = (kind, callback) => { if (!listeners.has(kind)) listeners.set(kind, new Set()); listeners.get(kind).add(callback) }
     const remove = (kind, callback) => listeners.get(kind)?.delete(callback)
     const storageView = {
@@ -55,7 +65,7 @@ export function sharedOrigin(options = {}) {
     const window = { localStorage: storageView, addEventListener: add, removeEventListener: remove,
       location: { pathname: '/system/users', search: '', assign: value => redirects.push(value) } }
     const sandbox = vm.createContext({ Response, URLSearchParams, DOMException, AbortController, AbortSignal, Promise, console,
-      setTimeout: settings.controlDeadline ? (callback, ms) => { const handle = ++id; timers.set(handle, { callback, ms }); return handle } : setTimeout,
+      setTimeout: settings.controlDeadline ? (callback, ms) => { const handle = ++id; timers.set(handle, { callback, ms }); return handle } : (fn, ms) => { const handle = setTimeout(fn, ms); handle.unref?.(); return handle },
       clearTimeout: settings.controlDeadline ? handle => timers.delete(handle) : clearTimeout,
       crypto: webcrypto,
       navigator: settings.noLocks ? {} : { locks }, localStorage: storageView, window,
@@ -63,7 +73,10 @@ export function sharedOrigin(options = {}) {
       fetch: async (url, config) => {
         // Legacy fixtures explicitly select their server mode without changing
         // the request counts and controlled handlers owned by each scenario.
-        if (url === '/auth/config' && (config?.method ?? 'GET') === 'GET') return json(200, { mode: settings.authMode ?? 'LEGACY' })
+        if (url === '/auth/config' && (config?.method ?? 'GET') === 'GET') return json(200, { mode: 'BFF' })
+        if (!settings.authMode && url === '/auth/session') return json(200, session())
+        if (!settings.authMode && url === '/auth/context-token') return json(200, { ...contextResponse(access, undefined, proof),
+          sessionId: sid(), version: '1', expiresIn: 300 })
         calls.push({ url, options: config })
         return handler(url, config)
       },
@@ -85,7 +98,10 @@ export function sharedOrigin(options = {}) {
     return { ...auth, api, state, storage, redirects, calls, load,
       fireDeadline: () => { for (const timer of [...timers.values()]) { if (timer.ms === 20_000) timer.callback() } },
       event: kind => listeners.get(kind)?.forEach(fn => fn({ key: SESSION_KEY })),
-      record: () => JSON.parse(storage.get(SESSION_KEY)),
+      record: () => load('src/lib/bff-session.ts').bffSessionCoordinator.current().record,
+      authenticate: async (token, _ignored, _expected, next = identity()) => {
+        proof = next; serial++; access = token; await load('src/lib/bff-session.ts').bffSessionCoordinator.reconcile(); return true
+      },
       denyWrites: () => { denyWrites = true },
     }
   }
@@ -95,6 +111,5 @@ export function sharedOrigin(options = {}) {
 export async function fixture(handler, settings = {}) {
   const shared = sharedOrigin(settings)
   const p = await shared.page(handler, settings)
-  if (settings.session !== false) await p.state().setSession('expired-access', 'psr_test-refresh', undefined, identity())
   return { ...p, shared }
 }

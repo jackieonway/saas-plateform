@@ -19,7 +19,7 @@ BEGIN
     SELECT * INTO s FROM public.identity_deployment_state WHERE singleton;
     IF NOT FOUND OR current_database()<>cfg.expected_database OR s.deployment_id<>cfg.deployment_id
        OR cfg.deployment_id::text<>current_setting('identity_deployment.verify_id')
-       OR s.issuer<>cfg.issuer OR s.schema_version<>20
+       OR s.issuer<>cfg.issuer OR s.schema_version<>1
        OR s.migration_owner<>cfg.prefix||'_migration_owner'
        OR s.identity_owner<>cfg.prefix||'_identity_owner'
        OR s.platform_owner<>cfg.prefix||'_platform_owner'

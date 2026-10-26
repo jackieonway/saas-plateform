@@ -2,7 +2,7 @@
 \set ECHO none
 \set QUIET on
 -- A privileged, single migration/provisioning job executes this once after
--- canonical migration 0020, before either zero-DDL runtime is started.
+-- canonical fresh baseline 0001, before either zero-DDL runtime is started.
 -- Variables: expected_database, deployment_id (canonical UUIDv7), issuer,
 -- role_prefix (fresh roles created by create-roles.sql).
 -- Database comment must already equal identity-deployment/1/<deployment_id>.
@@ -29,7 +29,7 @@ BEGIN
        OR pg_catalog.shobj_description((SELECT oid FROM pg_catalog.pg_database WHERE datname=cfg.expected_database),'pg_database')
             IS DISTINCT FROM 'identity-deployment/1/'||cfg.deployment_id::text
        OR EXISTS(SELECT 1 FROM public.identity_deployment_state)
-       OR NOT EXISTS(SELECT 1 FROM public._sqlx_migrations WHERE version=20 AND success)
+       OR NOT EXISTS(SELECT 1 FROM public._sqlx_migrations WHERE version=1 AND success)
        OR EXISTS(SELECT 1 FROM public._sqlx_migrations WHERE NOT success)
        OR NOT EXISTS(SELECT 1 FROM public.oidc_provider_settings WHERE singleton AND issuer=cfg.issuer)
        OR EXISTS(SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname<>'public'
@@ -214,6 +214,6 @@ BEGIN
     END IF;
     INSERT INTO public.identity_deployment_state(singleton,deployment_id,issuer,schema_version,migration_owner,identity_owner,platform_owner,
         revocation_bridge_owner,projection_owner,identity_runtime,platform_runtime,ready_at)
-    VALUES(true,cfg.deployment_id,cfg.issuer,20,migration_owner,identity_owner,platform_owner,bridge_owner,identity_owner,identity_runtime,platform_runtime,pg_catalog.clock_timestamp());
+    VALUES(true,cfg.deployment_id,cfg.issuer,1,migration_owner,identity_owner,platform_owner,bridge_owner,identity_owner,identity_runtime,platform_runtime,pg_catalog.clock_timestamp());
 END $provision$;
 COMMIT;

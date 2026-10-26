@@ -1,14 +1,12 @@
 import { create } from "zustand"
 import type { AppBrief, ProfileResp } from "@/api/types"
-import { sessionCoordinator } from "@/lib/session-coordinator"
 import { bffSessionCoordinator } from "@/lib/bff-session"
 import type { BffSessionView } from "@/lib/bff-session"
 import { loadAuthenticationMode, type AuthenticationMode } from "@/lib/authentication-mode"
-import type { SessionFence, SessionObservation, SessionStatus } from "@/lib/session-coordinator"
-import { contextIdentityFromResponse, contextIdentityKey, isContextIdentity, sameContextIdentity, type ContextIdentity } from "@/lib/context-identity"
-export type { SessionFence } from "@/lib/session-coordinator"
+import type { SessionFence, SessionObservation, SessionStatus } from "@/lib/session-types"
+import { contextIdentityFromResponse, contextIdentityKey, sameContextIdentity, type ContextIdentity } from "@/lib/context-identity"
+export type { SessionFence } from "@/lib/session-types"
 
-const LEGACY_APP_KEY = "platform-current-app"
 const APP_KEY_PREFIX = "platform-current-app-v2:"
 let sessionLifetime = new AbortController()
 let initialization: Promise<void> | null = null
@@ -18,7 +16,6 @@ interface AuthState {
   bffSession: BffSessionView | null
   tokenExpiresAt: number | null
   token: string | null
-  refreshToken: string | null
   profile: ProfileResp | null
   identity: ContextIdentity | null
   contextKey: string | null
@@ -34,8 +31,6 @@ interface AuthState {
   beginContextSwitch: () => void
   endContextSwitch: () => void
   retireAuthorizationProjection: (expected?: SessionFence) => boolean
-  setToken: (token: string, identity?: ContextIdentity) => Promise<boolean>
-  setSession: (token: string, refreshToken?: string | null, expected?: SessionFence, identity?: ContextIdentity) => Promise<boolean>
   setProfile: (profile: ProfileResp | null, epoch?: number) => void
   setCurrentApplication: (appId: string | null) => void
   /** 确保当前应用在可用列表内,返回有效应用 id */
@@ -48,7 +43,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   bffSession: null,
   tokenExpiresAt: null,
   token: null,
-  refreshToken: null,
   profile: null,
   identity: null,
   contextKey: null,
@@ -63,12 +57,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         const authMode = await loadAuthenticationMode()
         set({ authMode })
-        if (authMode === "BFF") await bffSessionCoordinator.initialize()
-        else await sessionCoordinator.initialize()
+        await bffSessionCoordinator.initialize()
       } catch (error) {
-        // Both an unavailable mode and an unavailable BFF remain closed. A
-        // deployment's explicit LEGACY mode is the only legacy entry point.
-        if (get().authMode !== "LEGACY") set({ token: null, refreshToken: null, sessionStatus: "unavailable",
+        set({ token: null, sessionStatus: "unavailable",
           coordinationError: error instanceof Error ? error.message : "认证服务暂时不可用，请重新检查" })
         throw error
       }
@@ -77,18 +68,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   reconcileSession: async () => {
     if (get().authMode === "BFF") await bffSessionCoordinator.reconcile()
-    else if (get().authMode === "LEGACY") await sessionCoordinator.reconcile()
     else await get().initializeSessionCoordination()
   },
   currentApplicationId: null,
-
-  setToken: (token, identity) => get().setSession(token, null, undefined, identity),
-
-  setSession: (token, refreshToken = null, expected = captureSessionFence(), identity) => {
-    if (get().authMode !== "LEGACY") return Promise.reject(new Error("当前登录方式不接受浏览器保存的会话凭据"))
-    if (!isContextIdentity(identity) || identity.memberType !== "EMPLOYEE") return Promise.reject(new Error("登录响应缺少有效员工成员证明，请重新登录"))
-    return sessionCoordinator.replace({ token, refreshToken, identity }, expected)
-  },
 
   beginContextSwitch: () => {
     sessionLifetime.abort()
@@ -144,15 +126,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return preferred.id
   },
 
-  logout: (expected = captureSessionFence()) => get().authMode === "BFF"
-    ? bffSessionCoordinator.forget(expected) : get().authMode === "LEGACY" ? sessionCoordinator.logout(expected) : Promise.resolve(false),
+  logout: (expected = captureSessionFence()) => bffSessionCoordinator.forget(expected),
 }))
 
 function applySharedSession({ record, status, error }: SessionObservation) {
   const state = useAuthStore.getState()
   const usable = status === "active" || status === "refreshing"
   const token = usable ? record?.token ?? null : null
-  const refreshToken = usable ? record?.refreshToken ?? null : null
   const sessionId = record?.sessionId ?? null
   const identity = record?.identity ?? null
   const contextKey = identity ? contextIdentityKey(identity) : null
@@ -167,25 +147,21 @@ function applySharedSession({ record, status, error }: SessionObservation) {
   if (restoringPreference && contextKey) {
     try { restoredApplicationId = localStorage.getItem(`${APP_KEY_PREFIX}${contextKey}`) } catch { /* Optional preference. */ }
   }
-  if (state.token === token && state.refreshToken === refreshToken && state.sessionStatus === status &&
+  if (state.token === token && state.sessionStatus === status &&
       state.sessionVersion === (record?.version ?? -1) && state.coordinationError === error) return
   if (identityChanged || isolated || resumed) {
     sessionLifetime.abort()
     sessionLifetime = new AbortController()
     try {
-      localStorage.removeItem(LEGACY_APP_KEY)
       if (state.contextKey) localStorage.removeItem(`${APP_KEY_PREFIX}${state.contextKey}`)
     } catch { /* Capability error is surfaced by the coordinator. */ }
   }
-  useAuthStore.setState({ token, refreshToken, sessionId, identity, contextKey, sessionVersion: record?.version ?? -1,
+  useAuthStore.setState({ token, sessionId, identity, contextKey, sessionVersion: record?.version ?? -1,
     sessionStatus: status, coordinationError: error, contextSwitching: switching,
     ...((identityChanged || isolated || resumed) ? { profile: null, currentApplicationId: restoredApplicationId, contextEpoch: state.contextEpoch + 1 } : {}),
     ...(restoringPreference ? { currentApplicationId: restoredApplicationId } : {}),
   })
 }
-sessionCoordinator.subscribe(observation => {
-  if (useAuthStore.getState().authMode === "LEGACY") applySharedSession(observation)
-})
 bffSessionCoordinator.subscribe(observation => {
   if (useAuthStore.getState().authMode !== "BFF") return
   applySharedSession(observation)
@@ -196,7 +172,6 @@ bffSessionCoordinator.subscribe(observation => {
  * Reading a record never claims an abandoned operation: recovery requires Web Locks. */
 export function reconcileSessionSync(): void {
   if (useAuthStore.getState().authMode === "BFF") bffSessionCoordinator.observe()
-  else if (useAuthStore.getState().authMode === "LEGACY") sessionCoordinator.observe()
 }
 export function captureSessionSignal(): AbortSignal { return sessionLifetime.signal }
 

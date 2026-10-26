@@ -236,15 +236,7 @@ async fn verify_history(connection: &mut PgConnection) -> Result<(), ImportedDat
     .fetch_all(&mut *connection)
     .await
     .map_err(ImportedDatabaseError::caused_by)?;
-    let applied: Vec<_> = rows
-        .iter()
-        .map(|(version, _, checksum)| sqlx::migrate::AppliedMigration {
-            version: *version,
-            checksum: std::borrow::Cow::Owned(checksum.clone()),
-        })
-        .collect();
-    let migrator = super::compatible_migrator(&applied);
-    let expected: Vec<_> = migrator
+    let expected: Vec<_> = super::MIGRATIONS
         .iter()
         .filter(|m| !m.migration_type.is_down_migration())
         .collect();

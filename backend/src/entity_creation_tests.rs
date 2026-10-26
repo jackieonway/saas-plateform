@@ -18,7 +18,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::routes;
-use crate::state::AppState;
 use crate::util::jwt;
 
 const SECRET: &str = "entity-creation-isolated-tests-only";
@@ -192,18 +191,7 @@ async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<S
         .bind(user)
         .fetch_one(pool)
         .await?;
-    let session: Uuid = sqlx::query_scalar(
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,now()+interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id",
-    )
-    .bind(user)
-    .bind(tenant)
-    .bind(org)
-    .bind(crate::util::uuid7::new_uuid())
-    .fetch_one(pool)
-    .await?;
+    let session = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
     let now = chrono::Utc::now().timestamp();
     jwt::sign(
         &jwt::Claims {
@@ -301,7 +289,10 @@ impl Harness {
             ("JWT_SECRET".into(), SECRET.into()),
         ]))?;
         Ok(Self {
-            app: routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config))),
+            app: routes::api_router().with_state(crate::sso_test_fixture::state(
+                pool.clone(),
+                Arc::new(config),
+            )),
             token: session(pool, platform, org, admin).await?,
             application,
             extra_menu,
@@ -962,7 +953,7 @@ async fn initial_schema_entity_types_default_and_enforce_database_constraints() 
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
-async fn contacts_initialize_administrators_and_support_telephone_and_email_login() -> Result<()> {
+async fn contacts_initialize_administrators_with_sso_permissions() -> Result<()> {
     let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
@@ -993,15 +984,10 @@ async fn contacts_initialize_administrators_and_support_telephone_and_email_logi
         let assigned: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM user_roles WHERE user_id=$1 AND role_id=$2 AND organization_id=$3)")
             .bind(user_id).bind(role).bind(root_id).fetch_one(pool).await?;
         ensure!(assigned, "first user lacks tenant administrator assignment");
-        for identifier in ["13800138001", "CONTACT@EXAMPLE.COM"] {
-            let login = h.ok(Method::POST, "/api/auth/login", Some(json!({"username": identifier, "password": secret}))).await?;
-            let ticket = login["ticket"].as_str().ok_or_else(|| anyhow!("login credential ticket missing"))?;
-            let context = request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({"organizationId": root_id})), StatusCode::OK).await?;
-            let token = context["accessToken"].as_str().ok_or_else(|| anyhow!("session token missing"))?;
-            let permissions = request(&h.app, token, Method::GET, "/api/auth/permissions", None, StatusCode::OK).await?;
-            ensure!(permissions["permissions"].as_array().is_some_and(|items| items.contains(&json!("system:organization"))),
-                "contact login has no effective administrator permissions");
-        }
+        let token = session(pool, tenant_id, root_id, user_id).await?;
+        let permissions = request(&h.app, &token, Method::GET, "/api/auth/permissions", None, StatusCode::OK).await?;
+        ensure!(permissions["permissions"].as_array().is_some_and(|items| items.contains(&json!("system:organization"))),
+            "SSO contact context has no effective administrator permissions");
         let child = h.ok(Method::POST, "/api/organizations", Some(json!({
             "tenantId": tenant_id, "parentId": root_id, "name": "联系人子组织",
             "contactName": "联系人甲", "contactPhone": "13800138001", "contactEmail": "contact@example.com",
@@ -1021,11 +1007,9 @@ async fn contacts_initialize_administrators_and_support_telephone_and_email_logi
         }))).await?;
         ensure!(org["administrator"]["username"] == email_only && email_only.len() > 50,
             "email-only account does not support the full email length");
-        h.ok(Method::POST, "/api/auth/login", Some(json!({"username": email_only,
-            "password": org["administrator"]["initialPassword"]}))).await?;
-        let email_login_audit: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_logs WHERE username=$1 AND action='LOGIN'")
-            .bind(&email_only).fetch_one(pool).await?;
-        ensure!(email_login_audit == 1, "long email username login lost its audit record");
+        let email_user: Uuid = org["administrator"]["userId"].as_str().unwrap().parse()?;
+        let email_hash: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1").bind(email_user).fetch_one(pool).await?;
+        ensure!(crate::util::password::verify_password(&email_hash, org["administrator"]["initialPassword"].as_str().unwrap()), "email account initialization lost its credential");
         let updated = h.ok(Method::PUT, &format!("/api/tenants/{tenant_id}"), Some(json!({
             "contactName": "后续业务联系人", "contactPhone": "", "contactEmail": "later@example.com",
         }))).await?;
@@ -1047,8 +1031,7 @@ async fn contacts_initialize_administrators_and_support_telephone_and_email_logi
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
-async fn shared_contact_identifiers_select_only_password_verified_accounts_and_contexts(
-) -> Result<()> {
+async fn shared_contact_identifiers_preserve_accounts_and_sso_tenant_isolation() -> Result<()> {
     let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
@@ -1065,32 +1048,16 @@ async fn shared_contact_identifiers_select_only_password_verified_accounts_and_c
             "name": "同邮箱租户丙", "code": "contact-third", "contactName": "联系人丙",
             "contactPhone": "13800138003", "contactEmail": "shared@example.com",
         }))).await?;
-        let first_id = id(&first)?;
+        let _first_id = id(&first)?;
         let second_id = id(&second)?;
-        let third_id = id(&third)?;
+        let _third_id = id(&third)?;
         let first_user = first["administrator"]["userId"].as_str().ok_or_else(|| anyhow!("first contact user missing"))?;
         let second_user = second["administrator"]["userId"].as_str().ok_or_else(|| anyhow!("second contact user missing"))?;
         let first_secret = first["administrator"]["initialPassword"].as_str().ok_or_else(|| anyhow!("first credential missing"))?;
         let second_secret = second["administrator"]["initialPassword"].as_str().ok_or_else(|| anyhow!("second credential missing"))?;
-        let third_secret = third["administrator"]["initialPassword"].as_str().ok_or_else(|| anyhow!("third credential missing"))?;
+        let _third_secret = third["administrator"]["initialPassword"].as_str().ok_or_else(|| anyhow!("third credential missing"))?;
         ensure!(first_user != second_user && first_secret != second_secret,
             "shared telephone merged distinct people or reused a credential");
-        for (identifier, secret, tenant_id) in [
-            ("13800138002", first_secret, first_id), ("13800138002", second_secret, second_id),
-            ("shared@example.com", first_secret, first_id), ("shared@example.com", third_secret, third_id),
-            ("second@example.com", second_secret, second_id),
-        ] {
-            let login = h.ok(Method::POST, "/api/auth/login", Some(json!({"username": identifier, "password": secret}))).await?;
-            let memberships = login["memberships"].as_array().ok_or_else(|| anyhow!("login choices missing"))?;
-            ensure!(login["accountCount"] == 1 && memberships.iter().all(|item| item["tenantId"] == json!(tenant_id)),
-                "shared alias exposed an account whose password was not verified");
-        }
-        // Repeated successful logins for one person must not lock another person
-        // sharing the phone number by counting mismatched candidate hashes.
-        for _ in 0..6 {
-            h.ok(Method::POST, "/api/auth/login", Some(json!({"username": "13800138002", "password": first_secret}))).await?;
-        }
-        h.ok(Method::POST, "/api/auth/login", Some(json!({"username": "13800138002", "password": second_secret}))).await?;
         let same_person = h.ok(Method::POST, "/api/tenants", Some(json!({
             "name": "同一联系人另一个租户", "code": "contact-same-person", "contactName": "联系人甲",
             "contactPhone": "13800138002", "contactEmail": "shared@example.com",
@@ -1098,46 +1065,16 @@ async fn shared_contact_identifiers_select_only_password_verified_accounts_and_c
         ensure!(same_person["administrator"]["userId"] == first["administrator"]["userId"]
             && same_person["administrator"]["created"] == false
             && same_person["administrator"].get("initialPassword").is_none(), "same contact did not reuse its proven identity");
-        let reused_login = h.ok(Method::POST, "/api/auth/login", Some(json!({"username": "shared@example.com", "password": first_secret}))).await?;
-        ensure!(reused_login["accountCount"] == 1 && reused_login["memberships"].as_array().is_some_and(|items| items.len() == 2),
-            "one person managing multiple tenants lost membership choices");
-        let shared_hash = crate::util::password::hash_password(first_secret)?;
-        let second_uid: Uuid = second_user.parse()?;
-        sqlx::query("UPDATE users SET password_hash=$2 WHERE id=$1")
-            .bind(second_uid).bind(shared_hash).execute(pool).await?;
-        let multi = h.ok(Method::POST, "/api/auth/login", Some(json!({"username": "13800138002", "password": first_secret}))).await?;
-        ensure!(multi["accountCount"] == 2 && multi["memberships"].as_array().is_some_and(|items| items.len() == 3),
-            "same alias/password cannot select among separately verified tenant accounts");
-        let ticket = multi["ticket"].as_str().ok_or_else(|| anyhow!("multi-account ticket missing"))?;
-        let roots_first = h.ok(Method::GET, &format!("/api/organizations/tree?tenantId={first_id}"), None).await?;
         let roots_second = h.ok(Method::GET, &format!("/api/organizations/tree?tenantId={second_id}"), None).await?;
-        let first_root = id(&roots_first[0])?;
         let second_root = id(&roots_second[0])?;
-        let selected = request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({
-            "organizationId": second_root, "userId": second_uid,
-        })), StatusCode::OK).await?;
-        ensure!(selected["user"]["id"] == json!(second_uid) && selected["tenant"]["id"] == json!(second_id),
-            "selected tenant reused another account identity");
-        let token = selected["accessToken"].as_str().ok_or_else(|| anyhow!("selected session missing"))?;
-        request(&h.app, token, Method::GET, "/api/tenants", None, StatusCode::FORBIDDEN).await?;
-        let scoped = request(&h.app, token, Method::GET, "/api/tenants/options", None, StatusCode::OK).await?;
+        let second_uid: Uuid = second_user.parse()?;
+        let token = session(pool, second_id, second_root, second_uid).await?;
+        request(&h.app, &token, Method::GET, "/api/tenants", None, StatusCode::FORBIDDEN).await?;
+        let scoped = request(&h.app, &token, Method::GET, "/api/tenants/options", None, StatusCode::OK).await?;
         ensure!(scoped.as_array().is_some_and(|items| items.len() == 1 && items[0]["id"] == json!(second_id)),
-            "selected account session exposes another tenant");
-        request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({
-            "organizationId": second_root, "userId": first_user,
-        })), StatusCode::FORBIDDEN).await?;
-        request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({
-            "organizationId": second_root, "userId": crate::util::uuid7::new_uuid(),
-        })), StatusCode::FORBIDDEN).await?;
-        request(&h.app, ticket, Method::GET, "/api/auth/profile", None, StatusCode::UNAUTHORIZED).await?;
-        sqlx::query("UPDATE users SET session_version=session_version+1 WHERE id=$1")
-            .bind(second_uid).execute(pool).await?;
-        request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({
-            "organizationId": second_root, "userId": second_uid,
-        })), StatusCode::UNAUTHORIZED).await?;
-        request(&h.app, ticket, Method::POST, "/api/auth/context", Some(json!({
-            "organizationId": first_root, "userId": first_user,
-        })), StatusCode::OK).await?;
+            "SSO account context exposes another tenant");
+        sqlx::query("UPDATE users SET session_version=session_version+1 WHERE id=$1").bind(second_uid).execute(pool).await?;
+        request(&h.app, &token, Method::GET, "/api/auth/profile", None, StatusCode::UNAUTHORIZED).await?;
         for fields in [json!({"contactName": "无电话邮箱"}), json!({"contactPhone": "13800138004"}),
             json!({"contactName": "格式错误", "contactPhone": "letters"}),
             json!({"contactName": "格式错误", "contactEmail": "not-an-email"})] {
@@ -1211,4 +1148,42 @@ async fn explicit_administrator_initialization_is_idempotent_and_preserves_accou
         Ok(())
     }.await;
     database.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
+async fn fresh_development_bootstrap_requires_explicit_admin_and_never_installs_demo_data(
+) -> Result<()> {
+    let db = Database::create().await?;
+    let result = async {
+        let mut config =
+            Config::from_values(&HashMap::from([("APP_ENV".into(), "development".into())]))?;
+        ensure!(
+            crate::seed::initialize(&db.pool, &config).await.is_err(),
+            "empty development database silently seeded demo accounts"
+        );
+        let empty: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
+            .fetch_one(&db.pool)
+            .await?;
+        ensure!(empty == 0, "failed bootstrap left an account");
+        config.bootstrap_admin_username = Some("fresh-owner".into());
+        config.bootstrap_admin_password = Some("Owned-fresh-bootstrap-password9!".into());
+        crate::seed::initialize(&db.pool, &config).await?;
+        crate::seed::initialize(&db.pool, &config).await?;
+        let accounts: Vec<String> =
+            sqlx::query_scalar("SELECT username FROM users ORDER BY username")
+                .fetch_all(&db.pool)
+                .await?;
+        ensure!(
+            accounts == vec!["fresh-owner".to_string()],
+            "bootstrap installed historical demo users"
+        );
+        let clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients")
+            .fetch_one(&db.pool)
+            .await?;
+        ensure!(clients == 0, "bootstrap installed historical OAuth clients");
+        Ok(())
+    }
+    .await;
+    db.finish(result).await
 }

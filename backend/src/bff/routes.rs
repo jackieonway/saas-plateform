@@ -45,8 +45,8 @@ async fn protected_headers(request: Request, next: Next) -> Response {
         .append(header::VARY, HeaderValue::from_static("Origin, Cookie"));
     response
 }
-async fn configuration(State(state): State<AppState>) -> Json<Value> {
-    Json(json!({"mode":if state.config.bff_enabled{"BFF"}else{"LEGACY"}}))
+async fn configuration() -> Json<Value> {
+    Json(json!({"mode":"BFF"}))
 }
 
 fn bad() -> AppError {
@@ -99,7 +99,6 @@ fn parameters(raw: Option<String>) -> Result<std::collections::BTreeMap<String, 
     Ok(values)
 }
 fn navigation(state: &AppState, headers: &HeaderMap) -> Result<(), AppError> {
-    super::enabled(state)?;
     if headers.contains_key(header::AUTHORIZATION)
         || !super::unique(headers, "host")?.is_some_and(|host| {
             host.eq_ignore_ascii_case(

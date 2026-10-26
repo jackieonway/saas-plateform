@@ -1,9 +1,0 @@
-{
-  "profile": "uuid-local-preview",
-  "source_dir": "/var/lib/saas-uuid-preview/source-export-01",
-  "output_dir": "/var/lib/saas-uuid-preview/converted-01",
-  "scratch": "/dev/shm/saas-uuid-preview",
-  "registry": "/srv/saas/source/backend/ops/recovery/uuid-references-v2.json",
-  "key_file": "/srv/saas/private/uuid-preview.key",
-  "resume_mapping": null
-}

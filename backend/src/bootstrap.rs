@@ -94,7 +94,6 @@ pub(crate) async fn run() -> anyhow::Result<()> {
 
     if config.identity_remote_enabled {
         verify_identity_deployment(&pool, &config).await?;
-        verify_membership_readiness(&pool, &config).await?;
         tracing::info!(
             event = "IDENTITY_DEPLOYMENT_VERIFIED",
             "Independent identity deployment verified without migrations or seed"
@@ -109,15 +108,12 @@ pub(crate) async fn run() -> anyhow::Result<()> {
             event = "IMPORTED_DATABASE_VERIFIED",
             "Imported database verified without migrations or seed"
         );
-        verify_membership_readiness(&pool, &config).await?;
     } else {
         // 迁移文件在编译时嵌入，新增迁移须重建后端镜像。
         database::run_migrations(&pool)
             .await
             .map_err(|_| anyhow::anyhow!("DATABASE_MIGRATION_FAILED"))?;
         tracing::info!("数据库迁移完成");
-
-        verify_membership_readiness(&pool, &config).await?;
 
         // 种子 (幂等)
         seed::initialize(&pool, &config).await.map_err(|error| {
@@ -229,7 +225,7 @@ async fn verify_identity_deployment(pool: &sqlx::PgPool, config: &Config) -> any
         let valid: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM public.identity_deployment_state d \
              JOIN pg_catalog.pg_roles r ON r.rolname=current_user \
-             WHERE d.singleton AND d.schema_version=20 AND d.issuer=$1 \
+             WHERE d.singleton AND d.schema_version=1 AND d.issuer=$1 \
              AND d.platform_runtime=current_user AND current_user=session_user \
              AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolcreaterole \
              AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) \
@@ -318,23 +314,6 @@ async fn verify_identity_deployment(pool: &sqlx::PgPool, config: &Config) -> any
     if !matches!(verified, Ok(Ok(()))) {
         let _ = tokio::time::timeout(Duration::from_secs(10), pool.close()).await;
         anyhow::bail!("IDENTITY_DEPLOYMENT_VERIFICATION_FAILED");
-    }
-    Ok(())
-}
-
-async fn verify_membership_readiness(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()> {
-    if let Some(readiness) = &config.membership_readiness {
-        if !matches!(
-            tokio::time::timeout(Duration::from_secs(45), readiness.verify(pool)).await,
-            Ok(Ok(()))
-        ) {
-            let _ = tokio::time::timeout(Duration::from_secs(10), pool.close()).await;
-            anyhow::bail!("MEMBERSHIP_READINESS_VERIFICATION_FAILED");
-        }
-        tracing::info!(
-            event = "MEMBERSHIP_READINESS_VERIFIED",
-            "Environment-bound membership rollout receipt verified"
-        );
     }
     Ok(())
 }

@@ -210,7 +210,6 @@ test('the unavailable login exception never exposes a private BFF route or an un
     { authMode: 'BFF', pathname: '/system/users' },
     { authMode: 'BFF', pathname: '/dashboard' },
     { authMode: null, pathname: '/login' },
-    { authMode: 'LEGACY', pathname: '/login' },
   ]) {
     const privateContent = `must-remain-private:${String(authMode)}:${pathname}`
     const tree = sessionGate({ authMode, sessionStatus: 'unavailable', coordinationError: 'Owned unavailable authority',

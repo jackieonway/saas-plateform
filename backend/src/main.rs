@@ -93,7 +93,10 @@ mod oidc_tests;
 mod bff_tests;
 
 #[cfg(test)]
-mod legacy_password_authority_tests;
+mod sso_only_tests;
+
+#[cfg(test)]
+mod sso_test_fixture;
 
 #[cfg(test)]
 mod employee_isolation_tests;
@@ -103,9 +106,6 @@ mod platform_session_refresh_tests;
 
 #[cfg(test)]
 mod oauth_issuance_tests;
-
-#[cfg(test)]
-mod login_protection_tests;
 
 #[cfg(test)]
 mod management_audit_tests;

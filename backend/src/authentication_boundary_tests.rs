@@ -1116,10 +1116,6 @@ impl AccountAdministrationPort for UnavailableAccounts {
         self.revocations.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Err(AppError::Unavailable) })
     }
-
-    fn record_login(&self, id: Uuid) -> AccountFuture<'_, ()> {
-        self.inner.record_login(id)
-    }
 }
 
 async fn account_state_snapshot(pool: &PgPool) -> Result<Value> {

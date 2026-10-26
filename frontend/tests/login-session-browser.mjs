@@ -1,214 +1,74 @@
-/** Real LoginPage, router and session gate, with isolated HTTP fixtures. */
+/** Real platform UI and Cookie session consumer; isolated SSO HTTP authority. */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mkdir } from 'node:fs/promises'
 import { launchBrowser } from './browser/runtime.mjs'
-import { fixtureUuid, installLegacyAuthMode, profileWithIdentity } from './browser/identity-fixture.mjs'
-
-const workspace = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const bindHost = process.platform === 'win32' ? '::1' : '127.0.0.1'
-const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
-async function waitState(predicate, message, timeout = 12_000) {
-  const deadline = Date.now() + timeout
-  while (!await predicate() && Date.now() < deadline) await pause(20)
-  assert(await predicate(), message)
-}
-const ORG_A = fixtureUuid('login-org-A'), ORG_B = fixtureUuid('login-org-B')
-const user = { id: fixtureUuid('login-user'), username: 'login-fixture', realName: '登录回归用户', email: '',
-  phone: '', gender: 'UNKNOWN', avatar: '', isSuperAdmin: false }
-const tenant = { id: fixtureUuid('login-tenant'), name: '登录回归租户', code: 'login', isPlatform: false }
-const organization = id => ({ id, name: '登录回归组织 ' + (id === ORG_A ? 'A' : 'B'), path: `/${id}/` })
-const membership = (id, memberType = 'EMPLOYEE') => ({ userId: user.id, tenantId: tenant.id, tenantName: tenant.name,
-  organizationId: id, organizationName: organization(id).name, organizationPath: `/${id}/`,
-  membershipId: fixtureUuid(`membership:${user.id}:${id}:${memberType}`), memberType, identityVersion: '1', status: 'ENABLED',
-  consoleSelectable: memberType === 'EMPLOYEE', selectionDisabledReason: memberType === 'CUSTOMER' ? 'CLIENT_MEMBER_TYPE_NOT_ALLOWED' : null })
-const memberships = () => [membership(ORG_A), membership(ORG_A, 'CUSTOMER'), membership(ORG_B)]
-const system = { id: fixtureUuid('login-system'), code: 'system', name: '系统管理', icon: 'LayoutGrid',
-  basePath: '/system', entryType: 'HTML', runtimeMode: 'TRUSTED' }
-const profile = (id, patch = {}) => profileWithIdentity({ user, tenant, organization: organization(id), applications: [system],
-  memberships: memberships().map(member => member.organizationId === id && member.memberType === 'EMPLOYEE' ? { ...member, ...patch } : member), platformContext: false }, patch)
-let browser, vite, origin, startup = '', passed = 0
-async function startServer() {
-  const port = await new Promise((resolve, reject) => {
-    const server = net.createServer().on('error', reject)
-    server.listen(0, bindHost, () => { const port = server.address().port; server.close(error => error ? reject(error) : resolve(port)) })
-  })
-  origin = `http://${bindHost.includes(':') ? '[' + bindHost + ']' : bindHost}:${port}`
-  vite = spawn(process.execPath, [path.join(workspace, 'node_modules/vite/bin/vite.js'), '--host', bindHost,
-    '--port', String(port), '--strictPort'], { cwd: workspace, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
-  let spawnError
-  vite.on('error', error => { spawnError = error })
-  vite.stdout.on('data', chunk => { startup = (startup + chunk).slice(-6000) })
-  vite.stderr.on('data', chunk => { startup = (startup + chunk).slice(-6000) })
-  await waitState(() => {
-    if (spawnError) throw spawnError
-    if (vite.exitCode !== null) throw new Error('Vite stopped: ' + startup)
-    return startup.includes('ready in')
-  }, 'Vite did not become ready', 30_000)
-}
-
-async function check(returnTo, run) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } })
-  await installLegacyAuthMode(context)
-  const page = await context.newPage()
-  page.setDefaultTimeout(12_000)
-  const state = { org: ORG_A, requests: [], errors: [], expirePermissions: false, memberPatch: {}, accessToken: null }
-  page.on('pageerror', error => state.errors.push(error.message))
-  await context.routeWebSocket(() => true, () => {})
-  // Only expose actual collaborators. Keep the production React tree intact;
-  // login below always starts anonymous and uses the real credential form.
-  await context.route(url => url.origin === origin && url.pathname === '/src/main.tsx', async route => {
-    const response = await route.fetch()
-    const body = (await response.text()).replace('ReactDOM.createRoot',
-      "import { authApi as loginAuthApi } from '/src/api/auth.ts';\nwindow.__loginAuth = sessionStore;\nwindow.__loginApi = loginAuthApi;\nwindow.__loginQueryClient = queryClient;\nReactDOM.createRoot")
-    assert.match(body, /window\.__loginAuth/)
-    await route.fulfill({ response, body })
-  })
-  await context.route(url => url.origin === origin && (url.pathname.startsWith('/api/') || url.pathname === '/oauth/token'), async route => {
-    const request = route.request(), url = new URL(request.url())
-    const record = { path: url.pathname, method: request.method() }
-    state.requests.push(record)
-    const reply = (body, status = 200) => { record.status = status; return route.fulfill({ status,
-      contentType: 'application/json', body: JSON.stringify(body) }) }
-    if (url.pathname === '/api/platform/branding') return reply({ platformName: '登录回归平台', loginTitle: '登录' })
-    if (url.pathname === '/api/auth/login') {
-      assert.deepEqual(request.postDataJSON(), { username: user.username, password: 'fixture-password' })
-      return reply({ ticket: 'login-fixture-ticket', memberships: memberships() })
-    }
-    if (url.pathname === '/api/auth/context') {
-      const body = request.postDataJSON()
-      if (state.requests.filter(row => row.path === url.pathname).length === 1) {
-        assert.equal(request.headers().authorization, 'Bearer login-fixture-ticket')
-        assert.deepEqual(body, { organizationId: ORG_A, membershipId: membership(ORG_A).membershipId, userId: user.id })
-      } else {
-        assert.equal(body.organizationId, ORG_B)
-        assert.equal(body.membershipId, profile(ORG_B, state.memberPatch).membershipId)
-        assert.equal(request.headers().authorization, `Bearer ${state.accessToken}`)
-      }
-      state.org = body.organizationId
-      state.accessToken = 'login-fixture-' + profile(state.org, state.memberPatch).membershipId
-      return reply({ ...profile(state.org, state.memberPatch), accessToken: state.accessToken, refreshToken: 'login-refresh-' + state.org })
-    }
-    if (url.pathname === '/api/auth/profile') {
-      assert.equal(request.headers().authorization, `Bearer ${state.accessToken}`, 'Profile uses the committed platform session')
-      return reply(profile(state.org, state.memberPatch))
-    }
-    if (url.pathname === '/api/auth/permissions') {
-      if (state.expirePermissions) { state.expirePermissions = false; return reply({ message: 'fixture access expired' }, 401) }
-      return reply({ permissions: [], roles: [] })
-    }
-    if (url.pathname === '/oauth/token') {
-      const body = new URLSearchParams(request.postData())
-      assert.equal(body.get('grant_type'), 'refresh_token')
-      state.accessToken = 'login-fixture-renewed'
-      return reply({ access_token: state.accessToken, refresh_token: 'login-refresh-renewed' })
-    }
-    if (url.pathname === '/api/auth/menus') return reply({ menus: [{ id: fixtureUuid('login-dashboard'), parentId: null,
-      type: 'MENU', title: '登录回归仪表盘', path: '/dashboard', icon: 'LayoutDashboard', sortOrder: 1, visible: true, children: [] }] })
-    if (url.pathname === '/api/auth/logout') return reply({ ok: true })
-    if (url.pathname === '/api/notifications/prefs') return reply({ dndEnabled: false, mutedTypes: [] })
-    if (url.pathname === '/api/notifications/unread-count') return reply({ count: 0 })
-    if (url.pathname === '/api/notifications/socket-context') return reply({ userId: user.id, tenantId: tenant.id,
-      organizationId: state.org, sessionVersion: 0 })
-    if (['/api/notifications', '/api/auth/login-history'].includes(url.pathname)) return reply({ records: [], total: 0, page: 1, size: 10 })
-    if (url.pathname === '/api/auth/my-sessions') return reply({ sessions: [], summary: { active: 0, revoked: 0 } })
-    if (url.pathname === '/api/monitor/overview') return reply({ code: 'FORBIDDEN', message: 'fixture monitor denied' }, 403)
-    return reply({ message: 'Unconfigured fixture ' + url.pathname }, 403)
-  })
-  try {
-    await page.goto(origin + '/login' + (returnTo ? '?return=' + encodeURIComponent(returnTo) : ''), { waitUntil: 'domcontentloaded' })
-    assert.equal(await page.evaluate(() => window.__loginAuth.getState().token), null, 'Login starts without injected credentials')
-    await page.locator('#username').fill(user.username)
-    await page.getByPlaceholder('请输入密码', { exact: true }).fill('fixture-password')
-    await page.locator('form button[type=submit]').click()
-    await page.getByRole('button').filter({ hasText: tenant.name }).click()
-    const employee = page.getByRole('button').filter({ hasText: organization(ORG_A).name }).filter({ hasText: '员工' })
-    const customer = page.getByRole('button').filter({ hasText: organization(ORG_A).name }).filter({ hasText: '客户' })
-    assert.equal(await customer.isDisabled(), true, 'A customer in the same user/organization remains visible but cannot enter the console')
-    const screenshots = path.join(workspace, 'target/phase05-browser')
-    await mkdir(screenshots, { recursive: true })
-    await page.screenshot({ path: path.join(screenshots, 'login-identities-desktop.png'), fullPage: true })
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page.screenshot({ path: path.join(screenshots, 'login-identities-mobile.png'), fullPage: true })
-    await page.setViewportSize({ width: 1440, height: 1100 })
-    await employee.click()
-    await waitState(() => state.requests.some(row => row.path === '/api/auth/context' && row.status === 200), 'Credential context was accepted')
-    await waitState(() => state.requests.some(row => row.path === '/api/auth/profile'), 'Accepted login mounts the protected layout and requests profile')
-    await page.waitForURL(url => url.pathname + url.search + url.hash === (returnTo || '/dashboard'))
-    await page.getByRole('complementary', { name: '应用导航', exact: true }).waitFor()
-    assert.equal(await page.locator('#username').count(), 0, 'Router DOM leaves the login form')
-    await run({ page, state })
-    assert.deepEqual(state.errors, [], 'No uncaught production React errors')
-    passed++
-    console.log('PASS login session navigation ' + (returnTo || 'default dashboard'))
-  } catch (error) {
-    console.error('LOGIN_SESSION_TRACE ' + JSON.stringify({ returnTo, path: new URL(page.url()).pathname,
-      loginFormVisible: await page.locator('#username').isVisible().catch(() => false),
-      requests: state.requests, pageErrors: state.errors }))
-    throw error
-  } finally { await context.close() }
-}
-
+import { fixtureUuid, installSsoAuthMode, profileWithIdentity, identityForProfile } from './browser/identity-fixture.mjs'
+const workspace=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const host=process.platform==='win32'?'::1':'127.0.0.1'
+const server=net.createServer(); await new Promise(resolve=>server.listen(0,host,resolve));const port=server.address().port;await new Promise(resolve=>server.close(resolve))
+const origin=`http://${host.includes(':')?'['+host+']':host}:${port}`
+const provider='https://auth.sso-fixture.test'
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))
+const vite=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host',host,'--port',String(port),'--strictPort'],{cwd:workspace,stdio:'ignore',windowsHide:true})
+let browser
 try {
-  await startServer()
-  browser = await launchBrowser()
-  await check('/profile?login-check=1#security', async ({ page, state }) => {
-    const draft = page.getByPlaceholder('请输入当前密码', { exact: true })
-    await draft.fill('private-org-A-draft')
-    await draft.evaluate(node => { window.__loginDraft = node })
-    const before = await page.evaluate(() => {
-      window.__loginQueryClient.setQueryData(['login-private-draft'], 'private-org-A-cache')
-      const { sessionId, contextEpoch, sessionVersion } = window.__loginAuth.getState()
-      return { sessionId, contextEpoch, sessionVersion }
+  for(let i=0;i<100;i++){try{if((await fetch(origin)).ok)break}catch{}await pause(100)}
+  browser=await launchBrowser()
+  for(const returnTo of ['/profile?login-check=1','/dashboard']) {
+    const context=await browser.newContext(), auth=await installSsoAuthMode(context), page=await context.newPage()
+    const uid=fixtureUuid('sso-browser-user'),tid=fixtureUuid('sso-browser-tenant'),oid=fixtureUuid('sso-browser-organization')
+    const member={userId:uid,tenantId:tid,organizationId:oid,membershipId:fixtureUuid('sso-browser-membership'),memberType:'EMPLOYEE',identityVersion:'1',status:'ENABLED',consoleSelectable:true,selectionDisabledReason:null,tenantName:'统一登录租户',organizationName:'统一登录组织',organizationPath:'/统一登录组织'}
+    const profile=profileWithIdentity({membershipId:member.membershipId,memberType:"EMPLOYEE",identityVersion:"1",user:{id:uid,username:'sso-user',realName:'SSO 验证用户',email:'',phone:'',avatar:'',gender:'',isSuperAdmin:false},tenant:{id:tid,name:member.tenantName,code:'sso-fixture',isPlatform:false},organization:{id:oid,name:member.organizationName,path:member.organizationPath},applications:[{id:fixtureUuid('sso-system'),code:'system',name:'系统管理',basePath:'/system',icon:'LayoutGrid',entryType:'HTML',runtimeMode:'TRUSTED'}],memberships:[member],platformContext:false})
+    const errors=[];page.on('requestfailed',r=>console.log('SSO_REQUEST_FAILED',new URL(r.url()).pathname,r.failure()?.errorText));page.on('pageerror',e=>{errors.push(e.message);console.log('SSO_PAGE_ERROR',e.message)});page.on('framenavigated',f=>{if(f===page.mainFrame())console.log('SSO_BROWSER_URL',new URL(f.url()).origin+new URL(f.url()).pathname)})
+    let providerVisits=0, callbacks=0
+    await context.route(url=>url.origin===origin && url.pathname==='/auth/login',route=>{console.log('SSO_LOGIN_REDIRECT');return route.fulfill({contentType:'text/html; charset=utf-8',body:'<script>location.replace('+JSON.stringify(provider+'/sso/login')+')</script>'})})
+    await context.route(provider+'/**',async route=>{
+      if(route.request().method()==='POST') {
+        auth.proof=identityForProfile(profile);auth.profile=profile;auth.token='sso-only-context-bearer';auth.selected=false
+        return route.fulfill({contentType:'text/html; charset=utf-8',body:'<script>location.replace('+JSON.stringify(origin+'/auth/callback?code=owned-fixture&state=owned-fixture')+')</script>'})
+      }
+      providerVisits++;console.log('SSO_PROVIDER_REQUEST',route.request().method())
+      return route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html lang="zh"><title>统一身份认证</title><h1>统一身份认证</h1><form method="post" action="/sso/login"><label>账号<input name="username" autocomplete="username"></label><label>密码<input name="password" type="password" autocomplete="current-password"></label><button>登录</button></form></html>'})
     })
-    state.expirePermissions = true
-    await page.evaluate(() => window.__loginApi.permissions())
-    const renewed = await page.evaluate(() => {
-      const { sessionId, contextEpoch, sessionVersion } = window.__loginAuth.getState()
-      return { sessionId, contextEpoch, sessionVersion, cached: window.__loginQueryClient.getQueryData(['login-private-draft']) }
+    await context.route(url=>url.origin===origin && url.pathname==='/auth/callback',route=>{callbacks++;return route.fulfill({status:303,headers:{location:origin+'/login?return='+encodeURIComponent(returnTo)}})})
+    await context.route(url=>url.origin===origin && url.pathname.startsWith('/api/'),route=>{
+      const p=new URL(route.request().url()).pathname
+      const reply=body=>route.fulfill({contentType:'application/json',body:JSON.stringify(body)})
+      if(p==='/api/platform/branding')return reply({platformName:'SSO 验收平台',platformDescription:'隔离 HTTP 认证夹具',footerText:''})
+      if(p==='/api/auth/profile')return reply(profile)
+      if(p==='/api/auth/permissions')return reply({permissions:[],roles:[]})
+      if(p==='/api/auth/menus')return reply([])
+      if(p.startsWith('/api/monitor/'))return route.fulfill({status:403,contentType:'application/json',body:'{"code":"FORBIDDEN"}'})
+      if(p==='/api/notifications/prefs')return reply({enableSound:false,enablePopup:false,dndEnabled:false,mutedApplicationIds:[]})
+      if(p==='/api/notifications/unread-count')return reply({count:0})
+      if(p==='/api/auth/my-sessions')return reply({clients:[],platformSessions:[]})
+      return reply({records:[],total:0,page:1,size:20})
     })
-    assert.equal(renewed.sessionId, before.sessionId)
-    assert.equal(renewed.contextEpoch, before.contextEpoch)
-    assert(renewed.sessionVersion > before.sessionVersion)
-    assert.equal(renewed.cached, 'private-org-A-cache')
-    assert.equal(await draft.inputValue(), 'private-org-A-draft', 'Ordinary refresh preserves same-context form state')
-    assert(await draft.evaluate(node => node === window.__loginDraft), 'Refresh keeps the same form node')
-    assert.equal(state.requests.filter(row => row.path === '/oauth/token').length, 1)
-    await page.evaluate(({ organizationId, membershipId }) => window.__loginApi.switchContext(organizationId, membershipId, window.__loginAuth.getState().token), membership(ORG_B))
-    await waitState(async () => await page.evaluate(org => window.__loginAuth.getState().profile?.organization.id === org, ORG_B), 'New organization profile mounts')
-    assert.equal(await draft.inputValue(), '', 'Organization change physically retires the prior form')
-    assert(await draft.evaluate(node => node !== window.__loginDraft && !window.__loginDraft.isConnected), 'Old private form node is unmounted')
-    assert.equal(await page.evaluate(() => window.__loginQueryClient.getQueryData(['login-private-draft'])), undefined, 'Organization change discards prior cache')
-    await draft.fill('same-organization-old-member-draft')
-    const prior = await page.evaluate(() => ({ key: window.__loginAuth.getState().contextKey, epoch: window.__loginAuth.getState().contextEpoch }))
-    state.memberPatch = { membershipId: fixtureUuid('login-org-B-replacement'), identityVersion: '2' }
-    await page.evaluate(({ organizationId, membershipId }) => window.__loginApi.switchContext(organizationId, membershipId, window.__loginAuth.getState().token), profile(ORG_B, state.memberPatch).memberships.find(member => member.organizationId === ORG_B))
-    await waitState(async () => await page.evaluate(id => window.__loginAuth.getState().profile?.membershipId === id, state.memberPatch.membershipId), 'Same user and organization adopt the exact replacement membership')
-    assert.equal(await draft.inputValue(), '', 'Same-organization member replacement retires the previous draft')
-    const replaced = await page.evaluate(() => ({ key: window.__loginAuth.getState().contextKey, epoch: window.__loginAuth.getState().contextEpoch }))
-    assert.notEqual(replaced.key, prior.key); assert(replaced.epoch > prior.epoch)
-    assert.equal(new URL(page.url()).pathname, '/profile')
-    await page.getByRole('complementary', { name: '菜单导航', exact: true }).getByRole('button').filter({ hasText: '登录回归仪表盘' }).click()
-    await page.waitForURL(url => url.pathname === '/dashboard')
-    await page.getByText('我的应用', { exact: true }).waitFor()
-    console.log('PASS login refresh preserves draft; organization change clears form/cache and router still navigates')
-  })
-  await check(null, async ({ page, state }) => {
-    await page.getByText('我的应用', { exact: true }).waitFor()
-    await page.getByRole('button', { name: '用户菜单', exact: true }).click()
-    await page.getByRole('menuitem', { name: '退出本平台', exact: true }).click()
-    await page.waitForURL(url => url.pathname === '/login' && url.searchParams.get('signedOut') === '1')
-    await page.locator('#username').waitFor()
-    assert.equal(await page.getByRole('complementary', { name: '应用导航', exact: true }).count(), 0)
-    assert.equal(await page.evaluate(() => window.__loginAuth.getState().token), null)
-    assert(state.requests.some(row => row.path === '/api/auth/logout' && row.status === 200))
-    console.log('PASS logout returns to the actual login form')
-  })
-  console.log(`Login session browser checks: ${passed} passed`)
-} finally {
-  if (browser) await browser.close()
-  if (vite && vite.exitCode === null) { vite.kill(); await pause(100) }
-}
+    await page.goto(origin+'/login?return='+encodeURIComponent(returnTo))
+    await page.getByRole('button',{name:'继续统一登录',exact:true}).waitFor()
+    assert.equal(await page.locator('input[type=password]').count(),0)
+    await page.getByRole('button',{name:'继续统一登录',exact:true}).click()
+    await page.waitForURL(url=>url.origin===provider)
+    await page.getByLabel('账号',{exact:true}).fill('sso-user');await page.getByLabel('密码',{exact:true}).fill('owned-fixture-password')
+    await page.getByRole('button',{name:'登录',exact:true}).click()
+    await page.getByRole('heading',{name:'选择本次员工身份',exact:true}).waitFor()
+    assert.equal(await page.locator('input[type=password]').count(),0)
+    await page.getByRole('button').filter({hasText:member.organizationName}).click()
+    await page.waitForURL(url=>url.pathname+url.search===returnTo)
+    await page.getByRole('complementary',{name:'应用导航',exact:true}).waitFor({timeout:15000}).catch(async e=>{console.log('SSO_VISIBLE_STATE',await page.locator('body').innerText());throw e})
+    await page.reload();await page.getByRole('complementary',{name:'应用导航',exact:true}).waitFor()
+    assert.equal(providerVisits,1);assert.equal(callbacks,1)
+    for(const key of ['platform-session-v2','platform-refresh-token','platform-token'])assert.equal(await page.evaluate(k=>localStorage.getItem(k),key),null)
+    await page.getByRole('button',{name:'用户菜单',exact:true}).click()
+    await page.getByRole('menuitem',{name:'退出本平台',exact:true}).click()
+    await page.getByRole('button',{name:'继续统一登录',exact:true}).waitFor()
+    assert.equal(providerVisits,1,'Logout must not silently begin another authentication')
+    assert.deepEqual(errors,[])
+    await context.close()
+    console.log('PASS SSO redirect, provider form, callback, explicit employee selection, return path, Cookie reload and logout '+returnTo)
+  }
+  console.log('SSO login session browser checks: 2 passed (isolated SSO HTTP authority, real platform UI)')
+} finally {await browser?.close();vite.kill();await pause(100)}

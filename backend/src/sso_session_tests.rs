@@ -389,7 +389,7 @@ impl Fixture {
         // shape. Historical migrations remain intact and production rollout
         // readiness is not bypassed by this explicitly APP_ENV=test fixture.
         sqlx::query(
-            "ALTER TABLE memberships DROP CONSTRAINT memberships_user_id_organization_id_key",
+            "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
         )
         .execute(pool)
         .await?;

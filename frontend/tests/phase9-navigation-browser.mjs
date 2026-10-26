@@ -378,7 +378,7 @@ try {
     await waitState(() => menuRequests(state, appA.id).length > 0, 'Old org request is actually pending')
     state.profile = profile([system, appA, appB], replacement.organization, true, replacement.patch)
     state.menus.set(appA.id, [])
-    await page.evaluate(proof => window.__phase9Auth.getState().setSession('phase9-session-B', null, undefined, proof), identityForProfile(state.profile))
+    await page.evaluate(proof => window.__replaceFixtureSession('phase9-session-B', proof), identityForProfile(state.profile))
     await waitState(async () => (await page.evaluate(() => window.__phase9Auth.getState().profile?.membershipId)) === state.profile.membershipId &&
       (await page.evaluate(() => window.__phase9Auth.getState().profile?.identityVersion)) === state.profile.identityVersion, 'New concrete member profile is authoritative')
     await openPalette(page)

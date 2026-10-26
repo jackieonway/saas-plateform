@@ -101,8 +101,14 @@ jobs:
         run: 'cargo test --locked --bin saas-platform-backend data_grant_tests:: -- --ignored --test-threads=2'
       - name: Data grant discovery boundaries
         run: 'cargo test --locked --bin saas-platform-backend data_grant_discovery_tests:: -- --ignored --test-threads=2'
-      - name: Platform session refresh
-        run: 'cargo test --locked --bin saas-platform-backend platform_session_refresh_tests:: -- --ignored --test-threads=2'
+      - name: SSO BFF sessions, refresh, revocation and fail-closed authority
+        env:
+          IDENTITY_PHASE10_TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: 'cargo test --locked --bin saas-platform-backend bff_tests:: -- --ignored --test-threads=2'
+      - name: Authentication and platform ownership isolation
+        env:
+          IDENTITY_PHASE12_TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: 'cargo test --locked --bin saas-platform-backend identity_deployment_tests:: -- --ignored --test-threads=1'
       - name: Micro application setup and access
         run: 'cargo test --locked --bin saas-platform-backend routes::application_setup::tests:: -- --ignored --test-threads=2'
   operations:
