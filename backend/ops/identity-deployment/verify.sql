@@ -65,7 +65,12 @@ BEGIN
        OR has_table_privilege(s.identity_runtime,'public.memberships','SELECT')
        OR has_table_privilege(s.identity_runtime,'public.roles','SELECT')
        OR has_table_privilege(s.platform_runtime,'public.oidc_clients','SELECT')
-       OR has_table_privilege(s.platform_runtime,'public.oidc_access_tokens','SELECT') THEN
+       OR has_table_privilege(s.platform_runtime,'public.oidc_access_tokens','SELECT')
+       OR has_table_privilege(s.platform_runtime,'public.oidc_consents','SELECT,INSERT,UPDATE,DELETE')
+       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','SELECT')
+       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','INSERT')
+       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','UPDATE')
+       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','DELETE') THEN
         RAISE EXCEPTION 'IDENTITY_DEPLOYMENT_PRIVILEGE_BOUNDARY_INVALID';
     END IF;
     IF EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

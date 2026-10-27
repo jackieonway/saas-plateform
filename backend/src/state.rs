@@ -77,6 +77,9 @@ pub struct AppState {
     pub(crate) customer_portal_authority:
         Arc<dyn crate::customer_portal::authority::AccountProofPort>,
     pub(crate) customer_portal_slots: Arc<tokio::sync::Semaphore>,
+    pub(crate) context_selection_authority:
+        Arc<dyn crate::context_selection_http::authority::SourcePort>,
+    pub(crate) context_selection_slots: Arc<tokio::sync::Semaphore>,
 }
 
 impl AppState {
@@ -105,7 +108,11 @@ impl AppState {
             } else {
                 crate::oidc::customer_portal_authority(pool.clone(), config.clone())
             };
+        let context_selection_authority =
+            crate::context_selection_http::authority::configured(&config);
         Ok(Self {
+            context_selection_authority,
+            context_selection_slots: Arc::new(tokio::sync::Semaphore::new(16)),
             customer_portal_authority,
             customer_portal_slots: Arc::new(tokio::sync::Semaphore::new(16)),
             bff_transport,

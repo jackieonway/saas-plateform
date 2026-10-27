@@ -44,7 +44,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription,
   AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog"
-import { useAuthStore } from "@/stores/auth"
+import { useAuthStore, captureSessionFence } from "@/stores/auth"
+import { bffSessionCoordinator } from "@/lib/bff-session"
+import { safePlatformReturn } from "@/lib/authentication-mode"
 import { usePlatformBranding } from "@/hooks/use-platform-branding"
 import { useMenusQuery, useSwitchContext } from "@/hooks/use-auth-data"
 import { useApplicationNavigation } from "@/hooks/use-application-navigation"
@@ -523,6 +525,8 @@ export function auditActionTone(action: string): string {
 
 function OrgContextChip() {
   const profile = useAuthStore((s) => s.profile)
+  const centralized = useAuthStore((s) => s.bffSession?.centralizedContextSelection)
+  const switching = useAuthStore((s) => s.contextSwitching)
   const switchContext = useSwitchContext()
   const { navigateTo: navigate, access } = useApplicationNavigation()
   const mutation = useMutation({
@@ -536,6 +540,14 @@ function OrgContextChip() {
   /* 「管理组织」入口按权限显隐: 所有账号均按组织有效权限判断; 权限未就绪按无权限处理(防按钮闪现),
      其余需 system:organization(与 Task 15 permsReady 门控模式同款) */
   const canManageOrgs = access("/system/organizations").status === "allowed"
+
+  if (centralized) return <button type="button" disabled={switching}
+    className="flex max-w-[16rem] items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-60"
+    aria-label="前往认证中心切换租户和组织"
+    title={`${profile.tenant.name} / ${profile.organization.name} · 点击切换`}
+    onClick={() => { void bffSessionCoordinator.beginContextSwitch(captureSessionFence(), safePlatformReturn(window.location.pathname + window.location.search)).catch((error: Error) => toast.error(error.message || "无法开始切换")) }}>
+    <Building2 className="size-3.5 shrink-0 text-primary" /><span className="truncate">{profile.tenant.name} / {profile.organization.name}</span><ChevronRight className="size-3.5 shrink-0" />
+  </button>
 
   return (
     <Popover>

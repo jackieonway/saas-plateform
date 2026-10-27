@@ -78,7 +78,8 @@ BEGIN
     auth_tables:=ARRAY['users','sso_sessions','sso_login_challenges','oidc_provider_settings','oidc_clients',
         'oidc_authorization_requests','oidc_grants','oidc_authorization_codes','oidc_access_tokens',
         'oidc_refresh_tokens','oidc_signing_keys','oidc_account_logout_receipts','identity_service_clients',
-        'identity_audit_logs','identity_account_tombstones','identity_account_command_receipts','identity_oidc_admin_receipts','identity_account_revocation_facts'];
+        'identity_audit_logs','identity_account_tombstones','identity_account_command_receipts','identity_oidc_admin_receipts','identity_account_revocation_facts',
+        'oidc_context_clients','oidc_context_interactions','oidc_consents'];
     FOR item IN SELECT c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname='public' AND c.relkind IN ('r','p') LOOP
         target_owner:=CASE WHEN item.relname=ANY(auth_tables) THEN identity_owner ELSE platform_owner END;
@@ -132,7 +133,8 @@ BEGIN
 
     auth_functions:=ARRAY['bump_session_version_on_user_disable','revoke_sso_on_account_generation',
         'revoke_oidc_on_client_policy','revoke_oidc_on_sso_revocation','oidc_key_material_immutable',
-        'bff_oidc_proof_active','customer_portal_account_source_active','oidc_console_source_active','identity_lock_oidc_source'];
+        'bff_oidc_proof_active','customer_portal_account_source_active','oidc_console_source_active','identity_lock_oidc_source',
+        'oidc_context_capability_generation','oidc_context_binding_immutable'];
     bridge_functions:=ARRAY['revoke_sessions_on_user_disable','revoke_credentials_on_account_generation'];
     fence_functions:=ARRAY['platform_password_context_active','platform_account_command_intent_active','identity_oidc_command_intent_active'];
     FOR item IN SELECT p.oid,p.proname,pg_catalog.pg_get_function_identity_arguments(p.oid) AS args

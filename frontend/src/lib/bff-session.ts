@@ -11,6 +11,7 @@ export interface BffSessionView {
   memberships: Membership[]
   context: ContextIdentity | null
   expiresAt: string
+  centralizedContextSelection?: boolean
 }
 
 export interface BffObservation extends SessionObservation {
@@ -25,6 +26,7 @@ export interface BffSessionNotice {
 }
 
 export interface BffSessionEnvironment {
+  navigate?: (url: string) => void
   fetch: typeof fetch
   now?: () => number
   setTimeout?: (callback: () => void, milliseconds: number) => unknown
@@ -97,7 +99,7 @@ function sessionResponse(value: unknown, now: number): { view: BffSessionView; c
   if (Date.parse(value.expiresAt) <= now) throw new BffSessionError("统一登录已过期，请重新登录。", "SESSION_AUTHENTICATION_REQUIRED", 401)
   const account = Object.freeze({ id: value.account.id as string, username: value.account.username as string,
     realName: value.account.realName as string, avatar: value.account.avatar as string })
-  const view: BffSessionView = { sessionId: value.sessionId, version: value.version, account,
+  const view: BffSessionView = { centralizedContextSelection: value.centralizedContextSelection === true, sessionId: value.sessionId, version: value.version, account,
     memberships: value.memberships.map(row => membership(row, account.id)), context: null, expiresAt: value.expiresAt }
   if (value.context !== null) {
     if (!isContextIdentity(value.context) || !memberMatches(view, value.context)) throw invalidResponse()
@@ -279,15 +281,20 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
       const raw = await request("/auth/session", ticket)
       const parsed = sessionResponse(raw, now())
       const previous = observation.session, token = observation.record?.token, expiry = observation.tokenExpiresAt
+      const centralChanged = parsed.view.centralizedContextSelection && (previous?.sessionId !== parsed.view.sessionId
+        || previous.version !== parsed.view.version || !sameContextIdentity(previous.context, parsed.view.context))
       const reusable = !needsRecovery && token && expiry !== null && expiry > now()
         && previous?.sessionId === parsed.view.sessionId && previous.version === parsed.view.version
         && sameContextIdentity(previous.context, parsed.view.context)
       csrf = parsed.csrf
-      if (!parsed.view.context) { accept(parsed.view, null, null); return }
+      if (!parsed.view.context) { accept(parsed.view, null, null); if (centralChanged) notify(observation.session, false); return }
       if (reusable && typeof token === "string" && expiry !== null) { accept(parsed.view, token, expiry); return }
       // Do not let a previous context stay usable during a replacement proof read.
       publish(observation.status === "initializing" ? "initializing" : "refreshing", parsed.view)
       await bridge(parsed.view, ticket)
+      if (centralChanged) {
+        notify(observation.session, false)
+      }
     } catch (error) {
       checkGeneration(ticket)
       if (error instanceof BffSessionError && error.status === 401) { anonymous(); return }
@@ -370,6 +377,17 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
       return bridge(view, ticket, { organizationId, membershipId })
     }))
   }
+  function beginContextSwitch(expected: SessionFence, returnPath: string): Promise<void> {
+    return enqueue(() => mutation(expected, async (view, ticket) => {
+      if (!view.centralizedContextSelection) throw new BffSessionError("统一身份选择尚未启用", "CENTRAL_SELECTION_REQUIRED", 409)
+      clearTimers(); publish("switching", view)
+      const data = await request("/auth/context-switch", ticket, { expectedVersion: view.version, returnPath })
+      if (!object(data) || typeof data.redirectTo !== "string") throw invalidResponse()
+      const target = new URL(data.redirectTo)
+      if (target.protocol !== "https:" || target.username || target.password || target.hash || target.pathname !== "/oidc/authorize" || !environment?.navigate) throw invalidResponse()
+      environment.navigate(target.href)
+    }))
+  }
   function logout(expected: SessionFence, scope: "PLATFORM" | "GLOBAL" = "PLATFORM"): Promise<boolean> {
     return enqueue(async () => {
       if (!matches(expected)) return false
@@ -397,7 +415,7 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
   }
   return { initialize, reconcile, observe, current: (): BffObservation => observation,
     subscribe: (observer: (value: BffObservation) => void) => { observers.add(observer); return () => { observers.delete(observer) } },
-    renew, selectContext, logout, forget, dispose }
+    renew, selectContext, beginContextSwitch, logout, forget, dispose }
 }
 
 function browserEnvironment(): BffSessionEnvironment | null {
@@ -405,6 +423,7 @@ function browserEnvironment(): BffSessionEnvironment | null {
   let channel: BroadcastChannel | undefined
   try { if (typeof BroadcastChannel !== "undefined") channel = new BroadcastChannel("platform-bff-session-v1") } catch { /* Focus and each request still read authority. */ }
   return {
+    navigate: url => window.location.assign(url),
     fetch: (...args) => fetch(...args),
     get storage() { try { return window.localStorage } catch { return undefined } },
     notify: notice => channel?.postMessage(notice),

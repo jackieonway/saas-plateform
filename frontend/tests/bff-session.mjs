@@ -53,6 +53,7 @@ function fixture(handler, options = {}) {
   }
   const { createBffSessionCoordinator } = load('src/lib/bff-session.ts')
   const environment = {
+    navigate: options.navigate,
     now: () => clock,
     fetch: async (url, config) => { calls.push({ url, config }); return handler(url, config) },
     setTimeout: (callback, ms) => { const timer = ++nextTimer; timers.set(timer, { callback, due: clock + ms }); return timer },
@@ -76,6 +77,39 @@ function fixture(handler, options = {}) {
     setTime: milliseconds => { clock = instant + milliseconds },
   }
 }
+
+test('centralized switch freezes the current context and navigates without posting a member choice', async t => {
+  let destination
+  const f = fixture(async (url, config) => {
+    if (url === '/auth/session') return json(200, session({ centralizedContextSelection: true }))
+    if (url === '/auth/context-token') return json(200, context())
+    assert.equal(url, '/auth/context-switch')
+    assert.equal(config.headers['X-CSRF-Token'], csrf)
+    assert.deepEqual(JSON.parse(config.body), { expectedVersion: '1', returnPath: '/dashboard' })
+    return json(200, { redirectTo: 'https://auth.example.test/oidc/authorize?context_request=owned' })
+  }, { navigate: url => { destination = url } })
+  t.after(() => f.coordinator.dispose())
+  await f.coordinator.initialize()
+  await f.coordinator.beginContextSwitch(f.fence(), '/dashboard')
+  assert.equal(destination, 'https://auth.example.test/oidc/authorize?context_request=owned')
+  assert.equal(f.coordinator.current().status, 'switching')
+  assert.equal(f.coordinator.current().record?.token, null)
+  assert.equal(f.calls.filter(call => call.url === '/auth/context-switch').length, 1)
+})
+
+test('centralized switch rejects an untrusted navigation target', async t => {
+  let navigated = false
+  const f = fixture(async url => {
+    if (url === '/auth/session') return json(200, session({ centralizedContextSelection: true }))
+    if (url === '/auth/context-token') return json(200, context())
+    return json(200, { redirectTo: 'https://auth.example.test/other-path' })
+  }, { navigate: () => { navigated = true } })
+  t.after(() => f.coordinator.dispose())
+  await f.coordinator.initialize()
+  await assert.rejects(f.coordinator.beginContextSwitch(f.fence(), '/dashboard'))
+  assert.equal(navigated, false)
+  assert.equal(f.coordinator.current().record?.token, null)
+})
 
 test('Cookie recovery uses no stored credentials or Web Locks and exposes no CSRF in observations', async t => {
   const f = fixture(async (url, config) => {

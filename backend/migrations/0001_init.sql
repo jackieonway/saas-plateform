@@ -1112,6 +1112,10 @@ CREATE TABLE public.console_browsers (
 );
 
 CREATE TABLE public.console_login_flows (
+    context_selection_required boolean NOT NULL DEFAULT false,
+    switch_session_id uuid CHECK (switch_session_id IS NULL OR public.is_uuid_v7(switch_session_id)),
+    switch_version bigint CHECK (switch_version>=1),
+    CONSTRAINT console_login_flows_switch_binding_check CHECK ((switch_session_id IS NULL)=(switch_version IS NULL)),
     id uuid NOT NULL,
     browser_id uuid NOT NULL,
     browser_generation bigint NOT NULL,
@@ -1290,7 +1294,7 @@ CREATE TABLE public.identity_service_clients (
     status text NOT NULL,
     created_at timestamp with time zone NOT NULL,
     CONSTRAINT identity_service_clients_id_check CHECK (public.is_uuid_v7(id)),
-    CONSTRAINT identity_service_clients_purpose_check CHECK ((purpose = ANY (ARRAY['ACCOUNT_COMMAND'::text, 'CUSTOMER_ACCESS_PROOF'::text, 'OIDC_ADMIN'::text]))),
+    CONSTRAINT identity_service_clients_purpose_check CHECK ((purpose = ANY (ARRAY['ACCOUNT_COMMAND'::text, 'CUSTOMER_ACCESS_PROOF'::text, 'OIDC_ADMIN'::text, 'CONTEXT_SELECTION_SOURCE'::text]))),
     CONSTRAINT identity_service_clients_secret_hash_check CHECK ((secret_hash ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT identity_service_clients_status_check CHECK ((status = ANY (ARRAY['ENABLED'::text, 'DISABLED'::text])))
 );
@@ -1709,6 +1713,7 @@ CREATE TABLE public.oidc_authorization_codes (
 );
 
 CREATE TABLE public.oidc_authorization_requests (
+    consented_at timestamp with time zone,
     id uuid NOT NULL,
     browser_hash text NOT NULL,
     csrf_hash text NOT NULL,
@@ -1764,6 +1769,17 @@ CREATE TABLE public.oidc_clients (
     CONSTRAINT oidc_clients_redirect_uris_check CHECK (((cardinality(redirect_uris) >= 1) AND (cardinality(redirect_uris) <= 16))),
     CONSTRAINT oidc_clients_secret_hash_check CHECK ((secret_hash ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT oidc_clients_status_check CHECK ((status = ANY (ARRAY['ENABLED'::text, 'DISABLED'::text])))
+);
+
+-- User approval survives logout and token expiry. Only a new scope or explicit
+-- account-side revocation requires confirmation again.
+CREATE TABLE public.oidc_consents (
+    user_id uuid NOT NULL CHECK (public.is_uuid_v7(user_id)),
+    client_id uuid NOT NULL CHECK (public.is_uuid_v7(client_id)),
+    scopes text[] NOT NULL CHECK (cardinality(scopes)>0 AND scopes <@ ARRAY['openid','profile','offline_access']::text[]),
+    approved_at timestamptz NOT NULL,
+    revoked_at timestamptz,
+    PRIMARY KEY (user_id,client_id)
 );
 
 CREATE TABLE public.oidc_grants (
@@ -2971,3 +2987,164 @@ SELECT pg_catalog.set_config('search_path','public,pg_catalog,pg_temp',false);
 
 -- Required public platform branding; no accounts, sessions or business fixtures.
 INSERT INTO public.platform_settings(singleton) VALUES(true);
+
+-- Platform-owned, short-lived member-selection state. Identity runtime receives
+-- no table privileges; it accesses this capability only through private HTTP.
+CREATE TABLE public.context_selections (
+    transaction_id uuid PRIMARY KEY CHECK (public.is_uuid_v7(transaction_id)),
+    interaction_id uuid NOT NULL UNIQUE CHECK (public.is_uuid_v7(interaction_id)),
+    client_id uuid NOT NULL CHECK (public.is_uuid_v7(client_id)),
+    consumer_service_id uuid CHECK (public.is_uuid_v7(consumer_service_id)),
+    credential_hash text NOT NULL UNIQUE CHECK (credential_hash ~ '^[0-9a-f]{64}$'),
+    selection jsonb NOT NULL CHECK (jsonb_typeof(selection)='object'),
+    created_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    consumed_at timestamptz,
+    result jsonb,
+    CHECK (expires_at>created_at AND expires_at<=created_at+interval '120 seconds'),
+    CHECK ((consumed_at IS NULL)=(result IS NULL)),
+    CHECK (consumed_at IS NULL OR (consumed_at>=created_at AND consumed_at<expires_at)),
+    CHECK (result IS NULL OR jsonb_typeof(result)='object'),
+    CHECK ((selection->'binding'->>'transactionId') IS NOT NULL
+        AND selection->'binding'->>'transactionId'=transaction_id::text),
+    CHECK ((selection->'binding'->'source'->>'interactionId') IS NOT NULL
+        AND selection->'binding'->'source'->>'interactionId'=interaction_id::text),
+    CHECK ((selection->'binding'->'registration'->>'clientId') IS NOT NULL
+        AND selection->'binding'->'registration'->>'clientId'=client_id::text)
+);
+CREATE INDEX context_selections_expiration ON public.context_selections(expires_at);
+ALTER TABLE public.context_selections ADD COLUMN result_ciphertext text;
+CREATE UNIQUE INDEX context_selections_switch_once ON public.context_selections(client_id,(selection#>>'{binding,intent,sessionId}'),(selection#>>'{binding,intent,expectedVersion}'))
+    WHERE consumed_at IS NOT NULL AND selection#>>'{binding,intent,kind}'='SWITCH';
+ALTER TABLE public.customer_portal_contexts ADD COLUMN bff_session_id uuid CHECK (bff_session_id IS NULL OR public.is_uuid_v7(bff_session_id));
+ALTER TABLE public.customer_portal_contexts ADD COLUMN bff_context_version bigint CHECK (bff_context_version>=1);
+
+CREATE FUNCTION public.context_selection_binding_immutable() RETURNS trigger
+LANGUAGE plpgsql SET search_path TO 'pg_catalog','public' AS $$
+BEGIN
+    IF (NEW.transaction_id,NEW.interaction_id,NEW.client_id,NEW.consumer_service_id,
+        NEW.credential_hash,NEW.selection,NEW.created_at,NEW.expires_at)
+       IS DISTINCT FROM
+       (OLD.transaction_id,OLD.interaction_id,OLD.client_id,OLD.consumer_service_id,
+        OLD.credential_hash,OLD.selection,OLD.created_at,OLD.expires_at)
+       OR (OLD.consumed_at IS NOT NULL AND
+           (NEW.consumed_at,NEW.result,NEW.result_ciphertext) IS DISTINCT FROM (OLD.consumed_at,OLD.result,OLD.result_ciphertext)) THEN
+        RAISE EXCEPTION 'CONTEXT_SELECTION_BINDING_IMMUTABLE';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER context_selection_binding_immutable
+BEFORE UPDATE ON public.context_selections
+FOR EACH ROW EXECUTE FUNCTION public.context_selection_binding_immutable();
+
+-- Identity-owned RP capability and browser authorization request binding.
+ALTER TABLE public.identity_service_clients ADD COLUMN allowed_oidc_clients uuid[] NOT NULL DEFAULT '{}';
+CREATE TABLE public.oidc_context_clients (
+    client_id uuid PRIMARY KEY REFERENCES public.oidc_clients(id),
+    enabled boolean NOT NULL DEFAULT true
+);
+CREATE FUNCTION public.oidc_context_capability_generation() RETURNS trigger
+LANGUAGE plpgsql SET search_path TO 'pg_catalog','public' AS $$
+DECLARE target uuid;
+BEGIN
+    IF TG_OP='UPDATE' AND NEW.client_id IS DISTINCT FROM OLD.client_id THEN
+        RAISE EXCEPTION 'OIDC_CONTEXT_CLIENT_IMMUTABLE';
+    END IF;
+    IF TG_OP='UPDATE' AND NEW.enabled IS NOT DISTINCT FROM OLD.enabled THEN RETURN NEW; END IF;
+    IF TG_OP='DELETE' THEN target:=OLD.client_id; ELSE target:=NEW.client_id; END IF;
+    UPDATE public.oidc_clients SET access_policy_version=access_policy_version+1,updated_at=clock_timestamp() WHERE id=target;
+    IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+END;
+$$;
+CREATE TRIGGER oidc_context_capability_generation
+AFTER INSERT OR UPDATE OR DELETE ON public.oidc_context_clients
+FOR EACH ROW EXECUTE FUNCTION public.oidc_context_capability_generation();
+
+CREATE TABLE public.oidc_context_interactions (
+    transaction_id uuid PRIMARY KEY CHECK (public.is_uuid_v7(transaction_id)),
+    request_hash text NOT NULL UNIQUE CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+    client_id uuid NOT NULL REFERENCES public.oidc_clients(id),
+    client_policy_version bigint NOT NULL CHECK (client_policy_version>=1),
+    redirect_uri text NOT NULL,
+    state_hash text NOT NULL CHECK (state_hash ~ '^[0-9a-f]{64}$'),
+    nonce_hash text NOT NULL CHECK (nonce_hash ~ '^[0-9a-f]{64}$'),
+    code_challenge text NOT NULL,
+    intent jsonb NOT NULL CHECK (jsonb_typeof(intent)='object'),
+    flow_id uuid UNIQUE REFERENCES public.oidc_authorization_requests(id) ON DELETE CASCADE,
+    source_hash text UNIQUE CHECK (source_hash ~ '^[0-9a-f]{64}$'),
+    grant_id uuid UNIQUE REFERENCES public.oidc_grants(id),
+    selected_membership_id uuid CHECK (public.is_uuid_v7(selected_membership_id)),
+    credential_ciphertext text,
+    selection_expires_at timestamptz,
+    delivered_at timestamptz,
+    created_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL CHECK (expires_at>created_at),
+    CHECK (source_hash IS NULL OR flow_id IS NOT NULL),
+    CHECK (grant_id IS NULL OR source_hash IS NOT NULL),
+    CHECK ((selected_membership_id IS NULL)=(selection_expires_at IS NULL)),
+    CHECK (selected_membership_id IS NULL OR (source_hash IS NOT NULL AND selection_expires_at<=expires_at)),
+    CHECK ((credential_ciphertext IS NULL)=(selected_membership_id IS NULL OR delivered_at IS NOT NULL)),
+    CHECK (delivered_at IS NULL OR (grant_id IS NOT NULL AND delivered_at<selection_expires_at))
+);
+CREATE INDEX oidc_context_interactions_expiration ON public.oidc_context_interactions(expires_at);
+
+CREATE FUNCTION public.oidc_context_binding_immutable() RETURNS trigger
+LANGUAGE plpgsql SET search_path TO 'pg_catalog','public' AS $$
+BEGIN
+    IF (NEW.transaction_id,NEW.request_hash,NEW.client_id,NEW.client_policy_version,
+        NEW.redirect_uri,NEW.state_hash,NEW.nonce_hash,NEW.code_challenge,NEW.intent,NEW.created_at)
+       IS DISTINCT FROM
+       (OLD.transaction_id,OLD.request_hash,OLD.client_id,OLD.client_policy_version,
+        OLD.redirect_uri,OLD.state_hash,OLD.nonce_hash,OLD.code_challenge,OLD.intent,OLD.created_at)
+       OR NEW.expires_at>OLD.expires_at
+       OR (OLD.grant_id IS NOT NULL AND NEW.grant_id IS DISTINCT FROM OLD.grant_id)
+       OR (OLD.delivered_at IS NOT NULL AND NEW.delivered_at IS DISTINCT FROM OLD.delivered_at)
+       OR (OLD.selected_membership_id IS NOT NULL AND
+           (NEW.selected_membership_id,NEW.selection_expires_at) IS DISTINCT FROM
+           (OLD.selected_membership_id,OLD.selection_expires_at)) THEN
+        RAISE EXCEPTION 'OIDC_CONTEXT_BINDING_IMMUTABLE';
+    END IF;
+    IF NEW.flow_id IS DISTINCT FROM OLD.flow_id AND OLD.flow_id IS NOT NULL AND
+       (OLD.selected_membership_id IS NOT NULL OR OLD.grant_id IS NOT NULL OR NEW.source_hash IS NOT NULL) THEN
+        RAISE EXCEPTION 'OIDC_CONTEXT_FLOW_IMMUTABLE';
+    END IF;
+    IF OLD.source_hash IS NOT NULL AND NEW.source_hash IS DISTINCT FROM OLD.source_hash AND
+       NOT (NEW.source_hash IS NULL AND NEW.flow_id IS DISTINCT FROM OLD.flow_id
+            AND OLD.selected_membership_id IS NULL AND OLD.grant_id IS NULL) THEN
+        RAISE EXCEPTION 'OIDC_CONTEXT_SOURCE_IMMUTABLE';
+    END IF;
+    IF OLD.credential_ciphertext IS NOT NULL AND NEW.credential_ciphertext IS DISTINCT FROM OLD.credential_ciphertext AND
+       NOT (NEW.credential_ciphertext IS NULL AND OLD.delivered_at IS NULL AND NEW.delivered_at IS NOT NULL
+            AND OLD.grant_id IS NOT NULL) THEN
+        RAISE EXCEPTION 'OIDC_CONTEXT_CREDENTIAL_IMMUTABLE';
+    END IF;
+    IF OLD.delivered_at IS NOT NULL AND NEW.credential_ciphertext IS NOT NULL THEN
+        RAISE EXCEPTION 'OIDC_CONTEXT_CREDENTIAL_ALREADY_DELIVERED';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER oidc_context_binding_immutable BEFORE UPDATE ON public.oidc_context_interactions
+FOR EACH ROW EXECUTE FUNCTION public.oidc_context_binding_immutable();
+
+CREATE TABLE public.context_selection_services (
+    id uuid PRIMARY KEY CHECK (public.is_uuid_v7(id)),
+    secret_hash text NOT NULL UNIQUE CHECK (secret_hash ~ '^[0-9a-f]{64}$'),
+    purpose text NOT NULL CHECK (purpose IN ('CONTEXT_SELECTION_AUTHORITY','CONTEXT_SELECTION_CONSUMER')),
+    allowed_oidc_clients uuid[] NOT NULL CHECK (cardinality(allowed_oidc_clients)>0),
+    status text NOT NULL CHECK (status IN ('ENABLED','DISABLED'))
+);
+CREATE TABLE public.context_selection_registrations (
+    client_id uuid PRIMARY KEY CHECK (public.is_uuid_v7(client_id)),
+    client_policy_version bigint NOT NULL CHECK (client_policy_version>=1),
+    member_type text NOT NULL CHECK (member_type IN ('EMPLOYEE','CUSTOMER')),
+    application_id uuid REFERENCES public.applications(id),
+    application_policy_version bigint CHECK (application_policy_version>=1),
+    consumer_service_id uuid REFERENCES public.context_selection_services(id),
+    enabled boolean NOT NULL DEFAULT true,
+    CHECK ((application_id IS NULL)=(application_policy_version IS NULL)),
+    CHECK (member_type<>'CUSTOMER' OR (application_id IS NOT NULL AND consumer_service_id IS NOT NULL))
+);
+ALTER TABLE public.oidc_consents ADD CONSTRAINT oidc_consents_user_fk FOREIGN KEY(user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.oidc_consents ADD CONSTRAINT oidc_consents_client_fk FOREIGN KEY(client_id) REFERENCES public.oidc_clients(id) ON DELETE CASCADE;

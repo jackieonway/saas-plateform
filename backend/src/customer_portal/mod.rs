@@ -3,6 +3,7 @@
 
 pub(crate) mod authority;
 pub(crate) mod remote_authority;
+pub(crate) mod selection;
 mod store;
 
 use axum::{

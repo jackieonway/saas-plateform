@@ -15,6 +15,7 @@
 - [成员与访问控制](identity-and-access.md)
 - [SSO 登录保护](login-protection.md)、[OAuth 签发](oauth-issuance.md)
 - [应用授权合同](application-authorization-contract.md)
+- [认证中心持久授权与选择交互验证](designs/auth-approval-ux-verification.md)
 - [组织目录](application-organization-directory.md)
 - [数据授权管理](data-grant-management.md)、[使用指南](data-grant-user-guide.md)
 - [管理审计](management-audit.md)、[通知协议](realtime-protocol.md)

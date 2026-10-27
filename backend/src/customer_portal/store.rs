@@ -84,6 +84,14 @@ impl Member {
     }
 }
 
+// The independently authenticated selection consumer is restricted to this
+// deployment's resource registration. It never supplies an application/client.
+pub(super) async fn selection_registration(state: &AppState) -> Result<Registration, AppError> {
+    sqlx::query_as("SELECT c.id,c.application_id,c.access_policy_version AS client_policy_version,a.access_policy_version AS application_policy_version,a.code AS application_code,a.name AS application_name,c.client_id,COALESCE(c.client_secret_hash,'') AS secret_hash FROM oauth_clients c JOIN applications a ON a.id=c.application_id WHERE c.id=$1 AND a.id=$2 AND c.status='ENABLED' AND a.status='ENABLED' AND c.client_type='CONFIDENTIAL' AND c.subject_mode='USER' AND c.allowed_member_types=ARRAY['CUSTOMER']::text[]")
+        .bind(state.config.customer_profile_client_ref.ok_or(AppError::Unavailable)?).bind(state.config.customer_profile_application_id.ok_or(AppError::Unavailable)?)
+        .fetch_optional(&state.pool).await?.ok_or_else(invalid)
+}
+
 const MEMBERS: &str = "SELECT m.id AS membership_id,m.user_id,m.organization_id,o.tenant_id,m.identity_version, \
     o.name AS organization_name,t.name AS tenant_name,org_chain_expires_at(o.id) AS org_expires,t.expires_at AS tenant_expires \
     FROM memberships m JOIN organizations o ON o.id=m.organization_id JOIN tenants t ON t.id=o.tenant_id \
@@ -197,8 +205,8 @@ impl Context {
     }
 }
 
-pub(super) async fn context(
-    pool: &PgPool,
+pub(super) async fn context<'e, E: Executor<'e, Database = Postgres>>(
+    pool: E,
     token: &str,
     include_retired: bool,
 ) -> Result<Option<Context>, AppError> {
@@ -248,8 +256,8 @@ pub(super) async fn revalidate(
 /// Last, single-statement checkpoint after all resource/authority awaits. The
 /// authentication-owned boolean can only reject; two online proofs are still
 /// mandatory. Local exact member/client/app bindings share this fresh snapshot.
-pub(super) async fn final_proof(
-    pool: &PgPool,
+pub(super) async fn final_proof<'e, E: Executor<'e, Database = Postgres>>(
+    pool: E,
     registration: &Registration,
     source: &Source,
     access: &str,
@@ -322,6 +330,35 @@ pub(super) async fn issue(
         .begin()
         .await
         .map_err(|_| AppError::Unavailable)?;
+    let result = issue_in_tx(
+        &mut tx,
+        registration,
+        source,
+        membership,
+        organization,
+        version,
+    )
+    .await?;
+    let managed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM context_selection_registrations WHERE client_id=$1 AND enabled)").bind(source.client_id).fetch_one(&mut *tx).await?;
+    if managed {
+        let association:Option<(Uuid,i64)>=sqlx::query_as("SELECT bff_session_id,bff_context_version FROM customer_portal_contexts WHERE user_id=$1 AND oidc_client_id=$2 AND oidc_grant_id=$3 AND membership_id=$4 AND identity_version=$5 AND revoked_at IS NULL AND bff_session_id IS NOT NULL AND bff_context_version IS NOT NULL ORDER BY created_at DESC LIMIT 1")
+            .bind(source.user_id).bind(source.client_id).bind(source.grant_id).bind(membership).bind(version).fetch_optional(&mut *tx).await?;
+        let association =
+            association.ok_or_else(|| AppError::forbidden("客户身份需先由认证中心确认"))?;
+        sqlx::query("UPDATE customer_portal_contexts SET bff_session_id=$2,bff_context_version=$3 WHERE id=$1").bind(result.1.id).bind(association.0).bind(association.1).execute(&mut *tx).await?;
+    }
+    tx.commit().await.map_err(|_| AppError::Unavailable)?;
+    Ok(result)
+}
+
+pub(super) async fn issue_in_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    registration: &Registration,
+    source: &Source,
+    membership: Uuid,
+    organization: Uuid,
+    version: i64,
+) -> Result<(String, Context, Member), AppError> {
     // Match membership/account mutation ordering. No authority call is made
     // under these locks; the caller rechecks source and exact local generation.
     for (table, id) in [
@@ -331,16 +368,16 @@ pub(super) async fn issue(
     ] {
         sqlx::query(&format!("SELECT id FROM {table} WHERE id=$1 FOR UPDATE"))
             .bind(id)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await
             .map_err(|_| AppError::Unavailable)?;
     }
     sqlx::query("SELECT id FROM memberships WHERE id=$1 FOR SHARE")
         .bind(membership)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await
         .map_err(|_| AppError::Unavailable)?;
-    let member = member(&mut *tx, registration, source, membership)
+    let member = member(&mut **tx, registration, source, membership)
         .await?
         .filter(|member| {
             member.organization_id == organization && member.identity_version == version
@@ -368,7 +405,6 @@ pub(super) async fn issue(
         .bind(source.auth_time).bind(source.expires_at).bind(registration.id).bind(registration.client_policy_version)
         .bind(registration.application_id).bind(registration.application_policy_version).bind(member.tenant_id)
         .bind(member.organization_id).bind(member.membership_id).bind(member.identity_version).bind(expires)
-        .fetch_optional(&mut *tx).await.map_err(|_|AppError::Unavailable)?.ok_or_else(invalid)?;
-    tx.commit().await.map_err(|_| AppError::Unavailable)?;
+        .fetch_optional(&mut **tx).await.map_err(|_|AppError::Unavailable)?.ok_or_else(invalid)?;
     Ok((token, record, member))
 }

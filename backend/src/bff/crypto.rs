@@ -111,7 +111,7 @@ impl CipherKeys {
         })
     }
 
-    pub(super) fn seal(
+    pub(crate) fn seal(
         &self,
         record: Uuid,
         issuer: &str,
@@ -150,7 +150,7 @@ impl CipherKeys {
         ))
     }
 
-    pub(super) fn open(
+    pub(crate) fn open(
         &self,
         record: Uuid,
         issuer: &str,

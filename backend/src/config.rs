@@ -67,6 +67,8 @@ pub struct Config {
     pub customer_authority_service_client_secret: Option<String>,
     pub identity_admin_service_client_id: Option<String>,
     pub identity_admin_service_client_secret: Option<String>,
+    pub context_source_service_client_id: Option<String>,
+    pub context_source_service_client_secret: Option<String>,
     pub(crate) identity_http_client: Option<reqwest::Client>,
     pub sso_enabled: bool,
     pub sso_origin: Option<String>,
@@ -577,6 +579,12 @@ impl Config {
                 "IDENTITY_ADMIN_SERVICE_CLIENT_SECRET",
             ),
             identity_http_client: identity_http_client(env)?,
+            context_source_service_client_id: optional_v7(env, "CONTEXT_SOURCE_SERVICE_CLIENT_ID")?
+                .map(|id| id.to_string()),
+            context_source_service_client_secret: optional(
+                env,
+                "CONTEXT_SOURCE_SERVICE_CLIENT_SECRET",
+            ),
             sso_enabled: boolean(env, "SSO_ENABLED", false)?,
             sso_origin: optional(env, "SSO_ORIGIN")
                 .map(|raw| {
@@ -652,6 +660,43 @@ impl Config {
                     && config.customer_profile_client_ref.is_some()
                     && config.customer_profile_application_id.is_some(),
                 "CUSTOMER_PORTAL_SOURCE_AND_PROFILE_REGISTRATION_REQUIRED"
+            );
+        }
+        anyhow::ensure!(
+            config.context_source_service_client_id.is_some()
+                == config.context_source_service_client_secret.is_some(),
+            "CONTEXT_SOURCE_SERVICE_PAIR_REQUIRED"
+        );
+        if config.context_source_service_client_id.is_some() {
+            anyhow::ensure!(
+                config.identity_remote_enabled,
+                "CONTEXT_SOURCE_REQUIRES_REMOTE_IDENTITY"
+            );
+            validate_identity_secret(config.context_source_service_client_secret.as_deref())?;
+            for (id, secret) in [
+                (
+                    &config.identity_service_client_id,
+                    &config.identity_service_client_secret,
+                ),
+                (
+                    &config.identity_admin_service_client_id,
+                    &config.identity_admin_service_client_secret,
+                ),
+                (
+                    &config.customer_authority_service_client_id,
+                    &config.customer_authority_service_client_secret,
+                ),
+            ] {
+                anyhow::ensure!(
+                    id.as_ref() != config.context_source_service_client_id.as_ref()
+                        && secret.as_ref() != config.context_source_service_client_secret.as_ref(),
+                    "CONTEXT_SOURCE_SERVICE_MUST_BE_SEPARATE"
+                );
+            }
+            anyhow::ensure!(
+                config.bff_oidc_client_secret.as_ref()
+                    != config.context_source_service_client_secret.as_ref(),
+                "CONTEXT_SOURCE_SERVICE_MUST_BE_SEPARATE"
             );
         }
         if config.identity_remote_enabled {
@@ -1337,5 +1382,41 @@ mod tests {
         assert!(!config.data_grant_policy.management_scopes[0].read);
         assert!(config.data_grant_policy.management_scopes[0].write);
         assert!(config.data_grant_policy.management_scopes[0].include_descendants);
+    }
+
+    #[test]
+    fn context_selection_source_credentials_require_a_separate_remote_pair() {
+        let service_id = "019a1163-0000-7000-8000-000000000001";
+        for values in [
+            HashMap::from([(
+                "CONTEXT_SOURCE_SERVICE_CLIENT_ID".to_owned(),
+                service_id.to_owned(),
+            )]),
+            HashMap::from([(
+                "CONTEXT_SOURCE_SERVICE_CLIENT_SECRET".to_owned(),
+                "a".repeat(64),
+            )]),
+        ] {
+            assert!(Config::from_values(&values)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("CONTEXT_SOURCE_SERVICE_PAIR_REQUIRED"));
+        }
+        let values = HashMap::from([
+            (
+                "CONTEXT_SOURCE_SERVICE_CLIENT_ID".to_owned(),
+                service_id.to_owned(),
+            ),
+            (
+                "CONTEXT_SOURCE_SERVICE_CLIENT_SECRET".to_owned(),
+                "a".repeat(64),
+            ),
+        ]);
+        assert!(Config::from_values(&values)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("CONTEXT_SOURCE_REQUIRES_REMOTE_IDENTITY"));
     }
 }

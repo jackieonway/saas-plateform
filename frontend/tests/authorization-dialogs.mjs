@@ -7,6 +7,8 @@ const user = { id: 'user-a', memberships: [{ organizationId: 'org-a', organizati
 const props = value => ({ ...value, onClose() {}, onSaved() {} })
 const userPageFixture = (names, dependencies = {}) => componentFixture('src/pages/system/users/UsersPage.tsx', names, {
   './MembershipDirectory': { MembershipDirectory: 'MembershipDirectory' },
+  './MembershipActionDialog': { MembershipActionDialog: 'MembershipActionDialog' },
+  './membership-model': { membershipWriteBlockedReason: () => null },
   ...dependencies,
 })
 

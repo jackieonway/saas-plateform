@@ -12,6 +12,7 @@ const ROUTE_PERMISSIONS: Readonly<Record<string, string>> = {
   "/system/authorizations": "system:authorization",
   "/system/data-grants": "system:data-grant:read",
   "/system/users": "system:user",
+  "/system/customers": "system:user",
   "/system/roles": "system:role",
   "/system/regions": "system:region",
   "/system/oauth/clients": "system:oauth",

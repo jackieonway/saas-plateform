@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowLeftRight, Database, Loader2, Plus, RefreshCw, Shield, Trash2, UserCheck, UserPlus, UserX } from "lucide-react"
+import { ArrowLeftRight, Database, Loader2, Plus, RefreshCw, Shield, Trash2, UserCheck, UserX } from "lucide-react"
 import { membershipsApi } from "@/api/memberships"
 import type { MembershipMemberType, MembershipRecord, MembershipStatus } from "@/api/memberships"
 import type { OrgNode, TenantRecord } from "@/api/types"
@@ -105,7 +105,6 @@ export function MembershipDirectory({ memberType }: { memberType: MembershipMemb
         <TableBody>{records.map(member => {
           const self = currentEmployeeMutationBlockedReason(member, currentMembershipId)
           const stateGate = membershipWriteBlockedReason(capabilities, "status") || self
-          const secondGate = membershipWriteBlockedReason(capabilities, "secondIdentity", oppositeMemberType(member.memberType))
           const replaceGate = membershipWriteBlockedReason(capabilities, "replaceIdentity", oppositeMemberType(member.memberType)) || self
           const deleteGate = membershipWriteBlockedReason(capabilities, "delete") || self
           return <TableRow key={member.id} data-membership-id={member.id} data-member-type={member.memberType} data-identity-version={member.identityVersion}>
@@ -117,7 +116,6 @@ export function MembershipDirectory({ memberType }: { memberType: MembershipMemb
             <TableCell className="pr-4"><div className="flex flex-wrap justify-end gap-1">
               {member.memberType === "EMPLOYEE" && member.status === "ENABLED" && canReadGrants && <Button asChild variant="ghost" size="sm"><Link to={`/system/data-grants?userId=${encodeURIComponent(member.userId)}&organizationId=${encodeURIComponent(member.organizationId)}&membershipId=${encodeURIComponent(member.id)}`}><Database className="size-3.5" />员工授权</Link></Button>}
               <Button variant="ghost" size="sm" disabled={!!stateGate} title={stateGate ?? undefined} onClick={() => openStatus(member)}>{member.status === "ENABLED" ? <UserX className="size-3.5" /> : <UserCheck className="size-3.5" />}{member.status === "ENABLED" ? "停用" : "启用"}</Button>
-              <Button variant="ghost" size="sm" disabled={!!secondGate} title={secondGate ?? undefined} onClick={() => setAction({ kind: "secondIdentity", source: member })}><UserPlus className="size-3.5" />第二身份</Button>
               <Button variant="ghost" size="sm" disabled={!!replaceGate} title={replaceGate ?? undefined} onClick={() => setAction({ kind: "replaceIdentity", source: member })}><ArrowLeftRight className="size-3.5" />替换</Button>
               <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={!!deleteGate} title={deleteGate ?? undefined} onClick={() => setAction({ kind: "delete", source: member })}><Trash2 className="size-3.5" />删除关系</Button>
             </div></TableCell>
@@ -126,6 +124,6 @@ export function MembershipDirectory({ memberType }: { memberType: MembershipMemb
       </Table></div>}
       {!!query.data?.total && <div className="border-t px-4 py-3"><DataPagination page={page} size={size} total={query.data.total} onPageChange={setPage} onSizeChange={setSize} /></div>}
     </div>
-    {action && <MembershipActionDialog key={`${namespace}:${action.kind}:${action.kind === "create" ? action.memberType : action.source.id}`} action={action} namespace={namespace} capabilities={capabilities} organizations={organizations} onClose={() => setAction(null)} onSaved={invalidate} onUseSource={source => setAction({ kind: "secondIdentity", source })} />}
+    {action && <MembershipActionDialog key={`${namespace}:${action.kind}:${action.kind === "create" ? action.memberType : action.source.id}`} action={action} namespace={namespace} capabilities={capabilities} organizations={organizations} onClose={() => setAction(null)} onSaved={invalidate} />}
   </div>
 }

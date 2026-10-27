@@ -170,6 +170,7 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
             "system:authorization",
         ),
         (system, "用户管理", "/system/users", "User", "system:user"),
+        (system, "客户管理", "/system/customers", "UsersRound", "system:user"),
         (system, "角色管理", "/system/roles", "Shield", "system:role"),
         (
             system,
@@ -235,7 +236,7 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
             | "/system/organizations"
             | "/system/departments"
             | "/system/authorizations" => directories.get("organizations").copied(),
-            "/system/users" | "/system/roles" => directories.get("users").copied(),
+            "/system/users" | "/system/customers" | "/system/roles" => directories.get("users").copied(),
             "/system/applications" | "/system/menus" | "/system/settings" => {
                 directories.get("configuration").copied()
             }

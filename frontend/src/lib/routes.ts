@@ -10,6 +10,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   "/system/departments": "部门管理",
   "/system/authorizations": "授权管理",
   "/system/users": "用户管理",
+  "/system/customers": "客户管理",
   "/system/roles": "角色管理",
   "/system/regions": "地区管理",
   "/system/oauth/clients": "OAuth 客户端",

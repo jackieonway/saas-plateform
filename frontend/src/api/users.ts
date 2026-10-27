@@ -8,6 +8,7 @@ export const usersApi = {
     keyword?: string
     organizationId?: string
     tenantId?: string
+    memberType?: "EMPLOYEE" | "CUSTOMER"
   }) => {
     const qs = new URLSearchParams()
     if (params.page) qs.set("page", String(params.page))
@@ -15,6 +16,7 @@ export const usersApi = {
     if (params.keyword) qs.set("keyword", params.keyword)
     if (params.organizationId) qs.set("organizationId", params.organizationId)
     if (params.tenantId) qs.set("tenantId", params.tenantId)
+    if (params.memberType) qs.set("memberType", params.memberType)
     const q = qs.toString()
     return api.get<unknown>(`/api/users${q ? `?${q}` : ""}`)
   },

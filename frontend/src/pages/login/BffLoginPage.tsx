@@ -158,7 +158,11 @@ export default function BffLoginPage({ session, returnTo, onLogin, onReload, onS
               <CheckCircle2 className="size-4 shrink-0 text-primary" aria-label="账号已认证" />
             </div>
 
-            {selectableCount > 0 ? <>
+            {session.centralizedContextSelection ? <div className="rounded-xl border border-dashed px-5 py-6">
+              <p className="font-medium">在认证中心选择租户和组织</p>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">请继续统一登录，依次确认应用授权、租户和组织后进入平台。</p>
+              <Button type="button" className="mt-4 min-h-11 w-full" disabled={busy} onClick={() => { void perform({ kind: "login" }, onLogin) }}>前往认证中心<ArrowRight className="size-4" aria-hidden="true" /></Button>
+            </div> : selectableCount > 0 ? <>
               <label className="sr-only" htmlFor="bff-membership-search">搜索租户、组织或员工身份</label>
               <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="bff-membership-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索租户、组织或部门" className="h-11 pl-9 text-base md:text-base" autoComplete="off" disabled={busy} /></div>
               <p className="my-3 text-xs text-muted-foreground" role="status" aria-live="polite">{query ? `找到 ${matchingCount} 个成员身份` : `${selectableCount} 个有效员工身份，请明确选择`}</p>

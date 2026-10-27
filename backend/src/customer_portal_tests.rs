@@ -34,6 +34,7 @@ use crate::{
     state::AppState,
     util::{hash, uuid7},
 };
+mod selection;
 
 const ISSUER: &str = "https://phase11-auth.example.invalid";
 const PROFILE_SECRET: &str = "phase11-owned-profile-secret-not-production";
@@ -91,56 +92,12 @@ impl Database {
     }
 
     async fn prepare_dual_identity_fixture(&self) -> Result<()> {
-        // The production migration deliberately retains the old binary key.
-        // Only this just-created, empty, task-owned database takes the accepted
-        // target shape. This DDL is not a Phase 6 rollout/receipt assertion.
+        let fresh:bool=sqlx::query_scalar("SELECT current_database()=$1 AND NOT EXISTS(SELECT 1 FROM users) AND NOT EXISTS(SELECT 1 FROM memberships) AND (SELECT count(*)=1 AND bool_and(success AND version=1) FROM _sqlx_migrations) AND NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass AND conname='memberships_user_id_organization_id_key') AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass AND conname='memberships_user_organization_type_key' AND contype='u' AND pg_get_constraintdef(oid)='UNIQUE (user_id, organization_id, member_type)')")
+            .bind(&self.name).fetch_one(&self.pool).await?;
         ensure!(
-            self.name.starts_with("identity_phase11_")
-                && self.name.len() <= 63
-                && self
-                    .name
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || c == b'_'),
-            "refusing fixture DDL outside the owned Phase 11 namespace"
+            fresh,
+            "customer fixture requires the current empty 0001 baseline"
         );
-        let mut tx = self.pool.begin().await?;
-        let fresh: bool = sqlx::query_scalar(
-            "SELECT current_database()=$1 AND NOT EXISTS(SELECT 1 FROM users) \
-             AND NOT EXISTS(SELECT 1 FROM memberships) \
-             AND (SELECT bool_and(success) FROM _sqlx_migrations) \
-             AND EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version=19 AND success) \
-             AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass \
-                 AND conname='memberships_user_id_organization_id_key' AND contype='u' \
-                 AND pg_get_constraintdef(oid)='UNIQUE (user_id, organization_id)') \
-             AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass \
-                 AND conname='memberships_user_organization_type_key' AND contype='u' \
-                 AND pg_get_constraintdef(oid)='UNIQUE (user_id, organization_id, member_type)')",
-        )
-        .bind(&self.name)
-        .fetch_one(&mut *tx)
-        .await?;
-        ensure!(fresh,"Phase 11 fixture DDL requires its exact empty fresh database and both original identity keys");
-        sqlx::query(&format!(
-            "COMMENT ON DATABASE \"{}\" IS 'identity-phase11/task-owned-fixture-only/1'",
-            self.name
-        ))
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query("ALTER TABLE public.memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key")
-            .execute(&mut *tx).await?;
-        let exact:bool=sqlx::query_scalar(
-            "SELECT NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass \
-                 AND conname='memberships_user_id_organization_id_key') \
-             AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass \
-                 AND conname='memberships_user_organization_type_key' AND contype='u' \
-                 AND pg_get_constraintdef(oid)='UNIQUE (user_id, organization_id, member_type)')"
-        ).fetch_one(&mut *tx).await?;
-        ensure!(
-            exact,
-            "owned fixture contraction did not preserve the exact ternary identity key"
-        );
-        tx.commit().await?;
-        eprintln!("identity_phase11_fixture_contraction database={} mode=task_owned_only binary_key_removed=true ternary_key_preserved=true",self.name);
         Ok(())
     }
     async fn finish(self, result: Result<()>) -> Result<()> {

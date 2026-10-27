@@ -14,6 +14,139 @@ use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+pub(super) async fn install_selection(
+    state: &AppState,
+    tx: &mut Transaction<'_, Postgres>,
+    bff: Uuid,
+    verified: &super::protocol::Verified,
+    proof: &crate::context_selection_http::authority::SourceProof,
+    flow: &store::Flow,
+    headers: &HeaderMap,
+) -> Result<(), AppError> {
+    let extension = verified.selection.as_ref().ok_or(AppError::Unavailable)?;
+    let account = &verified.proof;
+    use saas_platform_backend::{
+        context_selection::{Id, Intent, MemberType, Version},
+        context_selection_store::{self, Consumer, ContextResult},
+    };
+    let consumer = Consumer {
+        client_id: Id::new(account.client_id).map_err(|_| AppError::Unavailable)?,
+        service_id: None,
+    };
+    if extension.transaction_id.uuid() != flow.id
+        || proof.source.user_id.uuid() != account.user_id
+        || proof.source.account_version.value() != account.account_version
+        || proof.source.global_session_id.uuid() != account.global_session_id
+        || proof.source.auth_time.timestamp() != account.auth_time
+        || proof.client.policy_version.value() != account.client_policy_version
+    {
+        return Err(AppError::unauthorized("选择结果与本次账号认证不匹配"));
+    }
+    match &proof.intent {
+        Intent::Login {} if flow.switch_session_id.is_none() => {}
+        Intent::Switch {
+            session_id,
+            expected_version,
+        } if Some(session_id.uuid()) == flow.switch_session_id
+            && Some(expected_version.value()) == flow.switch_version => {}
+        _ => return Err(AppError::unauthorized("选择操作不属于本次会话")),
+    }
+    let (binding, member) =
+        crate::context_selection_http::consumption::validate(tx, extension, proof, consumer)
+            .await?;
+    if member.member_type != MemberType::Employee {
+        return Err(AppError::forbidden("平台仅接受员工身份"));
+    }
+    let row: Member = sqlx::query_as(&format!("{MEMBERS} AND m.id=$2 FOR SHARE OF m"))
+        .bind(account.user_id)
+        .bind(member.membership_id.uuid())
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or_else(|| AppError::forbidden("员工身份已失效"))?;
+    let current = store::session_id(&mut **tx, bff, true)
+        .await?
+        .ok_or(AppError::Unavailable)?;
+    let now: DateTime<Utc> = sqlx::query_scalar("SELECT clock_timestamp()")
+        .fetch_one(&mut **tx)
+        .await?;
+    let ttl = (state.config.session_ttl_hours * 3600).max(state.config.refresh_token_ttl_seconds);
+    let mut end = (now + chrono::Duration::seconds(ttl)).min(current.expires_at);
+    if let Some(expiry) = row.org_expires {
+        end = end.min(expiry);
+    }
+    if let Some(expiry) = row.tenant_expires {
+        end = end.min(expiry);
+    }
+    let context = crate::util::uuid7::new_uuid();
+    sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,ip,user_agent,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version,bff_session_id,bff_context_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'EMPLOYEE',$10,$11,$12,$13,$14,1)")
+        .bind(context).bind(account.user_id).bind(member.tenant_id.uuid()).bind(member.organization_id.uuid()).bind(end)
+        .bind(audit::client_ip(headers)).bind(audit::ua_of(headers)).bind(account.account_version).bind(member.membership_id.uuid())
+        .bind(member.identity_version.value()).bind(&current.issuer).bind(account.client_id.to_string()).bind(account.client_policy_version).bind(bff).execute(&mut **tx).await?;
+    // Renewal proofs require the complete active BFF/context association even
+    // inside the transaction. Publish the reference before issuing its refresh.
+    sqlx::query("UPDATE bff_sessions SET selected_session_id=$2 WHERE id=$1")
+        .bind(bff)
+        .bind(context)
+        .execute(&mut **tx)
+        .await?;
+    let refresh_end =
+        end.min(now + chrono::Duration::seconds(state.config.refresh_token_ttl_seconds));
+    let refresh =
+        session::issue_refresh_in_tx(tx, context, account.account_version, refresh_end).await?;
+    let encrypted = store::keys(state)?.seal(
+        bff,
+        &current.issuer,
+        account.client_id,
+        "platform-refresh",
+        &refresh,
+    )?;
+    sqlx::query(
+        "UPDATE bff_sessions SET selected_session_id=$2,platform_refresh_ciphertext=$3 WHERE id=$1",
+    )
+    .bind(bff)
+    .bind(context)
+    .bind(encrypted)
+    .execute(&mut **tx)
+    .await?;
+    context_selection_store::consume(
+        tx,
+        &extension.credential,
+        consumer,
+        &binding,
+        &member,
+        &ContextResult::Employee {
+            context_id: Id::new(context).map_err(|_| AppError::Unavailable)?,
+            version: Version::new(1).map_err(|_| AppError::Unavailable)?,
+        },
+    )
+    .await
+    .map_err(|_| AppError::conflict("选择凭据已过期、消费或变化"))?;
+    store::deadline(
+        tx,
+        end.min(proof.source_expires_at)
+            .min(proof.interaction_expires_at),
+    )
+    .await?;
+    let active: bool = sqlx::query_scalar("SELECT platform_session_active($1)")
+        .bind(context)
+        .fetch_one(&mut **tx)
+        .await?;
+    if !active {
+        return Err(AppError::unauthorized("新员工上下文已失效"));
+    }
+    let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id=$1")
+        .bind(account.user_id)
+        .fetch_one(&mut **tx)
+        .await?;
+    audit::write_in_tx(tx,audit::AuditInfo {user_id:Some(account.user_id),username:&username,
+        tenant_id:Some(member.tenant_id.uuid()),organization_id:Some(member.organization_id.uuid()),action:"CONTEXT_SELECTION_CONSUME",
+        detail:&json!({"transactionId":extension.transaction_id,"clientId":account.client_id,"oldBffSessionId":flow.switch_session_id,
+            "expectedVersion":flow.switch_version.map(|v|v.to_string()),"bffSessionId":bff,"platformSessionId":context,
+            "membershipId":member.membership_id,"memberType":"EMPLOYEE","identityVersion":member.identity_version}).to_string(),
+        ip:&audit::client_ip(headers),user_agent:&audit::ua_of(headers)}).await?;
+    Ok(())
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Selection {
@@ -269,6 +402,7 @@ pub(super) async fn view(state: &AppState, original: Session) -> Result<Value, A
         .await
         .map_err(|_| AppError::Unavailable)?;
     let result = json!({"sessionId":current.id,"version":current.version.to_string(),
+        "centralizedContextSelection":sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM context_selection_registrations WHERE client_id=$1 AND enabled)").bind(current.oidc_client_id).fetch_one(&mut *tx).await?,
         "account":{"id":current.user_id,"username":account.username,"realName":account.real_name,"avatar":account.avatar},
         "memberships":members.iter().map(Member::choice).collect::<Vec<_>>(),
         "context":context.as_ref().map(Context::identity),"expiresAt":current.expires_at});
@@ -296,6 +430,9 @@ pub(super) async fn token(
         return Err(AppError::bad_request("选择组织时必须指定具体员工成员身份"));
     }
     let selecting = body.membership_id.is_some();
+    if selecting && sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM context_selection_registrations WHERE client_id=$1 AND enabled)").bind(original.oidc_client_id).fetch_one(&state.pool).await? {
+        return Err(AppError::forbidden("请前往认证中心选择租户和组织"));
+    }
     let (mut tx, mut current, account) = locked(state, &original).await?;
     if current.version != expected {
         return Err(changed());

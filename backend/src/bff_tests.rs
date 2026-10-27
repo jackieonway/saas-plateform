@@ -24,6 +24,7 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::state::AppState;
 use crate::util::{hash, password, uuid7};
+mod centralized;
 
 const SECRET: &str = "identity-phase10-owned-fixture-signing-key";
 const PASSWORD: &str = "Owned-Phase10-Fixture-Password9!";
@@ -1251,11 +1252,12 @@ struct LogoutAttempt {
 }
 
 struct ProviderTransport {
+    selection_extension: Mutex<Option<Value>>,
     app: Router,
     short_app: Router,
     fault: AtomicU8,
-    counts: [AtomicU64; 7],
-    delays: [AtomicU64; 7],
+    counts: [AtomicU64; 8],
+    delays: [AtomicU64; 8],
     refreshes: AtomicU64,
     captured: Mutex<CapturedTokens>,
     pause_proof: AtomicBool,
@@ -1281,12 +1283,14 @@ fn endpoint_index(endpoint: crate::bff::Endpoint) -> usize {
         Endpoint::Introspect => 4,
         Endpoint::Revoke => 5,
         Endpoint::GlobalLogout => 6,
+        Endpoint::ContextInteractions => 7,
     }
 }
 
 impl ProviderTransport {
     fn new(app: Router, short_app: Router) -> Self {
         Self {
+            selection_extension: Mutex::new(None),
             app,
             short_app,
             fault: AtomicU8::new(Fault::Healthy as u8),
@@ -1414,13 +1418,24 @@ impl crate::bff::OidcTransport for ProviderTransport {
                     Method::GET
                 })
                 .uri(outgoing.endpoint.path())
-                .header("content-type", "application/x-www-form-urlencoded")
+                .header(
+                    "content-type",
+                    if outgoing.json.is_some() {
+                        "application/json"
+                    } else {
+                        "application/x-www-form-urlencoded"
+                    },
+                )
                 .extension(ConnectInfo(SocketAddr::from(([192, 0, 2, 240], 30038))));
             if let Some(authorization) = &outgoing.authorization {
                 request = request.header(header::AUTHORIZATION, authorization);
             }
             let request = request
-                .body(Body::from(encoded(&parameters)))
+                .body(Body::from(if let Some(body) = outgoing.json {
+                    serde_json::to_vec(&body).map_err(|_| AppError::Unavailable)?
+                } else {
+                    encoded(&parameters).into_bytes()
+                }))
                 .map_err(|_| AppError::Unavailable)?;
             let provider =
                 if index == endpoint_index(Endpoint::Token) && fault == Fault::EarlyRealId as u8 {
@@ -1498,6 +1513,16 @@ impl crate::bff::OidcTransport for ProviderTransport {
                 self.proof_release.notified().await;
             }
             if index == endpoint_index(Endpoint::Token) && status == 200 {
+                if !refreshing {
+                    if let Some(extension) = self
+                        .selection_extension
+                        .lock()
+                        .map_err(|_| AppError::Unavailable)?
+                        .take()
+                    {
+                        body["context_selection"] = extension;
+                    }
+                }
                 if fault == Fault::EarlyRealId as u8 {
                     // Isolate ID expiry from access expiry using only genuine
                     // provider-signed credentials for the same real grant.

@@ -23,7 +23,7 @@ export type MembershipAction =
   | { kind: "delete" | "secondIdentity" | "replaceIdentity"; source: MembershipRecord }
 
 const typeLabel = (type: MembershipMemberType) => type === "EMPLOYEE" ? "员工" : "客户"
-const actionLabel = (action: MembershipAction) => action.kind === "create" ? `新增${typeLabel(action.memberType)}关系` : action.kind === "status" ? `${action.nextStatus === "ENABLED" ? "启用" : "停用"}成员` : action.kind === "delete" ? "删除成员关系" : action.kind === "secondIdentity" ? "新增第二身份" : "替换身份"
+const actionLabel = (action: MembershipAction) => action.kind === "create" ? `添加${typeLabel(action.memberType)}` : action.kind === "status" ? `${action.nextStatus === "ENABLED" ? "启用" : "停用"}成员` : action.kind === "delete" ? "删除成员关系" : action.kind === "secondIdentity" ? "新增第二身份" : "替换身份"
 
 function IdentityCard({ title, member, memberType }: { title: string; member?: MembershipRecord | null; memberType: MembershipMemberType }) {
   return <div className="min-w-0 flex-1 rounded-lg border bg-muted/20 p-3">
@@ -33,14 +33,13 @@ function IdentityCard({ title, member, memberType }: { title: string; member?: M
   </div>
 }
 
-export function MembershipActionDialog({ action, namespace, capabilities, organizations, onClose, onSaved, onUseSource }: {
+export function MembershipActionDialog({ action, namespace, capabilities, organizations, onClose, onSaved }: {
   action: MembershipAction
   namespace: string | null
   capabilities?: MembershipCapabilities
   organizations: PickerNode[]
   onClose: () => void
   onSaved: () => void
-  onUseSource: (source: MembershipRecord) => void
 }) {
   const currentMembershipId = useAuthStore(state => state.identity?.membershipId)
   const [account, setAccount] = React.useState<SelectedMembershipAccount | null>(null)
@@ -78,14 +77,15 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
     retry: 1,
   })
   const target = targetQuery.data?.records.find(row => row.memberType === targetType) ?? null
-  const existingCreateRelation = create ? targetQuery.data?.records[0] : undefined
+  const existingCreateRelation = create ? target : undefined
+  const otherCreateRelation = create ? targetQuery.data?.records.find(row => row.memberType !== targetType) : undefined
   const targetProof = !create && !transition || targetQuery.isSuccess && !targetQuery.isFetching
   const sourceProof = create || sourceQuery.isSuccess && !sourceQuery.isFetching
   const proofSignature = `${targetUserId ?? ""}:${targetOrgId ?? ""}:${target?.id ?? "new"}:${target?.identityVersion ?? ""}:${source?.identityVersion ?? ""}`
   React.useEffect(() => { setReuseTarget(false); setEnableTarget(false); setBindingConfirmed(false) }, [proofSignature])
   const gate = membershipWriteBlockedReason(capabilities, action.kind, create || transition ? targetType : undefined)
   const selfGate = source && (action.kind === "status" || action.kind === "delete" || action.kind === "replaceIdentity") ? currentEmployeeMutationBlockedReason(source, currentMembershipId) : null
-  const blocked = gate || selfGate || (!namespace ? "当前身份尚未确认" : !sourceProof || !targetProof ? "正在重新核验源成员与目标成员" : null)
+  const blocked = gate || selfGate || (otherCreateRelation && !capabilities?.dualMembershipsEnabled ? "当前尚未开放同账号在组织内同时绑定员工和客户" : null) || (!namespace ? "当前身份尚未确认" : !sourceProof || !targetProof ? "正在重新核验源成员与目标成员" : null)
   const ready = !blocked && !saving && (!create || !!account && !!organizationId && !existingCreateRelation)
   const close = () => { if (!savingRef.current) onClose() }
 
@@ -131,7 +131,8 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
           <div className="space-y-2"><Label>目标组织 <span className="text-destructive">*</span></Label><EntityTreePicker nodes={organizations} value={organizationId} onSelect={id => setOrganizationId(id ?? "")} placeholder="选择管理范围内的组织" disabled={saving} ariaLabel="成员目标组织" /></div>
           <IdentityCard title="新增成员类型" memberType={action.memberType} />
           {action.memberType === "EMPLOYEE" && <div className="space-y-2"><Label htmlFor="member-position">岗位（可选）</Label><Input id="member-position" value={position} maxLength={50} onChange={event => setPosition(event.target.value)} disabled={saving} /></div>}
-          {!!existingCreateRelation && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><p>该账号在目标组织已有{typeLabel(existingCreateRelation.memberType)}成员，不能作为全新关系提交。</p>{existingCreateRelation.memberType !== action.memberType && <Button type="button" variant="outline" size="sm" className="mt-2" disabled={saving || !!membershipWriteBlockedReason(capabilities, "secondIdentity", action.memberType)} onClick={() => onUseSource(existingCreateRelation)}>改用明确的第二身份流程</Button>}</div>}
+          {!!existingCreateRelation && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">该账号在目标组织已绑定{typeLabel(existingCreateRelation.memberType)}，无需重复添加。</p>}
+          {!!otherCreateRelation && !existingCreateRelation && <p className="rounded-lg border bg-muted/30 p-3 text-sm">该账号已有{typeLabel(otherCreateRelation.memberType)}关系，添加{typeLabel(action.memberType)}后将保留原有关系及其状态。</p>}
         </> : source ? <>
           <div className="space-y-1 rounded-lg border p-3"><p className="text-xs text-muted-foreground">账号 ID / 组织 ID</p><p className="break-all font-mono text-xs">{source.userId}</p><p className="break-all font-mono text-xs text-muted-foreground">{source.organizationId}</p></div>
           {transition ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center"><IdentityCard title={action.kind === "replaceIdentity" ? "源成员 · 完成后停用" : "源成员 · 保留原状态"} member={source} memberType={source.memberType} /><ArrowRight className="mx-auto size-4 shrink-0 text-muted-foreground sm:mx-0" /><IdentityCard title={target ? "目标成员 · 显式复用" : "目标成员 · 新增"} member={target} memberType={targetType} /></div> : <IdentityCard title="本次操作的具体成员" member={source} memberType={source.memberType} />}

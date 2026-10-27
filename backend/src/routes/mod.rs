@@ -59,6 +59,7 @@ pub fn api_router_for_deployment(identity_remote: bool) -> Router<AppState> {
         .merge(auth::routes())
         .merge(identity_routes)
         .merge(crate::bff::routes())
+        .merge(crate::context_selection_http::routes())
         .merge(crate::customer_identity::routes())
         .merge(crate::customer_portal::routes())
         .merge(tenants::routes())

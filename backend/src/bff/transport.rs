@@ -12,6 +12,7 @@ pub(crate) enum Endpoint {
     Introspect,
     Revoke,
     GlobalLogout,
+    ContextInteractions,
 }
 impl Endpoint {
     pub(crate) fn path(self) -> &'static str {
@@ -23,12 +24,17 @@ impl Endpoint {
             Self::Introspect => "/oidc/introspect",
             Self::Revoke => "/oidc/revoke",
             Self::GlobalLogout => "/oidc/account/logout",
+            Self::ContextInteractions => "/oidc/context-interactions",
         }
     }
     pub(crate) fn is_post(self) -> bool {
         matches!(
             self,
-            Self::Token | Self::Introspect | Self::Revoke | Self::GlobalLogout
+            Self::Token
+                | Self::Introspect
+                | Self::Revoke
+                | Self::GlobalLogout
+                | Self::ContextInteractions
         )
     }
 }
@@ -38,6 +44,7 @@ pub(crate) struct OidcRequest {
     pub endpoint: Endpoint,
     pub authorization: Option<String>,
     pub form: Vec<(String, String)>,
+    pub json: Option<serde_json::Value>,
 }
 pub(crate) struct OidcResponse {
     pub status: u16,
@@ -78,7 +85,12 @@ impl OidcTransport for HttpTransport {
             let client = self.client.as_ref().ok_or(AppError::Unavailable)?;
             let issuer = self.issuer.as_deref().ok_or(AppError::Unavailable)?;
             let url = format!("{issuer}{}", request.endpoint.path());
-            let mut outgoing = if request.endpoint.is_post() {
+            let mut outgoing = if let Some(body) = request.json {
+                client
+                    .post(url)
+                    .header("content-type", "application/json")
+                    .body(serde_json::to_vec(&body).map_err(|_| AppError::Unavailable)?)
+            } else if request.endpoint.is_post() {
                 client
                     .post(url)
                     .header("content-type", "application/x-www-form-urlencoded")

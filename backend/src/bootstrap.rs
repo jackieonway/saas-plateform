@@ -250,7 +250,7 @@ async fn verify_identity_deployment(pool: &sqlx::PgPool, config: &Config) -> any
                   'oidc_access_tokens','oidc_refresh_tokens','oidc_signing_keys', \
                   'oidc_account_logout_receipts','identity_service_clients','identity_audit_logs', \
                   'identity_account_command_receipts','identity_oidc_admin_receipts', \
-                  'identity_account_revocation_facts') AND \
+                  'identity_account_revocation_facts','oidc_context_clients','oidc_context_interactions','oidc_consents') AND \
                  (has_any_column_privilege(current_user,a.oid,'SELECT') \
                   OR has_any_column_privilege(current_user,a.oid,'INSERT') \
                   OR has_any_column_privilege(current_user,a.oid,'UPDATE') \

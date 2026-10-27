@@ -385,6 +385,12 @@ async fn list(
         .await?;
     let (page, size, offset) = paging(&params);
     let kw = params.get("keyword").cloned().unwrap_or_default();
+    let member_type = match params.get("memberType").map(String::as_str) {
+        None => None,
+        Some("EMPLOYEE") => Some("EMPLOYEE"),
+        Some("CUSTOMER") => Some("CUSTOMER"),
+        _ => return Err(AppError::bad_request("成员类型仅支持 EMPLOYEE / CUSTOMER")),
+    };
     let org_filter = crate::util::uuid7::optional_query(params.get("organizationId"))?;
     let scoped_orgs = state.scoped_org_ids(&user).await?;
     if let Some(org) = org_filter {
@@ -401,7 +407,12 @@ async fn list(
      OR u.email ILIKE '%' || $1 || '%' OR u.phone ILIKE '%' || $1 || '%') \
      AND ($2::uuid IS NULL OR u.id IN (SELECT user_id FROM memberships WHERE organization_id = $2)) \
      AND ($3::uuid IS NULL OR u.id IN (SELECT m.user_id FROM memberships m JOIN organizations o ON o.id = m.organization_id WHERE o.tenant_id = $3)) \
-     AND ($4::uuid[] IS NULL OR EXISTS(SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.organization_id = ANY($4)))";
+     AND ($4::uuid[] IS NULL OR EXISTS(SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.organization_id = ANY($4))) \
+     AND ($5::text IS NULL OR EXISTS(SELECT 1 FROM memberships typed_m JOIN organizations typed_o ON typed_o.id=typed_m.organization_id \
+       WHERE typed_m.user_id=u.id AND typed_m.member_type=$5 \
+       AND ($2::uuid IS NULL OR typed_m.organization_id=$2) \
+       AND ($3::uuid IS NULL OR typed_o.tenant_id=$3) \
+       AND ($4::uuid[] IS NULL OR typed_m.organization_id=ANY($4))))";
 
     let employee_support = role_employee_support_sql(
         "ur.user_id",
@@ -415,12 +426,13 @@ async fn list(
           WHERE ur.user_id = u.id AND ur.organization_id=r.organization_id AND {employee_support} \
           AND ($3::uuid IS NULL OR r.tenant_id = $3) \
           AND ($4::uuid[] IS NULL OR (r.organization_id = ANY($4) AND ur.organization_id = ANY($4)))) AS role_count \
-         FROM users u WHERE {where_clause} ORDER BY u.created_at, u.id LIMIT $5 OFFSET $6"
+         FROM users u WHERE {where_clause} ORDER BY u.created_at, u.id LIMIT $6 OFFSET $7"
     ))
     .bind(&kw)
     .bind(org_filter)
     .bind(tenant_filter)
     .bind(&scoped_orgs)
+    .bind(member_type)
     .bind(size)
     .bind(offset)
     .fetch_all(&state.pool)
@@ -432,6 +444,7 @@ async fn list(
     .bind(org_filter)
     .bind(tenant_filter)
     .bind(&scoped_orgs)
+    .bind(member_type)
     .fetch_one(&state.pool)
     .await?;
 
@@ -444,11 +457,13 @@ async fn list(
              FROM memberships m JOIN organizations o ON o.id = m.organization_id \
              LEFT JOIN departments d ON d.id = m.department_id \
              WHERE m.user_id = ANY($1) AND ($2::uuid IS NULL OR o.tenant_id = $2) \
-             AND ($3::uuid[] IS NULL OR m.organization_id = ANY($3))",
+             AND ($3::uuid[] IS NULL OR m.organization_id = ANY($3)) \
+             AND ($4::text IS NULL OR m.member_type=$4)",
         )
         .bind(&user_ids)
         .bind(tenant_filter)
         .bind(&scoped_orgs)
+        .bind(member_type)
         .fetch_all(&state.pool)
         .await?;
         for (

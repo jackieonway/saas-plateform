@@ -10,6 +10,7 @@ mod bootstrap;
 mod client_ip;
 mod confidential_clients;
 mod config;
+mod context_selection_http;
 mod credential_binding;
 mod customer_identity;
 mod customer_portal;

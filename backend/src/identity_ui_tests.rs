@@ -501,6 +501,48 @@ async fn grant_member_management(pool: &PgPool, manager: Member) -> Result<()> {
 
 #[tokio::test]
 #[ignore = "requires explicit IDENTITY_PHASE05_TEST_DATABASE_URL and disposable database creation"]
+async fn user_directory_member_type_filter_binds_type_and_organization_to_the_same_relationship() -> Result<()> {
+    let db = Database::create().await?;
+    let result = async {
+        let (tenant, root) = tenant(&db.pool).await?;
+        let child = organization(&db.pool, tenant, Some(root)).await?;
+        let manager_id = user(&db.pool, "typed-directory-manager", 0, false).await?;
+        let manager = member(&db.pool, manager_id, root, "EMPLOYEE", "ENABLED", 1).await?;
+        grant_member_management(&db.pool, manager).await?;
+        let employee_id = user(&db.pool, "typed-directory-employee", 0, false).await?;
+        member(&db.pool, employee_id, root, "EMPLOYEE", "ENABLED", 1).await?;
+        let customer_id = user(&db.pool, "typed-directory-customer", 0, false).await?;
+        member(&db.pool, customer_id, root, "CUSTOMER", "ENABLED", 1).await?;
+        let dual_id = user(&db.pool, "typed-directory-dual", 0, false).await?;
+        member(&db.pool, dual_id, root, "EMPLOYEE", "ENABLED", 1).await?;
+        member(&db.pool, dual_id, child, "CUSTOMER", "ENABLED", 1).await?;
+        let app = app(&db.pool, true, true, true)?;
+        let token = session(&db.pool, manager).await?;
+        for (kind, org, expected) in [
+            ("EMPLOYEE", root, vec![manager_id, employee_id, dual_id]),
+            ("CUSTOMER", root, vec![customer_id]),
+            ("CUSTOMER", child, vec![dual_id]),
+        ] {
+            let reply = call(&app, Method::GET, &format!("/api/users?memberType={kind}&organizationId={org}&size=200"), Some(&token), Value::Null).await?;
+            expect(&reply, StatusCode::OK, "typed user information directory")?;
+            let rows = reply.body["records"].as_array().ok_or_else(|| anyhow!("missing directory rows"))?;
+            ensure!(reply.body["total"] == json!(expected.len()) && rows.len() == expected.len(), "typed pagination totals differ");
+            let ids: Vec<Uuid> = rows.iter().map(|row| row["id"].as_str().unwrap().parse()).collect::<Result<_,_>>()?;
+            ensure!(ids.iter().all(|id| expected.contains(id)), "directory leaked another membership type or organization");
+            for row in rows {
+                ensure!(row["username"].as_str().is_some() && row["realName"].is_string(), "user information is missing");
+                ensure!(row["memberships"].as_array().unwrap().iter().all(|m| m["memberType"] == kind), "directory projection mixed member types");
+            }
+        }
+        let invalid = call(&app, Method::GET, "/api/users?memberType=ALL", Some(&token), Value::Null).await?;
+        expect(&invalid, StatusCode::BAD_REQUEST, "invalid membership filter")?;
+        Ok(())
+    }.await;
+    db.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "requires explicit IDENTITY_PHASE05_TEST_DATABASE_URL and disposable database creation"]
 async fn phase05_capabilities_reflect_server_gates_and_customer_console_access_stays_closed(
 ) -> Result<()> {
     let db = Database::create().await?;

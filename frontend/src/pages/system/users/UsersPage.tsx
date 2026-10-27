@@ -58,7 +58,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
@@ -85,7 +84,9 @@ import { formatDateTime, formatRelative, generatePassword, useDebounced, GENDER_
 import { telephoneSchema } from "@/lib/contact"
 import { toast } from "sonner"
 import type { DeptNode, OrgNode, RoleRecord, TenantRecord, UserRecord } from "@/api/types"
-import { MembershipDirectory } from "./MembershipDirectory"
+import { membershipsApi, type MembershipMemberType } from "@/api/memberships"
+import { MembershipActionDialog } from "./MembershipActionDialog"
+import { membershipWriteBlockedReason } from "./membership-model"
 
 const userSchema = z.object({
   username: z
@@ -121,23 +122,16 @@ function employeeMemberships(user: UserRecord, enabledOnly = false) {
 
 export default function UsersPage() {
   const namespace = useAuthStore(state => state.contextKey)
-  const [view, setView] = React.useState("EMPLOYEE")
-  return <div>
-    <PageHeader title="用户与成员" description="先选择员工或客户关系，再操作具体成员；全局账号单独维护。" icon={<Users className="size-5" />} />
-    <Tabs value={view} onValueChange={setView}>
-      <TabsList className="mb-4 h-10 w-full sm:w-fit" aria-label="用户成员视图">
-        <TabsTrigger value="EMPLOYEE">员工成员</TabsTrigger>
-        <TabsTrigger value="CUSTOMER">客户成员</TabsTrigger>
-        <TabsTrigger value="ACCOUNTS">全局账号</TabsTrigger>
-      </TabsList>
-      <TabsContent value="EMPLOYEE"><MembershipDirectory key={`${namespace}:EMPLOYEE`} memberType="EMPLOYEE" /></TabsContent>
-      <TabsContent value="CUSTOMER"><MembershipDirectory key={`${namespace}:CUSTOMER`} memberType="CUSTOMER" /></TabsContent>
-      <TabsContent value="ACCOUNTS"><AccountDirectory key={`${namespace}:ACCOUNTS`} /></TabsContent>
-    </Tabs>
-  </div>
+  return <UserDirectory key={`${namespace}:EMPLOYEE`} memberType="EMPLOYEE" />
 }
 
-function AccountDirectory() {
+/** Account information for one membership type; account-wide writes have no entry here. */
+export function UserDirectory({ memberType, informationOnly = true }: { memberType: MembershipMemberType; informationOnly?: boolean }) {
+  const namespace = useAuthStore(state => state.contextKey)
+  const [bindingOpen, setBindingOpen] = React.useState(false)
+  const capabilitiesQuery = useQuery({ queryKey: ["membership-capabilities", namespace], queryFn: ({signal}) => membershipsApi.capabilities(signal), enabled: !!namespace, retry: 1 })
+  const capabilities = capabilitiesQuery.isSuccess && !capabilitiesQuery.isFetching ? capabilitiesQuery.data : undefined
+  const createGate = membershipWriteBlockedReason(capabilities, "create", memberType)
   const queryClient = useQueryClient()
   const grantAccess = useAuthorizedPaths()
   const canReadDataGrants = grantAccess.access("/system/data-grants").status === "allowed"
@@ -149,8 +143,9 @@ function AccountDirectory() {
   const debounced = useDebounced(keyword, 300)
 
   const tenantsQuery = useQuery({
-    queryKey: ["tenants", "options"],
+    queryKey: ["tenants", "options", namespace],
     queryFn: async () => asPage<TenantRecord>(await tenantsApi.options()).records,
+    enabled: !!namespace,
     staleTime: 60_000,
     retry: 1,
   })
@@ -158,8 +153,9 @@ function AccountDirectory() {
 
   const orgTreesQueries = useQueries({
     queries: tenants.map((t) => ({
-      queryKey: ["org-tree", t.id],
+      queryKey: ["org-tree", namespace, t.id],
       queryFn: async () => asArray<OrgNode>(await organizationsApi.tree(t.id)),
+      enabled: !!namespace,
       staleTime: 60_000,
       retry: 1,
     })),
@@ -175,7 +171,7 @@ function AccountDirectory() {
   }, [orgTreesQueries, tenants])
 
   const listQuery = useQuery({
-    queryKey: ["users", page, size, debounced, orgFilter],
+    queryKey: ["users", namespace, memberType, page, size, debounced, orgFilter],
     queryFn: async () =>
       asPage<UserRecord>(
         await usersApi.list({
@@ -183,8 +179,10 @@ function AccountDirectory() {
           size,
           keyword: debounced,
           organizationId: orgFilter ?? undefined,
+          memberType,
         })
       ),
+    enabled: !!namespace,
     staleTime: 30_000,
     retry: 1,
     placeholderData: (prev) => prev,
@@ -361,17 +359,18 @@ function AccountDirectory() {
   const clearSelection = () => setSelected(new Set())
 
   /* ---- 列显隐 ---- */
-  const { visibleSet: userCols, isVisible, setVisible } = useColumnVisibility("users", USER_COLUMNS)
+  const { visibleSet: userCols, isVisible: columnVisible, setVisible } = useColumnVisibility(`users:${memberType}`, USER_COLUMNS)
+  const isVisible = (key: string) => columnVisible(key) && (memberType === "EMPLOYEE" || key !== "roles")
   return (
     <div>
       <PageHeader
-        title="全局账号"
-        description="账号启停、密码和删除影响此账号的所有成员身份；单个员工或客户的启停请使用成员视图。"
+        title={memberType === "EMPLOYEE" ? "用户管理" : "客户管理"}
+        description={memberType === "EMPLOYEE" ? "查看员工用户信息；添加员工时查询并绑定已有账号。" : "查看客户信息；添加客户时查询并绑定已有账号。"}
         icon={<Users className="size-5" />}
         actions={
-          <Button onClick={openCreate}>
+          <Button disabled={informationOnly && !!createGate} title={informationOnly ? createGate ?? undefined : undefined} onClick={() => informationOnly ? setBindingOpen(true) : openCreate()}>
             <UserPlus className="size-4" />
-            新建用户
+            {memberType === "EMPLOYEE" ? "添加员工" : "添加客户"}
           </Button>
         }
       />
@@ -402,8 +401,8 @@ function AccountDirectory() {
             共 {total} 位用户
           </span>
           <ColumnVisibilityDropdown
-            table="users"
-            columns={USER_COLUMNS}
+            table={`users:${memberType}`}
+            columns={USER_COLUMNS.filter(column => memberType === "EMPLOYEE" || column.key !== "roles")}
             visible={[...userCols]}
             onChange={setVisible}
           />
@@ -412,7 +411,7 @@ function AccountDirectory() {
       </div>
 
       {/* 批量操作栏:选中 > 0 时浮现, sticky 于表格上方(样式与通知中心批量栏同款) */}
-      {selected.size > 0 && (
+      {!informationOnly && selected.size > 0 && (
         <div
           role="toolbar"
           aria-label="批量操作"
@@ -479,12 +478,12 @@ function AccountDirectory() {
         ) : records.length === 0 ? (
           <EmptyState
             title={keyword || orgFilter ? "没有匹配的用户" : "还没有用户"}
-            description={keyword || orgFilter ? "调整筛选条件试试" : "创建第一个用户账号"}
+            description={keyword || orgFilter ? "调整筛选条件试试" : "查询已有账号并绑定到组织后，将在这里显示"}
             action={
               !keyword && !orgFilter && (
-                <Button size="sm" onClick={openCreate}>
+                <Button size="sm" disabled={informationOnly && !!createGate} onClick={() => informationOnly ? setBindingOpen(true) : openCreate()}>
                   <UserPlus className="size-4" />
-                  新建用户
+                  {memberType === "EMPLOYEE" ? "添加员工" : "添加客户"}
                 </Button>
               )
             }
@@ -493,13 +492,13 @@ function AccountDirectory() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10 pl-5">
+                {!informationOnly && <TableHead className="w-10 pl-5">
                   <Checkbox
                     checked={allSelected ? true : someSelected ? "indeterminate" : false}
                     onCheckedChange={() => (allSelected ? clearSelection() : selectAllOnPage())}
                     aria-label="全选本页"
                   />
-                </TableHead>
+                </TableHead>}
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">用户</TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">姓名</TableHead>
                 {isVisible("contact") && (
@@ -523,7 +522,7 @@ function AccountDirectory() {
             <TableBody className={DENSITY_BODY_CLASS[density]}>
               {records.map((u) => (
                 <TableRow key={u.id} data-state={selected.has(u.id) ? "selected" : undefined}>
-                  <TableCell className="pl-5">
+                  {!informationOnly && <TableCell className="pl-5">
                     {u.id === currentUserId ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -540,7 +539,7 @@ function AccountDirectory() {
                         aria-label={`选择用户 ${u.realName || u.username}`}
                       />
                     )}
-                  </TableCell>
+                  </TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-2.5">
                       <Avatar className="size-8 border">
@@ -578,12 +577,12 @@ function AccountDirectory() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={u.status} />
-                        <Switch
+                        {!informationOnly && <Switch
                           checked={u.status === "ENABLED"}
                           onCheckedChange={(v) => statusMutation.mutate({ id: u.id, next: v ? "ENABLED" : "DISABLED" })}
                           aria-label={`切换用户 ${u.username} 状态`}
                           disabled={statusMutation.isPending}
-                        />
+                        />}
                       </div>
                     </TableCell>
                   )}
@@ -627,6 +626,7 @@ function AccountDirectory() {
                   )}
                   <TableCell className="pr-5">
                     <div className="flex items-center justify-end gap-0.5">
+                      {informationOnly ? <Button variant="ghost" size="sm" onClick={() => setDetailUser(u)}><Eye className="size-4" />详情</Button> : <>
                       {canReadDataGrants && employeeMemberships(u, true).length > 0 && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -705,6 +705,7 @@ function AccountDirectory() {
                         </TooltipTrigger>
                         <TooltipContent>删除</TooltipContent>
                       </Tooltip>
+                      </>}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -903,7 +904,7 @@ function AccountDirectory() {
       {rolesUser && <RoleAssignDialog key={rolesUser.id} user={rolesUser} onClose={() => setRolesUser(null)} onSaved={invalidate} />}
 
       {/* 用户详情抽屉 */}
-      <UserDetailDrawer
+      {!informationOnly && <UserDetailDrawer
         user={detailUser && employeeMemberships(detailUser, true).length > 0 ? detailUser : null}
         onOpenChange={(o) => !o && setDetailUser(null)}
         onEdit={(u) => {
@@ -922,12 +923,12 @@ function AccountDirectory() {
           setDetailUser(null)
           openReset(u)
         }}
-      />
-      <Dialog open={!!detailUser && employeeMemberships(detailUser, true).length === 0} onOpenChange={open => !open && setDetailUser(null)}>
+      />}
+      <Dialog open={!!detailUser && (informationOnly || employeeMemberships(detailUser, true).length === 0)} onOpenChange={open => !open && setDetailUser(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>账号详情 · {detailUser?.realName || detailUser?.username}</DialogTitle><DialogDescription>该账号当前没有有效员工关系，员工角色和岗位入口不可用。客户关系请在客户成员视图中维护。</DialogDescription></DialogHeader>
-          <div className="space-y-3 text-sm"><p className="break-all font-mono text-xs">{detailUser?.id}</p><p>用户名：{detailUser?.username}</p><p>账号状态：{detailUser?.status === "ENABLED" ? "已启用" : "已禁用"}</p></div>
-          <DialogFooter><Button variant="outline" onClick={() => setDetailUser(null)}>关闭</Button><Button onClick={() => { const user = detailUser; setDetailUser(null); if (user) openEdit(user) }}>编辑账号</Button></DialogFooter>
+          <DialogHeader><DialogTitle>用户信息 · {detailUser?.realName || detailUser?.username}</DialogTitle><DialogDescription>查看{memberType === "EMPLOYEE" ? "员工" : "客户"}的账号资料与所属组织。</DialogDescription></DialogHeader>
+          <div className="space-y-3 text-sm"><p>姓名：{detailUser?.realName || "—"}</p><p>用户名：{detailUser?.username}</p><p>邮箱：{detailUser?.email || "—"}</p><p>电话：{detailUser?.phone || "—"}</p><p>所属组织：{detailUser?.memberships.map(member => member.organizationName).join("、") || "—"}</p><p>账号状态：{detailUser?.status === "ENABLED" ? "已启用" : "已禁用"}</p></div>
+          <DialogFooter><Button variant="outline" onClick={() => setDetailUser(null)}>关闭</Button>{!informationOnly && <Button onClick={() => { const user = detailUser; setDetailUser(null); if (user) openEdit(user) }}>编辑账号</Button>}</DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -939,6 +940,8 @@ function AccountDirectory() {
         loading={deleteMutation.isPending}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
       />
+
+      {bindingOpen && <MembershipActionDialog action={{kind:"create",memberType}} namespace={namespace} capabilities={capabilities} organizations={allOrgTree} onClose={() => setBindingOpen(false)} onSaved={() => { invalidate(); void queryClient.invalidateQueries({queryKey:["memberships"]}) }} />}
 
       {/* 批量启用/禁用二次确认(文案随动作切换, 禁用强调不可登录但可随时重新启用) */}
       <ConfirmDialog

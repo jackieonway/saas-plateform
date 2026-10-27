@@ -562,9 +562,10 @@ async fn production_bootstrap_is_minimal_explicit_and_idempotent() -> Result<()>
         let directories: i64 = sqlx::query_scalar("SELECT count(*) FROM menus m JOIN applications a ON a.id=m.application_id WHERE a.code='system' AND m.type='DIR' AND m.parent_id IS NULL AND m.title IN ('组织机构','用户与角色','平台配置','开放平台')")
             .fetch_one(&database.pool).await?;
         ensure!(directories == 4, "fresh bootstrap lacks the original collapsible directories");
-        let parents: Vec<(String,String)> = sqlx::query_as("SELECT m.path,p.title FROM menus m JOIN menus p ON p.id=m.parent_id WHERE m.path IN ('/system/tenants','/system/users','/system/menus','/system/oauth/clients') ORDER BY m.path")
+        let parents: Vec<(String,String)> = sqlx::query_as("SELECT m.path,p.title FROM menus m JOIN menus p ON p.id=m.parent_id WHERE m.path IN ('/system/customers','/system/tenants','/system/users','/system/menus','/system/oauth/clients') ORDER BY m.path")
             .fetch_all(&database.pool).await?;
         ensure!(parents == vec![
+            ("/system/customers".into(), "用户与角色".into()),
             ("/system/menus".into(), "平台配置".into()),
             ("/system/oauth/clients".into(), "开放平台".into()),
             ("/system/tenants".into(), "组织机构".into()),

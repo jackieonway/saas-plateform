@@ -26,6 +26,7 @@ pub(super) struct AccountProof {
     pub expires_at: DateTime<Utc>,
 }
 pub(super) struct Verified {
+    pub selection: Option<crate::context_selection_http::consumption::Extension>,
     pub proof: AccountProof,
     pub access: String,
     pub refresh: String,
@@ -102,6 +103,7 @@ async fn call(
     json(
         chain
             .send(OidcRequest {
+                json: None,
                 endpoint,
                 authorization,
                 form,
@@ -389,6 +391,17 @@ async fn verified(
     userinfo(chain, &access, proof.user_id).await?;
     proof.expires_at = proof.expires_at.min(identity.expires_at);
     Ok(Verified {
+        selection: if original.is_none() {
+            response
+                .get("context_selection")
+                .map(|v| serde_json::from_value(v.clone()).map_err(|_| invalid()))
+                .transpose()?
+        } else {
+            if response.get("context_selection").is_some() {
+                return Err(invalid());
+            }
+            None
+        },
         proof,
         access,
         refresh,
@@ -465,6 +478,7 @@ pub(super) async fn logout(
     }
     let response = chain
         .send(OidcRequest {
+            json: None,
             endpoint,
             authorization: Some(basic(chain)?),
             form,
@@ -480,4 +494,23 @@ pub(super) async fn logout(
         return Err(invalid());
     }
     Ok(())
+}
+
+pub(super) async fn create_selection(
+    chain: &Chain<'_>,
+    transaction: Uuid,
+    intent: Value,
+    state_hash: &str,
+    nonce_hash: &str,
+    challenge: &str,
+) -> Result<String, AppError> {
+    let response = chain.send(OidcRequest { endpoint: Endpoint::ContextInteractions, authorization: Some(basic(chain)?), form: vec![],
+        json: Some(serde_json::json!({"contractVersion":"context-selection/1","transactionId":transaction,"intent":intent,
+            "redirectUri":chain.state.config.bff_oidc_redirect_uri,"stateHash":state_hash,"nonceHash":nonce_hash,"codeChallenge":challenge})) }).await?;
+    let value = json(response)?;
+    let reference = text(&value, "contextRequest")?;
+    if !super::canonical_secret(reference) {
+        return Err(invalid());
+    }
+    Ok(reference.to_owned())
 }

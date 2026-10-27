@@ -486,6 +486,8 @@ async fn phase12_real_roles_enforce_mixed_user_columns_and_no_ddl_owner_escape()
             ("UPDATE users SET password_hash='forged'","platform PHC update"),("UPDATE users SET session_version=session_version+1","platform account generation write"),
             ("UPDATE users SET real_name='forged'","platform profile write"),("SELECT * FROM oidc_clients","platform private OIDC read"),
             ("UPDATE oidc_clients SET status='DISABLED'","platform private OIDC write"),
+            ("SELECT * FROM oidc_context_clients","platform raw context capability read"),("SELECT * FROM oidc_context_interactions","platform raw context interaction read"),
+            ("SELECT * FROM oidc_consents","platform private saved approval read"),("UPDATE oidc_consents SET revoked_at=clock_timestamp()","platform saved approval revocation"),
             ("INSERT INTO identity_service_clients(id,secret_hash,purpose,status,created_at) VALUES('019a174e-0000-7000-8000-000000000099',repeat('a',64),'OIDC_ADMIN','ENABLED',clock_timestamp())","platform internal caller forgery")
         ] {denied(platform,sql,label).await?;}
         for (sql,label) in [
@@ -494,6 +496,9 @@ async fn phase12_real_roles_enforce_mixed_user_columns_and_no_ddl_owner_escape()
             ("SELECT * FROM memberships","identity membership read"),("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1","identity membership write"),
             ("SELECT * FROM roles","identity role read"),("DELETE FROM user_roles","identity role delete"),
             ("UPDATE identity_service_clients SET purpose='OIDC_ADMIN'","runtime service-purpose rewrite"),
+            ("SELECT * FROM context_selection_services","identity platform selection services read"),
+            ("SELECT * FROM context_selection_registrations","identity platform RP mapping read"),
+            ("SELECT * FROM context_selections","identity platform selected member read"),
             ("SELECT public.revoke_membership_credentials('019a174e-0000-7000-8000-000000000099')","identity generic platform invalidation helper")
         ] {denied(identity,sql,label).await?;}
         for pool in [identity,platform] {

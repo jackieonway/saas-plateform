@@ -45,6 +45,9 @@ pub(super) struct Browser {
 
 #[derive(sqlx::FromRow)]
 pub(super) struct Flow {
+    pub context_selection_required: bool,
+    pub switch_session_id: Option<Uuid>,
+    pub switch_version: Option<i64>,
     pub id: Uuid,
     pub browser_id: Uuid,
     pub browser_generation: i64,
@@ -226,6 +229,10 @@ pub(super) async fn revoke(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Resu
     sqlx::query("UPDATE platform_session_refresh_tokens r SET consumed_at=COALESCE(consumed_at,clock_timestamp()) FROM platform_sessions s WHERE r.session_id=s.id AND s.bff_session_id=$1")
         .bind(id).execute(&mut **tx).await?;
     sqlx::query("UPDATE oauth_tokens t SET revoked=true FROM platform_sessions s WHERE t.platform_session_id=s.id AND s.bff_session_id=$1 AND NOT t.revoked")
+        .bind(id).execute(&mut **tx).await?;
+    sqlx::query("UPDATE oauth_authorization_codes c SET consumed=true FROM platform_sessions s WHERE c.platform_session_id=s.id AND s.bff_session_id=$1 AND NOT c.consumed")
+        .bind(id).execute(&mut **tx).await?;
+    sqlx::query("UPDATE oauth_device_codes c SET status='EXPIRED' FROM platform_sessions s WHERE c.platform_session_id=s.id AND s.bff_session_id=$1 AND c.status IN ('PENDING','APPROVED')")
         .bind(id).execute(&mut **tx).await?;
     Ok(())
 }
