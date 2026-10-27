@@ -398,8 +398,7 @@ async fn membership_snapshot(pool: &PgPool, user: Uuid) -> Result<String> {
 
 #[tokio::test]
 #[ignore = "requires isolated PostgreSQL"]
-async fn sso_profile_shows_identity_metadata_and_retired_selection_never_changes_memberships(
-) -> Result<()> {
+async fn sso_profile_returns_only_employee_choices_and_preserves_all_memberships() -> Result<()> {
     let db = Database::create().await?;
     let result = async {
         allow_owned_dual_fixture(&db.pool).await?;
@@ -409,6 +408,10 @@ async fn sso_profile_shows_identity_metadata_and_retired_selection_never_changes
         let employee = member(&db.pool, actor, root, "EMPLOYEE", "ENABLED", 7).await?;
         let customer = member(&db.pool, actor, root, "CUSTOMER", "ENABLED", 13).await?;
         let descendant = member(&db.pool, actor, child, "EMPLOYEE", "ENABLED", 11).await?;
+        let disabled_org = organization(&db.pool, tenant, Some(root)).await?;
+        let disabled = member(&db.pool, actor, disabled_org, "EMPLOYEE", "DISABLED", 3).await?;
+        let customer_only_org = organization(&db.pool, tenant, Some(root)).await?;
+        member(&db.pool, actor, customer_only_org, "CUSTOMER", "ENABLED", 2).await?;
         let app = app(&db.pool, false, false, false)?;
         let token = session(&db.pool, employee).await?;
         let profile = call(
@@ -421,7 +424,16 @@ async fn sso_profile_shows_identity_metadata_and_retired_selection_never_changes
         .await?;
         expect(&profile, StatusCode::OK, "SSO employee profile")?;
         proof(&profile.body, employee)?;
-        choices(&profile.body, &[employee, customer, descendant])?;
+        choices(&profile.body, &[employee, descendant, disabled])?;
+        ensure!(
+            profile.body["memberships"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|row| row["memberType"] == "EMPLOYEE"
+                    && row["organizationId"] != json!(customer_only_org)),
+            "employee console leaked customer organization choices"
+        );
         let before = membership_snapshot(&db.pool, actor).await?;
         for body in [
             json!({"membershipId":employee.id}),

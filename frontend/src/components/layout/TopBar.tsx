@@ -572,7 +572,7 @@ function OrgContextChip() {
         </div>
         <div className="max-h-64 overflow-y-auto scroll-area p-1.5">
           <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            我的成员关系
+            我的员工身份
           </p>
           {profile.memberships.map((m) => {
             const active = m.membershipId === profile.membershipId && m.memberType === profile.memberType &&

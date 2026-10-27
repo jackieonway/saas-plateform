@@ -550,15 +550,26 @@ async fn production_bootstrap_is_minimal_explicit_and_idempotent() -> Result<()>
         let enabled_examples: i64 = sqlx::query_scalar("SELECT count(*) FROM applications WHERE status='ENABLED' AND code IN ('athena','vue-workshop','legacy-jquery','report-center')")
             .fetch_one(&database.pool).await?;
         ensure!(enabled_examples==0,"fresh production enabled demonstration applications");
-        let enabled_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients WHERE status='ENABLED' AND client_id<>'platform-console-legacy'")
+        let enabled_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients WHERE status='ENABLED'")
             .fetch_one(&database.pool).await?;
         ensure!(enabled_clients==0,"fresh production enabled a demonstration OAuth client");
-        let console: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM oauth_clients WHERE client_id='platform-console-legacy' AND status='ENABLED' AND subject_mode='USER' AND allowed_member_types=ARRAY['EMPLOYEE']::text[] AND application_id IS NULL AND grant_types='authorization_code' AND require_pkce AND COALESCE(redirect_uris,'')='')")
+        let registered_rps: i64 = sqlx::query_scalar("SELECT count(*) FROM oidc_clients")
             .fetch_one(&database.pool).await?;
-        ensure!(console,"fresh production omitted the protected employee console origin");
+        ensure!(registered_rps == 0,"fresh bootstrap must leave SSO RP registration to explicit provisioning");
         let system_menus: i64 = sqlx::query_scalar("SELECT count(DISTINCT m.permission) FROM menus m JOIN applications a ON a.id=m.application_id WHERE a.code='system' AND m.permission IN ('system:tenant','system:organization','system:user','system:role','system:application','system:menu','system:oauth','system:audit','system:monitor')")
             .fetch_one(&database.pool).await?;
         ensure!(system_menus==9,"production bootstrap lacks required platform management menus");
+        let directories: i64 = sqlx::query_scalar("SELECT count(*) FROM menus m JOIN applications a ON a.id=m.application_id WHERE a.code='system' AND m.type='DIR' AND m.parent_id IS NULL AND m.title IN ('组织机构','用户与角色','平台配置','开放平台')")
+            .fetch_one(&database.pool).await?;
+        ensure!(directories == 4, "fresh bootstrap lacks the original collapsible directories");
+        let parents: Vec<(String,String)> = sqlx::query_as("SELECT m.path,p.title FROM menus m JOIN menus p ON p.id=m.parent_id WHERE m.path IN ('/system/tenants','/system/users','/system/menus','/system/oauth/clients') ORDER BY m.path")
+            .fetch_all(&database.pool).await?;
+        ensure!(parents == vec![
+            ("/system/menus".into(), "平台配置".into()),
+            ("/system/oauth/clients".into(), "开放平台".into()),
+            ("/system/tenants".into(), "组织机构".into()),
+            ("/system/users".into(), "用户与角色".into()),
+        ], "fresh system menus lost their original directory parents");
         seed::check_production_credentials(&database.pool).await?;
         let before = snapshot(&database.pool).await?;
         seed::initialize(&database.pool,&config).await?;

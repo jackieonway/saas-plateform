@@ -122,6 +122,23 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         grant_tenant_app(&mut tx, tenant, app).await?;
         grant_org_app(&mut tx, root, app).await?;
     }
+    // Preserve the original collapsible system menu hierarchy on fresh installs.
+    let mut directories = std::collections::HashMap::new();
+    for (key, title, icon, sort) in [
+        ("organizations", "组织机构", "Building2", 2),
+        ("users", "用户与角色", "Users", 3),
+        ("configuration", "平台配置", "Settings", 4),
+        ("open", "开放平台", "KeyRound", 5),
+    ] {
+        let directory = insert_menu(
+            &mut tx, system, None, "DIR", title, "", icon, "", "", sort, true,
+        )
+        .await?;
+        grant_role_menu(&mut tx, role, directory).await?;
+        grant_tenant_menu(&mut tx, tenant, directory).await?;
+        grant_org_menu(&mut tx, root, directory).await?;
+        directories.insert(key, directory);
+    }
     let core = [
         (system, "仪表盘", "/dashboard", "Gauge", "dashboard:view"),
         (
@@ -213,10 +230,25 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         ),
     ];
     for (sort, (app, title, path, icon, permission)) in core.into_iter().enumerate() {
+        let directory = match path {
+            "/system/tenants"
+            | "/system/organizations"
+            | "/system/departments"
+            | "/system/authorizations" => directories.get("organizations").copied(),
+            "/system/users" | "/system/roles" => directories.get("users").copied(),
+            "/system/applications" | "/system/menus" | "/system/settings" => {
+                directories.get("configuration").copied()
+            }
+            "/system/oauth/clients"
+            | "/system/oauth/tokens"
+            | "/system/audit-logs"
+            | "/system/monitor" => directories.get("open").copied(),
+            _ => None,
+        };
         let menu = insert_menu(
             &mut tx,
             app,
-            None,
+            directory,
             "MENU",
             title,
             path,

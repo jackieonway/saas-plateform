@@ -59,7 +59,7 @@ async fn fetch_memberships(
          JOIN organizations o ON o.id = m.organization_id \
          JOIN tenants t ON t.id = o.tenant_id \
          LEFT JOIN departments d ON d.id = m.department_id \
-         WHERE m.user_id = $1 \
+         WHERE m.user_id = $1 AND m.member_type = 'EMPLOYEE' \
          AND org_chain_active(o.id) AND t.status = 'ENABLED' \
          AND (o.expires_at IS NULL OR o.expires_at > now()) \
          AND (t.expires_at IS NULL OR t.expires_at > now()) \
