@@ -260,23 +260,37 @@ async fn update_policy(
 async fn list_clients(
     State(state): State<AppState>,
     user: CurrentUser,
+    Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     require_oauth_menu(&state, &user, CLIENT_MENU).await?;
+    let paged = params.contains_key("page") || params.contains_key("size");
+    let (page, size, offset) = super::paging(&params);
+    let limit = if paged { size } else { i64::MAX };
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        .execute(&mut *tx)
+        .await?;
+    let total: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients")
+        .fetch_one(&mut *tx)
+        .await?;
     // (id, created_at, application_id, application_name): LEFT JOIN applications 取关联应用名
     let times: Vec<ClientMetadataRow> = sqlx::query_as(
         "SELECT c.id, c.created_at, c.application_id, a.name \
          FROM oauth_clients c LEFT JOIN applications a ON a.id = c.application_id \
-         ORDER BY c.created_at",
+         ORDER BY c.created_at,c.id LIMIT $1 OFFSET $2",
     )
-    .fetch_all(&state.pool)
+    .bind(limit)
+    .bind(if paged { offset } else { 0 })
+    .fetch_all(&mut *tx)
     .await?;
     let rows: Vec<ClientFull> = sqlx::query_as(
         "SELECT id, client_id, client_secret_hash, client_name, COALESCE(description,'') AS description, \
          client_type, COALESCE(redirect_uris,'') AS redirect_uris, COALESCE(grant_types,'') AS grant_types, \
          COALESCE(scopes,'') AS scopes, access_token_validity, refresh_token_validity, status, application_id, require_pkce, subject_mode, allowed_member_types, access_policy_version \
-         FROM oauth_clients ORDER BY created_at",
+         FROM oauth_clients ORDER BY created_at,id LIMIT $1 OFFSET $2",
     )
-    .fetch_all(&state.pool)
+    .bind(limit).bind(if paged { offset } else { 0 })
+    .fetch_all(&mut *tx)
     .await?;
     let mut time_map: HashMap<Uuid, ClientMetadata> = HashMap::new();
     for (id, t, app_id, app_name) in times {
@@ -297,7 +311,12 @@ async fn list_clients(
             v
         })
         .collect();
-    Ok(Json(Value::Array(items)))
+    tx.commit().await?;
+    Ok(Json(if paged {
+        super::page_json(items, total, page, size)
+    } else {
+        Value::Array(items)
+    }))
 }
 
 #[derive(Deserialize)]

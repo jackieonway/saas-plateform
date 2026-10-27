@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { componentFixture, elements, success, button } from './helpers/component-fixture.mjs'
+import { componentFixture, elements, success, pending, button } from './helpers/component-fixture.mjs'
 
 function deferred() {
   let resolve, reject
@@ -27,9 +27,10 @@ function fixture(api, clients = []) {
     '@/lib/form': { zResolver: () => undefined },
     '@/lib/format': { GRANT_TYPE_LABELS: {}, formatNumber: String },
     '@/api/oauth': { oauthApi: api },
+    './OidcClientsPanel': { OidcClientsPanel: 'OidcClientsPanel' },
     sonner: { toast: { success: message => messages.push(message), error: message => messages.push(message) } },
   })
-  f.queries.set('oauth-clients', success(clients))
+  f.queries.set('oauth-clients', success({ records: clients, total: clients.length, page: 1, size: 10 }))
   f.queries.set('applications', success([]))
   return { ...f, messages, values: () => values, field(tree, name) {
     const field = elements(tree, item => item.type === 'FormField' && item.props.name === name)[0]
@@ -121,4 +122,25 @@ test('a pending client save cannot close or replace its dialog and failed saves 
   tree = f.render('OAuthClientsPage')
   assert.equal(elements(tree, item => item.type === 'Dialog')[0].props.open, true)
   assert.equal(button(tree, '创建并生成密钥').props.disabled, false)
+})
+
+test('client paging requests server pages, resets size, and recovers a deleted last page without resetting during loading', () => {
+  const f = fixture({})
+  f.queries.set('oauth-clients', success({ records: [client], total: 25, page: 1, size: 10 }))
+  let tree = f.render('OAuthClientsPage')
+  let pagination = elements(tree, item => item.type === 'DataPagination')[0]
+  assert.equal(pagination.props.total, 25)
+  pagination.props.onPageChange(3)
+  tree = f.render('OAuthClientsPage')
+  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 3, 10])
+  elements(tree, item => item.type === 'DataPagination')[0].props.onSizeChange(20)
+  tree = f.render('OAuthClientsPage')
+  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 1, 20])
+  elements(tree, item => item.type === 'DataPagination')[0].props.onPageChange(2)
+  f.queries.set('oauth-clients', pending())
+  f.render('OAuthClientsPage')
+  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 2, 20])
+  f.queries.set('oauth-clients', success({ records: [], total: 20, page: 2, size: 20 }))
+  f.render('OAuthClientsPage')
+  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 1, 20])
 })

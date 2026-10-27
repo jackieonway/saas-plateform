@@ -40,13 +40,16 @@ import { StatusBadge } from "@/components/StatusBadge"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { CopyButton } from "@/components/CopyButton"
 import { SecretDialog } from "@/components/CopyButton"
+import { DataPagination } from "@/components/DataPagination"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { OidcClientsPanel } from "./OidcClientsPanel"
 import { TableSkeleton, EmptyState, ErrorState } from "@/components/states"
 import { oauthApi } from "@/api/oauth"
 import { applicationsApi } from "@/api/applications"
 import { admissionMemberLabels, admissionSubjectLabels, type AdmissionPolicySummary, type AdmissionPolicyTarget } from "@/api/admission-policies"
 import { AdmissionPolicyDialog } from "@/components/admission-policy-dialog"
 import { useAuthStore } from "@/stores/auth"
-import { asArray } from "@/lib/api"
+import { asArray, asPage } from "@/lib/api"
 import { GRANT_TYPE_LABELS, formatNumber } from "@/lib/format"
 import { toast } from "sonner"
 import type { ApplicationRecord, OAuthClientRecord } from "@/api/types"
@@ -107,10 +110,13 @@ function slugify(name: string): string {
 
 export default function OAuthClientsPage() {
   const queryClient = useQueryClient()
+  const [clientKind, setClientKind] = React.useState("oauth")
+  const [page, setPage] = React.useState(1)
+  const [size, setSize] = React.useState(10)
 
   const listQuery = useQuery({
-    queryKey: ["oauth-clients"],
-    queryFn: async () => asArray<ClientWithPolicy>(await oauthApi.clients()),
+    queryKey: ["oauth-clients", page, size],
+    queryFn: async () => asPage<ClientWithPolicy>(await oauthApi.clients({ page, size }), page, size),
     staleTime: 30_000,
     retry: 1,
   })
@@ -275,22 +281,32 @@ export default function OAuthClientsPage() {
     onError: (e: Error) => { finishWrite(); if (mounted.current && e.name !== "AbortError") toast.error(e.message || "删除失败") },
   })
 
-  const clients = listQuery.data ?? []
+  const clients = listQuery.data?.records ?? []
+  const total = listQuery.data?.total ?? 0
+  React.useEffect(() => {
+    if (listQuery.isSuccess && page > Math.max(1, Math.ceil(total / size))) setPage(Math.max(1, Math.ceil(total / size)))
+  }, [listQuery.isSuccess, page, size, total])
 
   return (
     <div>
       <PageHeader
         title="OAuth 客户端"
-        description="接入标准 OAuth 2.0 的第三方应用,支持授权码 / 设备码 / 客户端凭证等模式"
+        description="查看业务应用的 OAuth 接入与管理平台、客户门户的统一登录客户端"
         icon={<KeyRound className="size-5" />}
         actions={
-          <Button onClick={openCreate} disabled={writeBusy}>
+          clientKind === "oauth" ? <Button onClick={openCreate} disabled={writeBusy}>
             <Plus className="size-4" />
             新建客户端
-          </Button>
+          </Button> : undefined
         }
       />
 
+      <Tabs value={clientKind} onValueChange={setClientKind}>
+        <TabsList aria-label="客户端类型">
+          <TabsTrigger value="oauth">业务 OAuth 客户端</TabsTrigger>
+          <TabsTrigger value="oidc">统一登录 OIDC 客户端</TabsTrigger>
+        </TabsList>
+        <TabsContent value="oauth" className="mt-4">
       <div className="rounded-xl border bg-card">
         {listQuery.isLoading ? (
           <div className="p-2">
@@ -447,18 +463,22 @@ export default function OAuthClientsPage() {
           </div>
         )}
       </div>
+      {listQuery.isSuccess && <DataPagination className="mt-4" page={page} size={size} total={total} onPageChange={setPage} onSizeChange={value => { setSize(value); setPage(1) }} />}
+        </TabsContent>
+        <TabsContent value="oidc" className="mt-4"><OidcClientsPanel /></TabsContent>
+      </Tabs>
 
       {/* 新建/编辑 */}
       <Dialog open={dialogOpen} onOpenChange={value => { if (!writing.current) setDialogOpen(value) }}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
+          <DialogHeader className="pr-6">
             <DialogTitle>{editing ? `编辑客户端「${editing.clientName}」` : "新建 OAuth 客户端"}</DialogTitle>
             <DialogDescription>
               {editing ? "client_id 与客户端类型创建后不可变更；可调整 PKCE 策略" : "保存后自动分配 client_id,并生成一次性展示的 client_secret"}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form id="client-form" onSubmit={form.handleSubmit((v) => { if (startWrite()) saveMutation.mutate(v) })} className="space-y-4">
+            <form id="client-form" onSubmit={form.handleSubmit((v) => { if (startWrite()) saveMutation.mutate(v) })} className="-mx-1 min-h-0 space-y-4 overflow-y-auto overscroll-contain px-1">
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -743,7 +763,7 @@ export default function OAuthClientsPage() {
               />
             </form>
           </Form>
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saveMutation.isPending}>
               取消
             </Button>

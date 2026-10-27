@@ -937,6 +937,8 @@ async fn global_oauth_administration_requires_platform_context_and_operation_per
         ensure!(state.permissions_of(platform_user,organizations[0]).await?.contains("system:oauth"),"platform actor fixture lacks an explicit OAuth operation grant");
         ensure!(!state.permissions_of(unprivileged,organizations[0]).await?.contains("system:oauth"),"unprivileged platform actor inherited unexpected OAuth operation permission");
         fixture_client(&database.pool,"oauth-admin-target").await?;
+        fixture_client(&database.pool,"oauth-pagination-second").await?;
+        fixture_client(&database.pool,"oauth-pagination-third").await?;
         let client: Uuid = sqlx::query_scalar("SELECT id FROM oauth_clients WHERE client_id='oauth-admin-target'")
             .fetch_one(&database.pool).await?;
         let expired = fixture_token(&database.pool,"oauth-admin-target","synthetic-expired-admin-token").await?;
@@ -947,7 +949,7 @@ async fn global_oauth_administration_requires_platform_context_and_operation_per
         let assertions = async {
             let before = snapshot(&database.pool).await?;
             for token in [&ordinary_token,&unprivileged_token] {
-                for (method,path) in [(reqwest::Method::GET,"/api/oauth/clients"),(reqwest::Method::GET,"/api/oauth/tokens"),
+                for (method,path) in [(reqwest::Method::GET,"/api/oauth/clients"),(reqwest::Method::GET,"/api/oauth/clients?page=1&size=1"),(reqwest::Method::GET,"/api/oauth/tokens"),
                     (reqwest::Method::POST,"/api/oauth/tokens/purge"),(reqwest::Method::POST,regenerate.as_str())] {
                     let response = server.api(method,path,token).await?;
                     ensure!(response.0==StatusCode::FORBIDDEN,"global OAuth operation accepted a user without both platform context and operation permission");
@@ -958,6 +960,14 @@ async fn global_oauth_administration_requires_platform_context_and_operation_per
             ensure!(clients.0==StatusCode::OK && clients.1.is_array(),"authorized non-super platform user cannot list OAuth clients");
             ensure!(clients.1.as_array().is_some_and(|rows|rows.iter().any(|row|row.get("id")==Some(&Value::String(client.to_string())))),"platform global OAuth list did not expose its actual target fixture");
             ensure!(clients.1.as_array().is_some_and(|rows|rows.iter().all(|row|row.get("clientSecret").is_none() && row.get("clientSecretHash").is_none())),"global client list disclosed a client credential");
+            let first = server.api(reqwest::Method::GET,"/api/oauth/clients?page=1&size=1",&platform_token).await?;
+            let second = server.api(reqwest::Method::GET,"/api/oauth/clients?page=2&size=1",&platform_token).await?;
+            ensure!(first.0==StatusCode::OK && first.1["total"]==3 && first.1["page"]==1 && first.1["size"]==1,"OAuth pagination metadata incorrect");
+            ensure!(first.1["records"].as_array().is_some_and(|rows|rows.len()==1) && second.1["records"].as_array().is_some_and(|rows|rows.len()==1),"OAuth page size not respected");
+            ensure!(first.1["records"][0]["id"]!=second.1["records"][0]["id"],"OAuth pages overlap");
+            ensure!(first.1["records"][0]==clients.1[0] && second.1["records"][0]==clients.1[1],"OAuth paged metadata/order differs from full listing");
+            let empty = server.api(reqwest::Method::GET,"/api/oauth/clients?page=100&size=1",&platform_token).await?;
+            ensure!(empty.0==StatusCode::OK && empty.1["total"]==3 && empty.1["records"].as_array().is_some_and(Vec::is_empty),"out-of-range page must retain total and return no rows");
             let tokens = server.api(reqwest::Method::GET,"/api/oauth/tokens",&platform_token).await?;
             ensure!(tokens.0==StatusCode::OK && tokens.1.is_array(),"authorized platform user cannot list OAuth tokens");
             let purge = server.api(reqwest::Method::POST,"/api/oauth/tokens/purge",&platform_token).await?;

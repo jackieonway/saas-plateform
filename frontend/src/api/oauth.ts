@@ -1,4 +1,4 @@
-import { api } from "@/lib/api"
+import { api, qs } from "@/lib/api"
 import { capturePlatformSessionFence } from "@/stores/auth"
 import type {
   DeviceCodeRecord,
@@ -9,10 +9,13 @@ import type {
   OAuthSession,
   OAuthSessionTokenResp,
   OAuthTokenRecord,
+  PageParams,
+  PageResp,
 } from "./types"
 
 export const oauthApi = {
-  clients: () => api.get<unknown>("/api/oauth/clients"),
+  clients: ({ page = 1, size = 10 }: PageParams = {}) => api.get<PageResp<OAuthClientRecord>>(`/api/oauth/clients${qs({ page, size })}`),
+  oidcClients: () => api.get<{ records: OidcClientRecord[] }>("/api/oidc/clients"),
   createClient: (body: OAuthClientPayload) => api.post<OAuthClientCreateResp>("/api/oauth/clients", body),
   updateClient: (id: string, body: OAuthClientPayload) => api.put(`/api/oauth/clients/${id}`, body),
   removeClient: (id: string) => api.del(`/api/oauth/clients/${id}`),
@@ -42,4 +45,17 @@ export const oauthApi = {
     }),
 
   discovery: () => api.get<unknown>("/oauth/.well-known/openid-configuration", { skipAuth: true }),
+}
+
+export interface OidcClientRecord {
+  id: string
+  clientId: string
+  name: string
+  purpose: "PLATFORM_CONSOLE" | "CUSTOMER_PORTAL" | "ACCOUNT"
+  allowedMemberTypes: ("EMPLOYEE" | "CUSTOMER")[]
+  redirectUris: string[]
+  postLogoutRedirectUris: string[]
+  refreshEnabled: boolean
+  status: "ENABLED" | "DISABLED"
+  accessPolicyVersion: number
 }
