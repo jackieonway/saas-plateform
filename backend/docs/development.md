@@ -17,3 +17,5 @@
 成员、客户能力和双身份写入通过当前显式功能开关配置；三元唯一键已在基线中建立，不使用旧 rollout receipt。
 
 修改后运行[工具链与验证](engineering-baseline.md)中的相应门禁。数据库测试要使用任务自有空库，记录实际通过范围，并清理本次运行资源；旧阶段报告不作为当前通过证据。
+
+GitHub Actions 的数据库集成任务使用 runner 自有 PostgreSQL 服务，宿主端口为 `55494`。任务从该实例读取 `pg_control_system().system_identifier`，向当前 BFF 回归测试显式提供 `IDENTITY_PHASE24_TEST_DATABASE_URL` 和 `IDENTITY_PHASE24_TEST_CLUSTER_ID`；身份模型与权限测试分别使用 `IDENTITY_PHASE02_TEST_DATABASE_URL` 和 `IDENTITY_PHASE12_TEST_DATABASE_URL`。这些值只指向本次 CI 实例，各测试建立并清理自己的数据库，不使用开发或生产库。
