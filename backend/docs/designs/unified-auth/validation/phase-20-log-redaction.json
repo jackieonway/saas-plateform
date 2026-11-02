@@ -1,0 +1,15 @@
+{
+  "contractVersion": "unified-auth-runtime-log-redaction/1",
+  "date": "2026-10-28T10:25:03.783269+00:00",
+  "logFilesScanned": 7,
+  "bytesScanned": 3014692,
+  "runtimeAndDeliveredInvitationMaterialComparedInMemory": true,
+  "deliveredInvitationMessagesCompared": 6,
+  "secretValuesExported": false,
+  "findings": [],
+  "identityDeliveryTerminalWarnings": 1,
+  "infoLogConfiguration": true,
+  "originalFunctionalReport": "phase-20-https-browser.json",
+  "loggingGateReport": "phase-20-https-browser-logging.json",
+  "result": "PASS"
+}

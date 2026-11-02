@@ -23,7 +23,6 @@ cargo run --locked -- plan
 | --- | --- |
 | `PLATFORM_API_ORIGIN` | 准确平台 HTTPS 来源 |
 | `PLATFORM_ADMIN_BEARER` | 当前有效的平台管理 Bearer |
-| `PLATFORM_CLIENT_ID` | `inspect`、`bootstrap` 核对并绑定的已有客户端 ID |
 | `PLATFORM_CA_FILE` | 私有 CA 文件，按需配置 |
 
 秘密不写命令行、业务清单或日志。默认环境为 `production`；隔离回环开发需要同时指定 `--environment development --allow-loopback-http`。`--app-code` 仅支持 `work-orders`、`stores`，默认工单；`--app-id` 及清单中的实体标识须为 UUID v7／RFC variant，旧 v4、nil 和错误 variant 在发出请求前拒绝。`--timeout-ms` 为整条命令共享的 10–35000 毫秒预算。
@@ -35,9 +34,9 @@ CLI 不授予额外管理权限。平台实时检查身份、平台上下文、�
 | 命令 | 行为 |
 | --- | --- |
 | `plan` | 离线显示内置应用登记计划，不联网 |
-| `inspect` | 查询应用、已有客户端绑定和菜单 |
-| `bootstrap` | 默认预览，`--apply` 才补齐缺项并绑定客户端 |
-| `access-policy-read --policy-target application\|client --policy-id UUID` | 读取具体应用／客户端的当前准入策略，禁止 `--apply` |
+| `inspect` | 查询应用和菜单 |
+| `bootstrap` | 默认预览，`--apply` 才补齐应用和菜单缺项 |
+| `access-policy-read --policy-target application --policy-id UUID` | 读取具体应用的当前准入策略，禁止 `--apply` |
 | `access-policy-save --manifest FILE` | 默认离线预览；`--apply` 以清单旧版本保存策略 |
 | `grants-plan --manifest FILE` | 校验和预览数据授权清单 |
 | `grants-apply --manifest FILE` | `--apply` 才通过管理 API 执行 |
@@ -53,7 +52,7 @@ CLI 不授予额外管理权限。平台实时检查身份、平台上下文、�
 
 ## qiankun 内置登记
 
-内置清单采用 SDK 3.0.0，应用为 `HTML`、`TRUSTED` 且 `allowedMemberTypes=["EMPLOYEE"]`；预建服务客户端必须为 `subjectMode=MACHINE`、`allowedMemberTypes=[]`，只允许 `client_credentials`。空集合只表示机器凭据不适用成员身份。`inspect` 和 `bootstrap` 对用途不符的现有应用或客户端返回冲突，需要管理员显式审阅策略，不会自动扩大准入。
+内置清单采用 SDK 3.0.0，应用为 `HTML`、`TRUSTED` 且 `allowedMemberTypes=["EMPLOYEE"]`。`inspect` 和 `bootstrap` 只维护业务应用与菜单，不读取或绑定 OAuth 客户端。宿主向 `/api/apps/session-token` 申请绑定原始 BFF 来源的内部应用能力；外部 USER/MACHINE 客户端另经身份服务的统一注册簿管理。用途不符的现有应用返回冲突，不自动扩大准入。
 
 | 应用 | 宿主导航 | 内置本机开发 HTML 入口 |
 | --- | --- | --- |
@@ -81,9 +80,9 @@ saas-platform-admin retention-preview --app-code work-orders --minimum-age-days 
 
 确认计划符合目标后，在原命令添加 `--apply` 执行支持写入的命令。授权清单取所属业务 `backend/manifests`，使用真实租户、组织、成员与应用 UUID。角色/用户集合类变更先读取完整现值，避免覆盖无关项，见[数据授权管理](../../docs/data-grant-management.md)。
 
-## 应用与客户端准入策略
+## 应用准入策略
 
-先读取具体记录的当前策略，再按 [策略 schema](schemas/access-policy.schema.json) 填写[策略清单](manifests/access-policy.manifest.example.json)。`--policy-id` 和清单 `id` 使用数据库记录 UUID v7；客户端的公开 `clientId` 不作为该接口的记录标识。
+先读取具体记录的当前策略，再按 [策略 schema](schemas/access-policy.schema.json) 填写[策略清单](manifests/access-policy.manifest.example.json)。`--policy-id` 和清单 `id` 使用数据库记录 UUID v7。
 
 ```sh
 saas-platform-admin access-policy-read --policy-target application --policy-id 00000000-0000-7000-8000-000000000001
@@ -91,9 +90,9 @@ saas-platform-admin access-policy-save --manifest /srv/saas/config/application-a
 saas-platform-admin access-policy-save --manifest /srv/saas/config/application-access-policy.json --apply
 ```
 
-清单必须提供 `target=application|client`、`id`、`allowedMemberTypes`、读取到的 `accessPolicyVersion` 和真实 `reason`。原因 trim 后非空、最多 500 字符且不得含控制字符。应用集合非空，只能包含 `EMPLOYEE`、`CUSTOMER` 且不能重复；客户端还必须显式填写 `subjectMode=USER|MACHINE`。`USER` 集合非空，`MACHINE` 集合为空。CLI 可读取已登记的 `LEGACY_MIXED` 策略，但保存清单必须明确选择受支持的目标用途；服务端仍校验 grant 与主体用途的一致性。
+清单必须提供 `target=application`、`id`、`allowedMemberTypes`、读取到的 `accessPolicyVersion` 和真实 `reason`。原因 trim 后非空、最多 500 字符且不得含控制字符。成员集合非空，只能包含 `EMPLOYEE`、`CUSTOMER` 且不能重复。旧客户端策略和 `subjectMode` 清单拒绝；统一客户端使用身份服务的管理命令、版本和原 operation 恢复合同。
 
-预览只校验本地清单，不读取凭据或联网，原因内容不回显。执行时先读当前版本，版本不符直接返回 `ACCESS_POLICY_CONFLICT`／409；随后 PUT 仍携带原版本，由服务端事务防止读取后的并发覆盖。CLI 不刷新旧版本、不重试写入。实际策略变化由服务端递增版本并撤销相应凭据；相同策略不递增版本、不追加审计。未知写入结果要求先读取并核对，不能直接重试。响应只输出策略标识、类型、版本、状态与主体用途，不输出客户端秘密或任意远端字段。
+预览只校验本地清单，不读取凭据或联网，原因内容不回显。执行时先读当前版本，版本不符直接返回 `ACCESS_POLICY_CONFLICT`／409；随后 PUT 仍携带原版本，由服务端事务防止读取后的并发覆盖。CLI 不刷新旧版本、不重试写入。实际策略变化由服务端递增版本并撤销相应凭据；相同策略不递增版本、不追加审计。未知写入结果要求先读取并核对，不能直接重试。响应只输出策略标识、类型、版本、状态，不输出秘密或任意远端字段。
 
 准入策略不创建客户成员，也不授予资源权限。既有员工应用保持 `EMPLOYEE`；只有完成登记和安全基线的客户用途才可显式开放客户。客户与同组织第二身份的创建仍受平台生命周期开关限制。
 

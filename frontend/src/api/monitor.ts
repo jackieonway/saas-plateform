@@ -12,7 +12,7 @@ export interface TenantInsight {
   organizations: number
   roles: number
   logins7d: number
-  activeTokens: number
+  activePlatformSessions: number
   /** 近 7 天每日登录数 (旧 → 今, 恒为 7 个元素) */
   loginsTrend: number[]
 }

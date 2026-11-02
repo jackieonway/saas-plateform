@@ -2,9 +2,8 @@ import { api } from "@/lib/api"
 import { isUuidV7 } from "@/lib/uuid"
 
 export type AdmissionMemberType = "EMPLOYEE" | "CUSTOMER"
-export type AdmissionSubjectMode = "USER" | "MACHINE" | "LEGACY_MIXED"
 export interface AdmissionPolicyTarget {
-  kind: "application" | "client"
+  kind: "application"
   id: string
   name: string
   fixedEmployee?: boolean
@@ -12,14 +11,12 @@ export interface AdmissionPolicyTarget {
 export interface AdmissionPolicySummary {
   allowedMemberTypes?: AdmissionMemberType[]
   accessPolicyVersion?: number
-  subjectMode?: AdmissionSubjectMode
 }
 export interface AdmissionPolicy {
   id: string
   status: "ENABLED" | "DISABLED"
   allowedMemberTypes: AdmissionMemberType[]
   accessPolicyVersion: number
-  subjectMode?: AdmissionSubjectMode
 }
 export interface AdmissionPolicyChange {
   allowedMemberTypes: readonly AdmissionMemberType[]
@@ -28,12 +25,11 @@ export interface AdmissionPolicyChange {
 }
 
 export const admissionMemberLabels: Record<AdmissionMemberType, string> = { EMPLOYEE: "员工", CUSTOMER: "客户" }
-export const admissionSubjectLabels: Record<AdmissionSubjectMode, string> = { USER: "人员登录", MACHINE: "机器凭据", LEGACY_MIXED: "历史混合用途" }
 const memberOrder: readonly AdmissionMemberType[] = ["EMPLOYEE", "CUSTOMER"]
 
 function endpoint(target: AdmissionPolicyTarget): string {
-  if (!isUuidV7(target.id)) throw new Error("准入策略目标无效，请刷新列表")
-  return target.kind === "application" ? `/api/applications/${target.id}/access-policy` : `/api/oauth/clients/${target.id}/access-policy`
+  if (target.kind !== "application" || !isUuidV7(target.id)) throw new Error("准入策略目标无效，请刷新列表")
+  return `/api/applications/${target.id}/access-policy`
 }
 
 export function parseAdmissionPolicy(value: unknown, target: AdmissionPolicyTarget): AdmissionPolicy {
@@ -43,12 +39,9 @@ export function parseAdmissionPolicy(value: unknown, target: AdmissionPolicyTarg
       !Number.isSafeInteger(record.accessPolicyVersion) || (record.accessPolicyVersion as number) < 1 ||
       !Array.isArray(record.allowedMemberTypes) || record.allowedMemberTypes.some(type => !memberOrder.includes(type)) ||
       new Set(record.allowedMemberTypes).size !== record.allowedMemberTypes.length) throw new Error("准入策略响应无效")
-  const subjectMode = record.subjectMode as AdmissionSubjectMode | undefined
-  if (target.kind === "application" && subjectMode !== undefined) throw new Error("应用策略不能使用客户端主体用途")
-  if (target.kind === "client" && !["USER", "MACHINE", "LEGACY_MIXED"].includes(subjectMode ?? "")) throw new Error("客户端用途未经过验证")
-  if ((subjectMode === "MACHINE") !== (record.allowedMemberTypes.length === 0)) throw new Error("准入策略与主体用途不一致")
+  if (target.kind !== "application" || record.subjectMode !== undefined || record.allowedMemberTypes.length === 0) throw new Error("应用准入策略无效")
   const allowed = record.allowedMemberTypes as AdmissionMemberType[]
-  return { id: target.id, status: record.status as AdmissionPolicy["status"], subjectMode,
+  return { id: target.id, status: record.status as AdmissionPolicy["status"],
     accessPolicyVersion: record.accessPolicyVersion as number,
     allowedMemberTypes: memberOrder.filter(type => allowed.includes(type)) }
 }

@@ -22,17 +22,15 @@ use crate::config::Config;
 use crate::error::AppError;
 use crate::platform_accounts::{
     AccountAdministrationPort, AccountCredential, AccountFuture, AccountMutationTx,
-    AccountSnapshot, AuthenticationPort, CreatedAccount, CredentialHash, LoginIdentifier,
-    NewAccount, PasswordChange, PreparedPassword,
+    AccountSnapshot, AuthenticationPort, CreatedAccount, CredentialHash, NewAccount,
+    PasswordChange, PreparedPassword,
 };
 use crate::state::AppState;
-use crate::util::{hash, password, uuid7};
+use crate::util::{password, uuid7};
 
 const SECRET: &str = "identity-phase07-owned-fixture-signing-key";
 const PASSWORD: &str = "Owned-Phase07-Fixture-Password9!";
 const NEW_PASSWORD: &str = "Owned-Phase07-Replacement-Password8!";
-const CLIENT_SECRET: &str = "phase07-owned-client-fixture-not-a-deployment-secret";
-const REDIRECT: &str = "https://phase07.example.invalid/callback";
 
 struct Database {
     pool: PgPool,
@@ -57,7 +55,7 @@ impl Database {
         };
         ensure!(matches!(url.scheme(),"postgres"|"postgresql") &&
                 url.host_str().is_some_and(loopback) && port>0 && !url.username().is_empty() &&
-                url.password().is_some() && url.fragment().is_none() &&
+                url.fragment().is_none() &&
                 url.query_pairs().all(|(key,value)| matches!(key.as_ref(),"sslmode"|"ssl-mode") &&
                     matches!(value.as_ref(),"disable"|"prefer"|"require")),
                 "Phase 7 administration requires an explicit loopback host, port and account without redirection");
@@ -70,12 +68,28 @@ impl Database {
                 && !options.get_username().is_empty(),
             "Phase 7 administration must explicitly select postgres"
         );
+        let expected_cluster = std::env::var("IDENTITY_PHASE07_TEST_CLUSTER_ID")
+            .map_err(|_| anyhow!("explicit owned Phase 7 cluster identifier required"))?;
+        ensure!(
+            expected_cluster
+                .parse::<u64>()
+                .is_ok_and(|value| value > 0 && value.to_string() == expected_cluster),
+            "invalid owned Phase 7 cluster identifier"
+        );
         let admin = PgPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(Duration::from_secs(10))
             .connect_with(options.clone())
             .await
             .map_err(|_| anyhow!("isolated Phase 7 administration connection failed"))?;
+        let observed_cluster: String =
+            sqlx::query_scalar("SELECT system_identifier::text FROM pg_control_system()")
+                .fetch_one(&admin)
+                .await?;
+        ensure!(
+            observed_cluster == expected_cluster,
+            "refusing another PostgreSQL cluster"
+        );
         let name = format!("identity_phase07_{}", uuid7::new_uuid().simple());
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
@@ -131,7 +145,6 @@ impl Database {
 
 fn router(state: AppState) -> Router {
     crate::routes::api_router()
-        .nest("/oauth", crate::routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::observability::observe,
@@ -145,8 +158,6 @@ fn router(state: AppState) -> Router {
 
 struct Reply {
     status: StatusCode,
-    body: Value,
-    retry_after: Option<String>,
 }
 
 async fn request(
@@ -173,17 +184,8 @@ async fn request(
     .await
     .map_err(|_| anyhow!("owned Phase 7 HTTP request timed out"))??;
     let status = response.status();
-    let retry_after = response
-        .headers()
-        .get(header::RETRY_AFTER)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned);
-    let body = to_bytes(response.into_body(), 1024 * 1024).await?;
-    Ok(Reply {
-        status,
-        body: serde_json::from_slice(&body).unwrap_or(Value::Null),
-        retry_after,
-    })
+    let _ = to_bytes(response.into_body(), 1024 * 1024).await?;
+    Ok(Reply { status })
 }
 
 async fn call(
@@ -204,628 +206,12 @@ async fn call(
     .await
 }
 
-async fn form(app: &Router, path: &str, fields: &[(&str, String)]) -> Result<Reply> {
-    let encoded = fields
-        .iter()
-        .map(|(key, value)| {
-            format!(
-                "{}={}",
-                percent_encoding::utf8_percent_encode(key, percent_encoding::NON_ALPHANUMERIC),
-                percent_encoding::utf8_percent_encode(value, percent_encoding::NON_ALPHANUMERIC)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("&");
-    request(
-        app,
-        Method::POST,
-        path,
-        None,
-        "application/x-www-form-urlencoded",
-        encoded,
-    )
-    .await
-}
-
 fn expect(reply: &Reply, status: StatusCode, label: &str) -> Result<()> {
     // Never include a token-bearing response body, plaintext password or PHC hash.
     ensure!(
         reply.status == status,
         "{label}: expected {status}, received {}",
         reply.status
-    );
-    Ok(())
-}
-
-fn text<'a>(body: &'a Value, name: &str) -> Result<&'a str> {
-    body[name]
-        .as_str()
-        .ok_or_else(|| anyhow!("missing public response field {name}"))
-}
-
-#[derive(Clone)]
-struct Account {
-    id: Uuid,
-    username: String,
-}
-
-#[derive(Clone, Copy)]
-struct Member {
-    id: Uuid,
-    user: Uuid,
-    org: Uuid,
-    kind: &'static str,
-}
-
-#[derive(Clone)]
-struct Client {
-    id: Uuid,
-    public_id: String,
-    application: Option<Uuid>,
-}
-
-struct Platform {
-    access: String,
-    refresh: String,
-    ticket: String,
-}
-
-struct Token {
-    access: String,
-    refresh: String,
-}
-
-struct Fixture {
-    state: AppState,
-    admin: Account,
-    subject: Account,
-    unrelated: Account,
-    admin_member: Member,
-    employees: [Member; 2],
-    customer: Member,
-    unrelated_member: Member,
-    legacy: Client,
-    customer_client: Client,
-    service: Client,
-    employee_application_code: String,
-}
-
-async fn account(
-    pool: &PgPool,
-    username: &str,
-    encoded: &str,
-    administrator: bool,
-) -> Result<Account> {
-    let id = uuid7::new_uuid();
-    sqlx::query("INSERT INTO users(id,username,password_hash,is_super_admin,real_name) VALUES($1,$2,$3,$4,'Owned Phase 7 account')")
-        .bind(id).bind(username).bind(encoded).bind(administrator).execute(pool).await?;
-    Ok(Account {
-        id,
-        username: username.into(),
-    })
-}
-
-async fn member(pool: &PgPool, user: Uuid, org: Uuid, kind: &'static str) -> Result<Member> {
-    let id = uuid7::new_uuid();
-    sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,status,identity_version) VALUES($1,$2,$3,$4,'ENABLED',1)")
-        .bind(id).bind(user).bind(org).bind(kind).execute(pool).await?;
-    Ok(Member {
-        id,
-        user,
-        org,
-        kind,
-    })
-}
-
-async fn application(
-    pool: &PgPool,
-    tenant: Uuid,
-    orgs: &[Uuid],
-    code: &str,
-    kind: &str,
-) -> Result<Uuid> {
-    let id = uuid7::new_uuid();
-    sqlx::query("INSERT INTO applications(id,name,code,allowed_member_types) VALUES($1,'Owned Phase 7 application',$2,$3)")
-        .bind(id).bind(code).bind(vec![kind]).execute(pool).await?;
-    sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
-        .bind(tenant)
-        .bind(id)
-        .execute(pool)
-        .await?;
-    for org in orgs {
-        sqlx::query(
-            "INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)",
-        )
-        .bind(org)
-        .bind(id)
-        .execute(pool)
-        .await?;
-    }
-    Ok(id)
-}
-
-async fn client(
-    pool: &PgPool,
-    mode: &str,
-    kind: Option<&str>,
-    application: Option<Uuid>,
-) -> Result<Client> {
-    let id = uuid7::new_uuid();
-    let public_id = format!("phase07-{}", id.simple());
-    let grants = if mode == "MACHINE" {
-        "client_credentials"
-    } else {
-        "password,refresh_token,authorization_code,urn:ietf:params:oauth:grant-type:device_code"
-    };
-    sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,client_secret_hash,subject_mode,allowed_member_types,application_id,grant_types,scopes,redirect_uris) VALUES($1,$2,'Owned Phase 7 client','CONFIDENTIAL',$3,$4,$5,$6,$7,'profile',$8)")
-        .bind(id).bind(&public_id).bind(hash::sha256_hex(CLIENT_SECRET)).bind(mode)
-        .bind(kind.into_iter().collect::<Vec<_>>()).bind(application).bind(grants).bind(REDIRECT)
-        .execute(pool).await?;
-    Ok(Client {
-        id,
-        public_id,
-        application,
-    })
-}
-
-impl Fixture {
-    async fn create(pool: &PgPool) -> Result<Self> {
-        let tenant = uuid7::new_uuid();
-        sqlx::query("INSERT INTO tenants(id,name,code,is_platform) VALUES($1,'Owned Phase 7 tenant','admin-tenant',true)")
-            .bind(tenant).execute(pool).await?;
-        let root = uuid7::new_uuid();
-        sqlx::query(
-            "INSERT INTO organizations(id,tenant_id,name) VALUES($1,$2,'Owned Phase 7 root')",
-        )
-        .bind(root)
-        .bind(tenant)
-        .execute(pool)
-        .await?;
-        let employee_org = uuid7::new_uuid();
-        let customer_org = uuid7::new_uuid();
-        for (org, name) in [
-            (employee_org, "Owned Phase 7 second employee"),
-            (customer_org, "Owned Phase 7 customer"),
-        ] {
-            sqlx::query(
-                "INSERT INTO organizations(id,tenant_id,parent_id,name) VALUES($1,$2,$3,$4)",
-            )
-            .bind(org)
-            .bind(tenant)
-            .bind(root)
-            .bind(name)
-            .execute(pool)
-            .await?;
-        }
-        let encoded = password::hash_password(PASSWORD)?;
-        let admin = account(pool, "phase07-admin", &encoded, true).await?;
-        let subject = account(pool, "phase07-subject", &encoded, false).await?;
-        let unrelated = account(pool, "phase07-unrelated", &encoded, false).await?;
-        let admin_member = member(pool, admin.id, root, "EMPLOYEE").await?;
-        let employees = [
-            member(pool, subject.id, root, "EMPLOYEE").await?,
-            member(pool, subject.id, employee_org, "EMPLOYEE").await?,
-        ];
-        let customer = member(pool, subject.id, customer_org, "CUSTOMER").await?;
-        let unrelated_member = member(pool, unrelated.id, root, "EMPLOYEE").await?;
-        let employee_application_code = "phase07-employee".to_string();
-        let employee_app = application(
-            pool,
-            tenant,
-            &[root, employee_org],
-            &employee_application_code,
-            "EMPLOYEE",
-        )
-        .await?;
-        for (permission, path) in [
-            ("system:user", "/system/users"),
-            ("system:oauth", "/system/oauth/tokens"),
-        ] {
-            let menu = uuid7::new_uuid();
-            sqlx::query("INSERT INTO menus(id,application_id,type,title,permission,path) VALUES($1,$2,'MENU','Owned Phase 7 administrative permission',$3,$4)")
-                .bind(menu).bind(employee_app).bind(permission).bind(path).execute(pool).await?;
-            sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
-                .bind(tenant)
-                .bind(menu)
-                .execute(pool)
-                .await?;
-            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
-                .bind(root)
-                .bind(menu)
-                .execute(pool)
-                .await?;
-        }
-        let customer_app = application(
-            pool,
-            tenant,
-            &[customer_org],
-            "phase07-customer",
-            "CUSTOMER",
-        )
-        .await?;
-        // Exercise the existing OAuth password/refresh protocol through an
-        // explicitly human client. A new fixture is never a grandfathered
-        // LEGACY_MIXED registration; machine grants use their own client below.
-        let legacy = client(pool, "USER", Some("EMPLOYEE"), None).await?;
-        let customer_client = client(pool, "USER", Some("CUSTOMER"), Some(customer_app)).await?;
-        let service = client(pool, "MACHINE", None, Some(employee_app)).await?;
-        let config = Config::from_values(&HashMap::from([
-            ("APP_ENV".into(), "test".into()),
-            (
-                "DATABASE_URL".into(),
-                "postgres://unused/identity-phase07".into(),
-            ),
-            ("JWT_SECRET".into(), SECRET.into()),
-            (
-                "CUSTOMER_PROFILE_CLIENT_REF".into(),
-                customer_client.id.to_string(),
-            ),
-            (
-                "CUSTOMER_PROFILE_APPLICATION_ID".into(),
-                customer_app.to_string(),
-            ),
-            ("LOGIN_SOURCE_REQUESTS".into(), "1000".into()),
-            ("LOGIN_USER_FAILURES".into(), "1000".into()),
-        ]))?;
-        Ok(Self {
-            state: AppState::new(pool.clone(), Arc::new(config)),
-            admin,
-            subject,
-            unrelated,
-            admin_member,
-            employees,
-            customer,
-            unrelated_member,
-            legacy,
-            customer_client,
-            service,
-            employee_application_code,
-        })
-    }
-
-    fn app(&self) -> Router {
-        router(self.state.clone())
-    }
-}
-
-async fn login(app: &Router, account: &Account, supplied: &str) -> Result<Reply> {
-    call(
-        app,
-        Method::POST,
-        "/api/auth/login",
-        None,
-        json!({"username":account.username,"password":supplied}),
-    )
-    .await
-}
-
-async fn platform(
-    app: &Router,
-    account: &Account,
-    membership: Member,
-    supplied: &str,
-) -> Result<Platform> {
-    let authenticated = login(app, account, supplied).await?;
-    expect(
-        &authenticated,
-        StatusCode::OK,
-        "real account password authentication",
-    )?;
-    let ticket = text(&authenticated.body, "ticket")?.to_owned();
-    let selected = call(
-        app,
-        Method::POST,
-        "/api/auth/context",
-        Some(&ticket),
-        json!({"membershipId":membership.id,"organizationId":membership.org}),
-    )
-    .await?;
-    expect(&selected, StatusCode::OK, "real concrete employee context")?;
-    ensure!(
-        selected.body["membershipId"] == json!(membership.id)
-            && selected.body["memberType"] == "EMPLOYEE",
-        "platform selected another concrete member or kind"
-    );
-    Ok(Platform {
-        access: text(&selected.body, "accessToken")?.to_owned(),
-        refresh: text(&selected.body, "refreshToken")?.to_owned(),
-        ticket,
-    })
-}
-
-async fn oauth(
-    app: &Router,
-    client: &Client,
-    account: &Account,
-    member: Member,
-    supplied: &str,
-) -> Result<Reply> {
-    form(
-        app,
-        "/oauth/token",
-        &[
-            ("grant_type", "password".into()),
-            ("client_id", client.public_id.clone()),
-            ("client_secret", CLIENT_SECRET.into()),
-            ("username", account.username.clone()),
-            ("password", supplied.into()),
-            ("membership_id", member.id.to_string()),
-            ("scope", "profile".into()),
-        ],
-    )
-    .await
-}
-
-async fn token(pool: &PgPool, reply: Reply, member: Member, client: &Client) -> Result<Token> {
-    expect(
-        &reply,
-        StatusCode::OK,
-        "real ordinary OAuth password exchange",
-    )?;
-    let access = text(&reply.body, "access_token")?.to_owned();
-    let refresh = text(&reply.body, "refresh_token")?.to_owned();
-    let proof: (String, Uuid, Uuid, String, i64, Option<Uuid>) = sqlx::query_as(
-        "SELECT token_use,user_id,membership_id,member_type,account_version,application_id FROM oauth_tokens WHERE token_hash=$1 AND NOT revoked")
-        .bind(hash::sha256_hex(&access)).fetch_one(pool).await?;
-    ensure!(
-        proof
-            == (
-                "oauth".into(),
-                member.user,
-                member.id,
-                member.kind.into(),
-                0,
-                client.application
-            ),
-        "ordinary OAuth did not retain its exact persisted account/member/client purpose"
-    );
-    Ok(Token { access, refresh })
-}
-
-async fn membership_snapshot(pool: &PgPool, user: Uuid) -> Result<Value> {
-    Ok(sqlx::query_scalar("SELECT COALESCE(jsonb_agg(to_jsonb(m) ORDER BY m.id),'[]'::jsonb) FROM memberships m WHERE user_id=$1")
-        .bind(user).fetch_one(pool).await?)
-}
-
-struct Issued {
-    admin: Platform,
-    employees: Vec<Platform>,
-    human: Vec<(Client, Token)>,
-    app: String,
-    unrelated: Platform,
-    machine: String,
-}
-
-async fn issued(pool: &PgPool, fixture: &Fixture) -> Result<Issued> {
-    let app = fixture.app();
-    let admin = platform(&app, &fixture.admin, fixture.admin_member, PASSWORD).await?;
-    let mut employees = Vec::new();
-    let mut human = Vec::new();
-    for employee in fixture.employees {
-        employees.push(platform(&app, &fixture.subject, employee, PASSWORD).await?);
-        human.push((
-            fixture.legacy.clone(),
-            token(
-                pool,
-                oauth(&app, &fixture.legacy, &fixture.subject, employee, PASSWORD).await?,
-                employee,
-                &fixture.legacy,
-            )
-            .await?,
-        ));
-    }
-    let customer = token(
-        pool,
-        oauth(
-            &app,
-            &fixture.customer_client,
-            &fixture.subject,
-            fixture.customer,
-            PASSWORD,
-        )
-        .await?,
-        fixture.customer,
-        &fixture.customer_client,
-    )
-    .await?;
-    let profile = call(
-        &app,
-        Method::GET,
-        "/api/customer/profile",
-        Some(&customer.access),
-        Value::Null,
-    )
-    .await?;
-    expect(
-        &profile,
-        StatusCode::OK,
-        "registered real customer profile remains available",
-    )?;
-    ensure!(
-        profile.body["context"]["membershipId"] == json!(fixture.customer.id)
-            && profile.body["account"]["id"] == json!(fixture.subject.id)
-            && profile.body["account"].get("isSuperAdmin").is_none()
-            && profile.body["account"].get("passwordHash").is_none(),
-        "customer account contract broadened"
-    );
-    human.push((fixture.customer_client.clone(), customer));
-    let app_token = call(
-        &app,
-        Method::POST,
-        "/api/oauth/session-token",
-        Some(&employees[0].access),
-        json!({"appCode":fixture.employee_application_code}),
-    )
-    .await?;
-    expect(
-        &app_token,
-        StatusCode::CREATED,
-        "real employee application token",
-    )?;
-    let app_access = text(&app_token.body, "accessToken")?.to_owned();
-    expect(
-        &call(
-            &app,
-            Method::GET,
-            "/oauth/userinfo",
-            Some(&app_access),
-            Value::Null,
-        )
-        .await?,
-        StatusCode::OK,
-        "real application credential positive control",
-    )?;
-    let unrelated = platform(&app, &fixture.unrelated, fixture.unrelated_member, PASSWORD).await?;
-    let machine = form(
-        &app,
-        "/oauth/token",
-        &[
-            ("grant_type", "client_credentials".into()),
-            ("client_id", fixture.service.public_id.clone()),
-            ("client_secret", CLIENT_SECRET.into()),
-        ],
-    )
-    .await?;
-    expect(&machine, StatusCode::OK, "real unrelated machine grant")?;
-    Ok(Issued {
-        admin,
-        employees,
-        human,
-        app: app_access,
-        unrelated,
-        machine: text(&machine.body, "access_token")?.to_owned(),
-    })
-}
-
-async fn revoked(app: &Router, fixture: &Fixture, old: &Issued) -> Result<()> {
-    for platform in &old.employees {
-        expect(
-            &call(
-                app,
-                Method::GET,
-                "/api/auth/profile",
-                Some(&platform.access),
-                Value::Null,
-            )
-            .await?,
-            StatusCode::UNAUTHORIZED,
-            "account-wide old platform access",
-        )?;
-        let refresh = form(
-            app,
-            "/oauth/token",
-            &[
-                ("grant_type", "refresh_token".into()),
-                ("refresh_token", platform.refresh.clone()),
-            ],
-        )
-        .await?;
-        expect(
-            &refresh,
-            StatusCode::BAD_REQUEST,
-            "account-wide old platform refresh",
-        )?;
-        ensure!(
-            refresh.body["error"] == "invalid_grant",
-            "old platform refresh failed for unrelated reason"
-        );
-        expect(
-            &call(
-                app,
-                Method::POST,
-                "/api/auth/context",
-                Some(&platform.ticket),
-                json!({"membershipId":fixture.employees[0].id}),
-            )
-            .await?,
-            StatusCode::UNAUTHORIZED,
-            "old credential selection ticket",
-        )?;
-    }
-    for (client, pair) in &old.human {
-        expect(
-            &call(
-                app,
-                Method::GET,
-                "/oauth/userinfo",
-                Some(&pair.access),
-                Value::Null,
-            )
-            .await?,
-            StatusCode::UNAUTHORIZED,
-            "account-wide old ordinary OAuth access",
-        )?;
-        let refresh = form(
-            app,
-            "/oauth/token",
-            &[
-                ("grant_type", "refresh_token".into()),
-                ("client_id", client.public_id.clone()),
-                ("client_secret", CLIENT_SECRET.into()),
-                ("refresh_token", pair.refresh.clone()),
-            ],
-        )
-        .await?;
-        expect(
-            &refresh,
-            StatusCode::BAD_REQUEST,
-            "account-wide old ordinary OAuth refresh",
-        )?;
-        ensure!(
-            refresh.body["error"] == "invalid_grant",
-            "old OAuth refresh failed for unrelated reason"
-        );
-    }
-    expect(
-        &call(
-            app,
-            Method::GET,
-            "/api/customer/profile",
-            Some(&old.human[2].1.access),
-            Value::Null,
-        )
-        .await?,
-        StatusCode::UNAUTHORIZED,
-        "old customer access after global account mutation",
-    )?;
-    expect(
-        &call(
-            app,
-            Method::GET,
-            "/oauth/userinfo",
-            Some(&old.app),
-            Value::Null,
-        )
-        .await?,
-        StatusCode::UNAUTHORIZED,
-        "old application token after global account mutation",
-    )?;
-    expect(
-        &call(
-            app,
-            Method::GET,
-            "/api/auth/profile",
-            Some(&old.unrelated.access),
-            Value::Null,
-        )
-        .await?,
-        StatusCode::OK,
-        "unrelated account remains authenticated",
-    )?;
-    let machine = form(
-        app,
-        "/oauth/introspect",
-        &[
-            ("client_id", fixture.service.public_id.clone()),
-            ("client_secret", CLIENT_SECRET.into()),
-            ("token", old.machine.clone()),
-        ],
-    )
-    .await?;
-    expect(&machine, StatusCode::OK, "unrelated machine introspection")?;
-    ensure!(
-        machine.body["active"] == true,
-        "global human account change revoked a machine credential"
     );
     Ok(())
 }
@@ -1002,22 +388,6 @@ impl FakeAuthentication {
 }
 
 impl AuthenticationPort for FakeAuthentication {
-    fn candidates<'a>(
-        &'a self,
-        identifier: LoginIdentifier<'a>,
-    ) -> AccountFuture<'a, Vec<AccountCredential>> {
-        self.candidates_calls.fetch_add(1, Ordering::SeqCst);
-        self.inner.candidates(identifier)
-    }
-
-    fn by_username<'a>(
-        &'a self,
-        username: &'a str,
-    ) -> AccountFuture<'a, Option<AccountCredential>> {
-        self.username_calls.fetch_add(1, Ordering::SeqCst);
-        self.inner.by_username(username)
-    }
-
     fn by_user_id(&self, id: Uuid) -> AccountFuture<'_, AccountCredential> {
         self.inner.by_user_id(id)
     }
@@ -1053,7 +423,6 @@ struct UnavailableAccounts {
     creates: AtomicUsize,
     replacements: AtomicUsize,
     statuses: AtomicUsize,
-    revocations: AtomicUsize,
 }
 
 impl UnavailableAccounts {
@@ -1063,7 +432,6 @@ impl UnavailableAccounts {
             creates: AtomicUsize::new(0),
             replacements: AtomicUsize::new(0),
             statuses: AtomicUsize::new(0),
-            revocations: AtomicUsize::new(0),
         }
     }
 }
@@ -1107,121 +475,305 @@ impl AccountAdministrationPort for UnavailableAccounts {
         self.statuses.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Err(AppError::Unavailable) })
     }
-
-    fn revoke_all<'a>(
-        &'a self,
-        _tx: &'a mut dyn AccountMutationTx,
-        _id: Uuid,
-    ) -> AccountFuture<'a, u64> {
-        self.revocations.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async { Err(AppError::Unavailable) })
-    }
 }
 
+struct Fixture {
+    state: AppState,
+    subject: Uuid,
+    unrelated: Uuid,
+    tenant: Uuid,
+    root: Uuid,
+    other_org: Uuid,
+    admin: String,
+    employee: String,
+    other_employee: String,
+    unaffected: String,
+}
+impl Fixture {
+    async fn create(pool: &PgPool) -> Result<Self> {
+        let tenant = uuid7::new_uuid();
+        let root = uuid7::new_uuid();
+        let other_org = uuid7::new_uuid();
+        sqlx::query("INSERT INTO tenants(id,name,code,is_platform) VALUES($1,'Canonical account fixture','canonical-account',true)").bind(tenant).execute(pool).await?;
+        sqlx::query(
+            "INSERT INTO organizations(id,tenant_id,name) VALUES($1,$2,'Canonical account root')",
+        )
+        .bind(root)
+        .bind(tenant)
+        .execute(pool)
+        .await?;
+        sqlx::query("INSERT INTO organizations(id,tenant_id,parent_id,name) VALUES($1,$2,$3,'Canonical account branch')").bind(other_org).bind(tenant).bind(root).execute(pool).await?;
+        let encoded = password::hash_password(PASSWORD)?;
+        let mut accounts = Vec::new();
+        for (username, admin) in [
+            ("canonical-account-admin", true),
+            ("canonical-account-subject", false),
+            ("canonical-account-independent", false),
+        ] {
+            let id = uuid7::new_uuid();
+            sqlx::query("INSERT INTO users(id,username,password_hash,is_super_admin,session_version) VALUES($1,$2,$3,$4,1)")
+                .bind(id).bind(username).bind(&encoded).bind(admin).execute(pool).await?;
+            sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type) VALUES($1,$2,$3,'EMPLOYEE')")
+                .bind(uuid7::new_uuid()).bind(id).bind(root).execute(pool).await?;
+            accounts.push(id);
+        }
+        let (administrator, subject, unrelated) = (accounts[0], accounts[1], accounts[2]);
+        for (org, kind) in [(other_org, "EMPLOYEE"), (root, "CUSTOMER")] {
+            sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type) VALUES($1,$2,$3,$4)")
+                .bind(uuid7::new_uuid()).bind(subject).bind(org).bind(kind).execute(pool).await?;
+        }
+        let application = uuid7::new_uuid();
+        let menu = uuid7::new_uuid();
+        sqlx::query("INSERT INTO applications(id,name,code,allowed_member_types) VALUES($1,'Canonical management','canonical-account-management',ARRAY['EMPLOYEE'])")
+            .bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO menus(id,application_id,type,title,permission,path) VALUES($1,$2,'MENU','Account management','system:user','/system/users')")
+            .bind(menu).bind(application).execute(pool).await?;
+        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+            .bind(tenant)
+            .bind(application)
+            .execute(pool)
+            .await?;
+        sqlx::query(
+            "INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)",
+        )
+        .bind(root)
+        .bind(application)
+        .execute(pool)
+        .await?;
+        sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
+            .bind(tenant)
+            .bind(menu)
+            .execute(pool)
+            .await?;
+        sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+            .bind(root)
+            .bind(menu)
+            .execute(pool)
+            .await?;
+        let config = Config::from_values(&HashMap::from([
+            ("APP_ENV".into(), "test".into()),
+            (
+                "DATABASE_URL".into(),
+                "postgres://unused/canonical-account".into(),
+            ),
+            ("JWT_SECRET".into(), SECRET.into()),
+            ("MEMBERSHIP_LIFECYCLE_ENABLED".into(), "true".into()),
+            ("CUSTOMER_MEMBERSHIPS_ENABLED".into(), "true".into()),
+            ("DUAL_MEMBERSHIPS_ENABLED".into(), "true".into()),
+        ]))?;
+        let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
+        let admin =
+            crate::sso_test_fixture::token(pool, administrator, tenant, root, SECRET).await?;
+        let employee = crate::sso_test_fixture::token(pool, subject, tenant, root, SECRET).await?;
+        let other_employee =
+            crate::sso_test_fixture::token(pool, subject, tenant, other_org, SECRET).await?;
+        let unaffected =
+            crate::sso_test_fixture::token(pool, unrelated, tenant, root, SECRET).await?;
+        Ok(Self {
+            state,
+            subject,
+            unrelated,
+            tenant,
+            root,
+            other_org,
+            admin,
+            employee,
+            other_employee,
+            unaffected,
+        })
+    }
+    fn app(&self) -> Router {
+        router(self.state.clone())
+    }
+}
+async fn membership_snapshot(pool: &PgPool, user: Uuid) -> Result<Value> {
+    Ok(sqlx::query_scalar("SELECT COALESCE(jsonb_agg(to_jsonb(m) ORDER BY id),'[]'::jsonb) FROM memberships m WHERE user_id=$1")
+        .bind(user).fetch_one(pool).await?)
+}
 async fn account_state_snapshot(pool: &PgPool) -> Result<Value> {
-    // Compared only in memory. Neither PHC material nor token-bearing rows are printed.
+    // Compare in memory; never emit PHC, bearer, Cookie or ciphertext values.
     Ok(sqlx::query_scalar("SELECT jsonb_build_object( \
         'users',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM users t), \
-        'memberships',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM memberships t), \
+        'members',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM memberships t), \
         'sessions',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM platform_sessions t), \
-        'refresh',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM platform_session_refresh_tokens t), \
-        'oauth',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM oauth_tokens t), \
-        'codes',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM oauth_authorization_codes t), \
-        'devices',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM oauth_device_codes t), \
+        'grants',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM auth_grants t), \
+        'access',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM auth_access_tokens t), \
         'audit',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM audit_logs t), \
         'notifications',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM notifications t))")
         .fetch_one(pool).await?)
 }
+async fn assert_subject_revoked(app: &Router, fixture: &Fixture) -> Result<()> {
+    for bearer in [&fixture.employee, &fixture.other_employee] {
+        expect(
+            &call(
+                app,
+                Method::GET,
+                "/api/auth/profile",
+                Some(bearer),
+                Value::Null,
+            )
+            .await?,
+            StatusCode::UNAUTHORIZED,
+            "old subject context",
+        )?;
+    }
+    for bearer in [&fixture.admin, &fixture.unaffected] {
+        expect(
+            &call(
+                app,
+                Method::GET,
+                "/api/auth/profile",
+                Some(bearer),
+                Value::Null,
+            )
+            .await?,
+            StatusCode::OK,
+            "independent account context",
+        )?;
+    }
+    Ok(())
+}
 
 #[tokio::test]
-#[ignore = "requires explicit IDENTITY_PHASE07_TEST_DATABASE_URL and disposable database creation"]
-async fn phase07_fake_authentication_replaces_both_password_consumers_without_granting_membership(
-) -> Result<()> {
-    let database = Database::create().await?;
-    let assertions = async {
-        let mut fixture = Fixture::create(&database.pool).await?;
-        let fake = Arc::new(FakeAuthentication::new(fixture.state.authentication.clone()));
-        fixture.state.authentication = fake.clone();
-        let app = fixture.app();
-        let wrong_password = "Deliberately-not-the-stored-Phase07-password!";
-        let encoded:String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1")
-            .bind(fixture.subject.id).fetch_one(&database.pool).await?;
-        ensure!(!password::verify_password(&encoded,wrong_password),"fake acceptance positive control has a valid local password");
-        let accepted = platform(&app,&fixture.subject,fixture.employees[0],wrong_password).await?;
-        let oauth_reply = oauth(&app,&fixture.legacy,&fixture.subject,fixture.employees[0],wrong_password).await?;
-        let _accepted = token(&database.pool,oauth_reply,fixture.employees[0],&fixture.legacy).await?;
-        ensure!(fake.candidates_calls.load(Ordering::SeqCst)>0 && fake.username_calls.load(Ordering::SeqCst)>0 &&
-                fake.verify_calls.load(Ordering::SeqCst)>=2 && fake.locked_checks.load(Ordering::SeqCst)>0,
-                "console or ordinary OAuth bypassed the injected authentication port");
-        expect(&call(&app,Method::POST,"/api/auth/context",Some(&accepted.ticket),
-                     json!({"membershipId":fixture.customer.id,"organizationId":fixture.customer.org})).await?,
-               StatusCode::FORBIDDEN,"fake account authentication cannot manufacture employee eligibility")?;
-        for (username,has_customer) in [("phase07-customer-only",true),("phase07-no-membership",false)] {
-            let additional = account(&database.pool,username,&encoded,false).await?;
-            if has_customer { member(&database.pool,additional.id,fixture.customer.org,"CUSTOMER").await?; }
-            expect(&login(&app,&additional,wrong_password).await?,StatusCode::FORBIDDEN,
-                   "old console still requires its real employee membership")?;
-        }
-        let stored_tokens:i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_tokens")
-            .fetch_one(&database.pool).await?;
-        let successful_logins:i64 = sqlx::query_scalar("SELECT count(*) FROM audit_logs WHERE action='LOGIN'")
-            .fetch_one(&database.pool).await?;
-        for (mode,api_status,oauth_status,oauth_error) in [
-            (1,StatusCode::UNAUTHORIZED,StatusCode::BAD_REQUEST,"invalid_grant"),
-            (2,StatusCode::SERVICE_UNAVAILABLE,StatusCode::SERVICE_UNAVAILABLE,"temporarily_unavailable"),
-            (3,StatusCode::TOO_MANY_REQUESTS,StatusCode::TOO_MANY_REQUESTS,"temporarily_unavailable"),
-        ] {
-            fake.mode.store(mode,Ordering::SeqCst);
-            let console = login(&app,&fixture.subject,PASSWORD).await?;
-            expect(&console,api_status,"injected authentication rejection or dependency failure")?;
-            ensure!(console.body.get("ticket").is_none() && console.body.get("accessToken").is_none(),
-                    "failed authentication returned a partial platform credential");
-            let ordinary = oauth(&app,&fixture.legacy,&fixture.subject,fixture.employees[0],PASSWORD).await?;
-            expect(&ordinary,oauth_status,"legacy OAuth must preserve dependency failure semantics")?;
-            ensure!(ordinary.body["error"] == oauth_error && ordinary.body.get("access_token").is_none(),
-                    "ordinary OAuth converted dependency failure into success or wrong-password denial");
-            if mode==3 { ensure!(console.retry_after.as_deref()==Some("7") && ordinary.retry_after.as_deref()==Some("7"),
-                                "port capacity rejection lost Retry-After"); }
-        }
-        let after:(i64,i64) = sqlx::query_as("SELECT (SELECT count(*) FROM oauth_tokens),(SELECT count(*) FROM audit_logs WHERE action='LOGIN')")
-            .fetch_one(&database.pool).await?;
-        ensure!(after==(stored_tokens,successful_logins),"rejected port operation persisted credentials or successful login audit");
-        Ok(())
-    }.await;
-    database.finish(assertions).await
+async fn canonical_platform_routes_do_not_consume_local_password_authentication() -> Result<()> {
+    let pool = PgPoolOptions::new().connect_lazy("postgres://unused:unused@127.0.0.1:1/unused")?;
+    let config = Config::from_values(&HashMap::from([
+        ("APP_ENV".into(), "test".into()),
+        (
+            "DATABASE_URL".into(),
+            "postgres://unused:unused@127.0.0.1:1/unused".into(),
+        ),
+        ("JWT_SECRET".into(), SECRET.into()),
+    ]))?;
+    let mut state = AppState::new(pool.clone(), Arc::new(config));
+    let fake = Arc::new(FakeAuthentication::new(state.authentication.clone()));
+    state.authentication = fake.clone();
+    let app = router(state);
+    for path in [
+        "/api/auth/login",
+        "/api/auth/context",
+        "/oauth/token",
+        "/oauth/device/code",
+    ] {
+        expect(
+            &call(
+                &app,
+                Method::POST,
+                path,
+                None,
+                json!({"username":"owned","password":PASSWORD}),
+            )
+            .await?,
+            StatusCode::NOT_FOUND,
+            "retired password or issuer route",
+        )?;
+    }
+    ensure!(
+        fake.candidates_calls.load(Ordering::SeqCst) == 0
+            && fake.username_calls.load(Ordering::SeqCst) == 0
+            && fake.verify_calls.load(Ordering::SeqCst) == 0
+            && pool.size() == 0,
+        "removed authentication route still consumed a local credential or database connection"
+    );
+    pool.close().await;
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore = "requires explicit IDENTITY_PHASE07_TEST_DATABASE_URL and disposable database creation"]
-async fn phase07_fake_account_administration_failures_leave_original_transactions_unchanged(
-) -> Result<()> {
+async fn canonical_account_administration_failure_keeps_original_transactions() -> Result<()> {
     let database = Database::create().await?;
     let assertions = async {
         let mut fixture = Fixture::create(&database.pool).await?;
-        let old = issued(&database.pool,&fixture).await?;
-        let baseline = account_state_snapshot(&database.pool).await?;
         let fake = Arc::new(UnavailableAccounts::new(fixture.state.accounts.clone()));
         fixture.state.accounts = fake.clone();
         let app = fixture.app();
-        let requests = [
-            (Method::POST,"/api/users".to_string(),old.admin.access.as_str(),json!({"username":"phase07-failed-create","password":NEW_PASSWORD})),
-            (Method::POST,format!("/api/users/{}/reset-password",fixture.subject.id),old.admin.access.as_str(),json!({"newPassword":NEW_PASSWORD})),
-            (Method::PUT,"/api/auth/password".to_string(),old.employees[0].access.as_str(),json!({"oldPassword":PASSWORD,"newPassword":NEW_PASSWORD})),
-            (Method::PUT,format!("/api/users/{}/status",fixture.subject.id),old.admin.access.as_str(),json!({"status":"DISABLED"})),
-            (Method::POST,"/api/users/batch-status".to_string(),old.admin.access.as_str(),json!({"userIds":[fixture.subject.id,fixture.unrelated.id],"status":"DISABLED"})),
-            (Method::POST,"/api/oauth/tokens/kick".to_string(),old.admin.access.as_str(),json!({"userId":fixture.subject.id})),
-        ];
-        for (method,path,bearer,body) in requests {
-            expect(&call(&app,method,&path,Some(bearer),body).await?,StatusCode::SERVICE_UNAVAILABLE,
-                   "real management route must use its replaceable account port")?;
-            ensure!(account_state_snapshot(&database.pool).await?==baseline,
-                    "account port failure partially committed account, credentials, notification or audit state");
+        let baseline = account_state_snapshot(&database.pool).await?;
+        for (method, path, bearer, body) in [
+            (
+                Method::POST,
+                "/api/users".to_string(),
+                fixture.admin.as_str(),
+                json!({"username":"canonical-failed-create","password":NEW_PASSWORD}),
+            ),
+            (
+                Method::POST,
+                format!("/api/users/{}/reset-password", fixture.subject),
+                fixture.admin.as_str(),
+                json!({"newPassword":NEW_PASSWORD}),
+            ),
+            (
+                Method::PUT,
+                "/api/auth/password".to_string(),
+                fixture.employee.as_str(),
+                json!({"oldPassword":PASSWORD,"newPassword":NEW_PASSWORD}),
+            ),
+            (
+                Method::PUT,
+                format!("/api/users/{}/status", fixture.subject),
+                fixture.admin.as_str(),
+                json!({"status":"DISABLED"}),
+            ),
+            (
+                Method::POST,
+                "/api/users/batch-status".to_string(),
+                fixture.admin.as_str(),
+                json!({"userIds":[fixture.subject,fixture.unrelated],"status":"DISABLED"}),
+            ),
+        ] {
+            expect(
+                &call(&app, method, &path, Some(bearer), body).await?,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "account port dependency failure",
+            )?;
+            ensure!(
+                account_state_snapshot(&database.pool).await? == baseline,
+                "failed account command committed account, session, audit or notification changes"
+            );
         }
-        ensure!(fake.creates.load(Ordering::SeqCst)==1 && fake.replacements.load(Ordering::SeqCst)==2 &&
-                fake.statuses.load(Ordering::SeqCst)==2 && fake.revocations.load(Ordering::SeqCst)==1,
-                "one management consumer bypassed the injected account administration port");
-        expect(&call(&app,Method::GET,"/api/auth/profile",Some(&old.employees[0].access),Value::Null).await?,
-               StatusCode::OK,"rolled-back account operation retained original employee session")?;
+        ensure!(
+            fake.creates.load(Ordering::SeqCst) == 1
+                && fake.replacements.load(Ordering::SeqCst) == 2
+                && fake.statuses.load(Ordering::SeqCst) == 2,
+            "management consumer bypassed the account port"
+        );
+        expect(
+            &call(
+                &app,
+                Method::GET,
+                "/api/auth/profile",
+                Some(&fixture.employee),
+                Value::Null,
+            )
+            .await?,
+            StatusCode::OK,
+            "original session after account failure",
+        )?;
+        Ok(())
+    }
+    .await;
+    database.finish(assertions).await
+}
+
+#[tokio::test]
+#[ignore = "requires explicit IDENTITY_PHASE07_TEST_DATABASE_URL and disposable database creation"]
+async fn canonical_account_reset_preserves_members_and_revokes_exact_subject() -> Result<()> {
+    let database = Database::create().await?;
+    let assertions=async {
+        let fixture=Fixture::create(&database.pool).await?;
+        let app=fixture.app();
+        let members=membership_snapshot(&database.pool,fixture.subject).await?;
+        let version:i64=sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1").bind(fixture.subject).fetch_one(&database.pool).await?;
+        expect(&call(&app,Method::POST,&format!("/api/users/{}/reset-password",fixture.subject),Some(&fixture.admin),json!({"newPassword":NEW_PASSWORD})).await?,StatusCode::OK,"current administrative reset")?;
+        let (after,encoded):(i64,String)=sqlx::query_as("SELECT session_version,password_hash FROM users WHERE id=$1").bind(fixture.subject).fetch_one(&database.pool).await?;
+        ensure!(after==version+1 && password::verify_password(&encoded,NEW_PASSWORD) && !password::verify_password(&encoded,PASSWORD),"reset did not replace the credential and exact account generation");
+        ensure!(membership_snapshot(&database.pool,fixture.subject).await?==members,"account reset changed member relationships");
+        assert_subject_revoked(&app,&fixture).await?;
+        let fresh=crate::sso_test_fixture::token(&database.pool,fixture.subject,fixture.tenant,fixture.root,SECRET).await?;
+        expect(&call(&app,Method::GET,"/api/auth/profile",Some(&fresh),Value::Null).await?,StatusCode::OK,"fresh canonical source after reset")?;
+        let audit:(i64,bool)=sqlx::query_as("SELECT count(*),COALESCE(bool_or(detail LIKE $2 OR detail LIKE $3),false) FROM audit_logs WHERE action='RESET_PASSWORD' AND detail LIKE $1")
+            .bind(format!("%{}%",fixture.subject)).bind(format!("%{NEW_PASSWORD}%")).bind(format!("%{encoded}%")).fetch_one(&database.pool).await?;
+        ensure!(audit==(1,false),"reset audit missing, duplicated or contains credential material");
         Ok(())
     }.await;
     database.finish(assertions).await
@@ -1229,53 +781,15 @@ async fn phase07_fake_account_administration_failures_leave_original_transaction
 
 #[tokio::test]
 #[ignore = "requires explicit IDENTITY_PHASE07_TEST_DATABASE_URL and disposable database creation"]
-async fn phase07_real_account_reset_preserves_protocols_and_revokes_all_human_contexts(
-) -> Result<()> {
+async fn canonical_account_status_does_not_restore_old_member_sessions() -> Result<()> {
     let database = Database::create().await?;
     let assertions = async {
         let fixture = Fixture::create(&database.pool).await?;
         let app = fixture.app();
-        let old = issued(&database.pool,&fixture).await?;
-        let members = membership_snapshot(&database.pool,fixture.subject.id).await?;
-        let before: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-            .bind(fixture.subject.id).fetch_one(&database.pool).await?;
-        let reset = call(&app,Method::POST,&format!("/api/users/{}/reset-password",fixture.subject.id),
-                         Some(&old.admin.access),json!({"newPassword":NEW_PASSWORD})).await?;
-        expect(&reset,StatusCode::OK,"real administrative account port reset")?;
-        let (after,encoded): (i64,String) = sqlx::query_as("SELECT session_version,password_hash FROM users WHERE id=$1")
-            .bind(fixture.subject.id).fetch_one(&database.pool).await?;
-        ensure!(after == before+1,"reset must advance exactly one account generation");
-        ensure!(password::verify_password(&encoded,NEW_PASSWORD) && !password::verify_password(&encoded,PASSWORD),
-                "reset did not replace the actual account credential");
-        ensure!(membership_snapshot(&database.pool,fixture.subject.id).await? == members,
-                "global account reset changed concrete membership identity or status");
-        revoked(&app,&fixture,&old).await?;
-        expect(&login(&app,&fixture.subject,PASSWORD).await?,StatusCode::UNAUTHORIZED,"old password after reset")?;
-        let replacement = platform(&app,&fixture.subject,fixture.employees[0],NEW_PASSWORD).await?;
-        expect(&call(&app,Method::GET,"/api/auth/profile",Some(&replacement.access),Value::Null).await?,
-               StatusCode::OK,"fresh password can establish fresh employee context")?;
-        let audit: (i64,bool) = sqlx::query_as("SELECT count(*),COALESCE(bool_or(detail LIKE $2 OR detail LIKE $3),false) FROM audit_logs WHERE action='RESET_PASSWORD' AND detail LIKE $1")
-            .bind(format!("%{}%",fixture.subject.id)).bind(format!("%{NEW_PASSWORD}%")).bind(format!("%{encoded}%"))
-            .fetch_one(&database.pool).await?;
-        ensure!(audit == (1,false),"reset audit missing, duplicated or contains credential material");
-        Ok(())
-    }.await;
-    database.finish(assertions).await
-}
-
-#[tokio::test]
-#[ignore = "requires explicit IDENTITY_PHASE07_TEST_DATABASE_URL and disposable database creation"]
-async fn phase07_global_status_port_never_resurrects_employee_customer_or_legacy_credentials(
-) -> Result<()> {
-    let database = Database::create().await?;
-    let assertions = async {
-        let fixture = Fixture::create(&database.pool).await?;
-        let app = fixture.app();
-        let old = issued(&database.pool, &fixture).await?;
-        let members = membership_snapshot(&database.pool, fixture.subject.id).await?;
+        let members = membership_snapshot(&database.pool, fixture.subject).await?;
         let before: (i64, String) =
             sqlx::query_as("SELECT session_version,password_hash FROM users WHERE id=$1")
-                .bind(fixture.subject.id)
+                .bind(fixture.subject)
                 .fetch_one(&database.pool)
                 .await?;
         for status in ["DISABLED", "DISABLED", "ENABLED"] {
@@ -1283,42 +797,49 @@ async fn phase07_global_status_port_never_resurrects_employee_customer_or_legacy
                 &call(
                     &app,
                     Method::PUT,
-                    &format!("/api/users/{}/status", fixture.subject.id),
-                    Some(&old.admin.access),
+                    &format!("/api/users/{}/status", fixture.subject),
+                    Some(&fixture.admin),
                     json!({"status":status}),
                 )
                 .await?,
                 StatusCode::OK,
-                "real global account status command",
+                "current account status",
             )?;
             let actual: (i64, String, String) = sqlx::query_as(
                 "SELECT session_version,password_hash,status FROM users WHERE id=$1",
             )
-            .bind(fixture.subject.id)
+            .bind(fixture.subject)
             .fetch_one(&database.pool)
             .await?;
             ensure!(
                 actual == (before.0 + 1, before.1.clone(), status.into()),
-                "global status changed password or advanced the generation more than once"
+                "status command changed credential or account generation unexpectedly"
             );
-            revoked(&app, &fixture, &old).await?;
             ensure!(
-                membership_snapshot(&database.pool, fixture.subject.id).await? == members,
-                "global account status command rewrote employee/customer membership state"
+                membership_snapshot(&database.pool, fixture.subject).await? == members,
+                "global status changed member relationships"
             );
+            assert_subject_revoked(&app, &fixture).await?;
         }
-        let fresh = platform(&app, &fixture.subject, fixture.employees[0], PASSWORD).await?;
+        let fresh = crate::sso_test_fixture::token(
+            &database.pool,
+            fixture.subject,
+            fixture.tenant,
+            fixture.other_org,
+            SECRET,
+        )
+        .await?;
         expect(
             &call(
                 &app,
                 Method::GET,
                 "/api/auth/profile",
-                Some(&fresh.access),
+                Some(&fresh),
                 Value::Null,
             )
             .await?,
             StatusCode::OK,
-            "reenabled account requires fresh context",
+            "reenabled account needs a fresh canonical source",
         )?;
         Ok(())
     }

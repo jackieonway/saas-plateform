@@ -1,0 +1,25 @@
+{
+  "contractVersion": "unified-auth-phase25-supervisor-permission/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T11:32:54.615753+00:00",
+  "applicationServicesStarted": 0,
+  "databasesCreated": 0,
+  "namespacesCreated": 0,
+  "containersCreated": 0,
+  "oldRootNamespaceLinkDenied": true,
+  "ownerUid": 1000,
+  "newProtectedLeaseBindingPassed": true,
+  "ownNamespaceExactlyMatched": true,
+  "temporaryRootControllerReaped": true,
+  "temporaryDirectoryRemoved": true,
+  "sourceSha256": {
+    "phase25-business-runtime.py": "30e91f79f444d66275f7909f2bff300e60465d6e6dbbf382a4e94cb3f3c44767",
+    "test_phase25_business_runtime.py": "326d87501ab4a02e4616e5b52fdc229379bc0d4b60db1d408f54206f92c2319e"
+  },
+  "componentTests": {
+    "tests": 45,
+    "passed": 45,
+    "failed": 0,
+    "durationSeconds": 0.109
+  }
+}

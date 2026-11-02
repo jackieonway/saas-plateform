@@ -1,0 +1,60 @@
+{
+  "contractVersion": "unified-auth-phase25-platform-component-aggregate-review/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T12:04:31.848029+00:00",
+  "status": "PASS",
+  "p1Findings": [],
+  "p2Findings": [],
+  "reviewMode": "Read-only code/report reconciliation; no tests, generator or runtime executed.",
+  "code": {
+    "file": "saas-plateform/backend/tests/unified-auth-https/phase25-platform-component-aggregate.py",
+    "sha256": "506bca4e90c1461ad62c1134fc4e391dcfd4cfc9999a7fd1b1ac7537c2084147"
+  },
+  "output": {
+    "file": "phase-25-platform-final-components.json",
+    "sha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10"
+  },
+  "verifiedObservations": {
+    "allEightEvidenceReferenceHashesMatch": true,
+    "sourceInputsEqualAcrossSevenExecutionReports": 398,
+    "sameSnapshotManifestAndCluster": true,
+    "originalExecutableCount": 3,
+    "originalExecutableHashesEqualExactRerun": true,
+    "originalRun": {
+      "passed": 408,
+      "failed": 1,
+      "ignored": 0,
+      "filtered": 0
+    },
+    "separateExactTlsRun": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 431
+    },
+    "separateIntegrationRuns": {
+      "count": 5,
+      "passed": 23
+    },
+    "allExecutionCaseRows": 433,
+    "uniquePassedCaseNames": 432,
+    "onlyDuplicateCaseIsResolvedOriginalTlsFailure": true,
+    "historicalFailedRunStillPresent": true,
+    "singleInvocationClaimed": false,
+    "fullFrozenInputSupplementCount": 1527
+  },
+  "limits": [
+    "PASS is reconciled component coverage across separate current executions; it is not one green all-targets invocation.",
+    "Original 408PASS/1FAIL remains byte-identical and included in historical execution totals.",
+    "The 1527-input supplement expressly records its during-run observation time rather than pre-run or repeated execution.",
+    "Unit, PostgreSQL fixture, LOGIN, mocked authority and TLS-fixture results do not establish actual multiserver HTTPS or Phase25 completion."
+  ],
+  "resources": {
+    "testsExecuted": 0,
+    "runtimeMutation": false,
+    "databasesCreated": 0,
+    "rolesCreated": 0,
+    "containersCreated": 0,
+    "temporaryResourcesCreated": 0
+  }
+}

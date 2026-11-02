@@ -1373,9 +1373,6 @@ async fn lock_self_departure_children_in_tx(
         "SELECT id FROM platform_sessions WHERE membership_id=$1 ORDER BY id FOR UPDATE",
         "SELECT r.id FROM platform_session_refresh_tokens r JOIN platform_sessions s ON s.id=r.session_id \
          WHERE s.membership_id=$1 ORDER BY r.id FOR UPDATE OF r",
-        "SELECT id FROM oauth_tokens WHERE membership_id=$1 ORDER BY id FOR UPDATE",
-        "SELECT id FROM oauth_authorization_codes WHERE membership_id=$1 ORDER BY id FOR UPDATE",
-        "SELECT id FROM oauth_device_codes WHERE membership_id=$1 ORDER BY id FOR UPDATE",
     ] {
         sqlx::query_scalar::<_, Uuid>(query).bind(membership_id).fetch_all(&mut **tx).await?;
     }

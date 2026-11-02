@@ -9,7 +9,6 @@ use crate::extractors::CurrentUser;
 
 /// OAuth 端点 IP 限流参数: 滑动窗口 60 秒内最多 30 次
 const OAUTH_RATE_WINDOW_SECS: u64 = 60;
-const OAUTH_RATE_MAX_REQUESTS: usize = 30;
 /// 限流表超过该 IP 数量时触发一次全量过期清理 (防内存膨胀, 均摊开销)
 const OAUTH_RATE_MAP_GC_THRESHOLD: usize = 4096;
 
@@ -65,7 +64,6 @@ pub struct AppState {
     pub map_client: reqwest::Client,
     /// 进程启动时刻 (GET /api/monitor/system 的 startedAt/uptimeSeconds 数据源)
     pub started_at: chrono::DateTime<chrono::Utc>,
-    oauth_rate: RateMap,
     map_rate: RateMap,
     introspection_clients: RateMap,
     introspection_failures: RateMap,
@@ -106,10 +104,10 @@ impl AppState {
             if config.identity_remote_enabled && config.customer_portal_port_enabled {
                 crate::customer_portal::remote_authority::configured(&config)?
             } else {
-                crate::oidc::customer_portal_authority(pool.clone(), config.clone())
+                Arc::new(crate::customer_portal::authority::UnavailableAuthority)
             };
         let context_selection_authority =
-            crate::context_selection_http::authority::configured(&config);
+            crate::context_selection_http::authority::configured(&config, &pool);
         Ok(Self {
             context_selection_authority,
             context_selection_slots: Arc::new(tokio::sync::Semaphore::new(16)),
@@ -129,7 +127,8 @@ impl AppState {
                     max_entries: config.login_max_entries,
                     ttl: Duration::from_secs(config.login_window_seconds),
                     source_limit: config.login_source_requests,
-                    user_failure_limit: config.login_user_failures,
+                    #[cfg(test)]
+                    user_failure_limit: 5,
                 },
             )),
             config,
@@ -140,7 +139,6 @@ impl AppState {
                 .build()
                 .expect("static map client configuration"),
             started_at: chrono::Utc::now(),
-            oauth_rate: Arc::new(Mutex::new(HashMap::new())),
             map_rate: Arc::new(Mutex::new(HashMap::new())),
             introspection_clients: Arc::new(Mutex::new(HashMap::new())),
             introspection_failures: Arc::new(Mutex::new(HashMap::new())),
@@ -161,23 +159,6 @@ impl AppState {
     /// 权限口径与 GET /api/auth/menus 的非超管分支完全一致:
     /// 角色 ∩ 组织授权 ∩ 租户授权 —— 菜单(含 BUTTON 型操作权限码)必须同时被
     /// 当前组织与所属租户授权, 角色菜单才生效, 保证「组织只能看到/操作被授权的菜单与按钮」。
-    #[cfg(test)]
-    pub async fn permissions_of(
-        &self,
-        user_id: Uuid,
-        org_id: Uuid,
-    ) -> Result<HashSet<String>, AppError> {
-        let tenant_id: Uuid =
-            sqlx::query_scalar("SELECT tenant_id FROM organizations WHERE id = $1")
-                .bind(org_id)
-                .fetch_one(&self.pool)
-                .await?;
-        let rows = authorization::effective_menu_rows(&self.pool, user_id, tenant_id, org_id, None)
-            .await?;
-        Ok(authorization::permissions_of(&rows))
-    }
-
-    /// 权限校验；任何上下文都必须满足当前组织与租户的应用、菜单授权。
     pub async fn require(&self, user: &CurrentUser, perm: &'static str) -> Result<(), AppError> {
         // These catalogs are global platform resources; a tenant or child
         // organization menu grant cannot turn them into scoped resources.
@@ -199,24 +180,6 @@ impl AppState {
             Ok(())
         } else {
             Err(AppError::forbidden(format!("无操作权限: {}", perm)))
-        }
-    }
-
-    /// Menus sharing a permission code still require an explicit grant for the
-    /// selected page. Application and tenant/organization caps are unchanged.
-    pub(crate) async fn require_menu_path(
-        &self,
-        user: &CurrentUser,
-        path: &'static str,
-    ) -> Result<(), AppError> {
-        let rows = authorization::context_menu_rows(&self.pool, user, None).await?;
-        if rows
-            .iter()
-            .any(|menu| menu["type"] == "MENU" && menu["path"] == path)
-        {
-            Ok(())
-        } else {
-            Err(AppError::forbidden(format!("当前组织未授权菜单: {path}")))
         }
     }
 
@@ -368,15 +331,11 @@ impl AppState {
     /// OAuth 端点滑动窗口限流: 清理该 IP 过期时间戳后检查长度,
     /// 未超限则记录本次请求返回 None; 超限不记录, 返回建议的 Retry-After 秒数。
     /// 锁中毒或达到身份数量上限时拒绝请求。
-    pub fn record_oauth_request(&self, ip: &str) -> Option<i64> {
-        record_rate(&self.oauth_rate, ip, OAUTH_RATE_MAX_REQUESTS)
-    }
-
     pub fn record_introspection_attempt(&self, ip: &str) -> Option<i64> {
         record_rate(
             &self.introspection_attempts,
             ip,
-            self.config.oauth_introspection_attempts_per_minute,
+            self.config.resource_service_attempts_per_minute,
         )
     }
 
@@ -384,7 +343,7 @@ impl AppState {
         record_rate(
             &self.introspection_failures,
             ip,
-            self.config.oauth_auth_failure_requests_per_minute,
+            self.config.resource_service_auth_failures_per_minute,
         )
     }
 
@@ -392,7 +351,7 @@ impl AppState {
         record_rate(
             &self.introspection_clients,
             client_id,
-            self.config.oauth_introspection_client_requests_per_minute,
+            self.config.resource_service_requests_per_minute,
         )
     }
 }

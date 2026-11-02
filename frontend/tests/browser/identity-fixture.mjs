@@ -69,6 +69,7 @@ export async function installSsoAuthMode(context) {
       const members = profile?.memberships?.filter(m => m.memberType === 'EMPLOYEE' && m.status === 'ENABLED') ?? [membership(proof, profile)]
       if (!members.some(m => m.membershipId === proof.membershipId)) members.push(membership(proof, profile))
       return reply(route, { sessionId: state.sessionId, version: String(state.version), csrfToken: 'a'.repeat(64),
+        ...(state.centralizedContextSelection ? { centralizedContextSelection: true } : {}),
         account: { id: proof.userId, username: profile?.user?.username ?? 'sso-fixture', realName: profile?.user?.realName ?? 'SSO fixture', avatar: '' },
         memberships: members, context: state.selected ? proof : null, expiresAt: new Date(Date.now()+3600000).toISOString() })
     }

@@ -1,0 +1,161 @@
+{
+  "contractVersion": "unified-auth-phase20-real-https/1",
+  "date": "2026-10-28T10:18:49.140Z",
+  "tlsErrorsIgnored": false,
+  "httpFixtures": false,
+  "positiveMfaSeededBySql": false,
+  "fixtureSignedNegativeTokens": true,
+  "checks": [
+    {
+      "name": "real-two-rp-login-produces-distinct-opaque-sid",
+      "result": "PASS"
+    },
+    {
+      "name": "current-app-original-grant-only-with-consent-and-other-rp-preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "same-rp-independent-original-grant-survives-current-app",
+      "result": "PASS"
+    },
+    {
+      "name": "collector-outage-does-not-delay-canonical-revoke-and-recovers-same-operation",
+      "result": "PASS",
+      "responseMilliseconds": 533,
+      "collectorDelayMilliseconds": 3000,
+      "retryClockAdvancedAfterObservedFailure": true
+    },
+    {
+      "name": "permanent-delivery-failure-is-terminal-and-never-restores-authority",
+      "result": "PASS"
+    },
+    {
+      "name": "short-session-contract-is-explicitly-degraded-and-rejects-request-destinations",
+      "result": "PASS"
+    },
+    {
+      "name": "global-closes-both-rps-and-sso-with-consent-preserved",
+      "result": "PASS",
+      "notificationsBeforeSessionReads": true
+    },
+    {
+      "name": "signed-receiver-audience-signature-sub-and-replay-denials",
+      "result": "PASS"
+    },
+    {
+      "name": "real-reviewer-password-totp-enrollment-and-invitation-issue",
+      "result": "PASS"
+    },
+    {
+      "name": "verified-channel-failure-retries-without-durable-invitation-material",
+      "result": "PASS",
+      "retryClockAdvancedOnlyAfterObservedFailure": true
+    },
+    {
+      "name": "real-public-invitation-form-creates-one-account-and-no-business-identity",
+      "result": "PASS"
+    },
+    {
+      "name": "delivered-invitation-revocation-and-expired-owner-proof-deny-new-account",
+      "result": "PASS",
+      "expiredBoundary": "owner verification deadline; original invitation absolute deadline separately covered by canonical PG matrix"
+    },
+    {
+      "name": "durable-record-redaction-and-actual-tls",
+      "result": "PASS"
+    }
+  ],
+  "endpoints": {
+    "/auth/login 303": 5,
+    "/oauth/authorize 303": 10,
+    "/oauth/login 200": 8,
+    "/sso/assets/identity.css 200": 16,
+    "/sso/assets/identity.js 200": 8,
+    "/oauth/interaction/:id 200": 21,
+    "/api/sso/preauth 200": 6,
+    "/api/sso/login 200": 5,
+    "/auth/callback 303": 7,
+    "/ 200": 7,
+    "/assets/index-DCmp29IG.css 200": 6,
+    "/assets/index-CV3PkiE4.js 200": 6,
+    "/auth/config 200": 17,
+    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2 200": 6,
+    "/auth/session 200": 20,
+    "/assets/index-DJLdva9A.css 200": 2,
+    "/assets/index-u1OsXVgx.js 200": 2,
+    "/auth/login-bootstrap 200": 1,
+    "/auth/login 200": 1,
+    "/auth/logout 200": 2,
+    "/sso/applications 200": 6,
+    "/sso/assets/applications.css 200": 7,
+    "/sso/assets/applications.js 200": 6,
+    "/api/sso/session 200": 8,
+    "/api/sso/consents 200": 6,
+    "/auth/context-token 200": 6,
+    "/assets/AppLayout-BMJd2SCD.js 200": 2,
+    "/assets/sheet-Lyp0iw9Y.js 200": 2,
+    "/auth/backchannel-logout 200": 2,
+    "/auth/backchannel-logout 409": 2,
+    "/auth/backchannel-logout 400": 6,
+    "/sso/security 200": 1,
+    "/sso/assets/security.js 200": 1,
+    "/api/sso/mfa/status 200": 1,
+    "/api/sso/mfa/enrollment 200": 1,
+    "/api/sso/mfa/enrollment/confirm 200": 1,
+    "/auth/step-up 303": 1,
+    "/api/sso/login 428": 1,
+    "/system/oauth/clients 200": 1,
+    "/assets/index-DHBBecS5.js 200": 1,
+    "/assets/index-9PrqeT5U.js 200": 1,
+    "/assets/index-l2lNUsTA.js 200": 1,
+    "/assets/alert-dialog-CjIrfqte.js 200": 1,
+    "/assets/index-A_WEWRg1.js 200": 1,
+    "/assets/index-b-OEH2e2.js 200": 1,
+    "/assets/index-D8AnSf9e.js 200": 1,
+    "/assets/button-CCfKCQ1u.js 200": 1,
+    "/assets/tooltip-BQW3eiPb.js 200": 1,
+    "/assets/utils-CcEQGMld.js 200": 1,
+    "/assets/index-BqtRRT29.js 200": 1,
+    "/assets/index-DL7Dg7Vf.js 200": 1,
+    "/assets/index-Da4yOujI.js 200": 1,
+    "/assets/index-VKpD-LBA.js 200": 1,
+    "/assets/icons-CCAPKt16.js 200": 1,
+    "/assets/x-D7s1hYFn.js 200": 1,
+    "/assets/index-CPbXs_ve.js 200": 1,
+    "/assets/user-plus-KFgi7riO.js 200": 1,
+    "/assets/wifi-BSJoEJZ5.js 200": 1,
+    "/assets/users-BXL8zEs2.js 200": 1,
+    "/assets/network-B5u0waRG.js 200": 1,
+    "/assets/user-x-YSmd1lai.js 200": 1,
+    "/assets/user-cog-CKGU32B6.js 200": 1,
+    "/assets/user-2qGGN0df.js 200": 1,
+    "/assets/trending-up-D6MbHzRH.js 200": 1,
+    "/assets/tv-MSU-RgcS.js 200": 1,
+    "/assets/trash-2-CSyRaAE3.js 200": 1,
+    "/assets/server-COcua0dH.js 200": 1,
+    "/assets/sparkles-S-c-cFxy.js 200": 1,
+    "/assets/shield-check-DB3qJo-D.js 200": 1,
+    "/assets/shield-alert-B3QtSz8u.js 200": 1,
+    "/assets/search-C7ygTPqP.js 200": 1,
+    "/assets/send-CW82SU7H.js 200": 1,
+    "/assets/save-DYg02LDn.js 200": 1,
+    "/assets/refresh-cw-Cw0UP0mT.js 200": 1,
+    "/assets/phone-D5zmfNxy.js 200": 1,
+    "/assets/plus-DfmHnA5q.js 200": 1,
+    "/assets/message-square-BwWJWohf.js 200": 1,
+    "/api/identity/invitations 200": 3,
+    "/sso/invitations/:id 200": 1,
+    "/sso/assets/invitation.js 200": 1,
+    "/api/sso/invitations/:id/accept 200": 2,
+    "/api/sso/invitations/:id/accept 409": 2,
+    "/api/identity/invitations/:id/revoke 200": 1,
+    "/api/sso/invitations/:id/accept 403": 1
+  },
+  "result": "PASS",
+  "browserVersion": "156.0.8078.4",
+  "realEnrollment": true,
+  "ownedReviewerMfaReset": true,
+  "tlsProtocols": [
+    "TLS 1.3"
+  ]
+}

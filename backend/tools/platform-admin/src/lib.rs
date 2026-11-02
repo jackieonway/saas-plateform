@@ -61,11 +61,9 @@ pub fn run(
         )?;
     }
     if options.is_plan() {
-        let mut result = json!({"ok":true,"mode":"PLAN","command":options.command,"applicationCode":options.app().code(),"basePath":options.app().base_path(),"entryUrl":options.app().entry_url(),"runtimeMode":"TRUSTED","entryType":"HTML","environment":options.environment,"externalWrites":false,"permissions":options.app().permissions(),"grants":[],"clientProvisioning":"MANUAL_PLATFORM_UI","activation":"SEPARATE_EXPLICIT_COMMAND"});
+        let mut result = json!({"ok":true,"mode":"PLAN","command":options.command,"applicationCode":options.app().code(),"basePath":options.app().base_path(),"entryUrl":options.app().entry_url(),"runtimeMode":"TRUSTED","entryType":"HTML","environment":options.environment,"externalWrites":false,"permissions":options.app().permissions(),"grants":[],"credentialAuthority":"IDENTITY_AUTH_REGISTRY","activation":"SEPARATE_EXPLICIT_COMMAND"});
         if matches!(options.command.as_str(), "plan" | "bootstrap") {
             result["applicationAccessPolicy"] = json!({"allowedMemberTypes":["EMPLOYEE"]});
-            result["applicationServiceClientAccessPolicy"] =
-                json!({"subjectMode":"MACHINE","allowedMemberTypes":[]});
         }
         if let Some(artifact) = artifact {
             result["version"] = artifact["version"].clone();
@@ -92,8 +90,8 @@ pub fn run(
     }
     let api = ManagementApi::new(env, &options)?;
     let result = match options.command.as_str() {
-        "inspect" => bootstrap::inspect(&api, env, &options),
-        "bootstrap" => bootstrap::apply(&api, env, &options),
+        "inspect" => bootstrap::inspect(&api, &options),
+        "bootstrap" => bootstrap::apply(&api, &options),
         "access-policy-read" | "access-policy-save" => access_policy::execute(&api, &options),
         "grants-apply" => grants::apply(
             options.manifest_path()?,

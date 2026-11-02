@@ -1,0 +1,30 @@
+{
+  "status": "FAIL",
+  "validationLevel": "ACTUAL_EMPTY_POSTGRESQL",
+  "snapshot": "phase24-schema-r1",
+  "snapshotSha256": "0f25637ce6aa10f2464c39064f4f0234a1c01ea3d497e92f26595e2e648fe076",
+  "migrationSha256": "ae0ed8dc3e6a0b9a48db2696f7f23a346154660cff5bc07908bd3c8643bae796",
+  "migrationBinarySha256": "a54620232ba916f3448559252609a2e68af0744db7cdc5938f45c08f823724e4",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "checks": [
+    {
+      "name": "fresh_database_absent",
+      "status": "PASS"
+    },
+    {
+      "name": "fresh_migration",
+      "status": "PASS"
+    },
+    {
+      "name": "repeat_same_migration",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": {
+    "databaseAbsent": true,
+    "rolesAbsent": true
+  },
+  "errorType": "RuntimeError",
+  "error": "owned HTTPS fixture SQL failed (SQLSTATE 23502)"
+}

@@ -12,7 +12,6 @@ fn main() {
         let env = [
             "PLATFORM_API_ORIGIN",
             "PLATFORM_ADMIN_BEARER",
-            "PLATFORM_CLIENT_ID",
             "PLATFORM_CA_FILE",
         ]
         .into_iter()

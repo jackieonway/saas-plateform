@@ -1,0 +1,730 @@
+{
+  "contractVersion": "unified-auth-phase25-deployment-plan/1",
+  "status": "PREPARED_WITH_PHASE26_GATES",
+  "observedAtUtc": "2026-10-29T10:10:45.3337323Z",
+  "scope": "Current local Windows and WSL Ubuntu only; read-only inventory and proposed new installation",
+  "officialDeploymentExecuted": false,
+  "candidateVersionBinding": "PENDING_FINAL_PHASE25_CANDIDATE",
+  "secretValuesRecorded": false,
+  "rawCommandLinesRecorded": false,
+  "hosts": {
+    "address": "127.0.0.1",
+    "names": [
+      "auth.saas.test",
+      "console.saas.test",
+      "customer.saas.test"
+    ],
+    "authorization": "auth and console local hostnames previously confirmed; customer remains explicit target gate"
+  },
+  "windows": {
+    "checkedPorts": [
+      443,
+      4443,
+      3001,
+      3041,
+      3031,
+      3004,
+      3101,
+      3003
+    ],
+    "listeners": [],
+    "recordedPidFiles": [
+      {
+        "file": "bridges.pid.json",
+        "recordedPid": 43580,
+        "recordedStartedAt": "2026-10-27T14:23:45.122Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "chat-ui.pid.json",
+        "recordedPid": 43188,
+        "recordedStartedAt": "2026-10-27T14:23:47.241Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "chat.pid.json",
+        "recordedPid": 42264,
+        "recordedStartedAt": "2026-10-27T14:23:51.492Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "gateway.pid.json",
+        "recordedPid": 5044,
+        "recordedStartedAt": "2026-10-27T14:23:44.874Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "identity.pid.json",
+        "recordedPid": 24028,
+        "recordedStartedAt": "2026-10-27T14:33:24.584Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "jquery-ui.pid.json",
+        "recordedPid": 44436,
+        "recordedStartedAt": "2026-10-27T14:23:46.608Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "notification.pid.json",
+        "recordedPid": 30716,
+        "recordedStartedAt": "2026-10-27T14:23:51.12Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "oauth-ui.pid.json",
+        "recordedPid": 44100,
+        "recordedStartedAt": "2026-10-27T14:23:47.587Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "oauth.pid.json",
+        "recordedPid": 47556,
+        "recordedStartedAt": "2026-10-27T14:23:51.826Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "orders-ui.pid.json",
+        "recordedPid": 47292,
+        "recordedStartedAt": "2026-10-27T14:23:46.067Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "orders.pid.json",
+        "recordedPid": 15604,
+        "recordedStartedAt": "2026-10-27T14:23:50.457Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "platform-ui.pid.json",
+        "recordedPid": 43528,
+        "recordedStartedAt": "2026-10-27T14:23:45.351Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "platform.pid.json",
+        "recordedPid": 41764,
+        "recordedStartedAt": "2026-10-27T14:52:47.437Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "portal-ui.pid.json",
+        "recordedPid": 44700,
+        "recordedStartedAt": "2026-10-27T14:23:45.579Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "portal.pid.json",
+        "recordedPid": 41364,
+        "recordedStartedAt": "2026-10-27T14:23:50.782Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "report-ui.pid.json",
+        "recordedPid": 18840,
+        "recordedStartedAt": "2026-10-27T14:23:46.928Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "stores-ui.pid.json",
+        "recordedPid": 37284,
+        "recordedStartedAt": "2026-10-27T14:23:45.824Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "stores.pid.json",
+        "recordedPid": 45796,
+        "recordedStartedAt": "2026-10-27T14:23:50.139Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "vue-ui.pid.json",
+        "recordedPid": 40104,
+        "recordedStartedAt": "2026-10-27T14:23:46.327Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      },
+      {
+        "file": "wsl.pid.json",
+        "recordedPid": 42212,
+        "recordedStartedAt": "2026-10-27T14:23:44.61Z",
+        "matchingPidPresent": false,
+        "currentProcessName": null
+      }
+    ],
+    "pidFileCount": 20,
+    "absentRecordedPidCount": 20
+  },
+  "wsl": {
+    "distribution": "Ubuntu",
+    "listeners": [
+      {
+        "address": "127.0.0.1",
+        "port": 5432,
+        "process": "postgres",
+        "pid": 273
+      },
+      {
+        "address": "127.0.0.1",
+        "port": 55494,
+        "process": "postgres",
+        "pid": 1317
+      }
+    ],
+    "listenerObservationMethod": "ss -ltnpH; selected target ports only",
+    "databaseObservationMethod": "psql -X --no-password over local peer; pg_database name/owner only",
+    "existingDatabases": [
+      {
+        "database": "saas_platform_authux_dev",
+        "owner": "saas_local26_migration_owner"
+      },
+      {
+        "database": "stores_codex_local",
+        "owner": "saas_local26_stores"
+      },
+      {
+        "database": "work_orders_dev",
+        "owner": "saas_local26_orders"
+      },
+      {
+        "database": "saas_customer_portal_dev",
+        "owner": "saas_local26_portal"
+      }
+    ],
+    "existingDatabaseContentRead": false,
+    "existingDatabasesModified": false,
+    "taskPort55494IsDeploymentTarget": false
+  },
+  "legacyConfiguration": {
+    "safeDatabaseMetadata": [
+      {
+        "service": "platform",
+        "variable": "DATABASE_URL",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "saas_platform_authux_dev",
+        "user": "saas_local26_platform_runtime",
+        "explicitSslMode": false
+      },
+      {
+        "service": "identity",
+        "variable": "DATABASE_URL",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "saas_platform_authux_dev",
+        "user": "saas_local26_identity_runtime",
+        "explicitSslMode": false
+      },
+      {
+        "service": "stores",
+        "variable": "STORES_DATABASE_URL",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "stores_codex_local",
+        "user": "saas_local26_stores",
+        "explicitSslMode": false
+      },
+      {
+        "service": "orders",
+        "variable": "WORK_ORDERS_DATABASE_URL",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "work_orders_dev",
+        "user": "saas_local26_orders",
+        "explicitSslMode": false
+      },
+      {
+        "service": "portal",
+        "variable": "DATABASE_URL",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "saas_customer_portal_dev",
+        "user": "saas_local26_portal",
+        "explicitSslMode": false
+      },
+      {
+        "service": "notification",
+        "variable": "DATABASE_URL",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "saas_platform_authux_dev",
+        "user": "saas_local26_notification",
+        "explicitSslMode": false
+      }
+    ],
+    "environmentVariableNames": [
+      {
+        "service": "platform",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "DATABASE_URL",
+          "AUTO_CREATE_DATABASE",
+          "BIND_ADDR",
+          "JWT_SECRET",
+          "METRICS_TOKEN",
+          "PUBLIC_APP_URL",
+          "MICRO_GATEWAY_ORIGIN",
+          "MICRO_ALLOWED_ORIGINS",
+          "CORS_ALLOWED_ORIGINS",
+          "BFF_OIDC_ISSUER",
+          "BFF_OIDC_CLIENT_ID",
+          "BFF_OIDC_CLIENT_SECRET",
+          "BFF_OIDC_REDIRECT_URI",
+          "BFF_TOKEN_KEY_FILE",
+          "BFF_CA_CERT_FILE",
+          "IDENTITY_REMOTE_ENABLED",
+          "IDENTITY_SERVICE_URL",
+          "OIDC_ISSUER",
+          "IDENTITY_SERVICE_CA_FILE",
+          "IDENTITY_SERVICE_CLIENT_ID",
+          "IDENTITY_SERVICE_CLIENT_SECRET",
+          "IDENTITY_ADMIN_SERVICE_CLIENT_ID",
+          "IDENTITY_ADMIN_SERVICE_CLIENT_SECRET",
+          "CUSTOMER_AUTHORITY_SERVICE_CLIENT_ID",
+          "CUSTOMER_AUTHORITY_SERVICE_CLIENT_SECRET",
+          "CUSTOMER_PORTAL_PORT_ENABLED",
+          "CUSTOMER_PORTAL_OIDC_CLIENT_ID",
+          "CUSTOMER_PROFILE_CLIENT_REF",
+          "CUSTOMER_PROFILE_APPLICATION_ID",
+          "MEMBERSHIP_LIFECYCLE_ENABLED",
+          "CUSTOMER_MEMBERSHIPS_ENABLED",
+          "DUAL_MEMBERSHIPS_ENABLED",
+          "DATA_GRANT_POLICY",
+          "APP_ENV_FILE",
+          "CONTEXT_SOURCE_SERVICE_CLIENT_ID",
+          "CONTEXT_SOURCE_SERVICE_CLIENT_SECRET"
+        ]
+      },
+      {
+        "service": "identity",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "DATABASE_URL",
+          "BIND_ADDR",
+          "SSO_ENABLED",
+          "OIDC_ENABLED",
+          "SSO_ORIGIN",
+          "OIDC_ISSUER",
+          "OIDC_KEYSET_PATH",
+          "CUSTOMER_PORTAL_OIDC_CLIENT_ID",
+          "CONTEXT_PLATFORM_ORIGIN",
+          "CONTEXT_PLATFORM_SERVICE_ID",
+          "CONTEXT_PLATFORM_SERVICE_SECRET",
+          "CONTEXT_PLATFORM_CA_FILE",
+          "CONTEXT_SELECTION_KEY_FILE"
+        ]
+      },
+      {
+        "service": "stores",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "STORES_DATABASE_URL",
+          "STORES_HOST",
+          "STORES_ALLOWED_ORIGINS",
+          "PLATFORM_API_ORIGIN",
+          "PLATFORM_CLIENT_ID",
+          "PLATFORM_CLIENT_SECRET",
+          "PLATFORM_CA_CERT_FILE"
+        ]
+      },
+      {
+        "service": "orders",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "WORK_ORDERS_DATABASE_URL",
+          "WORK_ORDERS_HOST",
+          "WORK_ORDERS_ALLOWED_ORIGINS",
+          "PLATFORM_API_ORIGIN",
+          "PLATFORM_CLIENT_ID",
+          "PLATFORM_CLIENT_SECRET",
+          "PLATFORM_CA_CERT_FILE"
+        ]
+      },
+      {
+        "service": "portal",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "DATABASE_URL",
+          "BIND_ADDR",
+          "CUSTOMER_PORTAL_ENABLED",
+          "PUBLIC_CUSTOMER_URL",
+          "OIDC_ISSUER",
+          "OIDC_CLIENT_ID",
+          "OIDC_CLIENT_SECRET",
+          "OIDC_REDIRECT_URI",
+          "OIDC_CA_FILE",
+          "CUSTOMER_RESOURCE_URL",
+          "CUSTOMER_RESOURCE_CLIENT_ID",
+          "CUSTOMER_RESOURCE_CLIENT_SECRET",
+          "CUSTOMER_RESOURCE_CA_FILE",
+          "PORTAL_TOKEN_KEY_FILE",
+          "CONTEXT_SELECTION_ENABLED",
+          "CONTEXT_SELECTION_CONSUMER_ID",
+          "CONTEXT_SELECTION_CONSUMER_SECRET"
+        ]
+      },
+      {
+        "service": "notification",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "DATABASE_URL",
+          "NOTIFICATION_ENV",
+          "PLATFORM_API_BASE_URL",
+          "NOTIFICATION_ALLOWED_ORIGINS",
+          "NOTIFICATION_HOST",
+          "NOTIFICATION_PORT",
+          "METRICS_TOKEN"
+        ]
+      },
+      {
+        "service": "oauth",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "OAUTH_PUBLIC_ORIGIN",
+          "OAUTH_PLATFORM_ORIGIN",
+          "OAUTH_CC_CLIENT_ID",
+          "OAUTH_CC_CLIENT_SECRET",
+          "SSL_CERT_FILE",
+          "OAUTH_ALLOW_INSECURE_LOOPBACK"
+        ]
+      },
+      {
+        "service": "chat",
+        "names": [
+          "APP_ENV",
+          "RUST_LOG",
+          "CHAT_BIND_ADDR",
+          "CHAT_ALLOWED_ORIGINS"
+        ]
+      }
+    ],
+    "retiredPlatformVariablesPresent": [
+      "IDENTITY_ADMIN_SERVICE_CLIENT_ID",
+      "IDENTITY_ADMIN_SERVICE_CLIENT_SECRET"
+    ],
+    "currentPortalRequiredKeysMissing": [
+      "IDENTITY_SERVICE_URL",
+      "IDENTITY_SERVICE_CA_FILE",
+      "CUSTOMER_SOURCE_SERVICE_CLIENT_ID",
+      "CUSTOMER_SOURCE_SERVICE_CLIENT_SECRET"
+    ],
+    "privateResourceOriginNeedsReplacement": true,
+    "oauthPlaygroundGatewayRoutesPresent": true,
+    "oldLauncherApprovedForCurrentCandidate": false
+  },
+  "certificate": {
+    "caThumbprint": "9890EE2D669E2955DF5FC776213112054240AAE4",
+    "leafThumbprint": "B9F50538ABDD7DAEA52D4CCFB809638EF226C472",
+    "notAfterUtc": "2027-10-26T12:13:35Z",
+    "san": [
+      "console.saas.test",
+      "auth.saas.test",
+      "customer.saas.test",
+      "localhost"
+    ],
+    "currentUserRootPresent": true,
+    "localMachineRootPresent": false,
+    "chainVerifiedWithExplicitCa": true,
+    "privateKeyRead": false,
+    "privateKeyCustodyOrAclVerified": false
+  },
+  "proposal": {
+    "status": "NOT_CREATED_NOT_AUTHORIZED",
+    "databaseHost": "127.0.0.1",
+    "databasePort": 5432,
+    "databases": [
+      "saas_unified_auth_release_20261029",
+      "saas_stores_release_20261029",
+      "saas_work_orders_release_20261029",
+      "saas_customer_portal_release_20261029"
+    ],
+    "databaseNamesAbsentAtReadOnlyCatalogCheck": true,
+    "rolePrefix": "saas_release_20261029",
+    "rolePrefixAbsentAtReadOnlyCatalogCheck": true,
+    "preserveAllExistingDatabases": true,
+    "publicHttpsPort": 443,
+    "privateHttpsPortCandidate": 4443,
+    "privateListenerImplementation": "PENDING_ACTUAL_SERVICE_MANAGER_AND_ALLOWLIST_APPROVAL",
+    "secretReferences": "PENDING_PROTECTED_LOCAL_PATH_AND_ACL",
+    "cleanupOfExistingDataAuthorized": false,
+    "roles": [
+      {
+        "name": "saas_release_20261029_migration_owner",
+        "scope": "shared",
+        "login": false
+      },
+      {
+        "name": "saas_release_20261029_identity_owner",
+        "scope": "shared",
+        "login": false
+      },
+      {
+        "name": "saas_release_20261029_platform_owner",
+        "scope": "shared",
+        "login": false
+      },
+      {
+        "name": "saas_release_20261029_bridge_owner",
+        "scope": "shared",
+        "login": false
+      },
+      {
+        "name": "saas_release_20261029_identity_runtime",
+        "scope": "shared",
+        "login": true
+      },
+      {
+        "name": "saas_release_20261029_platform_runtime",
+        "scope": "shared",
+        "login": true
+      },
+      {
+        "name": "saas_release_20261029_notification_runtime",
+        "scope": "notification",
+        "login": true
+      },
+      {
+        "name": "saas_release_20261029_stores_owner",
+        "scope": "stores",
+        "login": false
+      },
+      {
+        "name": "saas_release_20261029_stores_runtime",
+        "scope": "stores",
+        "login": true
+      },
+      {
+        "name": "saas_release_20261029_orders_owner",
+        "scope": "orders",
+        "login": false
+      },
+      {
+        "name": "saas_release_20261029_orders_runtime",
+        "scope": "orders",
+        "login": true
+      },
+      {
+        "name": "saas_release_20261029_portal_owner",
+        "scope": "portal",
+        "login": false
+      },
+      {
+        "name": "saas_release_20261029_portal_runtime",
+        "scope": "portal",
+        "login": true
+      }
+    ],
+    "roleCount": 13,
+    "roleRestrictions": [
+      "NOINHERIT",
+      "NOSUPERUSER",
+      "NOCREATEDB",
+      "NOCREATEROLE",
+      "NOREPLICATION",
+      "NOBYPASSRLS",
+      "runtime cannot inherit owner",
+      "NOLOGIN owner passwords remain unset"
+    ]
+  },
+  "phase26Gates": [
+    {
+      "id": "Q3",
+      "state": "MISSING_REAL_FACTS",
+      "requires": [
+        "reviewer/publisher accounts and application delegation",
+        "test acceptance reference",
+        "separate applicant/reviewer"
+      ]
+    },
+    {
+      "id": "Q5_Q6",
+      "state": "MISSING_TARGET_BINDINGS",
+      "requires": [
+        "trusted invitation/identity-verification channels",
+        "real admin TOTP",
+        "two distinct authorized recovery operators"
+      ]
+    },
+    {
+      "id": "Q8",
+      "state": "MISSING_REAL_FACTS",
+      "requires": [
+        "operating legal entity/jurisdiction/contracts",
+        "privacy/data-residency and retention ownership references"
+      ]
+    },
+    {
+      "id": "Q9",
+      "state": "PENDING_FINAL_EVIDENCE_AND_OPERATIONS",
+      "requires": [
+        "current full-version capacity/fault/key/recovery evidence",
+        "on-call/security/product contact channels",
+        "protected backup/WAL schedule and rehearsed business restore"
+      ]
+    },
+    {
+      "id": "Q10",
+      "state": "AWAITING_TARGETED_AUTHORIZATION",
+      "requires": [
+        "confirm exact engine/new database and role names",
+        "confirm three hostnames/public and private listener/service manager",
+        "protected secret references",
+        "specific switch scope/window and rollback approval"
+      ]
+    },
+    {
+      "id": "PHASE25",
+      "state": "PENDING_FULL_CANDIDATE_ACCEPTANCE",
+      "requires": [
+        "final candidate hashes",
+        "all matrix outcomes",
+        "owned resource cleanup"
+      ]
+    }
+  ],
+  "rollback": {
+    "legacyAuthenticationFallbackAllowed": false,
+    "genericRestoreAllowed": false,
+    "canonicalIdentityRecoveryRequired": true,
+    "identityRecoveryCoversStoresAndOrders": false,
+    "businessRestoreApprovalRequired": true,
+    "oldDatabaseExistenceProvesSafeRollback": false,
+    "opensTrafficAutomatically": false
+  },
+  "resources": {
+    "dockerCreated": 0,
+    "dockerReused": 0,
+    "databaseCreated": 0,
+    "rolesCreated": 0,
+    "processesCreated": 0,
+    "runtimeDirectoriesCreated": 0,
+    "existingResourcesChanged": false,
+    "windowsVhdxReclamationClaimed": false
+  },
+  "sources": [
+    {
+      "path": "saas-plateform/backend/src/config.rs",
+      "sha256": "a4f7e84a5db48326660f6512ae532f67b54d371bfacbc807e8968b33569991a4"
+    },
+    {
+      "path": "saas-plateform/backend/migrations/0001_init.sql",
+      "sha256": "626862ee41b929a623bb68e6acfcfdd51f01869987bceb437bedee116ddc825b"
+    },
+    {
+      "path": "saas-plateform/backend/ops/identity-deployment/create-roles.sql",
+      "sha256": "5389a1c2187aba441f8ce7b936950112369293818b0e7f2c5f84be7ec6681259"
+    },
+    {
+      "path": "saas-plateform/backend/ops/identity-deployment/provision.sql",
+      "sha256": "076583529fae41f0de8a98d2126731201b4eed4ab302559c812f3803e83a0980"
+    },
+    {
+      "path": "saas-plateform/backend/ops/identity-deployment/verify.sql",
+      "sha256": "72dc5aff2efc8b7d82b501437ea064dbe8bb45288a5deb96582eb9a254b73f1e"
+    },
+    {
+      "path": "saas-plateform/backend/ops/identity-recovery/README.md",
+      "sha256": "e7b2b43e03f82b958a2f3967c9a91d256e7f01e4a150918c2f04373174661261"
+    },
+    {
+      "path": "saas-stores/backend/src/config.rs",
+      "sha256": "e4dc10a478d42bebaaea23afa789d9e4b00914830205a1dea84dd04eb2006b18"
+    },
+    {
+      "path": "saas-stores/backend/src/migration_cli.rs",
+      "sha256": "a78367def93aac3cbe42ede18c2e397ad321cf55c8bef6d5b86fc6713ccbe66e"
+    },
+    {
+      "path": "saas-work-orders/backend/src/config.rs",
+      "sha256": "922489a897de62de67d66fdbfe5c27e53909b170f437c42ef26bff19871c57a4"
+    },
+    {
+      "path": "saas-work-orders/backend/src/migration_cli.rs",
+      "sha256": "c9152658e98a97d3576132e30e362fc43e9436464ca27f22f477f9dba4081de1"
+    },
+    {
+      "path": "saas-customer-portal/backend/src/config.rs",
+      "sha256": "5ee6b939bbf4ae80f416c5886f24b0bcd765ed6e5f2fef463ec6955184a80db1"
+    },
+    {
+      "path": "saas-notification/src/config.rs",
+      "sha256": "2dbef2953ca8ea33e6844ce5df23d5a94ce32d3f25f1d43bad5f2be32d37e7a3"
+    },
+    {
+      "path": "saas-plateform/backend/docs/designs/unified-oauth-oidc-sso-policy-decisions.md",
+      "sha256": "427d349ed71ac23c888ccdf48a5ea1be4e8be088e749043fdaa37ea0df18e5bf"
+    },
+    {
+      "path": ".local-run/gateway.mjs",
+      "sha256": "45dd1163f2a7c527dc61fe662c35fb30f41c4276c6e82d74c796a599b59ceb6f"
+    }
+  ],
+  "businessFixturePreparation": {
+    "source": "saas-plateform/backend/tests/unified-auth-https/phase25-business-fixture.py",
+    "sha256": "9e9da66c6348adbc54af56b64d34b5ee671fb8d3af85b89e405f8818594f64ff",
+    "pureComponentCases": 13,
+    "result": "PASS",
+    "scope": "8 contract/SQL-generation/policy cases and 5 mocked cleanup/ownership/lease cases; no real DB or service calls",
+    "temporaryUnitDirectoriesCreated": 5,
+    "temporaryUnitDirectoriesCleaned": 5,
+    "actions": [
+      "prepare",
+      "cleanup-ui",
+      "cleanup"
+    ],
+    "databaseOperationsExecutedByThisSubtask": false,
+    "runtimeOperationsExecutedByThisSubtask": false
+  },
+  "review": {
+    "observedAtUtc": "2026-10-29T11:21:15Z",
+    "sourceHashesChecked": 14,
+    "sourceHashesMatch": true,
+    "relativeLinksChecked": 6,
+    "relativeLinksResolve": true,
+    "observedInventoryTimestampPreserved": true,
+    "formalCandidateBindingPending": true,
+    "formalDeploymentExecuted": false,
+    "approvedRoleObjectsCreated": false,
+    "windowsRecheckedPorts": [
+      443,
+      4443,
+      24443,
+      24444
+    ],
+    "windowsRecheckedPortsHadNoListener": true,
+    "postgresCatalogNotRefreshedByReview": true,
+    "authorizationChecklist": [
+      "Exact local engine, four new databases, thirteen roles, three hostnames and six affected services",
+      "Final release/secret paths, upstream ports, service manager and private listener",
+      "Final candidate hashes and matrix/cleanup evidence",
+      "Exact create/migrate/provision/start/switch/observe/failure-close actions and rollback",
+      "Real reviewer/publisher/recovery/operations/security/support identities and policy references",
+      "Formal backup/WAL and business-database restore responsibilities"
+    ]
+  }
+}

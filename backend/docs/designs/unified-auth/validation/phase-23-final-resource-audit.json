@@ -1,0 +1,119 @@
+{
+  "contractVersion": "phase23-final-resource-audit/1",
+  "auditedAt": "2026-10-29T13:46:09.0471563+08:00",
+  "result": "PASS_WITH_RETAINED_REUSABLE_RESOURCES",
+  "validationLayer": "INDEPENDENT_READONLY_LOCAL_AND_WSL_RESOURCE_INSPECTION",
+  "scope": {
+    "taskRoot": "/tmp/rust-saas-unified-auth-20261028",
+    "environmentOrHbaChangesPerformed": false,
+    "rehearsalRepeated": false,
+    "resourcesDeletedByAudit": false,
+    "onlyWrittenFile": "phase-23-final-resource-audit.json"
+  },
+  "binding": {
+    "ownerAndDirectoryBindingVerified": true,
+    "ownerMarkerSha256": "0d9dab085d592899a9d70b24a09f613fd17c94b6179489d19c2eddb7f15ff6b8",
+    "taskUid": 1000,
+    "taskModeOctal": "0700",
+    "actualSystemIdentifier": "7701881991704683791",
+    "actualPort": 55494,
+    "actualDataDirectoryMatchesBinding": true,
+    "queriesForcedReadOnly": true
+  },
+  "temporaryResourceCounts": {
+    "ownedDatabases": 0,
+    "nonDefaultDatabases": 0,
+    "ownedRoles": 0,
+    "ownedDatabaseBackends": 0,
+    "taskApplicationOrGatewayProcesses": 0,
+    "unexpectedTaskProcesses": 0,
+    "leaseOrSpawnJournalRecords": 0,
+    "privateRuntimeDirectories": 0,
+    "privateRuntimeFiles": 0,
+    "taskApplicationOrGatewayLogs": 0,
+    "rootHbaJournalDirectories": 0,
+    "taskHbaReceipts": 0,
+    "windowsOwnedNodeDriverOrProxyProcesses": 0,
+    "windowsExecutorLogDirectories": 0,
+    "windowsTaskPortListeners": 0
+  },
+  "hba": {
+    "sha256": "e6305f548fd8096217d02a8f93b5c50716d58df1d2441b12346dfe57db7027fd",
+    "matchesOriginalAndFinalRestorationProof": true,
+    "uid": 1000,
+    "gid": 1000,
+    "modeOctal": "0600",
+    "mtimeNs": "1793234141444530175",
+    "stableMetadataMatchesRestorationProof": true,
+    "atimeExcludedBecauseReadAccessCanAdvanceIt": true
+  },
+  "portsAndRetainedProcesses": {
+    "checkedTaskPorts": [23441, 23442, 23443, 24444, 24445, 24446, 23103, 25495, 55494],
+    "wslTaskPortListeners": [55494],
+    "sharedPostgresIntentionallyRetained": true,
+    "retainedPostgresMasterCount": 1,
+    "retainedPostgresProcessTreeCount": 9,
+    "retainedTaskSupervisorCount": 1,
+    "existingPort5432AndWindows443Modified": false
+  },
+  "docker": {
+    "context": "default",
+    "containers": 0,
+    "images": 0,
+    "volumes": 0,
+    "imageBytes": 0,
+    "containerBytes": 0,
+    "volumeBytes": 0,
+    "buildCacheBytes": 0,
+    "changeFromDriverCleanupProofBytes": 0,
+    "cleanupCommandsRunByAudit": false
+  },
+  "retainedStorage": {
+    "taskAllocatedBytesExcludingExternalCache": 1442504704,
+    "publicSnapshotDirectoryCount": 21,
+    "publicSnapshotAllocatedBytes": 700481536,
+    "binAllocatedBytes": 556150784,
+    "postgresDataAllocatedBytes": 91656192,
+    "nodeRuntimeAllocatedBytes": 90251264,
+    "rpDependencySourceAllocatedBytes": 1011712,
+    "externalCache": {
+      "path": "/home/jackie/.cache/rust-saas-unified-auth-20261029/target-linux",
+      "taskTargetLinuxIsSymlinkToThisPath": true,
+      "allocatedBytes": 3393560576,
+      "apparentBytes": 3372726926,
+      "separateOwnerPresent": true,
+      "ownerUid": 1000,
+      "ownerSha256": "6f8871dd64edd01ebbae1ec53c8bbc35bdee2b5b052c473515a61d73aa8fde66"
+    },
+    "tmpfsObservedUsedBytes": 1445138432,
+    "tmpfsObservedAvailableBytes": 6730457088,
+    "retainedResourcesAreNotClaimedReclaimed": true,
+    "windowsVdiskCompactionPerformedOrClaimed": false
+  },
+  "supersededToolSnapshotCleanupAdvice": {
+    "actionPerformed": "NONE",
+    "candidates": [
+      {"label": "phase23-tools-r16", "snapshotExists": true, "manifestExists": true, "uid": 1000, "allocatedBytes": 33411072, "manifestSha256": "11b0f6fe6125d33d3f1b6cbd56f29322ec065b77929df1a31b72d460651b16f2"},
+      {"label": "phase23-tools-r17", "snapshotExists": true, "manifestExists": true, "uid": 1000, "allocatedBytes": 33411072, "manifestSha256": "d2eae48e4d53de86be27a164c3e123f0e88d53e5526be0e52a58267077813150"},
+      {"label": "phase23-tools-r18", "snapshotExists": true, "manifestExists": true, "uid": 1000, "allocatedBytes": 33419264, "manifestSha256": "5361f465798bfcfa48dddfa88072731f2005b1cc81d48086e5cbb79a6a8578d9"},
+      {"label": "phase23-tools-r19", "snapshotExists": true, "manifestExists": true, "uid": 1000, "allocatedBytes": 33447936, "manifestSha256": "8d7fce833799f12bb53535077f6deeb20f886e110c1b00294617beb8eeae9c53"},
+      {"label": "phase23-tools-r20", "snapshotExists": true, "manifestExists": true, "uid": 1000, "allocatedBytes": 33484800, "manifestSha256": "d5e549c2fecf0f18eb15d235ea2ae7dffea826fcae0b0352250d9e3630165e74"}
+    ],
+    "candidateSnapshotAllocatedBytes": 167174144,
+    "candidateManifestApparentBytes": 611708,
+    "candidateBuildAttestations": 0,
+    "symlinksTargetingCandidateSnapshots": 0,
+    "candidateDirectoriesAreDirectOwnedNonSymlinkTaskChildren": true,
+    "recommendation": "After retaining provenance required by the final report and confirming no rerun needs these versions, the environment owner may remove only the five exact source-snapshot-phase23-tools-r16 through r20 directories and their matching manifests. Preserve apps-r3, tools-r21, current attestation, shared PostgreSQL and needed dependencies. Recheck resolved paths and ownership immediately before removal. No deletion was performed by this audit."
+  },
+  "evidenceSha256": {
+    "phase-23-integration.json": "8e93c1b72fabe0308e316ca55a1c8c8e58965a5535ea7668fa7ead400684206d",
+    "phase-23-cleanup.json": "dbdf06cfdbe8797cdfc966a3137384b0253c3820a104524d2321aa5ef3f9c2d6",
+    "phase-23-hba-restoration.json": "7ffa4525d1ea463a67307c8e06e78a344dad9bec2906d4379ffaf765ff8ff996"
+  },
+  "boundaries": [
+    "This audit verifies resource state after the completed driver; it does not replace OAuth, key, recovery or business acceptance evidence.",
+    "PostgreSQL, public snapshots, binaries, runtimes and the external compilation cache remain intentionally retained for subsequent authorized phases.",
+    "Allocated byte observations are point-in-time filesystem measurements; deleting Linux resources would not establish Windows VHDX compaction."
+  ]
+}

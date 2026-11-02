@@ -13,7 +13,6 @@ use crate::{
         commands,
         remote::{CommandContext, Receipt},
     },
-    authorization,
     error::AppError,
     extractors::CurrentUser,
     state::AppState,
@@ -97,20 +96,8 @@ pub(crate) async fn mutate(
         vec![actor.tenant_id]
     } else {
         let tenants = super::lock_global_user_mutation(state, actor, target, &mut tx).await?;
-        super::require_employee_permission_in_tx(
-            &mut tx,
-            actor,
-            if kick { "system:oauth" } else { "system:user" },
-        )
-        .await?;
+        super::require_employee_permission_in_tx(&mut tx, actor, "system:user").await?;
         super::require_scope_unchanged_in_tx(&mut tx, actor, scope.as_deref()).await?;
-        if kick {
-            let platform:bool=sqlx::query_scalar("SELECT t.is_platform AND o.parent_id IS NULL FROM tenants t JOIN organizations o ON o.tenant_id=t.id WHERE t.id=$1 AND o.id=$2").bind(actor.tenant_id).bind(actor.org_id).fetch_one(&mut *tx).await?;
-            let menu = authorization::context_menu_rows_in_tx(&mut tx, actor, None).await?;
-            if !platform || !menu.iter().any(|row| row["path"] == "/system/oauth/tokens") {
-                return Err(AppError::forbidden("没有会话管理权限"));
-            }
-        }
         tenants
     };
     let expected:i64=sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM identity_account_tombstones t WHERE t.user_id=users.id)").bind(target).fetch_optional(&mut *tx).await?.ok_or_else(||AppError::not_found("用户不存在"))?;
@@ -209,22 +196,12 @@ async fn finalize(state: &AppState, operation: Uuid) -> Result<Value, AppError> 
             .execute(&mut *tx)
             .await?;
     }
-    let mut revoked = 0;
     if matches!(
         kind,
         "RESET_PASSWORD" | "CHANGE_PASSWORD" | "REVOKE_ALL" | "RETIRE"
     ) || (kind == "SET_STATUS" && receipt.after_version != receipt.before_version)
     {
         sqlx::query("UPDATE platform_sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND account_version<=$2 AND revoked_at IS NULL").bind(target).bind(before_version).execute(&mut *tx).await?;
-        revoked =
-            sqlx::query("UPDATE oauth_tokens SET revoked=true WHERE user_id=$1 AND account_version<=$2 AND revoked=false")
-                .bind(target)
-                .bind(before_version)
-                .execute(&mut *tx)
-                .await?
-                .rows_affected();
-        sqlx::query("UPDATE oauth_authorization_codes SET consumed=true WHERE user_id=$1 AND account_version<=$2 AND consumed=false").bind(target).bind(before_version).execute(&mut *tx).await?;
-        sqlx::query("UPDATE oauth_device_codes SET status='EXPIRED' WHERE user_id=$1 AND account_version<=$2 AND status IN ('PENDING','APPROVED')").bind(target).bind(before_version).execute(&mut *tx).await?;
     }
     if let Some(membership) = followup["createMembership"].as_object() {
         let membership_id = parse_json_uuid(
@@ -319,7 +296,7 @@ async fn finalize(state: &AppState, operation: Uuid) -> Result<Value, AppError> 
     tx.commit().await?;
     state.invalidate_perm_cache();
     Ok(
-        json!({"ok":true,"operationId":operation,"revoked":receipt.revoked_tokens,"platformSessionsRevoked":receipt.revoked_sessions,"cleanupRevokedTokens":revoked}),
+        json!({"ok":true,"operationId":operation,"revoked":receipt.revoked_tokens,"platformSessionsRevoked":receipt.revoked_sessions}),
     )
 }
 
@@ -352,16 +329,7 @@ async fn accessible(
             return Err(AppError::forbidden("个人操作只能本人查询"));
         }
     } else {
-        state
-            .require(
-                user,
-                if followup["commandKind"] == "REVOKE_ALL" {
-                    "system:oauth"
-                } else {
-                    "system:user"
-                },
-            )
-            .await?;
+        state.require(user, "system:user").await?;
     }
     Ok((target, status, digest, receipt))
 }
@@ -423,6 +391,15 @@ mod tests {
         async fn create() -> Result<Self> {
             let raw = std::env::var("IDENTITY_PHASE12_TEST_DATABASE_URL")
                 .map_err(|_| anyhow!("explicit IDENTITY_PHASE12_TEST_DATABASE_URL required"))?;
+            let url = reqwest::Url::parse(&raw)
+                .map_err(|_| anyhow!("invalid owned Phase12 administration URL"))?;
+            ensure!(
+                matches!(url.scheme(), "postgres" | "postgresql")
+                    && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
+                    && url.port().is_some()
+                    && url.path() == "/postgres",
+                "owned Phase12 administration must use explicit loopback port and postgres"
+            );
             let options = PgConnectOptions::from_str(&raw)
                 .map_err(|_| anyhow!("invalid owned Phase12 database configuration"))?;
             ensure!(
@@ -435,6 +412,16 @@ mod tests {
                 .connect_with(options.clone())
                 .await
                 .map_err(|_| anyhow!("owned Phase12 administration connection failed"))?;
+            let expected = std::env::var("IDENTITY_PHASE12_TEST_CLUSTER_ID")
+                .map_err(|_| anyhow!("explicit owned Phase12 cluster identifier required"))?;
+            let actual: String =
+                sqlx::query_scalar("SELECT system_identifier::text FROM pg_control_system()")
+                    .fetch_one(&admin)
+                    .await?;
+            ensure!(
+                actual == expected,
+                "owned Phase12 cluster identifier differs"
+            );
             let name = format!(
                 "identity_phase12_accounts_{}",
                 crate::util::uuid7::new_uuid().simple()
@@ -529,16 +516,32 @@ mod tests {
     ) -> Result<Uuid> {
         let operation = crate::util::uuid7::new_uuid();
         let digest = "a".repeat(64);
-        let mut followup = json!({"kind":"USER_MUTATION","commandKind":kind,"action":"OWNED_PHASE12_FOLLOWUP","before":{"sessionVersion":0},"targetTenants":[tenant],"createMembership":null,"retireMemberships":[],"retireRoles":[],"actorUsername":"owned-phase12-account","ip":"192.0.2.12","userAgent":"owned-phase12-account-test"});
+        // This fixture models identity's already-committed response. A fresh
+        // canonical account starts at 1; its first committed command ends at 2.
+        let mut after_version: i64 =
+            sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
+                .bind(target)
+                .fetch_one(pool)
+                .await?;
+        if after_version == 1 {
+            after_version = sqlx::query_scalar(
+                "UPDATE users SET session_version=2 WHERE id=$1 RETURNING session_version",
+            )
+            .bind(target)
+            .fetch_one(pool)
+            .await?;
+        }
+        let before_version = after_version - 1;
+        let mut followup = json!({"kind":"USER_MUTATION","commandKind":kind,"action":"OWNED_PHASE12_FOLLOWUP","before":{"sessionVersion":before_version},"targetTenants":[tenant],"createMembership":null,"retireMemberships":[],"retireRoles":[],"actorUsername":"owned-phase12-account","ip":"192.0.2.12","userAgent":"owned-phase12-account-test"});
         for (key, value) in extra
             .as_object()
             .ok_or_else(|| anyhow!("expected safe followup object"))?
         {
             followup[key] = value.clone();
         }
-        let receipt = json!({"operationId":operation,"targetUserId":target,"canonicalDigest":digest,"state":"COMPLETED","beforeVersion":"0","afterVersion":"1","revokedSessions":0,"revokedTokens":0});
-        sqlx::query("INSERT INTO platform_account_command_intents(id,target_user_id,actor_user_id,actor_tenant_id,actor_organization_id,actor_session_id,expected_account_version,canonical_digest,command_kind,expires_at,state,followup,receipt,created_at) VALUES($1,$2,$2,$3,$4,$5,0,$6,$7,clock_timestamp()+interval '50 seconds','UNKNOWN',$8,$9,clock_timestamp())")
-            .bind(operation).bind(target).bind(tenant).bind(org).bind(crate::util::uuid7::new_uuid()).bind(&digest).bind(kind).bind(followup).bind(receipt).execute(pool).await?;
+        let receipt = json!({"operationId":operation,"targetUserId":target,"canonicalDigest":digest,"state":"COMPLETED","beforeVersion":before_version.to_string(),"afterVersion":after_version.to_string(),"revokedSessions":0,"revokedTokens":0});
+        sqlx::query("INSERT INTO platform_account_command_intents(id,target_user_id,actor_user_id,actor_tenant_id,actor_organization_id,actor_session_id,expected_account_version,canonical_digest,command_kind,expires_at,state,followup,receipt,created_at) VALUES($1,$2,$2,$3,$4,$5,$10,$6,$7,clock_timestamp()+interval '50 seconds','UNKNOWN',$8,$9,clock_timestamp())")
+            .bind(operation).bind(target).bind(tenant).bind(org).bind(crate::util::uuid7::new_uuid()).bind(&digest).bind(kind).bind(followup).bind(receipt).bind(before_version).execute(pool).await?;
         Ok(operation)
     }
 
@@ -549,11 +552,9 @@ mod tests {
         let result = async {
             let (state,target,tenant,org)=fixture(&db.pool).await?;
             let member=crate::util::uuid7::new_uuid();
-            let session=crate::util::uuid7::new_uuid();
             sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,status,identity_version) VALUES($1,$2,$3,'EMPLOYEE','ENABLED',1)")
                 .bind(member).bind(target).bind(org).execute(&db.pool).await?;
-            sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) VALUES($1,$2,$3,$4,clock_timestamp()+interval '10 minutes',1,$5,'EMPLOYEE',1,'urn:saas:legacy-platform','platform-console-legacy',1)")
-                .bind(session).bind(target).bind(tenant).bind(org).bind(member).execute(&db.pool).await?;
+            let session = crate::sso_test_fixture::session(&db.pool,target,tenant,org).await?;
             let actor=CurrentUser{user_id:target,username:"owned-phase12-account".into(),real_name:String::new(),is_super_admin:false,tenant_id:tenant,org_id:org,session_id:session};
             let command=crate::authentication::remote::Command{
                 operation_id:crate::util::uuid7::new_uuid(),target_user_id:target,
@@ -683,12 +684,11 @@ mod tests {
         let db = Database::create().await?;
         let result=async {
             let (state,target,tenant,org)=fixture(&db.pool).await?;
-            let old=crate::util::uuid7::new_uuid();let new=crate::util::uuid7::new_uuid();
             let member=crate::util::uuid7::new_uuid();
             sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,status,identity_version) VALUES($1,$2,$3,'EMPLOYEE','ENABLED',1)").bind(member).bind(target).bind(org).execute(&db.pool).await?;
-            for (id,version) in [(old,0_i64),(new,1_i64)] {
-                sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) VALUES($1,$2,$3,$4,clock_timestamp()+interval '10 minutes',$5,$6,'EMPLOYEE',1,'urn:saas:legacy-platform','platform-console-legacy',1)").bind(id).bind(target).bind(tenant).bind(org).bind(version).bind(member).execute(&db.pool).await?;
-            }
+            let old = crate::sso_test_fixture::session(&db.pool,target,tenant,org).await?;
+            sqlx::query("UPDATE users SET session_version=2 WHERE id=$1").bind(target).execute(&db.pool).await?;
+            let new = crate::sso_test_fixture::session(&db.pool,target,tenant,org).await?;
             let operation=intent(&db.pool,target,tenant,org,"REVOKE_ALL",json!({})).await?;
             finalize(&state,operation).await?;
             let rows:Vec<(Uuid,bool)>=sqlx::query_as("SELECT id,revoked_at IS NOT NULL FROM platform_sessions WHERE user_id=$1 ORDER BY account_version").bind(target).fetch_all(&db.pool).await?;

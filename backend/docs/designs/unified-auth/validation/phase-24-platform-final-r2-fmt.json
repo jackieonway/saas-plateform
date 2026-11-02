@@ -1,0 +1,19 @@
+{
+  "snapshot": "phase24-final-r2",
+  "snapshotSha256": "e1f3e17d31a3b96e548115559127308aa594f40f1e737268907c5523fa474926",
+  "command": [
+    "/home/jackie/.local/rust-1.97/bin/cargo",
+    "fmt",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "exitCode": 1,
+  "status": "FAIL",
+  "durationSeconds": 2.372,
+  "rawLogSha256": "886b67a928820cd9bbb421c4df0b7615f5c6af29d916b421727e1e2134eb3130",
+  "filesWithFormatDifferences": [
+    "src/bff/context.rs"
+  ],
+  "finishedUtc": "2026-10-29T09:03:31.188423+00:00"
+}

@@ -1,4 +1,70 @@
 groups:
+  # Candidate operational thresholds, not measured capacity or an SLA.
+  # See docs/designs/unified-auth/phase-22-monitoring-contract.md.
+  - name: identity-candidates
+    rules:
+      - alert: IdentityDatabaseUnavailable
+        expr: identity_database_up == 0
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'Identity database observation failed; fail-closed responses may follow'}
+      - alert: IdentityDeliveryObservationUnavailable
+        expr: identity_delivery_observation_up == 0
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'Identity delivery backlog is unknown; do not interpret absent series as zero'}
+      - alert: IdentityPoolSaturated
+        expr: (identity_db_pool_size >= identity_db_pool_capacity) and (identity_db_pool_idle == 0)
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'Identity connection budget is fully occupied; review 503 rate and database waits'}
+      - alert: IdentitySocketBudgetPressure
+        expr: identity_tcp_connections >= 0.8 * identity_tcp_connection_limit
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'Identity socket budget is nearly occupied; inspect keepalive and idle connection limits'}
+      - alert: IdentityPasswordAdmissionPressure
+        expr: sum(rate(identity_password_stage_duration_seconds_count{stage="password_queue",outcome=~"saturated|timeout"}[5m])) > 0
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Identity password admission rejected work; fast 429 responses are not capacity'}
+      - alert: IdentityPasswordResponseTimeout
+        expr: sum(rate(identity_password_stage_duration_seconds_count{stage="password_result",outcome="timeout"}[5m])) > 0
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Password caller deadline elapsed; blocking work may still hold its permits'}
+      - alert: IdentityCandidateSuccessfulApiP95
+        expr: histogram_quantile(0.95, sum by (le, route) (rate(identity_http_request_duration_seconds_bucket{route=~"/oauth/token|/oauth/introspect|/internal/identity/auth/resource-access-proof",outcome="ok",status=~"2.."}[5m]))) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: 'Identity candidate successful API p95 exceeds 500ms; verify workload and budget'}
+      - alert: IdentityCandidateDependencyFailureRatio
+        expr: sum by (route) (rate(identity_http_requests_total{route=~"/api/sso/login|/oauth/token|/oauth/introspect|/internal/identity/auth/resource-access-proof",outcome=~"failed|timeout"}[5m])) / clamp_min(sum by (route) (rate(identity_http_requests_total{route=~"/api/sso/login|/oauth/token|/oauth/introspect|/internal/identity/auth/resource-access-proof"}[5m])), 0.001) > 0.001
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: 'Identity candidate dependency/error ratio exceeds 0.1 percent; classify expected failures separately'}
+      - alert: IdentityAuditPersistenceFailure
+        expr: increase(identity_audit_write_failures_total[5m]) > 0
+        labels: {severity: warning}
+        annotations: {summary: 'Mandatory identity audit failed; the authorization transaction must roll back'}
+      - alert: IdentityDeliveryPendingAge
+        expr: identity_delivery_oldest_pending_seconds > 120
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Identity delivery has pending work older than the candidate 120s threshold'}
+      - alert: IdentityDeliveryExpiredLease
+        expr: identity_delivery_expired_leases > 0
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'Identity delivery lease recovery is overdue; inspect worker health'}
+      - alert: IdentityNewTerminalOrDegradedDelivery
+        expr: delta(identity_delivery_jobs{state=~"TERMINAL|DEGRADED"}[5m]) > 0
+        labels: {severity: warning}
+        annotations: {summary: 'New permanent or degraded identity delivery facts; correlate the safe terminal event'}
+      - alert: IdentityNewTerminalOrDegradedSource
+        expr: delta(identity_delivery_source_events{state=~"TERMINAL|DEGRADED"}[5m]) > 0
+        labels: {severity: warning}
+        annotations: {summary: 'New degraded identity source, including security events without a verified channel'}
   - name: saas-candidates
     rules:
       - alert: SaasPrivateTargetUnavailable

@@ -147,9 +147,10 @@ async fn execute(
     for (table, id) in [
         ("users", account.source.user_id),
         ("applications", registration.application_id),
-        ("oauth_clients", registration.id),
+        ("platform_resource_services", registration.id),
     ] {
-        sqlx::query(&format!("SELECT id FROM {table} WHERE id=$1 FOR UPDATE"))
+        let lock = if table == "users" { "SHARE" } else { "UPDATE" };
+        sqlx::query(&format!("SELECT id FROM {table} WHERE id=$1 FOR {lock}"))
             .bind(id)
             .execute(&mut *tx)
             .await?;
@@ -271,7 +272,6 @@ async fn execute(
             "customer-selection-result",
             &issued.0,
         )?;
-        sqlx::query("UPDATE context_selections SET result_ciphertext=$2 WHERE transaction_id=$1 AND consumed_at IS NULL").bind(extension.transaction_id.uuid()).bind(encrypted).execute(&mut *tx).await?;
         context_selection_store::consume(
             &mut tx,
             &extension.credential,
@@ -282,6 +282,7 @@ async fn execute(
                 context_id: Id::new(issued.1.id).map_err(|_| AppError::Unavailable)?,
                 version: body.version,
             },
+            Some(&encrypted),
         )
         .await
         .map_err(|_| AppError::conflict("选择已过期或被其他会话消费"))?;

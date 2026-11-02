@@ -1,0 +1,151 @@
+{
+  "contractVersion": "phase23-file-negative-evidence/2",
+  "status": "PASS",
+  "sourceSnapshot": "phase23-tools-r21",
+  "sourceArtifactName": "phase-23-file-negative-probe-r21.json",
+  "sourceArtifactSha256": "376cff1a695b3ae66452c1414617975ef8b6ab7b6978b8045f9d94113017e3ce",
+  "inputs": {
+    "saas-plateform/backend/ops/identity-recovery/core.py": "f9bd3aae8417bb9316f5ff36e1af2a5f95034725d44287e0025e5710f3fe7005",
+    "saas-plateform/backend/ops/identity-recovery/inventory.py": "5ca4449c7adbc794c642bf34eec584a4ffbbeb176be71980ee92df175f054a9f",
+    "saas-plateform/backend/ops/identity-recovery/witness.py": "5f96fc2402ec88bcdb5f41ca7e876691b87ed5846887c21a5bdc07f527e3e90d",
+    "saas-plateform/backend/ops/identity-recovery/reconcile.py": "381af6ebb57660b24dcb524a0507ac5ccf0a09f674c6d32bcc9e436535dd45af",
+    "saas-plateform/backend/ops/identity-recovery/recovery.py": "99b4a108b9b1c013d31a04db7d26a440581d078c3a3710fe0aed3f431b3e42b5",
+    "saas-plateform/backend/ops/identity-recovery/negative_probe.py": "05f6ed1f5c69cf50b3a9f41009b2d5f69e41684e321111a4172af2d0e2d3582d"
+  },
+  "result": {
+    "cases": [
+      {
+        "case": "ciphertext-tamper",
+        "code": "RECOVERY_ARCHIVE_DIGEST_MISMATCH",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "manifest-tamper",
+        "code": "RECOVERY_AUTHENTICATION_FAILED",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "wrong-encryption-key",
+        "code": "RECOVERY_ARCHIVE_AUTHENTICATION_FAILED",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "mixed-source-binding",
+        "code": "RECOVERY_CHECKPOINT_BINDING_MISMATCH",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "signed-old-floor",
+        "code": "RECOVERY_EXTERNAL_FLOOR_ROLLBACK",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "signed-old-current",
+        "code": "RECOVERY_REJECTED",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "signed-old-record",
+        "code": "RECOVERY_REJECTED",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "missing-chain",
+        "code": "RECOVERY_REJECTED",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      },
+      {
+        "case": "extra-chain",
+        "code": "RECOVERY_REJECTED",
+        "originalBytesRestored": true,
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "status": "PASS"
+      }
+    ],
+    "databaseWrites": false,
+    "format": "identity-recovery-negative-probe/1",
+    "restoreSqlExecuted": false,
+    "sequence": 2,
+    "status": "PASS",
+    "validationLayer": "REAL_AUTHENTICATED_FILE_LOADERS_AND_READONLY_PG_PREFLIGHT"
+  }
+}

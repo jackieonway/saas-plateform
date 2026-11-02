@@ -1,0 +1,106 @@
+{
+  "contractVersion": "unified-auth-customer-real-https-browser/1",
+  "date": "2026-10-28T05:45:48.277Z",
+  "tlsErrorsIgnored": false,
+  "httpFixtures": false,
+  "sqlBoundarySetup": true,
+  "privateNegativeProbes": true,
+  "checks": [
+    {
+      "name": "owned-database-preflight",
+      "result": "PASS",
+      "realRuntimeLogin": true,
+      "sharedDatabaseConnectionDenied": true
+    },
+    {
+      "name": "wrong-bff-version-rp-and-source-are-rejected",
+      "result": "PASS",
+      "statuses": {
+        "wrong-bff": 403,
+        "wrong-version": 409,
+        "wrong-rp": 403,
+        "wrong-source": 401
+      }
+    },
+    {
+      "name": "committed-platform-selection-survives-local-save-failure",
+      "result": "PASS",
+      "platformCommittedBeforePortalSave": true,
+      "portalSessionStatus": 503,
+      "portalProfileStatus": 503,
+      "encryptedPending": true
+    },
+    {
+      "name": "same-operation-recovers-same-capability-without-expiry-extension",
+      "result": "PASS",
+      "consumptionCount": 1,
+      "sameCapability": true,
+      "expiryExtended": false
+    },
+    {
+      "name": "customer-online-refresh-keeps-original-member",
+      "result": "PASS",
+      "refreshFamilyRotated": true,
+      "sameOriginalMember": true
+    },
+    {
+      "name": "customer-real-central-context-switch",
+      "result": "PASS"
+    },
+    {
+      "name": "employee-cannot-establish-customer-session",
+      "result": "PASS"
+    },
+    {
+      "name": "same-browser-sso-with-independent-console-and-customer-cookies",
+      "result": "PASS",
+      "sharedSso": true,
+      "independentHostCookies": true,
+      "employeeAndCustomerContextsSeparate": true
+    },
+    {
+      "name": "original-customer-source-revocation-fails-closed",
+      "result": "PASS",
+      "otherAccountUnaffected": true
+    },
+    {
+      "name": "browser-keeps-no-upstream-credentials",
+      "result": "PASS"
+    }
+  ],
+  "endpoints": {
+    "customer.saas.test/auth/config 200": 11,
+    "customer.saas.test/auth/session 200": 10,
+    "customer.saas.test/auth/login-bootstrap 200": 3,
+    "customer.saas.test/auth/login 200": 4,
+    "auth.saas.test/oauth/authorize 303": 5,
+    "auth.saas.test/oauth/login 200": 5,
+    "auth.saas.test/oauth/interaction/:id 200": 18,
+    "auth.saas.test/api/sso/preauth 200": 3,
+    "auth.saas.test/api/sso/login 200": 3,
+    "customer.saas.test/auth/callback 303": 3,
+    "customer.saas.test/auth/session 503": 2,
+    "customer.saas.test/api/profile 503": 1,
+    "customer.saas.test/api/profile 200": 5,
+    "console.saas.test/auth/login 303": 1,
+    "console.saas.test/auth/callback 303": 1,
+    "console.saas.test/auth/config 200": 1,
+    "console.saas.test/auth/session 200": 24,
+    "console.saas.test/auth/context-token 200": 1,
+    "console.saas.test/api/platform/branding 200": 1,
+    "console.saas.test/api/auth/profile 200": 1,
+    "console.saas.test/api/notifications/prefs 200": 1,
+    "console.saas.test/api/auth/menus 200": 1,
+    "console.saas.test/api/notifications/unread-count 200": 1,
+    "console.saas.test/api/monitor/overview 403": 2,
+    "console.saas.test/api/auth/permissions 200": 1,
+    "customer.saas.test/auth/session 401": 2,
+    "customer.saas.test/api/profile 401": 1
+  },
+  "result": "PASS",
+  "browserVersion": "156.0.8078.4",
+  "tlsProtocols": [
+    "TLS 1.3"
+  ],
+  "fixtureBoundaryReset": true
+}

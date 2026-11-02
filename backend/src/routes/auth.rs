@@ -383,63 +383,10 @@ async fn login_history(
     Ok(Json(page_json(records, total, page, size)))
 }
 
-type MySessionTuple = (
-    String,
-    i64,
-    i64,
-    DateTime<Utc>,
-    Option<DateTime<Utc>>,
-    Option<String>,
-);
-
-/// GET /api/auth/my-sessions — 本人 OAuth 令牌按客户端聚合的会话视图
-///
-/// 个人安全中心自助查询: 仅本人令牌行 (user_id = 当前用户, client_credentials 的
-/// user_id NULL 行天然排除)。每客户端一行:
-/// - activeAccess / activeRefresh: 未吊销且未过期的 access / refresh 计数
-/// - lastIssuedAt: 全历史最近签发时间; lastExpiresAt: 活跃令牌最晚过期时间 (无活跃为 null)
-/// - scope: 最近一条 access 令牌的 scope (array_agg 按签发时间倒序取首个, 无 access 行为空串)
-/// - revokedTotal (顶层): 本人全部已吊销令牌总数 (无任何令牌时为 0)
 async fn my_sessions(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> Result<Json<Value>, AppError> {
-    let rows: Vec<MySessionTuple> = sqlx::query_as(
-        "SELECT client_id, \
-         COUNT(*) FILTER (WHERE token_type = 'access' AND revoked = false AND expires_at > now()) AS active_access, \
-         COUNT(*) FILTER (WHERE token_type = 'refresh' AND revoked = false AND expires_at > now()) AS active_refresh, \
-         max(created_at) AS last_issued_at, \
-         max(expires_at) FILTER (WHERE revoked = false AND expires_at > now()) AS last_expires_at, \
-         (array_agg(scope ORDER BY created_at DESC) FILTER (WHERE token_type = 'access'))[1] AS scope \
-         FROM oauth_tokens WHERE user_id = $1 \
-         GROUP BY client_id \
-         ORDER BY last_issued_at DESC",
-    )
-    .bind(user.user_id)
-    .fetch_all(&state.pool)
-    .await?;
-    let revoked_total: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM oauth_tokens WHERE user_id = $1 AND revoked = true",
-    )
-    .bind(user.user_id)
-    .fetch_one(&state.pool)
-    .await?;
-
-    let sessions: Vec<Value> = rows
-        .into_iter()
-        .map(
-            |(client_id, active_access, active_refresh, last_issued_at, last_expires_at, scope)| {
-                json!({
-                    "clientId": client_id,
-                    "activeAccess": active_access,
-                    "activeRefresh": active_refresh,
-                    "lastIssuedAt": last_issued_at,
-                    "lastExpiresAt": last_expires_at,
-                    "scope": scope.unwrap_or_default(),
-                })
-            },
-        )
-        .collect();
     let platform_sessions = session::device_sessions(
         &state.pool,
         Some(user.user_id),
@@ -447,10 +394,7 @@ async fn my_sessions(
         user.session_id,
     )
     .await?;
-    Ok(Json(
-        json!({"sessions": sessions, "revokedTotal": revoked_total,
-                   "platformSessions": platform_sessions}),
-    ))
+    Ok(Json(json!({"platformSessions": platform_sessions})))
 }
 
 /// DELETE /api/auth/sessions/{id} — 用户撤销自己的指定设备会话。

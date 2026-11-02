@@ -1,0 +1,24 @@
+{
+  "contractVersion": "unified-auth-phase25-execution-journal/1",
+  "phase": 25,
+  "runId": "r4",
+  "snapshot": "phase25-tools-r6",
+  "buildSnapshot": "phase25-apps-r3",
+  "startedAtUtc": "2026-10-29T12:49:42.2522891Z",
+  "finishedAtUtc": "2026-10-29T12:54:59.1805204Z",
+  "result": "FAIL",
+  "lastExecutionStage": "ACTUAL_LOGOUT",
+  "cleanupFailureCodes": [],
+  "preflightFailureCodes": [
+    "PHASE25_BUSINESS_FAILED",
+    "PHASE25_RESOURCE_FAILED",
+    "PHASE25_PROTOCOL_FAILED",
+    "PHASE25_CONTEXT_FAILED",
+    "PHASE25_MANAGEMENT_FAILED"
+  ],
+  "fullRecoveryRequested": true,
+  "hbaInstallAttempted": false,
+  "fullRecoveryBrowserStarted": false,
+  "productionDeploymentExecuted": false,
+  "secretsOrRawLogsPersisted": false
+}

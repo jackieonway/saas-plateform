@@ -1,0 +1,51 @@
+{
+  "contractVersion": "unified-auth-phase25-management-adapter/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T11:32:14.7864009Z",
+  "result": "PASS",
+  "evidenceLayer": "COMPONENT_AND_STATIC",
+  "scope": "Guarded current-cluster/snapshot and non-overwriting output adaptation of mature management/logout browser runners. No actual HTTPS execution.",
+  "sourceSha256": {
+    "phase19-browser.mjs": "62ddc70515603cb1eae5fdf0fbad2c425a6dad8a3b64cc3d28d250a92cbe5e63",
+    "phase20-browser.mjs": "bf75e6b4e189b6a962e213320655bc1da713b262c8e953def0772e9392979c05",
+    "phase25-browser-binding.mjs": "66f68d0b89bee75e1abf65695eff969145adc66ad74ec317dfcf63626f9c7094",
+    "phase25-browser-binding.test.mjs": "33afd593f5b924b321e0cc28153c2e64de8090143a5f7bdeae44adbb83b19353"
+  },
+  "tests": {
+    "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-browser-binding.test.mjs",
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "nodeSyntaxPassed": [
+    "phase19-browser.mjs",
+    "phase20-browser.mjs",
+    "phase25-browser-binding.mjs"
+  ],
+  "runtimeOrder": [
+    "UI",
+    "business",
+    "protocol",
+    "management",
+    "logout",
+    "business cleanup",
+    "HBA full key/recovery"
+  ],
+  "mfaBoundary": {
+    "logoutMfaAccount": "reviewer",
+    "managementAccounts": [
+      "applicant",
+      "reviewer",
+      "publisher"
+    ],
+    "finallySourceAndFactorsReset": true,
+    "adminEnrolled": false
+  },
+  "resources": {
+    "servicesStarted": 0,
+    "containersCreated": 0,
+    "databasesCreated": 0,
+    "temporaryTestReportRemoved": true
+  },
+  "actualHttpsExecuted": false
+}

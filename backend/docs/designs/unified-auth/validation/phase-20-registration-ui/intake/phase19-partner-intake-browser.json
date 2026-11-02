@@ -1,0 +1,84 @@
+{
+  "status": "PASS",
+  "scope": "Real React/Vite UI and production session gate with isolated HTTP fixture; reauthentication evidence covers the URL whitelist, link and cancellation only, without executing SSO/TOTP or establishing a new BFF session; no live PostgreSQL, actual production approval, domain verification or invitation delivery claim",
+  "browser": "156.0.8078.4",
+  "scenarios": [
+    {
+      "name": "registrar submits only minimal account scope and exact owned callbacks",
+      "status": "PASS"
+    },
+    {
+      "name": "390px back-channel request requires an exact owned endpoint before independent review",
+      "status": "PASS"
+    },
+    {
+      "name": "independent reviewer returns then approves a revised test request with explicit evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "missing review permission",
+      "status": "PASS"
+    },
+    {
+      "name": "applicant cannot self approve",
+      "status": "PASS"
+    },
+    {
+      "name": "stale second authentication blocks sensitive controls",
+      "status": "PASS"
+    },
+    {
+      "name": "platform reauthentication confirms draft loss and exposes only the fixed same-origin entry",
+      "status": "PASS"
+    },
+    {
+      "name": "first-factor guidance distinguishes security management from a new platform session",
+      "status": "PASS"
+    },
+    {
+      "name": "an untrusted reauthentication address never becomes a navigation control",
+      "status": "PASS"
+    },
+    {
+      "name": "verified administrator still needs each fine permission while registration scope stays explicit",
+      "status": "PASS"
+    },
+    {
+      "name": "production approval stays closed without verified responsibility bindings",
+      "status": "PASS"
+    },
+    {
+      "name": "explicit configured fixture permits independent production approval and controlled enablement",
+      "status": "PASS"
+    },
+    {
+      "name": "390px application form keeps its actions reachable within the viewport",
+      "status": "PASS"
+    },
+    {
+      "name": "a version conflict preserves the decision draft until explicit latest-state reload",
+      "status": "PASS"
+    },
+    {
+      "name": "390px invitation management issues and revokes metadata without exposing token material",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown intake writes recover the original operation before another mutation",
+      "status": "PASS"
+    },
+    {
+      "name": "unexpected invitation token fields never enter the page or Query cache",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": [
+    "phase19-submitted-application.png",
+    "phase20-review-backchannel-mobile.png",
+    "phase19-independent-review.png",
+    "phase19-reauthentication-confirm.png",
+    "phase19-reauthentication-mobile.png",
+    "phase19-application-mobile.png",
+    "phase19-invitation-mobile.png"
+  ]
+}

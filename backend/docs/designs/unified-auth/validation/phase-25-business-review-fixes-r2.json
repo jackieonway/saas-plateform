@@ -1,0 +1,59 @@
+{
+  "contractVersion": "unified-auth-phase25-business-review-fixes/1",
+  "recordedAtUtc": "2026-10-29T11:21:01.5655257Z",
+  "phase": 25,
+  "status": "P2_FIXES_COMPONENT_PASS_REAL_RUNTIME_PENDING",
+  "earlierReview": "phase-25-business-review-r1.json",
+  "earlierReviewPreserved": true,
+  "sourceSha256": {
+    "backend/tests/unified-auth-https/phase25-business-browser.mjs": "739d301655d2fe40205b3baf46bf7167e4913b28fc56561747d8ad0cc6407e3d",
+    "backend/tests/unified-auth-https/phase25-business-http.mjs": "71f74a3deb5725d95c707275b74631532b5187efdafc51c4d280a408a93d2489",
+    "backend/tests/unified-auth-https/phase25-business-http.test.mjs": "709ed72f9383610879ba55e8be10b2e0223fbedef2a0d0b82870120a2681b410"
+  },
+  "findings": [
+    {
+      "id": "P25-REVIEW-01",
+      "result": "FIXED_COMPONENT_PASS",
+      "observation": "Browser request carries stable Idempotency-Key. Native runner explicitly retries identical input and checks exact result plus one matching durable ticket; changed-body same-key request must return 409. Actual native runtime remains pending."
+    },
+    {
+      "id": "P25-REVIEW-02",
+      "result": "FIXED_COMPONENT_PASS",
+      "observation": "Health readiness uses direct navigation and exact status/URL, then restores Console origin in finally before notification requests. Actual Chromium fixture reproduced blocked cross-origin fetch and successful navigation."
+    },
+    {
+      "id": "P25-REVIEW-03",
+      "result": "FIXED_COMPONENT_PASS",
+      "observation": "Finally checks context pages, browser connection and closure failures. Any failure overrides PASS, records actual facts and exits nonzero. Mock failed cleanup and actual Chromium successful closure verified."
+    }
+  ],
+  "validation": {
+    "testsRun": 4,
+    "nodeCheck": "PASS",
+    "passed": 4,
+    "chromiumVersion": "See native Phase25 run for current deployment browser attestation",
+    "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-business-http.test.mjs",
+    "failed": 0,
+    "evidenceLayers": [
+      "REAL_CHROMIUM_LOCAL_HTTP_FIXTURE",
+      "MOCK_CLEANUP_FAILURE"
+    ],
+    "interpreter": "v24.22.1",
+    "skipped": 0
+  },
+  "limitations": [
+    "No native business database, actual cross-service HTTPS, actual notification service or Phase25 scenario completion is claimed by these four component checks.",
+    "The native full candidate must include and hash-check phase25-business-http.mjs in the frozen tools manifest.",
+    "The helper HTTP fixture is temporary loopback HTTP; no TLS evidence is inferred."
+  ],
+  "operations": {
+    "privateCarriersPersisted": false,
+    "temporaryLocalHttpServersClosed": 2,
+    "databaseOperations": 0,
+    "dockerCreated": 0,
+    "temporaryLocalHttpServers": 2,
+    "nativeServiceProcessesStarted": 0,
+    "dockerReused": 0,
+    "actualChromiumClosed": true
+  }
+}

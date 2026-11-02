@@ -1,8 +1,8 @@
 import * as React from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, Bot, Loader2, RefreshCw, ShieldCheck, UsersRound } from "lucide-react"
+import { AlertTriangle, Loader2, RefreshCw, ShieldCheck, UsersRound } from "lucide-react"
 import { toast } from "sonner"
-import { admissionMemberLabels, admissionPoliciesApi, admissionSubjectLabels, isAdmissionReasonValid, type AdmissionMemberType, type AdmissionPolicy, type AdmissionPolicyChange, type AdmissionPolicyTarget } from "@/api/admission-policies"
+import { admissionMemberLabels, admissionPoliciesApi, isAdmissionReasonValid, type AdmissionMemberType, type AdmissionPolicy, type AdmissionPolicyChange, type AdmissionPolicyTarget } from "@/api/admission-policies"
 import { ApiError } from "@/lib/api"
 import { captureAuthSession, isCurrentAuthSession } from "@/lib/auth-queries"
 import { captureSessionFence, useAuthStore, type SessionFence } from "@/stores/auth"
@@ -106,8 +106,7 @@ export function AdmissionPolicyDialog({ target, onClose, onSaved }: {
     },
     onSettled: () => { writing.current = false },
   })
-  const machine = snapshot?.subjectMode === "MACHINE"
-  const readOnly = machine || target.fixedEmployee === true
+  const readOnly = target.fixedEmployee === true
   const changed = !!snapshot && ["EMPLOYEE", "CUSTOMER"].some(type => snapshot.allowedMemberTypes.includes(type as AdmissionMemberType) !== selected.includes(type as AdmissionMemberType))
   const trimmedReason = reason.trim()
   const validReason = isAdmissionReasonValid(reason)
@@ -118,7 +117,7 @@ export function AdmissionPolicyDialog({ target, onClose, onSaved }: {
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl" showCloseButton={!save.isPending}>
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2"><ShieldCheck className="size-5 text-primary" />身份准入</DialogTitle>
-        <DialogDescription>{target.name} · {target.kind === "application" ? "应用" : "OAuth 客户端"}</DialogDescription>
+        <DialogDescription>{target.name} · 应用</DialogDescription>
       </DialogHeader>
       <div className="flex items-center justify-between gap-3 border-y py-3 text-xs text-muted-foreground">
         <span>当前策略<Badge variant="outline" className="ml-2 font-mono">{snapshot ? `v${snapshot.accessPolicyVersion}` : "读取中"}</Badge></span>
@@ -131,11 +130,7 @@ export function AdmissionPolicyDialog({ target, onClose, onSaved }: {
       </Alert>}
       {!snapshot ? <div className="flex min-h-28 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
         {query.isFetching ? <><Loader2 className="size-4 animate-spin" />正在读取权威策略…</> : query.isError ? "策略读取失败，请重新加载" : "正在准备策略…"}
-      </div> : machine ? <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
-        <Bot className="mt-0.5 size-5 text-muted-foreground" /><div><p className="font-medium">机器凭据 · 无人员身份准入</p>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">该客户端使用独立机器主体和 client_credentials，允许成员集合为空。员工与客户身份不通过机器凭据选择。</p></div>
       </div> : <>
-        {snapshot.subjectMode && <p className="text-xs text-muted-foreground">客户端用途：{admissionSubjectLabels[snapshot.subjectMode]}</p>}
         {target.fixedEmployee && <p className="rounded-lg border bg-muted/30 p-3 text-sm">内置控制台来源固定为员工入口。请为客户入口单独登记客户端。</p>}
         <fieldset disabled={save.isPending || target.fixedEmployee} className="space-y-3">
           <legend className="mb-3 text-sm font-medium">允许的成员身份</legend>
@@ -150,7 +145,7 @@ export function AdmissionPolicyDialog({ target, onClose, onSaved }: {
                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{type === "EMPLOYEE" ? "后台与内部业务；新建时的安全默认值" : "仅适用于已登记客户用途的入口"}</span></span>
             </label>)}
           </div>
-          {selected.length === 0 && <p className="text-xs text-destructive" role="alert">应用与人员客户端至少允许一种成员身份。</p>}
+          {selected.length === 0 && <p className="text-xs text-destructive" role="alert">应用至少允许一种成员身份。</p>}
         </fieldset>
         {!readOnly && <>
           <div className="space-y-2"><Label htmlFor="admission-policy-reason">变更原因<span className="text-destructive">*</span></Label>

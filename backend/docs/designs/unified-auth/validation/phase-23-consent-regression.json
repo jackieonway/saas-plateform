@@ -1,0 +1,26 @@
+{
+  "contractVersion": "phase23-consent-runtime-regression/1",
+  "status": "PASS",
+  "validationLayer": "CURRENT_CANONICAL_POSTGRES_ACTUAL_LOGIN_ROLE_AND_IN_PROCESS_HTTP",
+  "appsSnapshot": "phase23-apps-r3",
+  "appsSnapshotSha256": "51b024e351c3ec842b30a6588a6f37ff5647afb3d989474e4bdd8420ba99fe1e",
+  "clusterSystemIdentifier": "7701881991704683791",
+  "testFilter": "phase23_consent_commands_keep_immutable_receipts_under_runtime_login",
+  "command": "cargo test --manifest-path <apps-r3>/saas-identity/Cargo.toml --offline --locked -j2 --lib phase23_consent_commands_keep_immutable_receipts_under_runtime_login -- --ignored --nocapture --test-threads=1",
+  "requiredEnvironment": ["IDENTITY_PHASE23_TEST_DATABASE_URL", "IDENTITY_PHASE23_TEST_CLUSTER_ID"],
+  "result": {"passed": 1, "failed": 0, "ignored": 0, "filteredOut": 145, "testSeconds": 1.72},
+  "assertions": [
+    "Actual identity_runtime LOGIN keeps SELECT and INSERT but no UPDATE or DELETE on immutable consent receipts",
+    "SELECT FOR UPDATE negative control returns SQLSTATE 42501 even with no matching rows",
+    "First consent revoke returns 200 and revokes the original grant",
+    "Two concurrent original-operation replays return the identical saved result and exactly one receipt",
+    "Rebinding the original operation to display deletion returns 409",
+    "Fresh display deletion returns 200 and replays its original result",
+    "Revoked consent tombstone persists with display deleted and scopes removed",
+    "Runtime privileges remain restricted after all commands"
+  ],
+  "fixtureBoundary": "Current 0001 and actual create-roles/provision/verify; explicit fixture SSO cookie facts. No password login, real browser, TLS or MFA claim from this test.",
+  "cleanup": {"databasesRemoved": 1, "rolesRemoved": 6, "databaseRolesRemaining": 0, "containersCreated": 0, "containersReused": 0},
+  "normalLibraryTests": {"passed": 88, "failed": 0, "ignoredExplicitPostgres": 58, "filteredOut": 0, "seconds": 3.69},
+  "strictClippy": {"status": "PASS", "seconds": 96, "command": "cargo clippy --manifest-path <apps-r3>/saas-identity/Cargo.toml --offline --locked -j2 --all-targets --all-features -- -D warnings"}
+}

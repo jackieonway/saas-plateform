@@ -29,7 +29,7 @@ export function safePlatformReturn(value: string | null | undefined): string {
   const pathname = value.split("?", 1)[0]
   let decoded: string
   try { decoded = decodeURIComponent(pathname) } catch { return "/dashboard" }
-  if (!/^(?:\/|\/(?:dashboard|profile|embed|device|consent)\/?|\/(?:system|athena|hermes|micro)(?:\/[A-Za-z0-9_-]+)*\/?)$/.test(decoded)) return "/dashboard"
+  if (!/^(?:\/|\/(?:dashboard|profile|embed)\/?|\/(?:system|athena|hermes|micro)(?:\/[A-Za-z0-9_-]+)*\/?)$/.test(decoded)) return "/dashboard"
   return value
 }
 

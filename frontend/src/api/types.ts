@@ -11,8 +11,6 @@ export type { NotificationType, NotificationTarget, NotificationRecord, Notifica
 
 export type Status = "ENABLED" | "DISABLED"
 export type MenuType = "DIR" | "MENU" | "BUTTON"
-export type ClientType = "CONFIDENTIAL" | "PUBLIC"
-export type DeviceStatus = "PENDING" | "APPROVED" | "DENIED" | "EXPIRED"
 export type ApplicationRuntimeMode = "TRUSTED"
 export type ApplicationEntryType = "HTML"
 export type ApplicationEnvironment = "development" | "staging" | "production"
@@ -166,19 +164,7 @@ export interface LoginHistoryPage {
   size: number
 }
 
-/** 本人名下按 OAuth 客户端聚合的会话概览 */
-export interface MySessionRecord {
-  clientId: string
-  activeAccess: number
-  activeRefresh: number
-  lastIssuedAt: string | null
-  lastExpiresAt: string | null
-  scope: string
-}
-
 export interface MySessionsResp {
-  sessions: MySessionRecord[]
-  revokedTotal: number
   platformSessions: PlatformSessionRecord[]
 }
 
@@ -587,96 +573,135 @@ export interface RolePayload {
 
 /* ============ 2.10 OAuth ============ */
 
-export interface OAuthClientRecord {
-  id: string
-  clientId: string
-  clientName: string
-  clientType: ClientType
-  /** Authorization-code requests must use PKCE with S256 when enabled. */
-  requirePkce: boolean
-  description?: string | null
-  redirectUris: string[]
-  grantTypes: string[]
+export type UnifiedClientOwnership = "FIRST_PARTY" | "THIRD_PARTY"
+export type UnifiedClientType = "PUBLIC" | "CONFIDENTIAL"
+export type UnifiedSubjectMode = "USER" | "MACHINE"
+export type UnifiedContextMode = "ACCOUNT_ONLY" | "PLATFORM_CONTEXT" | "NONE"
+export type UnifiedRuntimeKind = "WEB_BFF" | "SPA" | "NATIVE" | "SERVICE"
+export type UnifiedClientStatus = "ENABLED" | "DISABLED" | "RETIRED"
+
+export interface UnifiedClientPermission {
+  resourceKey: string
+  audience: string
   scopes: string[]
-  accessTokenValidity: number
-  refreshTokenValidity: number
-  status: Status
-  /** 关联平台应用(21-e 后端契约, 联调期间可能缺失: null/undefined = 未关联) */
-  applicationId?: string | null
-  applicationName?: string | null
-  createdAt: string
 }
 
-export interface OAuthClientPayload {
-  clientName: string
-  clientId?: string
-  clientType: ClientType
-  /** Omit on updates to retain the current policy; new PUBLIC clients default to true. */
-  requirePkce?: boolean
-  redirectUris: string[]
+export interface UnifiedClientRecord {
+  id: string
+  clientId: string
+  displayName: string
+  applicationId: string
+  applicationName: string
+  ownership: UnifiedClientOwnership
+  partnerId: string | null
+  environment: string
+  clientType: UnifiedClientType
+  runtimeKind: UnifiedRuntimeKind
+  subjectMode: UnifiedSubjectMode
+  contextMode: UnifiedContextMode
+  allowedMemberTypes: ("EMPLOYEE" | "CUSTOMER")[]
   grantTypes: string[]
-  scopes: string[]
-  accessTokenValidity: number
-  refreshTokenValidity: number
-  description?: string
-  /** 关联平台应用: null = 清除关联(21-e 后端契约) */
-  applicationId?: string | null
-}
-
-export interface OAuthClientCreateResp {
-  clientSecret?: string
-  clientId?: string
-  [k: string]: unknown
-}
-
-export interface OAuthTokenRecord {
-  id: string
-  tokenType: "access" | "refresh"
-  clientId: string
-  username: string
-  scope: string
+  tokenEndpointAuthMethod: "client_secret_basic" | "none"
+  redirectUris: string[]
+  postLogoutRedirectUris: string[]
+  logoutMode: "SHORT_SESSION_ONLINE_CHECK" | "BACK_CHANNEL"
+  backchannelLogoutUri: string | null
+  backchannelTargetId: string | null
+  status: UnifiedClientStatus
+  version: number
+  policyVersion: number
   createdAt: string
-  expiresAt: string
-  revoked: boolean
+  updatedAt: string
+  consentGroupId: string | null
+  permissions: UnifiedClientPermission[]
 }
 
-export interface DeviceCodeRecord {
+export interface UnifiedClientPage {
+  records: UnifiedClientRecord[]
+  page: { limit: number; offset: number; total: number }
+}
+
+export interface UnifiedConsentGroup {
   id: string
-  userCode: string
-  clientId: string
-  clientName: string
-  scope: string
-  status: DeviceStatus
-  username: string | null
-  createdAt: string
-  expiresAt: string
+  applicationId: string
+  applicationName: string
+  environment: string
+  displayName: string
+  purpose: string
+  subjectMode: "USER"
+  contextMode: "ACCOUNT_ONLY" | "PLATFORM_CONTEXT"
+  status: "ACTIVE" | "SUSPENDED" | "RETIRED"
+  version: number
+  clients: { id: string; displayName: string }[]
 }
 
-/** 微前端会话令牌响应(POST /api/oauth/session-token body {appCode} → 201; 失败 4xx) */
-export interface OAuthSessionTokenResp {
+export interface UnifiedClientListParams {
+  applicationId?: string
+  partnerId?: string
+  ownership?: UnifiedClientOwnership
+  environment?: string
+  clientType?: UnifiedClientType
+  subjectMode?: UnifiedSubjectMode
+  status?: UnifiedClientStatus
+  limit?: number
+  offset?: number
+}
+
+export interface UnifiedClientPayload {
+  expectedVersion: number | null
+  applicationId: string
+  environment: string
+  displayName: string
+  clientType: UnifiedClientType
+  runtimeKind: UnifiedRuntimeKind
+  subjectMode: UnifiedSubjectMode
+  contextMode: UnifiedContextMode
+  allowedMemberTypes: ("EMPLOYEE" | "CUSTOMER")[]
+  grantTypes: string[]
+  tokenEndpointAuthMethod: "client_secret_basic" | "none"
+  redirectUris: string[]
+  postLogoutRedirectUris: string[]
+  logoutMode: "SHORT_SESSION_ONLINE_CHECK" | "BACK_CHANNEL"
+  backchannelLogoutUri: string | null
+  backchannelTargetId: string | null
+  status: UnifiedClientStatus
+  consentGroupId: string | null
+  permissions: { resourceKey: string; scopes: string[] }[]
+}
+
+export interface UnifiedCredentialRotation {
+  clientId: string
+  credentialId: string
+  credentialVersion: number
+  clientVersion: number
+  previousCredentialExpiresAt: string | null
+  credentialExpiresAt: string
+  clientSecret: string
+}
+
+export interface UnifiedClientOperation {
+  operationId: string
+  state: "COMPLETED" | "NOT_APPLIED"
+  result: UnifiedClientRecord | UnifiedCredentialRotation | Record<string, unknown> | null
+}
+
+export interface ApplicationAuthProjection {
+  applicationId: string
+  partnerId: string | null
+  ownership: UnifiedClientOwnership
+  status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "SUSPENDED" | "RETIRED"
+  displayName: string
+  purpose: string
+  approvedScopes: string[]
+  projectionVersion: number
+}
+
+/** 微前端会话令牌响应(POST /api/apps/session-token body {appCode} → 201; 失败 4xx) */
+export interface AppCapabilityTokenResp {
   accessToken: string
   expiresIn: number
   tokenType: string
   audience: string
-}
-
-/** OAuth 会话视图:按用户聚合的令牌概览 (GET /api/oauth/tokens/sessions) */
-export interface AdminPlatformSession extends PlatformSessionRecord {
-  userId: string
-  username: string
-  realName: string
-}
-
-export interface OAuthSession {
-  userId: string
-  username: string
-  realName: string
-  clients: string[]
-  activeAccess: number
-  activeRefresh: number
-  lastIssuedAt: string | null
-  lastExpiresAt: string | null
-  revokedCount: number
 }
 
 /* ============ 2.11 审计 ============ */
@@ -707,8 +732,8 @@ export interface MonitorOverview {
   roleCount: number
   applicationCount: number
   menuCount: number
-  oauthClientCount: number
-  activeTokenCount: number
+  internalCapabilityCount: number
+  activePlatformSessionCount: number
   todayLoginCount: number
   recentLogins: { username: string; organizationName: string | null; ip: string | null; createdAt: string }[]
   loginTrend7d: { date: string; count: number }[]
@@ -743,43 +768,6 @@ export interface MonitorSystemInfo {
     /** 核心表清单(按大小排序前在前端再排) */
     tables: { name: string; rows: number | null; sizeBytes: number | null }[] | null
   }
-}
-
-/* ============ 3. OAuth 对外 ============ */
-
-export interface ConsentInfo {
-  client: { clientId: string; clientName: string; description: string | null }
-  scope: string
-  redirectUri: string
-  state: string | null
-  expiresAt: string
-}
-
-export interface ConsentDecisionResp {
-  redirectTo: string
-}
-
-export interface DeviceInfo {
-  clientId: string
-  clientName: string
-  scope: string
-  status: DeviceStatus
-  expiresAt: string
-}
-
-export interface OAuthDiscovery {
-  issuer: string
-  authorization_endpoint: string
-  token_endpoint: string
-  device_authorization_endpoint: string
-  userinfo_endpoint: string
-  introspection_endpoint: string
-  revocation_endpoint: string
-  response_types_supported: string[]
-  grant_types_supported: string[]
-  subject_types_supported: string[]
-  code_challenge_methods_supported: string[]
-  [k: string]: unknown
 }
 
 /* ============ 通知中心 ============ */

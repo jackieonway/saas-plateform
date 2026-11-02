@@ -4,6 +4,17 @@ global:
   scrape_interval: 15s
 rule_files: [/etc/prometheus/saas-alerts.yml]
 scrape_configs:
+  # Explicit private TLS gateway; replace this example with the reviewed
+  # identity endpoint and mount a separate operational token and CA file.
+  - job_name: identity
+    scheme: https
+    metrics_path: /internal/identity/metrics
+    scrape_timeout: 3s
+    authorization: {type: Bearer, credentials_file: /run/secrets/identity-metrics}
+    tls_config:
+      ca_file: /run/secrets/identity-metrics-ca.pem
+      server_name: identity.internal.example.invalid
+    static_configs: [{targets: ['identity.internal.example.invalid:443']}]
   - job_name: platform
     metrics_path: /api/internal/metrics
     authorization: {type: Bearer, credentials_file: /run/secrets/platform-metrics}

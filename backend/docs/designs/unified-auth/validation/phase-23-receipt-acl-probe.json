@@ -1,0 +1,91 @@
+{
+  "contractVersion": "phase23-receipt-acl-probe/1",
+  "containersCreated": 0,
+  "containersReused": 0,
+  "validationLayer": "ACTUAL_IDENTITY_RUNTIME_LOGIN_SQL_NOT_HTTP",
+  "steps": [
+    {
+      "caseId": "CURRENT_ROW_LOCK_QUERY",
+      "sqlState": "42501",
+      "expectedFailure": true
+    },
+    {
+      "caseId": "IMMUTABLE_RECEIPT_PLAIN_SELECT",
+      "status": "PASS",
+      "rows": 0
+    }
+  ],
+  "cleanup": [
+    {
+      "awaitHba": true,
+      "collectorCanaryScan": null,
+      "containersCreated": 0,
+      "containersReused": 0,
+      "databasesRemoved": 0,
+      "dockerAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+      "dockerBefore": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+      "errors": [],
+      "filesystemAfter": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1290911744 6884683776  16% /tmp\n",
+      "filesystemBefore": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1277030400 6898565120  16% /tmp\n",
+      "privateBytesRemoved": 0,
+      "privateFilesRemoved": 0,
+      "processesRemaining": 0,
+      "remainingLeaseRecords": 0,
+      "result": "AWAIT_HBA",
+      "retainedSharedPostgresAndPublicBuildInputs": true,
+      "rolesRemoved": 0,
+      "rootHbaJournalRemovedByThisWrapper": false,
+      "status": "PHASE23_CLEANUP",
+      "windowsWslVdiskCompactionClaimed": false
+    },
+    {
+      "awaitHba": false,
+      "collectorCanaryScan": null,
+      "containersCreated": 0,
+      "containersReused": 0,
+      "databaseBytesBeforeDrop": [
+        16864959,
+        8320703
+      ],
+      "databasesRemaining": 0,
+      "databasesRemoved": 2,
+      "dockerAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+      "dockerBefore": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+      "errors": [],
+      "filesystemAfter": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1277124608 6898470912  16% /tmp\n",
+      "filesystemBefore": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1277030400 6898565120  16% /tmp\n",
+      "logRedaction": {
+        "candidateFindings": 0,
+        "candidatesComparedInMemory": 49,
+        "files": 0
+      },
+      "privateBytesRemoved": 16773,
+      "privateFilesRemoved": 19,
+      "processesRemaining": 0,
+      "remainingLeaseRecords": 0,
+      "result": "PASS",
+      "retainedSharedPostgresAndPublicBuildInputs": true,
+      "rolesRemaining": 0,
+      "rolesRemoved": 8,
+      "rootHbaJournalRemovedByThisWrapper": false,
+      "status": "PHASE23_CLEANUP",
+      "windowsWslVdiskCompactionClaimed": false
+    }
+  ],
+  "prepare": {
+    "compiledApplicationInputsIdentical": true,
+    "compiledFromBuildSnapshot": true,
+    "containersCreated": 0,
+    "opsExecutedFromSelectedSnapshot": true,
+    "services": 3,
+    "status": "PHASE23_PREPARED"
+  },
+  "privileges": {
+    "runtimeLogin": true,
+    "canSelect": true,
+    "canInsert": true,
+    "canUpdate": false,
+    "canDelete": false
+  },
+  "result": "PASS"
+}

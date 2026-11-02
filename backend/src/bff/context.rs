@@ -69,7 +69,8 @@ pub(super) async fn install_selection(
     let now: DateTime<Utc> = sqlx::query_scalar("SELECT clock_timestamp()")
         .fetch_one(&mut **tx)
         .await?;
-    let ttl = (state.config.session_ttl_hours * 3600).max(state.config.refresh_token_ttl_seconds);
+    let ttl =
+        (state.config.session_ttl_hours * 3600).max(state.config.bff_context_renewal_ttl_seconds);
     let mut end = (now + chrono::Duration::seconds(ttl)).min(current.expires_at);
     if let Some(expiry) = row.org_expires {
         end = end.min(expiry);
@@ -90,7 +91,7 @@ pub(super) async fn install_selection(
         .execute(&mut **tx)
         .await?;
     let refresh_end =
-        end.min(now + chrono::Duration::seconds(state.config.refresh_token_ttl_seconds));
+        end.min(now + chrono::Duration::seconds(state.config.bff_context_renewal_ttl_seconds));
     let refresh =
         session::issue_refresh_in_tx(tx, context, account.account_version, refresh_end).await?;
     let encrypted = store::keys(state)?.seal(
@@ -118,6 +119,7 @@ pub(super) async fn install_selection(
             context_id: Id::new(context).map_err(|_| AppError::Unavailable)?,
             version: Version::new(1).map_err(|_| AppError::Unavailable)?,
         },
+        None,
     )
     .await
     .map_err(|_| AppError::conflict("选择凭据已过期、消费或变化"))?;
@@ -341,15 +343,11 @@ async fn retire_context(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<
     sqlx::query("UPDATE platform_session_refresh_tokens SET consumed_at=COALESCE(consumed_at,clock_timestamp()) WHERE session_id=$1")
         .bind(id).execute(&mut **tx).await?;
     sqlx::query(
-        "UPDATE oauth_tokens SET revoked=true WHERE platform_session_id=$1 AND NOT revoked",
+        "UPDATE platform_app_capabilities SET revoked=true WHERE platform_session_id=$1 AND NOT revoked",
     )
     .bind(id)
     .execute(&mut **tx)
     .await?;
-    sqlx::query("UPDATE oauth_authorization_codes SET consumed=true WHERE platform_session_id=$1 AND NOT consumed")
-        .bind(id).execute(&mut **tx).await?;
-    sqlx::query("UPDATE oauth_device_codes SET status='EXPIRED' WHERE platform_session_id=$1 AND status IN ('PENDING','APPROVED')")
-        .bind(id).execute(&mut **tx).await?;
     Ok(())
 }
 
@@ -468,8 +466,8 @@ pub(super) async fn token(
             retire_context(&mut tx, id).await?;
         }
         let version = next_version(current.version)?;
-        let ttl =
-            (state.config.session_ttl_hours * 3600).max(state.config.refresh_token_ttl_seconds);
+        let ttl = (state.config.session_ttl_hours * 3600)
+            .max(state.config.bff_context_renewal_ttl_seconds);
         let mut end = (now + chrono::Duration::seconds(ttl))
             .min(original.expires_at)
             .min(current.expires_at);
@@ -493,7 +491,7 @@ pub(super) async fn token(
             .ok_or(AppError::Unavailable)?;
         context = selected(&mut tx, &current).await?;
         refresh_end =
-            end.min(now + chrono::Duration::seconds(state.config.refresh_token_ttl_seconds));
+            end.min(now + chrono::Duration::seconds(state.config.bff_context_renewal_ttl_seconds));
     } else {
         let selected = context
             .as_ref()
@@ -580,19 +578,23 @@ pub(super) async fn token(
     }
     let claims = jwt::Claims {
         sub: original.user_id.to_string(),
-        typ: "session".to_owned(),
+        typ: "platform_session".to_owned(),
         tenant: Some(context.tenant_id.to_string()),
         org: Some(context.organization_id.to_string()),
         cid: None,
         scope: None,
         sid: Some(context.id.to_string()),
         ver: Some(original.account_version),
-        aud: None,
+        aud: Some(jwt::PLATFORM_API_AUDIENCE.to_owned()),
         jti: None,
         exp: expiry,
         iat: now.timestamp(),
     };
-    let access = jwt::sign(&claims, &state.config.jwt_secret)?;
+    let access = jwt::sign_internal(
+        &claims,
+        jwt::InternalUse::PlatformSession,
+        &state.config.jwt_secret,
+    )?;
     audit::write_in_tx(&mut tx, audit::AuditInfo {
         user_id:Some(original.user_id),username:&account.username,tenant_id:Some(context.tenant_id),
         organization_id:Some(context.organization_id),action:if selecting {"BFF_CONTEXT_SELECT"}else{"BFF_CONTEXT_RENEW"},

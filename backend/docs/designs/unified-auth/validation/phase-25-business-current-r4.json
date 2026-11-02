@@ -1,0 +1,34 @@
+{
+  "contractVersion": "unified-auth-phase25-real-business/1",
+  "result": "FAIL",
+  "startedAt": "2026-10-29T12:50:48.146Z",
+  "sourceSnapshot": "phase25-tools-r6",
+  "checks": [
+    {
+      "caseId": "PREFLIGHT",
+      "status": "PASS"
+    },
+    {
+      "caseId": "REAL_EMPLOYEE_BFF_AND_DERIVED_CAPABILITIES",
+      "status": "PASS",
+      "employeeBff": true,
+      "exactAudienceCapabilities": 2
+    }
+  ],
+  "tlsErrorsIgnored": false,
+  "responseInterception": false,
+  "rawCarriersPersisted": false,
+  "databaseMutationsByBrowserRunner": false,
+  "helperSha256": "71f74a3deb5725d95c707275b74631532b5187efdafc51c4d280a408a93d2489",
+  "snapshotSha256": "c795b314a63ad9ed0200ead36eeb790112862e7b5fdf939ded964cf1e813b2e0",
+  "currentClusterAndSourceVerified": true,
+  "failedStep": "FRESH_BUSINESS_READINESS_AND_AUTHENTICATION",
+  "failureCode": "PHASE25_BUSINESS_STORES_READ_FAILED",
+  "cleanup": {
+    "contextsClosed": true,
+    "browserClosed": true,
+    "failures": 0
+  },
+  "browserClosed": true,
+  "endedAt": "2026-10-29T12:51:00.329Z"
+}

@@ -1,0 +1,120 @@
+{
+  "contractVersion": "unified-auth-phase19-real-https/1",
+  "date": "2026-10-28T06:13:57.826Z",
+  "browser": "chromium",
+  "playwright": "1.64.1",
+  "tlsErrorsIgnored": false,
+  "httpFixtures": false,
+  "realEnrollment": true,
+  "positiveMfaSeededBySql": false,
+  "staleBoundaryInjected": true,
+  "fixtureProductionBindingApplied": false,
+  "productionResponsibility": "isolated fixture only; does not establish real Q3 production responsibility",
+  "manualProofReferences": "isolated fixture references; not real partner/domain verification",
+  "invitationDelivery": false,
+  "checks": [
+    {
+      "name": "real-unenrolled-primary-and-sensitive-denial",
+      "result": "PASS"
+    },
+    {
+      "name": "real-applicant-enrollment-and-fresh-primary-totp-new-bff",
+      "result": "PASS",
+      "enrollmentThroughRealUi": true,
+      "freshPrimaryAndTotp": true,
+      "newBffAndSource": true
+    },
+    {
+      "name": "real-partner-and-application-submission",
+      "result": "PASS"
+    },
+    {
+      "name": "real-reviewer-enrollment-and-new-bff",
+      "result": "PASS"
+    },
+    {
+      "name": "real-independent-test-approval-and-identity-admission",
+      "result": "PASS"
+    },
+    {
+      "name": "real-invitation-metadata-only-issue-and-revoke",
+      "result": "PASS",
+      "deliveryAttempted": false
+    },
+    {
+      "name": "real-totp-source-with-stale-boundary-denies-sensitive-write",
+      "result": "PASS",
+      "timestampBoundaryInjected": true,
+      "restoredOriginalRealTimestamp": true
+    },
+    {
+      "name": "real-recovery-login-cannot-authorize-totp-management",
+      "result": "PASS",
+      "actualRecoveryLogin": true,
+      "sensitiveWriteDenied": true,
+      "restoredByRealPrimaryTotp": true
+    },
+    {
+      "name": "production-default-closed-before-fixture-binding",
+      "result": "PASS"
+    }
+  ],
+  "endpoints": {
+    "/auth/login 303": 3,
+    "/oauth/authorize 303": 8,
+    "/oauth/login 200": 8,
+    "/oauth/interaction/:id 200": 26,
+    "/api/sso/preauth 200": 13,
+    "/api/sso/login 200": 8,
+    "/auth/callback 303": 8,
+    "/auth/config 200": 17,
+    "/auth/session 200": 73,
+    "/auth/context-token 200": 19,
+    "/api/identity/review/security 200": 5,
+    "/api/identity/review/partners 403": 1,
+    "/api/sso/session 200": 4,
+    "/api/sso/mfa/status 200": 2,
+    "/api/sso/mfa/enrollment 200": 2,
+    "/api/sso/mfa/enrollment/confirm 200": 2,
+    "/auth/step-up 303": 5,
+    "/api/sso/login 428": 5,
+    "/api/identity/review/partners 200": 1,
+    "/api/identity/review/applications 200": 1,
+    "/api/identity/review/applications/:id/requests 400": 1,
+    "/api/identity/review/applications/:id/requests 200": 2,
+    "/api/identity/review/requests/:id/decisions 200": 2,
+    "/api/identity/invitations 200": 1,
+    "/api/identity/invitations/:id/revoke 200": 1,
+    "/api/identity/invitations 403": 2,
+    "/api/identity/review/requests/:id/decisions 403": 1,
+    "/api/identity/clients 403": 2
+  },
+  "result": "FAILED",
+  "browserVersion": "156.0.8078.4",
+  "failedStep": "real-publisher-enrollment-and-explicit-assignment",
+  "failedSubstep": "identity-transition",
+  "pageState": {
+    "origin": "https://console.saas.test",
+    "pathname": "/system/oauth/clients",
+    "view": {
+      "ready": "complete",
+      "authScreen": null,
+      "loginVisible": false,
+      "securityVisible": false,
+      "enrollmentVisible": false,
+      "recoveryVisible": false
+    }
+  },
+  "failureCode": "BROWSER_STEP_TIMEOUT",
+  "fixtureBoundaryReset": true,
+  "ownedMfaResidualRows": {
+    "factors": 0,
+    "enrollments": 0,
+    "recoveryRows": 0,
+    "unrevokedSso": 0
+  },
+  "ownedMfaBoundaryReset": true,
+  "tlsProtocols": [
+    "TLS 1.3"
+  ]
+}

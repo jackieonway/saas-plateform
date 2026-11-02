@@ -11,6 +11,8 @@ use saas_platform_backend::{
 };
 use std::sync::Mutex;
 
+mod lock_regression;
+
 struct Sources(Mutex<HashMap<Uuid, (SourceProof, String)>>);
 impl SourcePort for Sources {
     fn verify<'a>(
@@ -46,7 +48,7 @@ async fn issue(
     intent: Intent,
 ) -> Result<Value> {
     let (access, grant, sid) = authentication;
-    let (auth,expiry):(chrono::DateTime<chrono::Utc>,chrono::DateTime<chrono::Utc>)=sqlx::query_as("SELECT auth_time,(SELECT expires_at FROM oidc_access_tokens WHERE grant_id=$1 LIMIT 1) FROM oidc_grants WHERE id=$1").bind(grant).fetch_one(&f.state.pool).await?;
+    let (auth,expiry):(chrono::DateTime<chrono::Utc>,chrono::DateTime<chrono::Utc>)=sqlx::query_as("SELECT auth_time,(SELECT expires_at FROM auth_access_tokens WHERE grant_id=$1 LIMIT 1) FROM auth_grants WHERE id=$1").bind(grant).fetch_one(&f.state.pool).await?;
     let proof = SourceProof {
         contract_version: ContractVersion::V1,
         transaction_id: id(transaction),
@@ -65,6 +67,10 @@ async fn issue(
             purpose: "CUSTOMER_PORTAL".into(),
             allowed_member_types: vec!["CUSTOMER".into()],
             redirect_uri: "https://phase11-customer.example.invalid/callback".into(),
+            client_registry: Some("AUTH".into()),
+            subject_mode: Some("USER".into()),
+            context_mode: Some("PLATFORM_CONTEXT".into()),
+            application_id: Some(id(f.app)),
         },
         source_expires_at: expiry,
         interaction_expires_at: chrono::Utc::now() + chrono::Duration::minutes(4),
@@ -101,11 +107,25 @@ async fn issue(
         proof.interaction_expires_at,
     )?;
     let credential = Credential::parse(crate::sso::opaque_secret()?)?;
+    let credential_ciphertext = f
+        .state
+        .config
+        .bff_token_keys
+        .as_deref()
+        .ok_or_else(|| anyhow!("selection test BFF keyring missing"))?
+        .seal(
+            selected.binding.transaction_id.uuid(),
+            &selected.binding.source.issuer,
+            selected.binding.registration.client_id.uuid(),
+            "context-selection-credential",
+            credential.as_secret(),
+        )?;
     let mut tx = f.state.pool.begin().await?;
     context_selection_store::issue(
         &mut tx,
         &selected,
         &credential,
+        &credential_ciphertext,
         Consumer {
             client_id: id(f.rp),
             service_id: Some(id(service)),
@@ -151,7 +171,7 @@ async fn centralized_customer_consumption_recovery_and_switch_are_exact() -> Res
     let result=async {
         let mut f=Fixture::create(&db.pool).await?;
         let service=Uuid::now_v7();
-        sqlx::query("INSERT INTO context_selection_services(id,secret_hash,purpose,allowed_oidc_clients,status) VALUES($1,$2,'CONTEXT_SELECTION_CONSUMER',ARRAY[$3]::uuid[],'ENABLED')").bind(service).bind(hash::sha256_hex(&"c".repeat(64))).bind(f.rp).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO context_selection_services(id,secret_hash,purpose,allowed_auth_clients,status) VALUES($1,$2,'CONTEXT_SELECTION_CONSUMER',ARRAY[$3]::uuid[],'ENABLED')").bind(service).bind(hash::sha256_hex(&"c".repeat(64))).bind(f.rp).execute(&db.pool).await?;
         sqlx::query("INSERT INTO context_selection_registrations(client_id,client_policy_version,member_type,application_id,application_policy_version,consumer_service_id) VALUES($1,1,'CUSTOMER',$2,1,$3)").bind(f.rp).bind(f.app).bind(service).execute(&db.pool).await?;
         let mut config=(*f.state.config).clone();
         config.bff_token_keys=Some(Arc::new(crate::bff::CipherKeys::fixture()));
@@ -178,8 +198,13 @@ async fn centralized_customer_consumption_recovery_and_switch_are_exact() -> Res
         let mut wrong=body.clone();wrong["bffSessionId"]=json!(Uuid::now_v7());
         expect(&call(&app,"result",&auth,wrong).await?,StatusCode::FORBIDDEN,"result for another BFF session")?;
         expect(&call(&app,"result",&f.basic(),body.clone()).await?,StatusCode::FORBIDDEN,"profile credentials cannot consume selection")?;
+        expect(&f.call("revoke",json!({"oidcAccessToken":f.access,"customerContext":token})).await?,StatusCode::OK,"old capability is revoked before access-token rotation")?;
         let renewed=f.select().await?;
         expect(&f.profile(&renewed).await?,StatusCode::OK,"renewal of the selected identity remains available")?;
+        expect(&f.profile(token).await?,StatusCode::UNAUTHORIZED,"renewal never revives old capability")?;
+        let associated:bool=sqlx::query_scalar("SELECT old.revoked_at IS NOT NULL AND renewed.revoked_at IS NULL AND old.id<>renewed.id AND old.bff_session_id=renewed.bff_session_id AND old.bff_context_version=renewed.bff_context_version AND old.oidc_grant_id=renewed.oidc_grant_id AND old.global_session_id=renewed.global_session_id AND old.membership_id=renewed.membership_id AND old.identity_version=renewed.identity_version AND (SELECT count(*)=1 FROM context_selections WHERE consumed_at IS NOT NULL) FROM customer_portal_contexts old JOIN customer_portal_contexts renewed ON renewed.token_hash=$2 WHERE old.token_hash=$1")
+            .bind(hash::sha256_hex(token)).bind(hash::sha256_hex(&renewed)).fetch_one(&db.pool).await?;
+        ensure!(associated,"renewal changed original selection/BFF/source or revived revoked capability");
         let old_session:Uuid=serde_json::from_value(body["bffSessionId"].clone())?;
         let access="d".repeat(64);let (sid,grant)=source(&db.pool,f.user,f.rp,&access).await?;
         let mut switched=issue(&f,&sources,service,Uuid::now_v7(),(&access,grant,sid),Intent::Switch{session_id:id(old_session),expected_version:ver(1)}).await?;
@@ -188,6 +213,7 @@ async fn centralized_customer_consumption_recovery_and_switch_are_exact() -> Res
         ensure!(new.status==StatusCode::OK,"customer switch failed: {} {}",new.status,new.body);
         expect(&f.profile(token).await?,StatusCode::UNAUTHORIZED,"old customer context was revoked")?;
         expect(&f.profile(&renewed).await?,StatusCode::UNAUTHORIZED,"all old renewed contexts were revoked")?;
+        expect(&f.call("context",json!({"oidcAccessToken":f.access,"membershipId":f.customer,"organizationId":f.org,"expectedIdentityVersion":"5"})).await?,StatusCode::FORBIDDEN,"committed switch permanently fences old BFF renewal even while old grant is live")?;
         let recovered=call(&app,"result",&auth,switched.clone()).await?;
         ensure!(recovered.status==StatusCode::OK && recovered.body==new.body,"switch recovery changed the committed result");
         sqlx::query("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1 WHERE id=$1").bind(f.customer).execute(&db.pool).await?;

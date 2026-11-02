@@ -1,0 +1,40 @@
+{
+  "contractVersion": "unified-auth-phase23-harness-components/1",
+  "status": "PASS",
+  "testedAtUtc": "2026-10-28T15:47:49.8545640Z",
+  "validationLayer": "PURE_INJECTED_NODE_COMPONENTS_AND_SYNTAX_ONLY",
+  "nodeVersion": "24.22.1",
+  "tests": {
+    "passed": 36,
+    "failed": 0,
+    "skipped": 0,
+    "protocol": 11,
+    "policyCases": 8,
+    "keyCases": 9,
+    "invitationCases": 8
+  },
+  "browser": {
+    "syntax": "PASS",
+    "actualEnvironmentRun": "NOT_RUN"
+  },
+  "inputsSha256": {
+    "phase23-key-cases.mjs": "52acf369878fd166a230c15fc43b5f1cef4ea569956d90057ce3a14e57692306",
+    "phase23-invitation-cases.mjs": "e3ed667a91447f35d37ccdf4df03c53184bd5b4a6349afd856e994458977c72f",
+    "phase23-policy-cases.mjs": "adf73ae9235ffe87882565f09cfee912c9e982e51bde53757badb3d37a54fbec",
+    "phase23-protocol.mjs": "8126a6a3e596deb51ec57ad829daf67b1ae1baf5ebed7cdc560f4e77a515b18d",
+    "phase23-browser.mjs": "af32447096d9235bacd538e093026232faeeba127ae409813e66e86b05e0e007"
+  },
+  "boundaries": [
+    "No actual application, PostgreSQL, SCRAM authentication, browser HTTPS, key retirement wait, restore or RTO evidence",
+    "Protocol retained-carrier deadline and log-canary checks use injected pure test ports",
+    "The browser runner requires a final frozen tools snapshot and separate actual environment owner"
+  ],
+  "resources": {
+    "containersCreated": 0,
+    "containersReused": 0,
+    "secretsExported": false,
+    "applicationProcesses": 0,
+    "databaseConnections": 0,
+    "listenersCreated": 0
+  }
+}

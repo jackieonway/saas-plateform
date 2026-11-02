@@ -1,0 +1,52 @@
+{
+  "contractVersion": "unified-auth-phase25-ui-acceptance-components/1",
+  "recordedAtUtc": "2026-10-29T13:18:49.1906611Z",
+  "status": "PASS",
+  "evidenceLayer": "REAL_CHROMIUM_HTTP_FIXTURE",
+  "scope": "Cookie content-setting BLOCK/ALLOW in one owned temporary Chromium profile, denied-page fallback observation and actual negative storage/URL controls; runner dialog focus and pageerror gate are syntax-checked and await current SaaS HTTPS execution",
+  "inputSha256": {
+    "saas-plateform/backend/tests/unified-auth-https/phase25-ui-browser.mjs": "018e8684e72142c78dfed9391623a3ff82cbbb62015f760c7d6d9f958f8b0094",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.mjs": "22b3faf8002b1b0b8eafd9061142ca5e5e22772c7e79e64f960b0f3a7aba6589",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.test.mjs": "3992d42ba9a2bf1ff72f3bc59a6acd9c1de1a7869f97ede7abd94faa17a94fe3"
+  },
+  "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.test.mjs",
+  "tests": {
+    "passed": 3,
+    "skipped": 0,
+    "failed": 0,
+    "total": 3
+  },
+  "directFacts": [
+    "Actual Chromium BLOCK_ALL refuses HTTP Set-Cookie and script cookies",
+    "Real early interaction403 is required; incorrect interaction200 causes test failure",
+    "Denied-page URL and storage are observed only as counts; values are never reported",
+    "After explicit policy ALLOW and prior blocked context close, the same private profile stores a cookie again",
+    "Real local/session storage credential fixtures and URL code/fragment fixtures are detected; returned facts contain no values"
+  ],
+  "runnerNewAssertions": [
+    "Before first Tab, opened client dialog contains activeElement",
+    "Every observed real page increments only pageerror counters and fixed stage; final gate requires zero",
+    "Cookie denial page has zero credential URL fields and no credential storage entries; browser SecurityError is recorded as inaccessible storage",
+    "After allowing cookies in the same private profile, employee uses fresh primary login and establishes a BFF session"
+  ],
+  "syntaxCheck": "PASS",
+  "actualCurrentSaasRunExecuted": false,
+  "productionSourceModified": false,
+  "databaseTouched": false,
+  "applicationServiceTouched": false,
+  "docker": {
+    "reused": 0,
+    "created": 0
+  },
+  "cleanup": {
+    "privateProfilesRemoved": true,
+    "httpServersClosed": true,
+    "browserContextsClosed": true,
+    "newPrivateProfileSetEqualsBaseline": true
+  },
+  "limitations": [
+    "No claim that r4 actual9PASS exercised these new assertions",
+    "No PUBLIC client DOM/no-secret assertion was added",
+    "Architecture18 requires modal scrolling; actual r4 covered long client modal. Prepared matrix additionally names long consent; that extra renderer subfact remains unexecuted and must be recorded or transparently normalized by matrix owner"
+  ]
+}

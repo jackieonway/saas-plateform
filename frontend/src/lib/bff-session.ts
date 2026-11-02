@@ -23,7 +23,12 @@ export interface BffSessionNotice {
   sessionId: string | null
   revision: string | null
   invalid: boolean
+  phase?: "switching" | "settled"
+  switchId?: string
 }
+
+interface SwitchCorrelation { sessionId: string; revision: string; switchId: string }
+interface PendingSwitch extends SwitchCorrelation { local: boolean; unknown: boolean }
 
 export interface BffSessionEnvironment {
   navigate?: (url: string) => void
@@ -32,6 +37,7 @@ export interface BffSessionEnvironment {
   setTimeout?: (callback: () => void, milliseconds: number) => unknown
   clearTimeout?: (handle: unknown) => void
   storage?: Pick<Storage, "removeItem">
+  returnedSwitch?: SwitchCorrelation | null
   notify?: (notice: BffSessionNotice) => void
   listen?: (invalidated: (notice?: BffSessionNotice) => void, focused: () => void, suspended: () => void) => (() => void)
 }
@@ -44,6 +50,10 @@ export class BffSessionError extends Error {
 }
 
 const credentialKeys = ["platform-session-v2", "platform-session-v1", "platform-token", "platform-refresh-token", "platform-remember-username", "platform-current-app"]
+const switchReturnParameter = "__platform_context_switch"
+const switchIdPattern = /^[0-9a-f]{32}$/
+const maximumPendingSwitches = 32
+const maximumSettledSwitches = 128
 const uuid7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const i64Maximum = "9223372036854775807"
 const unavailableMessage = "无法确认统一登录状态，平台请求已暂停，请稍后重试或重新登录。"
@@ -56,6 +66,40 @@ const hasSecretResponse = (value: Record<string, unknown>) => ["refreshToken", "
 const copyIdentity = (value: ContextIdentity): ContextIdentity => Object.freeze({ userId: value.userId, tenantId: value.tenantId,
   organizationId: value.organizationId, membershipId: value.membershipId, memberType: value.memberType,
   identityVersion: value.identityVersion, accountVersion: value.accountVersion })
+
+function correlatedSwitch(value: unknown): value is SwitchCorrelation {
+  return object(value) && Object.keys(value).length === 3
+    && typeof value.sessionId === "string" && uuid7.test(value.sessionId)
+    && decimal(value.revision) && typeof value.switchId === "string" && switchIdPattern.test(value.switchId)
+}
+
+function switchReturnPath(path: string, operation: SwitchCorrelation): string {
+  const invalid = () => new BffSessionError("切换返回路径无效。", "INVALID_CONTEXT_RETURN", 400)
+  let target: URL
+  try { target = new URL(path, "https://bff.invalid") } catch { throw invalid() }
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\") || [...path].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
+      || target.origin !== "https://bff.invalid" || target.hash || target.searchParams.has(switchReturnParameter)) throw invalid()
+  target.searchParams.set(switchReturnParameter, `${operation.sessionId}.${operation.revision}.${operation.switchId}`)
+  const result = target.pathname + target.search
+  if (result.length > 2048) throw invalid()
+  return result
+}
+
+/** The return marker carries correlation only. Consume it before private pages,
+ * requests or caches observe the URL; a live GET and bridge still own authority. */
+function consumeSwitchReturn(): SwitchCorrelation | null {
+  try {
+    const url = new URL(window.location.href)
+    const markers = url.searchParams.getAll(switchReturnParameter)
+    if (!markers.length) return null
+    url.searchParams.delete(switchReturnParameter)
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash)
+    if (markers.length !== 1 || markers[0].length > 90) return null
+    const [sessionId, revision, switchId, extra] = markers[0].split(".")
+    const operation = { sessionId, revision, switchId }
+    return extra === undefined && correlatedSwitch(operation) ? operation : null
+  } catch { return null }
+}
 
 function membership(value: unknown, accountId: string): Membership {
   if (!object(value) || value.userId !== accountId || ![value.userId, value.tenantId, value.organizationId, value.membershipId].every(id => typeof id === "string" && uuid7.test(id))
@@ -155,7 +199,50 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
   let recovery: { generation: number; promise: Promise<void> } | null = null
   let renewing: { sessionId: string | null; contextKey: string | null; promise: Promise<string> } | null = null
   let mutationTail: Promise<unknown> = Promise.resolve()
+  const pendingSwitches = new Map<string, PendingSwitch>()
+  const settledSwitches = new Set<string>()
+  let switchOverflow: { sessionId: string; revision: string; ambiguous: boolean } | null = null
+  let localSwitch = correlatedSwitch(environment?.returnedSwitch) ? { ...environment.returnedSwitch } : null
+  // Includes an UNKNOWN POST outcome until a newer authority or explicit action.
+  let localSwitchInFlight = false
+  let announcedSwitch = localSwitch !== null
   const revisions = new Map<string, string>()
+
+  const switchKey = (operation: SwitchCorrelation) => `${operation.sessionId}:${operation.revision}:${operation.switchId}`
+  const blockedAt = (operation: Pick<SwitchCorrelation, "sessionId" | "revision">, view: BffSessionView) =>
+    view.sessionId === operation.sessionId && BigInt(view.version) <= BigInt(operation.revision)
+  const overflowBlocked = (view: BffSessionView) => !!switchOverflow && (switchOverflow.ambiguous || blockedAt(switchOverflow, view))
+  function rememberSettled(key: string) {
+    settledSwitches.add(key)
+    if (settledSwitches.size > maximumSettledSwitches) settledSwitches.delete(settledSwitches.values().next().value!)
+  }
+  function finishSwitch(operation: SwitchCorrelation) {
+    const key = switchKey(operation)
+    pendingSwitches.delete(key); rememberSettled(key)
+  }
+  function trackSwitch(operation: SwitchCorrelation, local: boolean) {
+    const key = switchKey(operation)
+    if (settledSwitches.has(key) || pendingSwitches.has(key)) return
+    if (pendingSwitches.size >= maximumPendingSwitches) {
+      // Never evict an unresolved operation. Overflow remains paused until an
+      // authoritative new source/version (or explicit reauthentication).
+      if (!switchOverflow) switchOverflow = { sessionId: operation.sessionId, revision: operation.revision, ambiguous: false }
+      else if (switchOverflow.sessionId !== operation.sessionId) switchOverflow.ambiguous = true
+      else if (BigInt(operation.revision) > BigInt(switchOverflow.revision)) switchOverflow.revision = operation.revision
+      return
+    }
+    pendingSwitches.set(key, { ...operation, local, unknown: false })
+  }
+  function switchBlocked(view: BffSessionView): boolean {
+    return [...pendingSwitches.values()].some(operation => blockedAt(operation, view))
+      || overflowBlocked(view)
+      || localSwitchInFlight && !!localSwitch && blockedAt(localSwitch, view)
+  }
+  function publishSwitchPause(view: BffSessionView) {
+    const unknown = overflowBlocked(view)
+      || [...pendingSwitches.values()].some(operation => operation.local && operation.unknown && blockedAt(operation, view))
+    publish(unknown ? "unknown" : "switching", view, null, null, unknown ? unavailableMessage : null)
+  }
 
   function clearTimers() {
     if (renewalTimer !== null) cancel(renewalTimer)
@@ -187,8 +274,26 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
   }
   function requireFence(expected: SessionFence) { if (disposed || !matches(expected)) throw changed() }
   function checkGeneration(expected: number) { if (disposed || expected !== generation) throw changed() }
-  function notify(view: BffSessionView | null, invalid: boolean) {
-    try { environment?.notify?.({ sessionId: view?.sessionId ?? null, revision: view?.version ?? null, invalid }) } catch { /* Authority remains on the server. */ }
+  function notify(view: BffSessionView | null, invalid: boolean, phase: "switching" | "settled" = "settled") {
+    announcedSwitch = phase === "switching"
+    const operation = localSwitch
+    try { environment?.notify?.({ sessionId: operation?.sessionId ?? view?.sessionId ?? null,
+      revision: operation?.revision ?? view?.version ?? null, invalid,
+      ...(operation ? { phase, switchId: operation.switchId } : {}) }) } catch { /* Authority remains on the server. */ }
+    if (phase === "settled") {
+      if (operation) finishSwitch(operation)
+      localSwitch = null; localSwitchInFlight = false
+    }
+  }
+  function newSwitch(view: BffSessionView): SwitchCorrelation {
+    let switchId: string
+    try { switchId = [...crypto.getRandomValues(new Uint8Array(16))].map(byte => byte.toString(16).padStart(2, "0")).join("") }
+    catch { throw new BffSessionError(unavailableMessage, "SESSION_UNKNOWN", 503) }
+    return { sessionId: view.sessionId, revision: view.version, switchId }
+  }
+  function startSwitch(operation: SwitchCorrelation) {
+    trackSwitch(operation, true)
+    localSwitch = operation; localSwitchInFlight = true
   }
   function pause() {
     clearTimers(); needsRecovery = true
@@ -201,13 +306,15 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
     clearTimers(); needsRecovery = true
     publish("unknown", observation.session, null, null, unavailableMessage)
   }
-  function anonymous(announce = false) {
+  function anonymous(announce = false, settleOperation = true) {
     const previous = observation.session
+    const settleSwitch = announcedSwitch
     ++generation
     controllers.forEach(controller => controller.abort())
-    clearTimers(); csrf = null; needsRecovery = false
+    clearTimers(); csrf = null; needsRecovery = false; pendingSwitches.clear(); switchOverflow = null
     publish("anonymous", null)
-    if (announce) notify(previous, true)
+    if (announce || settleSwitch && settleOperation) notify(previous, true)
+    else { localSwitch = null; localSwitchInFlight = false; announcedSwitch = false }
   }
   function armTimers() {
     clearTimers()
@@ -262,6 +369,11 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
     const previousRevision = revisions.get(view.sessionId)
     if (previousRevision !== undefined && BigInt(view.version) < BigInt(previousRevision)) throw invalidResponse()
     revisions.set(view.sessionId, view.version)
+    for (const [key, operation] of pendingSwitches) {
+      if (!blockedAt(operation, view)) { pendingSwitches.delete(key); rememberSettled(key) }
+    }
+    if (switchOverflow && !overflowBlocked(view)) switchOverflow = null
+    if (switchBlocked(view)) { needsRecovery = true; publishSwitchPause(view); return }
     needsRecovery = false
     publish("active", view, token, expiry)
     armTimers()
@@ -280,6 +392,17 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
     try {
       const raw = await request("/auth/session", ticket)
       const parsed = sessionResponse(raw, now())
+      // A switching notice freezes this revision. A read that raced ahead of
+      // server freeze cannot restore it. Only a terminal notice or a newer
+      // authoritative revision releases the barrier; no credentials are shared.
+      if (switchBlocked(parsed.view)) {
+        // A definitive local rejection or correlated return may settle only
+        // itself after this authenticated source GET. Other operations keep
+        // the UI frozen, and no bearer bridge runs until their barriers clear.
+        if (localSwitch && !localSwitchInFlight && announcedSwitch) notify(parsed.view, false)
+        publishSwitchPause(parsed.view)
+        return
+      }
       const previous = observation.session, token = observation.record?.token, expiry = observation.tokenExpiresAt
       const centralChanged = parsed.view.centralizedContextSelection && (previous?.sessionId !== parsed.view.sessionId
         || previous.version !== parsed.view.version || !sameContextIdentity(previous.context, parsed.view.context))
@@ -287,12 +410,12 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
         && previous?.sessionId === parsed.view.sessionId && previous.version === parsed.view.version
         && sameContextIdentity(previous.context, parsed.view.context)
       csrf = parsed.csrf
-      if (!parsed.view.context) { accept(parsed.view, null, null); if (centralChanged) notify(observation.session, false); return }
+      if (!parsed.view.context) { accept(parsed.view, null, null); if (centralChanged || announcedSwitch) notify(observation.session, false); return }
       if (reusable && typeof token === "string" && expiry !== null) { accept(parsed.view, token, expiry); return }
       // Do not let a previous context stay usable during a replacement proof read.
       publish(observation.status === "initializing" ? "initializing" : "refreshing", parsed.view)
       await bridge(parsed.view, ticket)
-      if (centralChanged) {
+      if (centralChanged || announcedSwitch) {
         notify(observation.session, false)
       }
     } catch (error) {
@@ -322,7 +445,31 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
     if (!initialized) {
       initialized = true
       for (const key of credentialKeys) { try { environment?.storage?.removeItem(key) } catch { /* Optional cleanup never owns BFF authority. */ } }
-      unsubscribe = environment?.listen?.(() => { retire(); void reconcile().catch(() => {}) }, () => { observe(); void reconcile().catch(() => {}) }, () => {
+      unsubscribe = environment?.listen?.((notice) => {
+        const current = observation.session
+        if (notice?.phase === "switching" && notice.sessionId && current && notice.sessionId !== current.sessionId) return
+        if (notice?.sessionId === current?.sessionId && notice?.revision && current && BigInt(notice.revision) < BigInt(current.version)) return
+        if (notice?.phase === "switching") {
+          if (!notice.sessionId || !notice.revision || !notice.switchId || !switchIdPattern.test(notice.switchId)) return
+          const operation = { sessionId: notice.sessionId, revision: notice.revision, switchId: notice.switchId }
+          if (settledSwitches.has(switchKey(operation))) return
+          trackSwitch(operation, false)
+          // Record simultaneous foreign switches without aborting this tab's POST.
+          if (localSwitchInFlight) { void reconcile().catch(() => {}); return }
+          retire(); publish("switching", observation.session)
+          return
+        }
+        // A terminal notice is only a hint for this exact switch revision.
+        // Unrelated or unbound notices still recheck authority, but cannot
+        // release a barrier while GET may still return the original source.
+        if (notice?.sessionId && notice.revision && notice.switchId && switchIdPattern.test(notice.switchId)) {
+          const operation = { sessionId: notice.sessionId, revision: notice.revision, switchId: notice.switchId }
+          if (!pendingSwitches.get(switchKey(operation))?.local) finishSwitch(operation)
+        }
+        // Even a copied matching hint cannot settle this tab's active/UNKNOWN POST.
+        if (localSwitchInFlight) { void reconcile().catch(() => {}); return }
+        retire(); void reconcile().catch(() => {})
+      }, () => { observe(); void reconcile().catch(() => {}) }, () => {
         retire(); csrf = null
       })
     }
@@ -338,12 +485,25 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
     if (needsRecovery) { await restore(generation); requireFence(expected) }
     const view = observation.session
     if (!view || Date.parse(view.expiresAt) <= now()) { anonymous(); throw new BffSessionError("统一登录已失效，请重新登录。", "SESSION_AUTHENTICATION_REQUIRED", 401) }
+    // Every remote mutation, including an already queued renew, must stop
+    // after recovery if any operation still freezes this exact source.
+    // Explicit reauthentication navigates outside this credential coordinator.
+    if (switchBlocked(view)) throw changed()
     // Fence out a GET that started before this mutation, even if fetch ignores abort.
     ++generation; controllers.forEach(controller => controller.abort())
     const ticket = generation
     try { return await action(view, ticket) }
     catch (error) {
       checkGeneration(ticket)
+      // A failed transport or 5xx may follow server-side creation. Keep the
+      // original correlation barrier: another old GET cannot settle UNKNOWN.
+      if (error instanceof BffSessionError && error.status >= 400 && error.status < 500) {
+        localSwitchInFlight = false
+        if (localSwitch) pendingSwitches.delete(switchKey(localSwitch))
+      } else if (localSwitch) {
+        const operation = pendingSwitches.get(switchKey(localSwitch))
+        if (operation) operation.unknown = true
+      }
       if (error instanceof BffSessionError && error.status === 401) anonymous()
       else if (error instanceof BffSessionError && error.status === 409) {
         pause()
@@ -373,18 +533,24 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
     return enqueue(() => mutation(expected, async (view, ticket) => {
       if (!uuid7.test(organizationId) || !uuid7.test(membershipId) || !view.memberships.some(row => canSelectConsoleMembership(row)
         && row.organizationId === organizationId && row.membershipId === membershipId)) throw new BffSessionError("请选择有效的具体员工身份。", "INVALID_CONTEXT_SELECTION", 400)
+      startSwitch(newSwitch(view))
       clearTimers(); publish("switching", view)
+      notify(view, false, "switching")
       return bridge(view, ticket, { organizationId, membershipId })
     }))
   }
   function beginContextSwitch(expected: SessionFence, returnPath: string): Promise<void> {
     return enqueue(() => mutation(expected, async (view, ticket) => {
       if (!view.centralizedContextSelection) throw new BffSessionError("统一身份选择尚未启用", "CENTRAL_SELECTION_REQUIRED", 409)
+      const operation = newSwitch(view)
+      const correlatedReturn = switchReturnPath(returnPath, operation)
+      startSwitch(operation)
       clearTimers(); publish("switching", view)
-      const data = await request("/auth/context-switch", ticket, { expectedVersion: view.version, returnPath })
+      notify(view, false, "switching")
+      const data = await request("/auth/context-switch", ticket, { expectedVersion: view.version, returnPath: correlatedReturn })
       if (!object(data) || typeof data.redirectTo !== "string") throw invalidResponse()
       const target = new URL(data.redirectTo)
-      if (target.protocol !== "https:" || target.username || target.password || target.hash || target.pathname !== "/oidc/authorize" || !environment?.navigate) throw invalidResponse()
+      if (target.protocol !== "https:" || target.username || target.password || target.hash || target.pathname !== "/oauth/authorize" || !environment?.navigate) throw invalidResponse()
       environment.navigate(target.href)
     }))
   }
@@ -403,7 +569,8 @@ export function createBffSessionCoordinator(environment: BffSessionEnvironment |
   }
   async function forget(expected: SessionFence): Promise<boolean> {
     if (!matches(expected) || disposed) return false
-    anonymous()
+    // Local credential removal proves no outcome for a pending remote switch.
+    anonymous(false, false)
     return true
   }
   function dispose() {
@@ -426,13 +593,18 @@ function browserEnvironment(): BffSessionEnvironment | null {
     navigate: url => window.location.assign(url),
     fetch: (...args) => fetch(...args),
     get storage() { try { return window.localStorage } catch { return undefined } },
+    returnedSwitch: consumeSwitchReturn(),
     notify: notice => channel?.postMessage(notice),
     listen: (invalidated, focused, suspended) => {
       const message = (event: MessageEvent<unknown>) => {
-        if (!object(event.data) || Object.keys(event.data).length !== 3 || typeof event.data.invalid !== "boolean"
+        if (!object(event.data) || ![3,4,5].includes(Object.keys(event.data).length) || typeof event.data.invalid !== "boolean"
+          || Object.keys(event.data).some(key => !["sessionId","revision","invalid","phase","switchId"].includes(key))
+          || event.data.phase !== undefined && event.data.phase !== "switching" && event.data.phase !== "settled"
+          || event.data.switchId !== undefined && (typeof event.data.switchId !== "string" || !switchIdPattern.test(event.data.switchId))
+          || event.data.phase === "switching" && event.data.switchId === undefined
           || !(event.data.sessionId === null || typeof event.data.sessionId === "string" && uuid7.test(event.data.sessionId))
           || !(event.data.revision === null || decimal(event.data.revision))) return
-        invalidated()
+        invalidated(event.data as unknown as BffSessionNotice)
       }
       const visible = () => { if (document.visibilityState === "visible") focused() }
       channel?.addEventListener("message", message)

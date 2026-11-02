@@ -62,16 +62,29 @@ BEGIN
        OR has_column_privilege(s.identity_runtime,'public.users','id','UPDATE')
        OR has_table_privilege(s.identity_runtime,'public.users','DELETE')
        OR has_table_privilege(s.identity_runtime,'public.users','TRUNCATE')
+       OR NOT has_table_privilege(s.identity_runtime,'public.identity_consent_command_receipts','SELECT')
+       OR NOT has_table_privilege(s.identity_runtime,'public.identity_consent_command_receipts','INSERT')
+       OR has_table_privilege(s.identity_runtime,'public.identity_consent_command_receipts','UPDATE,DELETE,TRUNCATE,TRIGGER')
        OR has_table_privilege(s.identity_runtime,'public.memberships','SELECT')
        OR has_table_privilege(s.identity_runtime,'public.roles','SELECT')
-       OR has_table_privilege(s.platform_runtime,'public.oidc_clients','SELECT')
-       OR has_table_privilege(s.platform_runtime,'public.oidc_access_tokens','SELECT')
-       OR has_table_privilege(s.platform_runtime,'public.oidc_consents','SELECT,INSERT,UPDATE,DELETE')
-       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','SELECT')
-       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','INSERT')
-       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','UPDATE')
-       OR NOT has_table_privilege(s.identity_runtime,'public.oidc_consents','DELETE') THEN
+       OR EXISTS(SELECT 1 FROM unnest(ARRAY[
+            'auth_applications','auth_application_admissions','auth_resources','auth_scopes','auth_clients','auth_client_credentials',
+            'auth_client_permissions','auth_consent_groups','auth_consent_group_clients','auth_consents',
+            'auth_consent_scopes','auth_subject_sectors','auth_subject_links','auth_authorization_requests','auth_context_interactions',
+            'auth_authorization_codes','auth_grants','auth_grant_scopes','auth_access_tokens',
+            'auth_access_token_scopes','auth_refresh_families','auth_refresh_tokens',
+            'auth_totp_enrollments','auth_totp_factors','auth_totp_recovery_codes','auth_mfa_recovery_receipts',
+            'auth_mfa_recovery_approvals','auth_invitations']::text[]) AS target(name)
+          WHERE NOT (has_table_privilege(s.identity_runtime,'public.'||target.name,'SELECT')
+             AND has_table_privilege(s.identity_runtime,'public.'||target.name,'INSERT')
+             AND has_table_privilege(s.identity_runtime,'public.'||target.name,'UPDATE')
+             AND has_table_privilege(s.identity_runtime,'public.'||target.name,'DELETE'))
+             OR has_any_column_privilege(s.platform_runtime,'public.'||target.name,'SELECT,INSERT,UPDATE,REFERENCES')
+             OR has_table_privilege(s.platform_runtime,'public.'||target.name,'DELETE,TRUNCATE,TRIGGER,REFERENCES')) THEN
         RAISE EXCEPTION 'IDENTITY_DEPLOYMENT_PRIVILEGE_BOUNDARY_INVALID';
+    END IF;
+    IF NOT public.identity_phase20_schema_ready() THEN
+        RAISE EXCEPTION 'IDENTITY_PHASE20_SCHEMA_PRIVILEGE_INVALID';
     END IF;
     IF EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
         CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a
@@ -83,6 +96,28 @@ BEGIN
           (p.proconfig IS NULL OR NOT ('search_path=pg_catalog, public'=ANY(p.proconfig)))) THEN
         RAISE EXCEPTION 'IDENTITY_DEPLOYMENT_DEFINER_SEARCH_PATH_INVALID';
     END IF;
+    IF NOT has_function_privilege(s.identity_runtime,'public.identity_auth_invitation_intent_active(uuid,uuid,text,text,text,uuid,uuid)','EXECUTE')
+       OR has_function_privilege(s.platform_runtime,'public.identity_auth_invitation_intent_active(uuid,uuid,text,text,text,uuid,uuid)','EXECUTE')
+       OR (SELECT proowner FROM pg_proc WHERE oid='public.identity_auth_invitation_intent_active(uuid,uuid,text,text,text,uuid,uuid)'::regprocedure)
+          <>(SELECT oid FROM pg_roles WHERE rolname=s.platform_owner) THEN
+        RAISE EXCEPTION 'IDENTITY_DEPLOYMENT_INVITATION_FENCE_INVALID';
+    END IF;
+    IF NOT has_function_privilege(s.identity_runtime,'public.identity_auth_review_intent_active(uuid,uuid,text,text,text,jsonb)','EXECUTE')
+       OR has_function_privilege(s.platform_runtime,'public.identity_auth_review_intent_active(uuid,uuid,text,text,text,jsonb)','EXECUTE')
+       OR (SELECT proowner FROM pg_proc WHERE oid='public.identity_auth_review_intent_active(uuid,uuid,text,text,text,jsonb)'::regprocedure)
+          IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname=s.platform_owner)
+       OR NOT has_function_privilege(s.platform_runtime,'public.identity_admin_assurance(uuid,uuid,uuid,bigint,uuid,bigint,text)','EXECUTE')
+       OR (SELECT proowner FROM pg_proc WHERE oid='public.identity_admin_assurance(uuid,uuid,uuid,bigint,uuid,bigint,text)'::regprocedure)
+          IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname=s.identity_owner)
+       OR NOT has_function_privilege(s.platform_runtime,'public.platform_identity_management_actor_active(uuid,uuid,text,boolean,boolean)','EXECUTE')
+       OR has_function_privilege(s.identity_runtime,'public.platform_identity_management_actor_active(uuid,uuid,text,boolean,boolean)','EXECUTE')
+       OR NOT has_table_privilege(s.platform_runtime,'public.platform_auth_release_bindings','SELECT')
+       OR has_any_column_privilege(s.platform_runtime,'public.platform_auth_release_bindings','INSERT,UPDATE,REFERENCES')
+       OR has_table_privilege(s.platform_runtime,'public.platform_auth_release_bindings','DELETE,TRUNCATE,TRIGGER')
+       OR has_any_column_privilege(s.identity_runtime,'public.platform_auth_release_bindings','SELECT,INSERT,UPDATE,REFERENCES')
+       OR has_table_privilege(s.identity_runtime,'public.platform_auth_release_bindings','DELETE,TRUNCATE,TRIGGER') THEN
+        RAISE EXCEPTION 'IDENTITY_DEPLOYMENT_REVIEW_BOUNDARY_INVALID';
+    END IF;
     IF EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         JOIN pg_roles owner_role ON owner_role.oid=c.relowner
         CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS owner_permission(privilege_name)
@@ -93,9 +128,39 @@ BEGIN
     END IF;
     IF (SELECT relowner FROM pg_class WHERE oid='public.users'::regclass)<>(SELECT oid FROM pg_roles WHERE rolname=s.identity_owner)
        OR (SELECT relowner FROM pg_class WHERE oid='public.memberships'::regclass)<>(SELECT oid FROM pg_roles WHERE rolname=s.platform_owner)
+       OR (SELECT relowner FROM pg_class WHERE oid='public.identity_consent_command_receipts'::regclass)<>(SELECT oid FROM pg_roles WHERE rolname=s.identity_owner)
+       OR EXISTS(SELECT 1 FROM unnest(ARRAY[
+            'auth_applications','auth_application_admissions','auth_resources','auth_scopes','auth_clients','auth_client_credentials',
+            'auth_client_permissions','auth_consent_groups','auth_consent_group_clients','auth_consents',
+            'auth_consent_scopes','auth_consent_revocation_outbox','auth_subject_sectors','auth_subject_links','auth_authorization_requests','auth_context_interactions',
+            'auth_authorization_codes','auth_grants','auth_grant_scopes','auth_access_tokens',
+            'auth_access_token_scopes','auth_refresh_families','auth_refresh_tokens',
+            'auth_totp_enrollments','auth_totp_factors','auth_totp_recovery_codes','auth_mfa_recovery_receipts',
+            'auth_mfa_recovery_approvals','auth_security_notification_outbox','auth_invitations']::text[]) AS target(name)
+          WHERE (SELECT relowner FROM pg_class WHERE oid=to_regclass('public.'||target.name))<>
+                (SELECT oid FROM pg_roles WHERE rolname=s.identity_owner))
        OR (SELECT datdba FROM pg_database WHERE datname=current_database())<>(SELECT oid FROM pg_roles WHERE rolname=s.migration_owner)
        OR (SELECT nspowner FROM pg_namespace WHERE nspname='public')<>(SELECT oid FROM pg_roles WHERE rolname=s.migration_owner) THEN
         RAISE EXCEPTION 'IDENTITY_DEPLOYMENT_OBJECT_OWNER_INVALID';
+    END IF;
+    IF NOT has_column_privilege(s.identity_runtime,'public.identity_service_clients','allowed_auth_resources','SELECT')
+       OR has_column_privilege(s.identity_runtime,'public.identity_service_clients','allowed_auth_resources','UPDATE')
+       OR EXISTS(SELECT 1 FROM unnest(ARRAY[
+        'platform_app_capabilities','platform_resource_services','platform_resource_bindings','platform_machine_delegations']::text[]) AS target(name)
+      WHERE to_regclass('public.'||target.name) IS NULL
+         OR (SELECT relowner FROM pg_class WHERE oid=to_regclass('public.'||target.name))
+            IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname=s.platform_owner)
+         OR NOT (has_table_privilege(s.platform_runtime,'public.'||target.name,'SELECT')
+             AND has_table_privilege(s.platform_runtime,'public.'||target.name,'INSERT')
+             AND has_table_privilege(s.platform_runtime,'public.'||target.name,'UPDATE')
+             AND has_table_privilege(s.platform_runtime,'public.'||target.name,'DELETE'))
+         OR has_any_column_privilege(s.identity_runtime,'public.'||target.name,'SELECT,INSERT,UPDATE,REFERENCES')
+         OR has_table_privilege(s.identity_runtime,'public.'||target.name,'DELETE,TRUNCATE,TRIGGER,REFERENCES'))
+       OR NOT has_function_privilege(s.platform_runtime,'public.platform_app_capability_active(text)','EXECUTE')
+       OR has_function_privilege(s.identity_runtime,'public.platform_app_capability_active(text)','EXECUTE')
+       OR (SELECT proowner FROM pg_proc WHERE oid='public.platform_app_capability_active(text)'::regprocedure)
+          IS DISTINCT FROM (SELECT oid FROM pg_roles WHERE rolname=s.platform_owner) THEN
+        RAISE EXCEPTION 'PLATFORM_RESOURCE_CAPABILITY_PRIVILEGE_INVALID';
     END IF;
 END $verify$;
 SELECT 'identity-deployment/1 verified' AS receipt;

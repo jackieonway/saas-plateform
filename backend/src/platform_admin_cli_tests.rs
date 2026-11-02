@@ -22,7 +22,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::entity_creation_tests::Database;
-use crate::util::{hash, jwt};
 
 const SECRET: &str = "owned-phase25-platform-session-signing-only";
 const CLIENT_SECRET: &str = "owned-phase25-confidential-client-secret";
@@ -169,7 +168,6 @@ struct Cli<'a> {
     files: &'a Files,
     origin: &'a str,
     bearer: &'a str,
-    client_id: &'a str,
 }
 
 impl Cli<'_> {
@@ -182,7 +180,6 @@ impl Cli<'_> {
             .args(["--environment", "development", "--allow-loopback-http"])
             .env("PLATFORM_API_ORIGIN", self.origin)
             .env("PLATFORM_ADMIN_BEARER", self.bearer)
-            .env("PLATFORM_CLIENT_ID", self.client_id)
             .kill_on_drop(true)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -326,29 +323,7 @@ async fn role(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid, menus: &[Uuid]
 }
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<String> {
-    let ver = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let sid = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            sid: Some(sid.to_string()),
-            ver: Some(ver),
-            cid: None,
-            scope: None,
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 async fn authorize(
@@ -435,7 +410,6 @@ async fn platform(
     let state =
         crate::sso_test_fixture::state(pool.clone(), Arc::new(config(artifact_origin, policy)?));
     let router = crate::routes::api_router()
-        .nest("/oauth", crate::routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::observability::observe,
@@ -613,7 +587,6 @@ async fn bootstrap_and_releases(
     for permission in [
         "system:application",
         "system:menu",
-        "system:oauth",
         "system:tenant",
         "system:organization",
         "system:user",
@@ -622,13 +595,8 @@ async fn bootstrap_and_releases(
         "system:data-grant:read",
         "system:data-grant:write",
     ] {
-        // OAuth administration requires this exact MENU page as well as its
-        // permission code; a generic BUTTON does not authorize the client page.
-        let (kind, path, visible) = if permission == "system:oauth" {
-            ("MENU", "/system/oauth/clients", true)
-        } else {
-            ("BUTTON", "", false)
-        };
+        // Business bootstrap needs application/menu administration only.
+        let (kind, path, visible) = ("BUTTON", "", false);
         let menu = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,visible,path,id) VALUES($1,$2,$3,$3,$4,$5,$6) RETURNING id")
             .bind(system).bind(kind).bind(permission).bind(visible).bind(path).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
         management.push(menu);
@@ -636,18 +604,11 @@ async fn bootstrap_and_releases(
     authorize(pool, platform_tenant, &[root, child], system, &management).await?;
     let (actor, _) = user(pool, "phase25-admin", true, root).await?;
     let admin = session(pool, actor, platform_tenant, root).await?;
-    let client_id = format!(
-        "phase25-generated-{}",
-        crate::util::uuid7::new_uuid().simple()
-    );
-    let client: Uuid = sqlx::query_scalar("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,client_type,subject_mode,allowed_member_types,grant_types,scopes,access_token_validity,refresh_token_validity,id) VALUES($1,'work-orders-client',$2,'CONFIDENTIAL','MACHINE',ARRAY[]::text[],'client_credentials','openid',300,300,$3) RETURNING id")
-        .bind(&client_id).bind(hash::sha256_hex(CLIENT_SECRET)).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let cli = Cli {
         binary,
         files,
         origin,
         bearer: &admin,
-        client_id: &client_id,
     };
     let release = |version: &str| {
         json!({"environment":"development","version":version,"entryType":"HTML",
@@ -686,26 +647,16 @@ async fn bootstrap_and_releases(
     let first = cli.call(&["bootstrap", "--apply"], None).await?;
     let app = uuid(&first, "applicationId")?;
     ensure!(
-        uuid(&first, "clientRecordId")? == client
-            && first["created"]
-                .as_array()
-                .is_some_and(|v| v.contains(&json!("application"))),
-        "bootstrap did not create application using actual client record"
-    );
-    let associated: (String, Option<Uuid>) =
-        sqlx::query_as("SELECT client_id,application_id FROM oauth_clients WHERE id=$1")
-            .bind(client)
-            .fetch_one(pool)
-            .await?;
-    ensure!(
-        associated == (client_id.clone(), Some(app)) && client_id != "work-orders-client",
-        "bootstrap did not preserve real generated client ID"
+        first["created"]
+            .as_array()
+            .is_some_and(|v| v.contains(&json!("application")))
+            && first.get("clientRecordId").is_none(),
+        "bootstrap did not create an independent business application"
     );
     let stable = snapshot(pool).await?;
     let second = cli.call(&["bootstrap", "--apply"], None).await?;
     ensure!(
         second["applicationId"] == first["applicationId"]
-            && second["clientRecordId"] == first["clientRecordId"]
             && second["menuIds"] == first["menuIds"]
             && second["created"] == json!([])
             && snapshot(pool).await? == stable,
@@ -713,29 +664,15 @@ async fn bootstrap_and_releases(
     );
     let inspection = cli.call(&["inspect"], None).await?;
     ensure!(
-        inspection["clientAssociated"] == true
+        inspection.get("clientAssociated").is_none()
             && inspection["missingMenus"] == json!([])
             && inspection["menuIds"] == first["menuIds"],
         "inspect failed to reconcile real bootstrap"
     );
-    let other: Uuid = sqlx::query_scalar("INSERT INTO applications(name,code,id) VALUES('Other owned app','phase25-other',$1) RETURNING id").bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
-    sqlx::query("UPDATE oauth_clients SET application_id=$1 WHERE id=$2")
-        .bind(other)
-        .bind(client)
-        .execute(pool)
-        .await?;
-    let conflict = snapshot(pool).await?;
-    cli.call(&["bootstrap", "--apply"], Some("CLIENT_OWNERSHIP_CONFLICT"))
-        .await?;
-    ensure!(
-        snapshot(pool).await? == conflict,
-        "foreign client conflict changed state"
-    );
-    sqlx::query("UPDATE oauth_clients SET application_id=$1 WHERE id=$2")
-        .bind(app)
-        .bind(client)
-        .execute(pool)
-        .await?;
+    // Identity client ownership is administered by the canonical identity registry;
+    // business bootstrap never claims or mutates a client registration.
+    let other: Uuid = sqlx::query_scalar("INSERT INTO applications(name,code,id) VALUES('Other owned app','phase25-other',$1) RETURNING id")
+        .bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
     let read = uuid(&first["menuIds"], "ticket:read")?;
     sqlx::query("UPDATE menus SET path='/phase25-conflicting-menu' WHERE id=$1")
         .bind(read)
@@ -960,13 +897,18 @@ async fn grant_round_trip(
     .await?;
     let mut identities = Vec::new();
     let mut identity_users = Vec::new();
+    ensure!(
+        management.len() >= 2,
+        "data-grant fixture management permissions missing"
+    );
+    let (common_permissions, grant_permissions) = management.split_at(management.len() - 2);
     for (name, selected) in [
-        ("reader", vec![management[8]]),
-        ("writer", vec![management[9]]),
+        ("reader", vec![grant_permissions[0]]),
+        ("writer", vec![grant_permissions[1]]),
         ("plain", vec![]),
     ] {
         let (id, _) = user(pool, &format!("phase25-{name}"), false, root).await?;
-        let mut allowed = management[..8].to_vec();
+        let mut allowed = common_permissions.to_vec();
         allowed.extend(selected);
         role(pool, platform_tenant, root, id, &allowed).await?;
         identity_users.push(id);
@@ -1034,7 +976,7 @@ async fn grant_round_trip(
         let wrong_member = cli.files.json("grants-wrong-membership", &wrong_member)?;
         live_cli.call(&["grants-apply", "--manifest", &wrong_member, "--apply"], Some("GRANT_PRECONDITION_FAILED")).await?;
         let business_session = session(pool, business_user, business, branch).await?;
-        let issued = http(&server.origin, &business_session, Method::POST, "/api/oauth/session-token", json!({"appCode":"work-orders"})).await?;
+        let issued = http(&server.origin, &business_session, Method::POST, "/api/apps/session-token", json!({"appCode":"work-orders"})).await?;
         ensure!(issued.status == StatusCode::CREATED, "could not issue real non-super application token");
         let token = issued.body["accessToken"].as_str().ok_or_else(|| anyhow!("real app token missing"))?;
         let context_path = "/api/apps/work-orders/context";

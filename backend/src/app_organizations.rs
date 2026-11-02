@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use uuid::Uuid;
 
-use crate::{app_authorization, error::AppError, state::AppState, util::hash};
+use crate::{directory_authorization::Access, error::AppError, state::AppState, util::hash};
 use saas_platform_backend::authorization_policy::{
     member_organization_allowed, MemberScope, OrganizationCeiling,
 };
@@ -20,11 +20,11 @@ const WINDOW_SECONDS: i64 = 3;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct LookupQuery {
-    resource: String,
-    action: String,
-    page: Option<i64>,
-    size: Option<i64>,
-    q: Option<String>,
+    pub(crate) resource: String,
+    pub(crate) action: String,
+    pub(crate) page: Option<i64>,
+    pub(crate) size: Option<i64>,
+    pub(crate) q: Option<String>,
 }
 
 struct Search {
@@ -151,10 +151,20 @@ pub(crate) async fn lookup(
     query: LookupQuery,
     target: Option<Uuid>,
 ) -> Result<Value, AppError> {
+    lookup_with_access(state, code, Access::Internal(headers), query, target).await
+}
+
+pub(crate) async fn lookup_with_access(
+    state: &AppState,
+    code: &str,
+    access: Access<'_>,
+    query: LookupQuery,
+    target: Option<Uuid>,
+) -> Result<Value, AppError> {
     let deadline = Utc::now() + chrono::Duration::seconds(WINDOW_SECONDS);
     tokio::time::timeout(
         std::time::Duration::from_secs(WINDOW_SECONDS as u64),
-        lookup_inner(state, code, headers, query, target, deadline),
+        lookup_inner(state, code, access, query, target, deadline),
     )
     .await
     .map_err(|_| AppError::Unavailable)?
@@ -163,7 +173,7 @@ pub(crate) async fn lookup(
 async fn lookup_inner(
     state: &AppState,
     code: &str,
-    headers: &HeaderMap,
+    access: Access<'_>,
     query: LookupQuery,
     target: Option<Uuid>,
     mut deadline: DateTime<Utc>,
@@ -172,7 +182,7 @@ async fn lookup_inner(
         return Err(AppError::bad_request("组织 ID 无效"));
     }
     let search = search(&query, target.is_some())?;
-    let checked = app_authorization::request_context(state, code, headers).await?;
+    let checked = access.context(state, code).await?;
     let context = &checked.context;
     let app = uuid(&context["application"]["id"])?;
     let user = uuid(&context["user"]["id"])?;
@@ -223,7 +233,8 @@ async fn lookup_inner(
     }
     // An independent statement detects target type/state/application-grant or
     // metadata changes not represented by the actor's context version.
-    if app_authorization::revalidate_context(state, code, headers, checked.revision)
+    if access
+        .revalidate(state, code, checked.revision)
         .await?
         .is_some()
     {

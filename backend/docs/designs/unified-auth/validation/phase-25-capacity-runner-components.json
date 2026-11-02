@@ -1,0 +1,50 @@
+{
+  "contractVersion": "unified-auth-phase25-capacity-runner-components/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T11:27:04.823183+00:00",
+  "scope": "Capacity runner filesystem preflight/finally contract only; actual fresh capacity and failure runtime remain root acceptance.",
+  "defect": "Both df calls required a stale /var/tmp/rust-saas-unified-auth-20261028 cache directory that does not exist in the current owned environment; preflight failed before try/finally.",
+  "change": "Both filesystem samples now use only the verified owned TASK path with a 15-second timeout. No application/compile input changed.",
+  "inputs": {
+    "saas-plateform/backend/tests/unified-auth-https/phase22-run.py": "cb207c06ee86f4fe7c54568d261566f2038979d4f404e1826b0c34c3e2b0bb39",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase25_capacity_runner.py": "d8201105a3476ced345412202c65756fc480f2978771a97d36e2a6be7a20a288",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-cleanup-selftest.py": "776a5c1e1ca046e59bc5bc451bb0e464abbe661788e9117ea369d4ff06785d4f"
+  },
+  "checks": [
+    {
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "saas-plateform/backend/tests/unified-auth-https",
+        "-p",
+        "test_phase25_capacity_runner.py",
+        "-v"
+      ],
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "durationSeconds": 0.057,
+      "evidence": "Includes both actual AST df call expressions replayed with an observer rejecting any unowned or absent cache path and checking the timeout; full-candidate dispatch, fresh-capacity refusal, controller binding, report gate and four finally cleanup scenarios."
+    },
+    {
+      "command": [
+        "python3",
+        "-B",
+        "saas-plateform/backend/tests/unified-auth-https/phase22-cleanup-selftest.py"
+      ],
+      "cases": 4,
+      "passed": 4,
+      "failed": 0,
+      "finallyAstSha256": "b7dd2ce7e65fe62b98a6085311eb2575aabe372a95ffc8bb59ccb2aaf244690b",
+      "evidence": "Actual runner finally AST in memory-only success/control-failure/database-failure/malformed-pid models."
+    }
+  ],
+  "servicesStarted": 0,
+  "databasesCreated": 0,
+  "containersCreated": 0,
+  "temporaryResourcesCreated": 0
+}

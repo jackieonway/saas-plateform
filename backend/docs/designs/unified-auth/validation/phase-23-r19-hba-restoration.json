@@ -1,0 +1,19 @@
+{
+  "finalSha256": "e6305f548fd8096217d02a8f93b5c50716d58df1d2441b12346dfe57db7027fd",
+  "finalStat": {
+    "atimeNs": 1793236708007411218,
+    "gid": 1000,
+    "mode": 384,
+    "mtimeNs": 1793234141444530175,
+    "uid": 1000
+  },
+  "installedSha256": "ab9b831e66407b827af472efb08be9a7ff1743fc933a168bc1a166ea15f13a23",
+  "journal": "/run/rust-saas-phase23-hba-01a185e6-649f-7ee5-a9df-03bb62b1e8eb",
+  "originalBytesAndStatRestored": true,
+  "originalSha256": "e6305f548fd8096217d02a8f93b5c50716d58df1d2441b12346dfe57db7027fd",
+  "port": 55494,
+  "receiptRetained": true,
+  "ruleCount": 2,
+  "sourceAddress": "127.0.0.2/32",
+  "status": "PHASE23_HBA_RESTORED"
+}

@@ -8,11 +8,13 @@ use axum::http::HeaderMap;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use uuid::Uuid;
 
+use crate::directory_authorization::Access;
 use crate::error::AppError;
 use crate::state::AppState;
+use chrono::{DateTime, Utc};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -22,14 +24,14 @@ pub fn routes() -> Router<AppState> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct MemberQuery {
-    resource: String,
-    action: String,
+pub(crate) struct MemberQuery {
+    pub(crate) resource: String,
+    pub(crate) action: String,
     #[serde(deserialize_with = "crate::util::uuid7::deserialize")]
-    organization_id: Uuid,
-    page: Option<i64>,
-    size: Option<i64>,
-    q: Option<String>,
+    pub(crate) organization_id: Uuid,
+    pub(crate) page: Option<i64>,
+    pub(crate) size: Option<i64>,
+    pub(crate) q: Option<String>,
 }
 
 fn validate(query: &MemberQuery, single: bool) -> Result<(i64, i64, String), AppError> {
@@ -120,10 +122,10 @@ struct LookupProof {
 async fn authorized(
     state: &AppState,
     app_code: &str,
-    headers: &HeaderMap,
+    access: &Access<'_>,
     query: &MemberQuery,
 ) -> Result<LookupProof, AppError> {
-    let checked = crate::app_authorization::request_context(state, app_code, headers).await?;
+    let checked = access.context(state, app_code).await?;
     let identity = authorize_projection(state, &checked.context, query).await?;
     Ok(LookupProof {
         identity,
@@ -193,14 +195,11 @@ async fn authorize_projection(
 async fn recheck(
     state: &AppState,
     app_code: &str,
-    headers: &HeaderMap,
+    access: &Access<'_>,
     query: &MemberQuery,
     proof: &LookupProof,
 ) -> Result<(), AppError> {
-    if let Some(context) =
-        crate::app_authorization::revalidate_context(state, app_code, headers, proof.revision)
-            .await?
-    {
+    if let Some(context) = access.revalidate(state, app_code, proof.revision).await? {
         if authorize_projection(state, &context, query).await? != proof.identity {
             return Err(AppError::unauthorized("应用上下文已改变"));
         }
@@ -216,33 +215,104 @@ async fn recheck(
     Ok(())
 }
 
+pub(crate) struct LookupResult {
+    pub(crate) data: Value,
+    pub(crate) expires_at: Option<DateTime<Utc>>,
+}
+
+async fn load(
+    state: &AppState,
+    query: &MemberQuery,
+    identity: &(Uuid, Uuid, Uuid, Uuid),
+    page: i64,
+    size: i64,
+    pattern: &str,
+    target: Option<Uuid>,
+) -> Result<LookupResult, AppError> {
+    let row:Option<(Value,Option<DateTime<Utc>>)>=sqlx::query_as(
+        "WITH target AS (SELECT LEAST(t.expires_at,org_chain_expires_at(o.id)) AS expires_at \
+         FROM organizations o JOIN tenants t ON t.id=o.tenant_id AND t.status='ENABLED' \
+           AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) \
+         JOIN applications a ON a.id=$4 AND a.status='ENABLED' AND 'EMPLOYEE'=ANY(a.allowed_member_types) \
+         JOIN tenant_applications ta ON ta.tenant_id=t.id AND ta.application_id=a.id \
+         JOIN organization_applications oa ON oa.organization_id=o.id AND oa.application_id=a.id \
+         WHERE o.id=$1 AND o.tenant_id=$3 AND org_chain_active(o.id) \
+           AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>clock_timestamp())), \
+         matching AS (SELECT u.id,COALESCE(NULLIF(trim(u.real_name),''),u.username) AS display_name \
+           FROM memberships m JOIN users u ON u.id=m.user_id CROSS JOIN target \
+           WHERE m.organization_id=$1 AND m.member_type='EMPLOYEE' AND m.status='ENABLED' \
+             AND u.status='ENABLED' AND ($7::uuid IS NULL OR m.user_id=$7) \
+             AND ($2='' OR COALESCE(NULLIF(trim(u.real_name),''),u.username) ILIKE $2 ESCAPE CHR(92))) \
+         SELECT jsonb_build_object('records',COALESCE((SELECT jsonb_agg(jsonb_build_object( \
+             'id',id,'displayName',display_name,'organizationId',$1) ORDER BY id) \
+             FROM (SELECT id,display_name FROM matching ORDER BY id LIMIT $6::bigint OFFSET ($5::bigint-1)*$6::bigint) page),'[]'::jsonb), \
+             'total',(SELECT count(*) FROM matching),'page',$5,'size',$6),target.expires_at FROM target")
+        .bind(query.organization_id).bind(pattern).bind(identity.1).bind(identity.3)
+        .bind(page).bind(size).bind(target).fetch_optional(&state.pool).await?;
+    let (mut data, expires_at) =
+        row.ok_or_else(|| AppError::not_found("组织不存在或不能访问当前应用"))?;
+    if target.is_some() {
+        data = data["records"]
+            .as_array()
+            .and_then(|rows| rows.first())
+            .cloned()
+            .ok_or_else(|| AppError::not_found("有效直接成员不存在"))?;
+    }
+    Ok(LookupResult { data, expires_at })
+}
+
+/// Shared directory policy and target projection for public and private callers.
+pub(crate) async fn lookup(
+    state: &AppState,
+    app_code: &str,
+    access: Access<'_>,
+    query: MemberQuery,
+    target: Option<Uuid>,
+) -> Result<LookupResult, AppError> {
+    if let Some(target) = target {
+        crate::util::uuid7::validate_uuid(target)?;
+    }
+    let (page, size, pattern) = validate(&query, target.is_some())?;
+    let identity = authorized(state, app_code, &access, &query).await?;
+    let first = load(
+        state,
+        &query,
+        &identity.identity,
+        page,
+        size,
+        &pattern,
+        target,
+    )
+    .await?;
+    recheck(state, app_code, &access, &query, &identity).await?;
+    let latest = load(
+        state,
+        &query,
+        &identity.identity,
+        page,
+        size,
+        &pattern,
+        target,
+    )
+    .await?;
+    if first.data != latest.data || first.expires_at != latest.expires_at {
+        return Err(AppError::Unavailable);
+    }
+    if latest.expires_at.is_some_and(|expiry| expiry <= Utc::now()) {
+        return Err(AppError::Unavailable);
+    }
+    Ok(latest)
+}
+
 async fn list(
     State(state): State<AppState>,
     Path(app_code): Path<String>,
     headers: HeaderMap,
     Query(query): Query<MemberQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let (page, size, pattern) = validate(&query, false)?;
-    let identity = authorized(&state, &app_code, &headers, &query).await?;
-    let predicate = "m.organization_id=$1 AND m.member_type='EMPLOYEE' AND m.status='ENABLED' \
-        AND u.status='ENABLED' AND ($2='' OR COALESCE(NULLIF(trim(u.real_name),''),u.username) ILIKE $2 ESCAPE CHR(92))";
-    let total: i64 = sqlx::query_scalar(&format!(
-        "SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id WHERE {predicate}"
-    ))
-    .bind(query.organization_id)
-    .bind(&pattern)
-    .fetch_one(&state.pool)
-    .await?;
-    let rows: Vec<(Uuid, String)> = sqlx::query_as(&format!(
-        "SELECT u.id,COALESCE(NULLIF(trim(u.real_name),''),u.username) FROM memberships m JOIN users u ON u.id=m.user_id \
-         WHERE {predicate} ORDER BY u.id LIMIT $3 OFFSET $4"))
-        .bind(query.organization_id).bind(&pattern).bind(size).bind((page - 1) * size).fetch_all(&state.pool).await?;
-    recheck(&state, &app_code, &headers, &query, &identity).await?;
-    Ok(Json(
-        json!({ "records": rows.into_iter().map(|(id, display)|
-        json!({"id":id,"displayName":display,"organizationId":query.organization_id})).collect::<Vec<_>>(),
-        "total":total,"page":page,"size":size }),
-    ))
+    lookup(&state, &app_code, Access::Internal(&headers), query, None)
+        .await
+        .map(|result| Json(result.data))
 }
 
 async fn one(
@@ -251,24 +321,21 @@ async fn one(
     headers: HeaderMap,
     Query(query): Query<MemberQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let user_id = crate::util::uuid7::validate_uuid(user_id)?;
-    validate(&query, true)?;
-    let identity = authorized(&state, &app_code, &headers, &query).await?;
-    let display: String = sqlx::query_scalar(
-        "SELECT COALESCE(NULLIF(trim(u.real_name),''),u.username) FROM memberships m JOIN users u ON u.id=m.user_id \
-         WHERE m.organization_id=$1 AND m.user_id=$2 AND m.member_type='EMPLOYEE' \
-         AND m.status='ENABLED' AND u.status='ENABLED'"
-    ).bind(query.organization_id).bind(user_id).fetch_optional(&state.pool).await?
-        .ok_or_else(|| AppError::not_found("有效直接成员不存在"))?;
-    recheck(&state, &app_code, &headers, &query, &identity).await?;
-    Ok(Json(
-        json!({"id":user_id,"displayName":display,"organizationId":query.organization_id}),
-    ))
+    lookup(
+        &state,
+        &app_code,
+        Access::Internal(&headers),
+        query,
+        Some(user_id),
+    )
+    .await
+    .map(|result| Json(result.data))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn member_search_rejects_nul_and_preserves_literal_pattern_characters() {

@@ -1,5 +1,6 @@
-//! Offline recovery of a coordinated three-database set. Native PostgreSQL tools
-//! run with deadlines; restored databases remain quarantined until business acceptance.
+//! Coordinated encrypted backups and authenticated snapshot verification.
+//! Native PostgreSQL tools run with deadlines. Database restoration is refused
+//! before any configuration access; canonical identity recovery has its own tool.
 mod bundle;
 mod config;
 mod native;

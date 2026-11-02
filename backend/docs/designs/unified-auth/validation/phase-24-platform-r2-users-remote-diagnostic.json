@@ -1,0 +1,49 @@
+{
+  "profile": "HISTORICAL_BINARY_DIAGNOSTIC",
+  "sourceSnapshotHistorical": "phase24-platform-r2",
+  "binarySha256": "4eaaf052339dd64682ae50a3541d3a1b67fc76353d4a24e092c9ed8f2b76c7f6",
+  "newClusterId": "7701992637128815755",
+  "cases": [
+    {
+      "case": "routes::users::remote::tests::account_command_acknowledgements_reject_trigger_suppressed_writes",
+      "exitCode": 101,
+      "rawLogSha256": "6c8fc4934bb7a1fc508c77f7df18e4fbd735e5dc9bc23cc31bc5bda6973c2f18",
+      "diagnosticsBeforeJson": [
+        "Error: \u5f53\u524d\u6210\u5458\u4f1a\u8bdd\u5df2\u5931\u6548"
+      ],
+      "sourceLocations": [
+        "src/routes/users/remote.rs:515:85",
+        "src/routes/users/remote.rs:532:13",
+        "src/routes/users/remote.rs:643:11",
+        "src/routes/users/remote.rs:644:27"
+      ],
+      "sqlstates": []
+    },
+    {
+      "case": "routes::users::remote::tests::delayed_account_followup_does_not_revoke_new_generation_and_is_idempotent",
+      "exitCode": 101,
+      "rawLogSha256": "02746e85cbfde008d5a0c4b5e68484aea26d7c6985762f9c2beddadca7103b57",
+      "diagnosticsBeforeJson": [
+        "Error: new generation session lost its actual authority after delayed followup"
+      ],
+      "sourceLocations": [
+        "src/routes/users/remote.rs:650:10",
+        "src/routes/users/remote.rs:665:13",
+        "src/routes/users/remote.rs:670:11",
+        "src/routes/users/remote.rs:671:27"
+      ],
+      "sqlstates": []
+    }
+  ],
+  "currentSourcePassClaim": false,
+  "dockerCreated": 0,
+  "newOwnedDatabases": [],
+  "binaryHashAfter": "4eaaf052339dd64682ae50a3541d3a1b67fc76353d4a24e092c9ed8f2b76c7f6",
+  "historicalSourceSnapshotSha256": "7c77991ca6e3e74d5289bae8cc4849536f432331f544981fb3c200ce8613c027",
+  "temporaryResources": {
+    "protectedDiagnosticBinary": "/tmp/rust-saas-unified-auth-20261028/bin/phase24-platform-r2-diagnostic-tests/main",
+    "privateRawDirectory": "/home/jackie/.cache/rust-saas-unified-auth-20261029/phase24-platform-r2-historical-users-diagnostic-private",
+    "cleanupOwner": "root",
+    "retainUntilCurrentRetestComplete": true
+  }
+}

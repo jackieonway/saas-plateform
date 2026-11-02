@@ -54,11 +54,12 @@ async fn console_configuration_is_always_sso_and_password_routes_are_absent() {
 async fn migration_retires_password_clients_and_unbound_console_sessions() -> anyhow::Result<()> {
     let db = crate::entity_creation_tests::Database::create().await?;
     let result = async {
-        let password_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients WHERE 'password'=ANY(string_to_array(grant_types,','))")
+        let retired_relations: i64 = sqlx::query_scalar("SELECT count(*) FROM pg_class relation JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace WHERE namespace.nspname='public' AND relation.relkind IN ('r','p','v','m','f') AND relation.relname ~ '^(oauth_|oidc_)'")
+            .fetch_one(&db.pool).await?;
+        assert_eq!(retired_relations, 0);
+        let password_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM auth_clients WHERE 'password'=ANY(grant_types)")
             .fetch_one(&db.pool).await?;
         assert_eq!(password_clients, 0);
-        let retired: i64=sqlx::query_scalar("SELECT count(*) FROM oauth_clients WHERE client_id='platform-console-legacy'").fetch_one(&db.pool).await?;
-        assert_eq!(retired,0);
         let unbound: i64 = sqlx::query_scalar("SELECT count(*) FROM platform_sessions WHERE bff_session_id IS NULL AND revoked_at IS NULL")
             .fetch_one(&db.pool).await?;
         assert_eq!(unbound, 0);

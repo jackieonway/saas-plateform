@@ -1,0 +1,55 @@
+{
+  "status": "PASS",
+  "scope": "Real React/Vite unified client page with production session gate and isolated HTTP fixture; no database or live backend claim",
+  "browser": "156.0.8078.4",
+  "scenarios": [
+    {
+      "name": "desktop URL filters and server pagination restore",
+      "status": "PASS"
+    },
+    {
+      "name": "390px editor fits viewport and creates a valid machine client",
+      "status": "PASS"
+    },
+    {
+      "name": "390px consent group management versions members and warns about reconfirmation",
+      "status": "PASS"
+    },
+    {
+      "name": "failed refresh retains the last successful directory",
+      "status": "PASS"
+    },
+    {
+      "name": "same-frame duplicate submits issue only one versioned write",
+      "status": "PASS"
+    },
+    {
+      "name": "409 version conflict requires an explicit latest-version reload",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown credential result recovers the original operation without resubmitting",
+      "status": "PASS"
+    },
+    {
+      "name": "lost HTTP response recovers the original operation without resubmitting",
+      "status": "PASS"
+    },
+    {
+      "name": "lost response then reload restores only the original pending operation",
+      "status": "PASS"
+    },
+    {
+      "name": "different authorized session refuses old credential recovery after reload",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": [
+    "desktop-third-party-directory.png",
+    "desktop-first-party-sources.png",
+    "mobile-client-editor.png",
+    "mobile-client-directory.png",
+    "desktop-consent-groups.png",
+    "desktop-client-version-conflict.png"
+  ]
+}

@@ -151,7 +151,10 @@ async fn prove(
     for secret in [
         state.config.context_source_service_client_secret.as_deref(),
         state.config.identity_service_client_secret.as_deref(),
-        state.config.identity_admin_service_client_secret.as_deref(),
+        state
+            .config
+            .identity_key_admin_service_client_secret
+            .as_deref(),
         state
             .config
             .customer_authority_service_client_secret
@@ -262,16 +265,66 @@ async fn confirm(
         proof.interaction_expires_at,
     )
     .map_err(|_| AppError::unauthorized("选择来源已经失效"))?;
-    let credential =
-        Credential::parse(crate::sso::opaque_secret()?).map_err(|_| AppError::Unavailable)?;
-    selections::issue(
+    let consumer = registration.consumer()?;
+    selections::lock_issue_capacity(&mut tx).await?;
+    let (credential, issued) = if let Some(existing) = selections::recover_issued(
         &mut tx,
-        &selected,
-        &credential,
-        registration.consumer()?,
-        state.config.login_max_entries.min(u32::MAX as usize) as u32,
+        selected.binding.transaction_id,
+        &selected.binding,
+        &selected.member,
+        consumer,
+        selected.expires_at,
     )
-    .await?;
+    .await?
+    {
+        if existing.selection.expires_at > selected.expires_at {
+            return Err(AppError::conflict("原选择期限已变化").into());
+        }
+        let credential = Credential::parse(
+            state
+                .config
+                .bff_token_keys
+                .as_deref()
+                .ok_or(AppError::Unavailable)?
+                .open(
+                    selected.binding.transaction_id.uuid(),
+                    &selected.binding.source.issuer,
+                    selected.binding.registration.client_id.uuid(),
+                    "context-selection-credential",
+                    &existing.credential_ciphertext,
+                )?,
+        )
+        .map_err(|_| AppError::Unavailable)?;
+        if crate::util::hash::sha256_hex(credential.as_secret()) != existing.credential_hash {
+            return Err(AppError::Unavailable.into());
+        }
+        (credential, existing.selection)
+    } else {
+        let credential =
+            Credential::parse(crate::sso::opaque_secret()?).map_err(|_| AppError::Unavailable)?;
+        let credential_ciphertext = state
+            .config
+            .bff_token_keys
+            .as_deref()
+            .ok_or(AppError::Unavailable)?
+            .seal(
+                selected.binding.transaction_id.uuid(),
+                &selected.binding.source.issuer,
+                selected.binding.registration.client_id.uuid(),
+                "context-selection-credential",
+                credential.as_secret(),
+            )?;
+        let issued = selections::issue(
+            &mut tx,
+            &selected,
+            &credential,
+            &credential_ciphertext,
+            consumer,
+            state.config.login_max_entries.min(u32::MAX as usize) as u32,
+        )
+        .await?;
+        (credential, issued)
+    };
     let fresh = state
         .context_selection_authority
         .verify(&source, body.expected_client_id, None)
@@ -286,7 +339,7 @@ async fn confirm(
     audit::write_in_tx(&mut tx,audit::AuditInfo{user_id:Some(proof.source.user_id.uuid()),username:&username,tenant_id:Some(selected.member.tenant_id.uuid()),organization_id:Some(selected.member.organization_id.uuid()),action:"CONTEXT_SELECTION_CONFIRM",detail:&json!({"transactionId":selected.binding.transaction_id,"membershipId":selected.member.membership_id,"clientId":selected.binding.registration.client_id,"serviceId":principal.id,"operationId":uuid7::new_uuid()}).to_string(),ip:&audit::client_ip(&headers),user_agent:&audit::ua_of(&headers)}).await?;
     tx.commit().await?;
     Ok(Json(
-        json!({"contractVersion":"context-selection/1","transactionId":selected.binding.transaction_id,"credential":credential,"expiresAt":selected.expires_at}),
+        json!({"contractVersion":"context-selection/1","transactionId":issued.binding.transaction_id,"credential":credential,"expiresAt":issued.expires_at}),
     ))
 }
 

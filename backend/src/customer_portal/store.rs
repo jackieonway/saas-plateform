@@ -29,7 +29,8 @@ pub(super) async fn authenticate(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<Registration, AppError> {
-    let caller = crate::confidential_clients::authenticate(state, headers).await?;
+    let caller =
+        crate::confidential_clients::authenticate_for(state, headers, "CUSTOMER_PROFILE").await?;
     let (_, secret) = crate::confidential_clients::parse_basic_auth(headers).ok_or_else(invalid)?;
     let (client, application) = state
         .config
@@ -37,14 +38,14 @@ pub(super) async fn authenticate(
         .zip(state.config.customer_profile_application_id)
         .ok_or(AppError::Unavailable)?;
     let row: Option<Registration> = sqlx::query_as(
-        "SELECT c.id,c.application_id,c.access_policy_version AS client_policy_version, \
+        "SELECT c.id,c.application_id,c.credential_version AS client_policy_version, \
          a.access_policy_version AS application_policy_version,a.code AS application_code, \
-         a.name AS application_name,c.client_id,COALESCE(c.client_secret_hash,'') AS secret_hash \
-         FROM oauth_clients c JOIN applications a ON a.id=c.application_id \
-         WHERE c.id=$1 AND c.application_id=$2 AND c.client_id=$3 \
-         AND c.client_type='CONFIDENTIAL' AND c.subject_mode='USER' AND c.status='ENABLED' \
-         AND c.allowed_member_types=ARRAY['CUSTOMER']::text[] \
-         AND 'profile'=ANY(regexp_split_to_array(trim(COALESCE(c.scopes,'')),'[[:space:]]*,[[:space:]]*')) \
+         a.name AS application_name,c.service_id AS client_id,COALESCE(c.secret_hash,'') AS secret_hash \
+         FROM platform_resource_services c JOIN applications a ON a.id=c.application_id \
+         WHERE c.id=$1 AND c.application_id=$2 AND c.service_id=$3 \
+         AND c.purpose='CUSTOMER_PROFILE' AND c.status='ENABLED' \
+         AND c.allowed_member_types=ARRAY['CUSTOMER']::text[] AND c.audience=a.code AND NOT identity_credential_digest_in_use(c.secret_hash) AND NOT EXISTS(SELECT 1 FROM context_selection_services context_service WHERE context_service.secret_hash=c.secret_hash) \
+         AND 'customer:profile'=ANY(c.allowed_operations) \
          AND a.status='ENABLED' AND 'CUSTOMER'=ANY(a.allowed_member_types)",
     ).bind(client).bind(application).bind(&caller.client_id).fetch_optional(&state.pool).await.map_err(|_|AppError::Unavailable)?;
     row.filter(|row| {
@@ -87,7 +88,7 @@ impl Member {
 // The independently authenticated selection consumer is restricted to this
 // deployment's resource registration. It never supplies an application/client.
 pub(super) async fn selection_registration(state: &AppState) -> Result<Registration, AppError> {
-    sqlx::query_as("SELECT c.id,c.application_id,c.access_policy_version AS client_policy_version,a.access_policy_version AS application_policy_version,a.code AS application_code,a.name AS application_name,c.client_id,COALESCE(c.client_secret_hash,'') AS secret_hash FROM oauth_clients c JOIN applications a ON a.id=c.application_id WHERE c.id=$1 AND a.id=$2 AND c.status='ENABLED' AND a.status='ENABLED' AND c.client_type='CONFIDENTIAL' AND c.subject_mode='USER' AND c.allowed_member_types=ARRAY['CUSTOMER']::text[]")
+    sqlx::query_as("SELECT c.id,c.application_id,c.credential_version AS client_policy_version,a.access_policy_version AS application_policy_version,a.code AS application_code,a.name AS application_name,c.service_id AS client_id,COALESCE(c.secret_hash,'') AS secret_hash FROM platform_resource_services c JOIN applications a ON a.id=c.application_id WHERE c.id=$1 AND a.id=$2 AND c.status='ENABLED' AND a.status='ENABLED' AND c.purpose='CUSTOMER_PROFILE' AND c.allowed_member_types=ARRAY['CUSTOMER']::text[] AND c.audience=a.code AND NOT identity_credential_digest_in_use(c.secret_hash) AND NOT EXISTS(SELECT 1 FROM context_selection_services context_service WHERE context_service.secret_hash=c.secret_hash)")
         .bind(state.config.customer_profile_client_ref.ok_or(AppError::Unavailable)?).bind(state.config.customer_profile_application_id.ok_or(AppError::Unavailable)?)
         .fetch_optional(&state.pool).await?.ok_or_else(invalid)
 }
@@ -95,13 +96,13 @@ pub(super) async fn selection_registration(state: &AppState) -> Result<Registrat
 const MEMBERS: &str = "SELECT m.id AS membership_id,m.user_id,m.organization_id,o.tenant_id,m.identity_version, \
     o.name AS organization_name,t.name AS tenant_name,org_chain_expires_at(o.id) AS org_expires,t.expires_at AS tenant_expires \
     FROM memberships m JOIN organizations o ON o.id=m.organization_id JOIN tenants t ON t.id=o.tenant_id \
-    JOIN applications a ON a.id=$3 JOIN oauth_clients c ON c.id=$4 AND c.application_id=a.id \
+    JOIN applications a ON a.id=$3 JOIN platform_resource_services c ON c.id=$4 AND c.application_id=a.id \
     WHERE m.user_id=$1 AND m.member_type='CUSTOMER' \
     AND identity_binding_active($1,t.id,o.id,$2,m.id,'CUSTOMER',m.identity_version) \
-    AND c.status='ENABLED' AND c.client_type='CONFIDENTIAL' AND c.subject_mode='USER' \
-    AND c.allowed_member_types=ARRAY['CUSTOMER']::text[] AND c.access_policy_version=$5 \
+    AND c.status='ENABLED' AND c.purpose='CUSTOMER_PROFILE' \
+    AND c.allowed_member_types=ARRAY['CUSTOMER']::text[] AND c.audience=a.code AND NOT identity_credential_digest_in_use(c.secret_hash) AND NOT EXISTS(SELECT 1 FROM context_selection_services context_service WHERE context_service.secret_hash=c.secret_hash) AND c.credential_version=$5 \
     AND a.status='ENABLED' AND a.access_policy_version=$6 AND 'CUSTOMER'=ANY(a.allowed_member_types) \
-    AND 'profile'=ANY(regexp_split_to_array(trim(COALESCE(c.scopes,'')),'[[:space:]]*,[[:space:]]*')) \
+    AND 'customer:profile'=ANY(c.allowed_operations) \
     AND EXISTS(SELECT 1 FROM tenant_applications WHERE tenant_id=t.id AND application_id=a.id) \
     AND EXISTS(SELECT 1 FROM organization_applications WHERE organization_id=o.id AND application_id=a.id)";
 
@@ -282,13 +283,12 @@ pub(super) async fn final_proof<'e, E: Executor<'e, Database = Postgres>>(
         .collect::<Vec<_>>();
     let active:bool=sqlx::query_scalar(
         "SELECT customer_portal_account_source_active($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) \
-         AND EXISTS(SELECT 1 FROM oauth_clients c JOIN applications a ON a.id=c.application_id \
-             WHERE c.id=$15 AND a.id=$16 AND c.status='ENABLED' AND c.client_type='CONFIDENTIAL' \
-             AND c.subject_mode='USER' AND c.allowed_member_types=ARRAY['CUSTOMER']::text[] \
-             AND c.access_policy_version=$17 AND a.access_policy_version=$18 \
-             AND c.client_id=$19 AND c.client_secret_hash=$20 AND a.status='ENABLED' \
+         AND EXISTS(SELECT 1 FROM platform_resource_services c JOIN applications a ON a.id=c.application_id \
+             WHERE c.id=$15 AND a.id=$16 AND c.status='ENABLED' AND c.purpose='CUSTOMER_PROFILE' AND c.allowed_member_types=ARRAY['CUSTOMER']::text[] AND c.audience=a.code AND NOT identity_credential_digest_in_use(c.secret_hash) AND NOT EXISTS(SELECT 1 FROM context_selection_services context_service WHERE context_service.secret_hash=c.secret_hash) \
+             AND c.credential_version=$17 AND a.access_policy_version=$18 \
+             AND c.service_id=$19 AND c.secret_hash=$20 AND a.status='ENABLED' \
              AND 'CUSTOMER'=ANY(a.allowed_member_types) \
-             AND 'profile'=ANY(regexp_split_to_array(trim(COALESCE(c.scopes,'')),'[[:space:]]*,[[:space:]]*'))) \
+             AND 'customer:profile'=ANY(c.allowed_operations)) \
          AND NOT EXISTS(SELECT 1 FROM unnest($11::uuid[],$12::uuid[],$13::uuid[],$14::bigint[]) \
              AS e(member_id,organization_id,tenant_id,identity_version) \
              WHERE NOT identity_binding_active($6,e.tenant_id,e.organization_id,$7,e.member_id,'CUSTOMER',e.identity_version) \
@@ -341,10 +341,74 @@ pub(super) async fn issue(
     .await?;
     let managed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM context_selection_registrations WHERE client_id=$1 AND enabled)").bind(source.client_id).fetch_one(&mut *tx).await?;
     if managed {
-        let association:Option<(Uuid,i64)>=sqlx::query_as("SELECT bff_session_id,bff_context_version FROM customer_portal_contexts WHERE user_id=$1 AND oidc_client_id=$2 AND oidc_grant_id=$3 AND membership_id=$4 AND identity_version=$5 AND revoked_at IS NULL AND bff_session_id IS NOT NULL AND bff_context_version IS NOT NULL ORDER BY created_at DESC LIMIT 1")
-            .bind(source.user_id).bind(source.client_id).bind(source.grant_id).bind(membership).bind(version).fetch_optional(&mut *tx).await?;
-        let association =
-            association.ok_or_else(|| AppError::forbidden("客户身份需先由认证中心确认"))?;
+        // The prior capability is revoked before an access-token rotation. It
+        // remains provenance for its one committed selection, never a live
+        // bearer and never a source of newly reconstructed membership.
+        let associations:Vec<(Uuid,i64,Uuid,String,String)>=sqlx::query_as(
+            "SELECT c.bff_session_id,c.bff_context_version,c.id,s.selection::text,s.result::text \
+             FROM context_selections s JOIN customer_portal_contexts c ON s.result->>'kind'='CUSTOMER' \
+               AND s.result->>'contextId'=c.id::text \
+             WHERE s.consumed_at IS NOT NULL AND c.user_id=$1 AND c.oidc_client_id=$2 \
+               AND c.oidc_grant_id=$3 AND c.membership_id=$4 AND c.identity_version=$5 \
+               AND c.issuer=$6 AND c.global_session_id=$7 AND c.account_version=$8 \
+               AND c.oidc_client_policy_version=$9 AND c.auth_time=$10 \
+               AND c.profile_client_ref=$11 AND c.profile_client_policy_version=$12 \
+               AND c.application_id=$13 AND c.application_policy_version=$14 \
+               AND c.organization_id=$15 AND c.tenant_id=$16 AND c.member_type='CUSTOMER' \
+               AND c.bff_session_id IS NOT NULL AND c.bff_context_version IS NOT NULL")
+            .bind(source.user_id).bind(source.client_id).bind(source.grant_id).bind(membership).bind(version)
+            .bind(&source.issuer).bind(source.global_session_id).bind(source.account_version)
+            .bind(source.client_policy_version).bind(source.auth_time).bind(registration.id)
+            .bind(registration.client_policy_version).bind(registration.application_id)
+            .bind(registration.application_policy_version).bind(organization).bind(result.2.tenant_id).fetch_all(&mut *tx).await?;
+        if associations.len() != 1 {
+            return Err(AppError::forbidden("客户身份缺少唯一的原认证中心确认"));
+        }
+        let association = associations
+            .into_iter()
+            .next()
+            .ok_or(AppError::Unavailable)?;
+        let selected: saas_platform_backend::context_selection::Selection =
+            serde_json::from_str(&association.3).map_err(|_| AppError::Unavailable)?;
+        let committed: saas_platform_backend::context_selection_store::ContextResult =
+            serde_json::from_str(&association.4).map_err(|_| AppError::Unavailable)?;
+        let original = &selected.binding.source;
+        let member = &selected.member;
+        use saas_platform_backend::context_selection::MemberType;
+        if original.issuer != source.issuer
+            || original.user_id.uuid() != source.user_id
+            || original.global_session_id.uuid() != source.global_session_id
+            || original.account_version.value() != source.account_version
+            || original.auth_time.timestamp() != source.auth_time
+            || selected.binding.registration.client_id.uuid() != source.client_id
+            || selected.binding.registration.client_policy_version.value()
+                != source.client_policy_version
+            || selected.binding.registration.member_type != MemberType::Customer
+            || !selected
+                .binding
+                .registration
+                .application
+                .as_ref()
+                .is_some_and(|application| {
+                    application.id.uuid() == registration.application_id
+                        && application.policy_version.value()
+                            == registration.application_policy_version
+                })
+            || member.user_id.uuid() != source.user_id
+            || member.membership_id.uuid() != membership
+            || member.organization_id.uuid() != organization
+            || member.tenant_id.uuid() != result.2.tenant_id
+            || member.identity_version.value() != version
+            || member.member_type != MemberType::Customer
+            || !matches!(committed,saas_platform_backend::context_selection_store::ContextResult::Customer{context_id,version} if context_id.uuid()==association.2 && version.value()==association.1)
+        {
+            return Err(AppError::forbidden("客户续期不能替换原确认的来源或成员"));
+        }
+        let switched:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM context_selections WHERE consumed_at IS NOT NULL AND result->>'kind'='CUSTOMER' AND selection#>>'{binding,intent,kind}'='SWITCH' AND selection#>>'{binding,intent,sessionId}'=$1 AND selection#>>'{binding,intent,expectedVersion}'=$2 AND (result->>'version')::bigint>$3)")
+            .bind(association.0.to_string()).bind(association.1.to_string()).bind(association.1).fetch_one(&mut *tx).await?;
+        if switched {
+            return Err(AppError::forbidden("原客户上下文已提交切换，不能再次续期"));
+        }
         sqlx::query("UPDATE customer_portal_contexts SET bff_session_id=$2,bff_context_version=$3 WHERE id=$1").bind(result.1.id).bind(association.0).bind(association.1).execute(&mut *tx).await?;
     }
     tx.commit().await.map_err(|_| AppError::Unavailable)?;
@@ -364,9 +428,10 @@ pub(super) async fn issue_in_tx(
     for (table, id) in [
         ("users", source.user_id),
         ("applications", registration.application_id),
-        ("oauth_clients", registration.id),
+        ("platform_resource_services", registration.id),
     ] {
-        sqlx::query(&format!("SELECT id FROM {table} WHERE id=$1 FOR UPDATE"))
+        let lock = if table == "users" { "SHARE" } else { "UPDATE" };
+        sqlx::query(&format!("SELECT id FROM {table} WHERE id=$1 FOR {lock}"))
             .bind(id)
             .execute(&mut **tx)
             .await

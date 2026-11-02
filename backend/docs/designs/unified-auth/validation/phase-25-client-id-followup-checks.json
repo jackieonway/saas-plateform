@@ -1,0 +1,84 @@
+{
+  "contractVersion": "unified-auth-phase25-client-id-followup-checks/1",
+  "phase": 25,
+  "status": "PASS",
+  "startedAtUtc": "2026-10-29T13:19:07.647285+00:00",
+  "sourceSha256": {
+    "src/oidc/remote_admin.rs": "bf187c7d9060f0969b83044ed905007017fa0f8a477da111eeb4e43b3c83d7ca",
+    "src/oidc/remote_admin_tests.rs": "e1036785346990b789a67b3dba546571d7609509d2bbbd09d9e0d15f00de896c",
+    "src/oidc/remote_admin_pg_tests.rs": "17d6b5d3d058a8ecec88e03bb483a6d6b2a5b0eee51087c9401ba464b1007dea",
+    "docs/identity-and-access.md": "fa30e7d7583ee53c76e2d7aecdd082013df964c477bf2dbbad2c2e564776e10a",
+    "tests/unified-auth-https/phase19-browser.mjs": "0f7e2739d1b8ecf15b194758ffc92701768c6694c172c1b9375813315b07d7d0"
+  },
+  "evidenceLayer": "SOURCE_UNIT_AND_STRICT_CLIPPY",
+  "wholeCandidateHttpsAcceptanceClaimed": false,
+  "dockerContainersCreated": 0,
+  "databaseOrRoleCreated": false,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "-j",
+        "2",
+        "--bin",
+        "saas-platform-backend",
+        "oidc::remote_admin::tests::",
+        "--",
+        "--nocapture"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 153.517,
+      "fixedObservations": [
+        "Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 33s",
+        "running 20 tests",
+        "test oidc::remote_admin::tests::phase04_auth_client_targets_use_their_own_receipt_and_service_route ... ok",
+        "test oidc::remote_admin::tests::phase04_auth_client_proxy_rejects_extra_authority_fields ... ok",
+        "test oidc::remote_admin::tests::phase03_projection_payload_is_strict_versioned_and_contains_no_business_authority ... ok",
+        "test oidc::remote_admin::tests::phase05_browser_operation_handle_is_preserved_and_rejects_ambiguous_headers ... ok",
+        "test oidc::remote_admin::tests::phase04_auth_client_responses_are_bounded_and_keep_one_time_secret_out_of_lists ... ok",
+        "test oidc::remote_admin::tests::phase04_auth_admin_transport_uses_only_basic_and_bound_operation_headers ... ok",
+        "test oidc::remote_admin::tests::phase07_consent_group_admin_port_is_fixed_typed_and_recoverable ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_fixed_targets_reject_url_and_dot_segment_normalization ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_only_expired_intent_and_locked_receipt_absence_is_not_applied ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_digest_uses_raw_body_full_path_and_canonical_keys ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_outgoing_request_contains_only_its_service_credential ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_response_contract_rejects_private_fields_and_maps_errors_safely ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_budget_exhaustion_never_dispatches_and_query_rejected_before_auth ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_requires_accept_commit_and_ack_commit_before_success ... ok",
+        "test oidc::remote_admin::tests::phase12_remote_admin_unknown_network_or_ack_result_preserves_original_operation ... ok",
+        "test oidc::remote_admin::tests::phase19_internal_sync_metadata_read_uses_only_its_fixed_sensitive_write_permission ... ok",
+        "test oidc::remote_admin::tests::phase19_disable_only_authority_cannot_hide_metadata_callback_or_scope_changes ... ok",
+        "test oidc::remote_admin::tests::phase19_review_and_invitation_targets_keep_receipt_contracts_and_metadata_separate ... ok",
+        "test oidc::remote_admin::tests::phase19_review_success_requires_reconciliation_and_failure_preserves_original_operation ... ok",
+        "test oidc::remote_admin::tests::phase25_public_client_identifiers_are_opaque_but_internal_route_ids_stay_bound ... ok",
+        "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 383 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-j",
+        "2",
+        "--bin",
+        "saas-platform-backend",
+        "--tests",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 88.045,
+      "fixedObservations": [
+        "Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 27s"
+      ]
+    }
+  ],
+  "sourceMismatchesAfter": [],
+  "finishedAtUtc": "2026-10-29T13:23:09.236136+00:00"
+}

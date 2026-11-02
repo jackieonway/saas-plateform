@@ -82,7 +82,7 @@ async function fixture(run, options = {}) {
       if (url.pathname === '/api/auth/profile') return fulfill(route, profile())
       if (url.pathname === '/api/auth/permissions') return fulfill(route, { permissions, roles: [] })
       if (url.pathname === '/api/auth/menus') return fulfill(route, state.micro && url.searchParams.get('applicationId') === ids.app ? [menu(state.apps[1])] : [{ id: 'applications-menu', parentId: null, type: 'MENU', title: '应用管理', path: '/system/applications', icon: 'Boxes', permission: 'system:application', sortOrder: 0, visible: true, children: [] }])
-      if (url.pathname === '/api/oauth/session-token') {
+      if (url.pathname === '/api/apps/session-token') {
         assert.equal(request.postDataJSON().appCode, 'crm')
         state.issuedTokens = (state.issuedTokens || 0) + 1
         return fulfill(route, { accessToken: 'micro-application-fixture-token', tokenType: 'Bearer', expiresIn: 120, audience: 'crm' })

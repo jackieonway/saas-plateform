@@ -1,0 +1,774 @@
+{
+  "contractVersion": "unified-auth-phase25-component-suite/1",
+  "phase": 25,
+  "service": "identity",
+  "snapshot": "phase25-apps-r2",
+  "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+  "manifestSha256": "bc6cac8f2ea794b7b8a39b50e4f21fb8b77301f9fd6f4a86a752a1cce8d452b1",
+  "sourceInputs": {
+    "saas-identity/.dockerignore": "b69bb96edd8fdfe86900222f615050ce8c75d61505c0e5a28fc78f31456d7204",
+    "saas-identity/Cargo.lock": "36550d7f57a9ac1246d02c612a12e6bccd917342a1ab7b782d89ecd15a8252ec",
+    "saas-identity/Cargo.toml": "886f28e9354f7a6c5a8c5e90c27a4f3161070610eec9ce4af3f70d603d6fc411",
+    "saas-identity/Dockerfile": "8b387dd45fac8282f016eb70f4a13b24de7b9ee5f6d680631a5ab1ed4be89d06",
+    "saas-identity/src/accounts.rs": "78c7e289cd97afa7d8e05992478d724db450463d2f5bdda2c6d5f2cb9485327c",
+    "saas-identity/src/admin_operations.rs": "37d45269bd08ee6023dd5dfee5a90585e0981e1a44a2b9f247bf2695e79a55db",
+    "saas-identity/src/admission/tests.rs": "9aed53786c01473fd91183e49c97fd52645c4701e6e3f9acdf6f962e5bcebc20",
+    "saas-identity/src/admission.rs": "1fa123c665f2eb105b520f15b7b0203e15de8a99dc6bee1cd7bcc5583bfd2236",
+    "saas-identity/src/auth_admin.rs": "3364fa3fb68156336f05cd9c866f91bc503f99fc611adc1c47f40cb41857ab21",
+    "saas-identity/src/auth_admin_logout_tests.rs": "77457ce81fb735b0279ebcc62b551ee95a61e427e3f3860d889983d4679eb45e",
+    "saas-identity/src/auth_consent.rs": "2b39e5db6a17795c6433f5a26be2b6b450ea05bde302cc58de9cd71649acb1af",
+    "saas-identity/src/auth_invitations/activation.rs": "7b9d1bfdad436a9fa4ab0721367eafb62c28e00a0c7170bb6f5e1ef6926b1964",
+    "saas-identity/src/auth_invitations/activation_page_tests.rs": "33f365d875809a31409d0b2b3c9493ea8a9b6db62f50c0b8813ee6d1de896ef6",
+    "saas-identity/src/auth_invitations/delivery.rs": "2a5d23e629bfb03542d5974216d27b53f2a1e7083068213c037fdaf1a35ed94f",
+    "saas-identity/src/auth_invitations/keys.rs": "8c7739706fb14be306627fed6bd6088d83877e4174a5e2375df0c7d67875f2e9",
+    "saas-identity/src/auth_invitations/tests.rs": "1f784328bea367f97169536aa91afd914bd0d789ec5b0859b7288b8ece9a78fc",
+    "saas-identity/src/auth_invitations/trust.rs": "57ab18dceeaa3843382d349c4ac623fae539bb0a6a9d739f0b948ead4d4df7d7",
+    "saas-identity/src/auth_invitations.rs": "a6ec09f795c1040add5567d2a5e5eca8cc4c9c5d50e0b1604d0fe854badacbd1",
+    "saas-identity/src/auth_projection.rs": "0eb3cf0b4a54339f382976a789f00574bc153a78a73b0522679a2ef5bce6286d",
+    "saas-identity/src/auth_review/tests.rs": "f0780715c6c630304403fc0e5f2bd0e05ccc0318a9f63d0cf92f16efb3772ff7",
+    "saas-identity/src/auth_review.rs": "579ee6a4d1a9647daf7de50d444dbc05a906ad9c55d8414734f8b8018d8a341c",
+    "saas-identity/src/authentication/mod.rs": "d56bae56923eb6b940da25ce035bdd3ef856f48f437655c7a0e982b41fae915b",
+    "saas-identity/src/authentication/postgres.rs": "7b62b4363ec4fe26767d381ba622de881797d5c6f4fa5554ddcc88d23387ad7e",
+    "saas-identity/src/config.rs": "af04583a5d1bd0be74e961388014034e1651751b5dbdcfcc5035e7cd781040e1",
+    "saas-identity/src/delivery/mod.rs": "af2b739d2382fc0ff6ccfd8df0d9c57f64929b861bee59dc3b8aaf6e138b4e8b",
+    "saas-identity/src/delivery/transport.rs": "82a2d02dfe850cf7fee0707a3074853bb4f04ec90e8dbe8fe4856a657062d9c2",
+    "saas-identity/src/delivery/transport_tests.rs": "362300a39ad29eae21436bcd542ed935a449cbd256cd3221bbafd91e50367e6e",
+    "saas-identity/src/delivery/worker/registration_tests.rs": "923769538170ef2be949a26cf40777129f13cc064f8217b455db96c328a911ff",
+    "saas-identity/src/delivery/worker/tests.rs": "8be6a45ffd27bfe2bc6e18ed14efde2733f96c38a2d3c68a25bd0c4b5e923997",
+    "saas-identity/src/delivery/worker.rs": "4221aeb82db253cf0c06c12cf388cc2b2b0ac006f744c342e45d0bd266f9b780",
+    "saas-identity/src/error.rs": "5e95dd06ad39b7498732ea3c43d299a5782ad83b8fa5fa79a2cc8707d43d023d",
+    "saas-identity/src/extractors.rs": "bfb087b8dab575254a4755375f3e449567a87a201156882634fe4693dce04283",
+    "saas-identity/src/internal.rs": "a93507e0bfc18c133ddfb4c8fbdd164166127a87118ca18439e8907f62d99fe8",
+    "saas-identity/src/lib.rs": "cd71305109eafa31698f4ab1ac57f546996f336fabddfb207d8348f64170715c",
+    "saas-identity/src/login_limits.rs": "e452347239e23bf234d739ec49ec4715d65ba7290e25baec63330623a15b600a",
+    "saas-identity/src/main.rs": "7b2cfa74114b26a210b2c424d24d58004f724756b45bf46eb2397bff1f1cbfe5",
+    "saas-identity/src/network/tests.rs": "6634cdf8b805804f01c24366a58bd0f06782936051e667604e60480ef2da7c79",
+    "saas-identity/src/network.rs": "4ba73b3478b90187dd75d8b034660deff7ec816968d97b0451857c2196cb64cf",
+    "saas-identity/src/observability/http.rs": "66366b0f27996c57468f9afe031ad91ac940659b40b1a1b8056c93da58a4026f",
+    "saas-identity/src/observability/pg_tests.rs": "2106bf98a3b40ed3c7058efeae78766e08a2f707ab8b40e916a6642a77d41c80",
+    "saas-identity/src/observability/registry.rs": "67466f8868064e8fcb3337423d72594a39d1dff3486c01b0fb2d5fb9d17af2a7",
+    "saas-identity/src/observability/settings.rs": "a52c1cb2dfb5a514c94ac49adccaf12b29f124add962bb7678a84a1d98c3fd78",
+    "saas-identity/src/observability/tests.rs": "9a8ef3a6e0329963dc837312225cb044b1af801abfbab4e3e06b6988c091fc03",
+    "saas-identity/src/observability.rs": "56840a254459a9a8a3c77ad90bbd49dfdcdfa7573f683828327e9c5b0a1e7511",
+    "saas-identity/src/oidc/context/bridge.rs": "9634d8ae942a904f8d47f86ae2bd6b7868074338319f45c857fcf94b94d19e84",
+    "saas-identity/src/oidc/context/crypto.rs": "8597cd5c4fa89f48b6e488dc1b2c40e8c5da859638a66fd0fa931c9b4d8231f9",
+    "saas-identity/src/oidc/context.rs": "87d1f0c2f389a955dfdbd6d2c1b2767a743c0319ac34d449ead75c87cb39dc24",
+    "saas-identity/src/oidc/keys/actor_fixture.rs": "8c7b4ca05f887f5ac41a22564ad4a9af3aa2465101545d9cb24e33ec1a9c30a9",
+    "saas-identity/src/oidc/keys/config_tests.rs": "f2160b38a45d0dfc50e9af6558d0ac0c2a95e66a01632c17e126806ac7ac781e",
+    "saas-identity/src/oidc/keys/lifecycle_tests.rs": "1ec5fbab1001452401dcd1505a25e15a3bd9ccae611bc6757473a3684c2e4af7",
+    "saas-identity/src/oidc/keys/pg_fixture.rs": "6c40660ac9a6dd398e57b3f51f7bafa598268063cea5e8ee8123fa58565970f0",
+    "saas-identity/src/oidc/keys/test_keys.rs": "8f9b4dc8be5f9cdf03c69329f779bda79c671eb373cd0a179bc0fcc3d0b75cef",
+    "saas-identity/src/oidc/keys.rs": "4b436159792600f00b0b08a8939e165612a4bc23ad8beb780f7da557ca97b902",
+    "saas-identity/src/oidc/mod.rs": "8de01b7e051ae46a46052494e29a8fb410c3b229cff9845e0910a012caa941d9",
+    "saas-identity/src/oidc/oauth/customer_proof.rs": "d5c988e7ad83f7825fe2710816e80aeb94d93ce0ea11f65b0b5bcef9585a7833",
+    "saas-identity/src/oidc/oauth/logout/tests.rs": "f15495e6432cfd891082fe67bc99a6c229f05c46fb4e64694e5fa2ab0e850569",
+    "saas-identity/src/oidc/oauth/logout.rs": "010bb5daa129ef1b08e510f0c85ef15cc8518e9e0fefee4d75f746043b92cb34",
+    "saas-identity/src/oidc/oauth/phase22_tests.rs": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+    "saas-identity/src/oidc/oauth/resource_proof.rs": "e5a4f2910dda8cfd93d4814fa4571a513aac3d08601dffcd3dd44745ad8e0a29",
+    "saas-identity/src/oidc/oauth/unified_context.rs": "032e518a32e5ff113df237d122331f5c406525204b246cff54428c71f07ad6c9",
+    "saas-identity/src/oidc/oauth.rs": "555d3e3b5a04aa43f2b19ea25c4aa40dd74408530a7e803dc9af579bc6580b81",
+    "saas-identity/src/oidc/protocol.rs": "a9d9f4c00c3253182a45fe6d9e559b4a93603ee6e74d67e119d491019b063133",
+    "saas-identity/src/oidc/store.rs": "6526072001130cc4a8fb2f8cb6533777c2a88b06b71fc21851b719d8afbffbe6",
+    "saas-identity/src/oidc/subjects.rs": "1695bd5397155a790da44b4922602749ad765566565984a59e613bc8644da5da",
+    "saas-identity/src/password.rs": "9be4e314d761562a250afd0515ed8eec3669166c32b4a2b029ee165d9a3fc9d1",
+    "saas-identity/src/platform_accounts.rs": "8d3a9e28a004af264e8d1b15c87c1fb1ea166d6994a3a4cfd19b1e02193af3d1",
+    "saas-identity/src/readiness.rs": "5d47408a4829b87fb899f1da3b70b8b16a50bb1133f06d90d9857d0f745f0f8f",
+    "saas-identity/src/sso/mfa.rs": "c06b98b1c2e40bfa6ae23518219d62eef30cf3cbfb701d9063bcb028d05a103a",
+    "saas-identity/src/sso/mfa_recovery.rs": "e2d3a3b769125440d64c774bf78cf5ac1835715ed018e203e5b86539691b1778",
+    "saas-identity/src/sso/mod.rs": "c8b77b4ccdcbe862f7605dff577a3bafa9fbdb5fa8dcc5583f358df6d5476dba",
+    "saas-identity/src/sso/routes/consents.rs": "271939dfff3f7e629975afc6d327f9332035f98895d173370bf6af4303b158ce",
+    "saas-identity/src/sso/routes/mfa.rs": "97efa7fbcae957bbed8266a0787236a33505dfa34d259939cc8e7574a92d499f",
+    "saas-identity/src/sso/routes.rs": "5e052d8c0053356e82d38568104ac6518e591f57822a76ac677ba2d5a45f7269",
+    "saas-identity/src/sso/store.rs": "be43d49438879412a460b895dec8080bfffafd4fa69b45ef1089c09accf1dbad",
+    "saas-identity/src/state.rs": "b8667fd435aec15161232f9a417a9183a5e720494fb4d51d1fa69bf7643a4a5f",
+    "saas-identity/src/test_support.rs": "fbd0383e2d5cc9a4e3db7868888c7c181ddfd8722d58232aa7aea2ed2a1cf440",
+    "saas-identity/src/util/audit.rs": "a1906c14ea234ec03e37dd79f932e8df1cae201d6c3e686f7bd59a2e139c768d",
+    "saas-identity/src/util/audit_tests/accounts.rs": "20dac63efd99759556153e8c1eb6c9ab1e4b3ca677c7f502cfbda414dc3242de",
+    "saas-identity/src/util/audit_tests/auth_consents.rs": "f25bc10451dacdf0796acd1e58c87eb51e4a72e1726586fa98ac715150cd94ef",
+    "saas-identity/src/util/audit_tests/auth_protocol/customer_proof_tests.rs": "3aa2871895b48dd7e11e80de6d20b604c683f0d07528499064d4098d3601f61d",
+    "saas-identity/src/util/audit_tests/auth_protocol/resource_proof_tests.rs": "6141cd2310fbe07f23874d12ecf07dff9abdbb24a198cf4de309108c58fcdd42",
+    "saas-identity/src/util/audit_tests/auth_protocol.rs": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+    "saas-identity/src/util/audit_tests/auth_subjects.rs": "fe600ff4ec7f3f26e459b06cf3278fc3364e9b3243e00e06fd877f07148033ce",
+    "saas-identity/src/util/audit_tests.rs": "ec0319e4407704dbdb19079f82b7028cb0882d488f38248fd3905ae2d2a5231e",
+    "saas-identity/src/util/auth_admin_tests.rs": "66f3713f37d00eeb16de65288ec01e1d56eb17509f3e6a890530a683fb7b91cf",
+    "saas-identity/src/util/hash.rs": "c5dbe05845bff958c3c668e4be7f0bf4fcc4b3fee9adba23033f7b41dd10aa57",
+    "saas-identity/src/util/mod.rs": "cda35388b8f3ecdba24b98f62a9128264706d6c383869d6ae9f4c99843c7ba82",
+    "saas-identity/src/util/uuid7.rs": "f35abe7d9f81353b1b9affb8941108288a09a700836e528b5caa72929a4c06e6",
+    "saas-identity/static/identity/applications.css": "63e6717819cf40b9b344e2d0d5a81b46baa6f4a9efeb9373ef483974ff5095d7",
+    "saas-identity/static/identity/applications.html": "c9062f507073f0b36419d9f557dfda7f5d5c7c2605dfea62727d45b2fa1a2987",
+    "saas-identity/static/identity/applications.js": "19acd367e6e7fdd8f5e5ba3f491633c049b6b4254f77683332325a02c4f191fe",
+    "saas-identity/static/identity/identity.css": "07db16d3da5a70098452e05660f3e72bdd0fb09926fc37009f38ec2f90a2f3c2",
+    "saas-identity/static/identity/identity.js": "a00dc2e4e04ef7700a5513ce7b10705470d32e5c4357a3422af9586bf239027b",
+    "saas-identity/static/identity/invitation.html": "7a0986e1e36d04296636a28fd1d32a01829fd5c1f8e06c6a0bb2dfe81ca1e199",
+    "saas-identity/static/identity/invitation.js": "64cea6a2e44c3a11b626fed9283d4bbe4f62915ee5e91f31cce844a0fb6dc8ce",
+    "saas-identity/static/identity/login.html": "0ab799e16f7b0b7a458bb66531281c4f5fc6bed72e8e0c245850d9f4f2bf40e2",
+    "saas-identity/static/identity/security.html": "3197e710a53c59498be50a76b645bde10d42b898160f04a62e599975b6a21cea",
+    "saas-identity/static/identity/security.js": "03b4fed93512b7e337467dca7e96d5139e7aec9cae7ab2f89f51aa6c71d8d444",
+    "saas-identity/tests/context-selection-ui.mjs": "a675c1e29474a5cbbaa24686b1cfc9f59cc119d78fbfab25db10a364a2143c89",
+    "saas-identity/tests/generate-context-test-key.mjs": "2a531f457e8ff41f6da664afe74c5e96ac946c29c265df624cd800637fd2247f",
+    "saas-identity/tests/identity-flow-routing.test.mjs": "26f6f1fcca836ed9daa7f3196d5ae56a8d633ebe1146fbe2c4e7f116a42d9695",
+    "saas-identity/tests/invitation-ui.test.mjs": "54c10c09cb51103674ba787e289988a5e3b7ab430b00864129b5674c0ec14d56",
+    "saas-identity/tests/package-lock.json": "c4ccc35154a0c76cd4b8a335672d70394a56bbea1c0c47cc7a8ee7cd503b18ea",
+    "saas-identity/tests/package.json": "f24e8af9c2693e9924f8536f5387c17b9c57614f849dd4bd07c189e8f19cd02e",
+    "saas-identity/tests/run-context-selection.ps1": "c09870f09e9422c3ea27ef99d087e252350c10d35f8533966bc9a3d7fab4bbd9"
+  },
+  "startedAtUtc": "2026-10-29T11:24:44.168362+00:00",
+  "status": "FAIL",
+  "layers": [
+    "RUST_COMPONENT",
+    "EXPLICIT_TASK_OWNED_POSTGRESQL_ROUTER"
+  ],
+  "clusterSystemIdentifier": "7701992637128815755",
+  "clusterBindingSha256": "81efbc1c1be5f03145d6a5ef150a22b38919285a20e05be1f43e056eba2d7aaa",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "hbaWrites": 0,
+  "runs": [
+    {
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "-j2",
+        "--lib",
+        "--",
+        "--include-ignored",
+        "--test-threads=1"
+      ],
+      "startedAtUtc": "2026-10-29T11:26:27.783838+00:00",
+      "returnCode": 101,
+      "durationSeconds": 103.615,
+      "rawOutputSha256": "5cec95cfc1b06457c721dc8a2868d3da28c160b9f5d034a079123703a1ab9f9c",
+      "cases": [
+        {
+          "name": "accounts::tests::account_generations_and_ids_are_canonical_and_nonnegative",
+          "result": "OK"
+        },
+        {
+          "name": "accounts::tests::canonical_command_json_sorts_recursively_without_changing_array_order",
+          "result": "OK"
+        },
+        {
+          "name": "accounts::tests::command_requires_all_fields_and_denies_platform_policy_fields",
+          "result": "OK"
+        },
+        {
+          "name": "accounts::tests::hmac_matches_rfc4231_short_and_long_key_vectors",
+          "result": "OK"
+        },
+        {
+          "name": "accounts::tests::only_a_new_revoking_generation_reads_its_own_bridge_fact",
+          "result": "OK"
+        },
+        {
+          "name": "accounts::tests::operation_lookup_accepts_only_one_exact_digest_query",
+          "result": "OK"
+        },
+        {
+          "name": "accounts::tests::payloads_deny_unknown_fields_and_retirement_cannot_request_hard_delete",
+          "result": "OK"
+        },
+        {
+          "name": "accounts::tests::receipt_contains_only_operation_outcome_and_decimal_versions",
+          "result": "OK"
+        },
+        {
+          "name": "admin_operations::tests::derived_creation_secret_is_stable_and_bound_to_service_operation_digest",
+          "result": "OK"
+        },
+        {
+          "name": "admin_operations::tests::digest_binds_full_method_path_body_and_keeps_array_order",
+          "result": "OK"
+        },
+        {
+          "name": "admin_operations::tests::mutation_headers_are_single_canonical_and_complete",
+          "result": "OK"
+        },
+        {
+          "name": "admin_operations::tests::replay_requires_same_service_digest_and_unrotated_service_secret",
+          "result": "OK"
+        },
+        {
+          "name": "admin_operations::tests::routes_are_fixed_and_forbid_query_encoding_or_unrelated_commands",
+          "result": "OK"
+        },
+        {
+          "name": "admin_operations::tests::safe_receipt_strips_only_derived_creation_secret_and_never_persists_credentials",
+          "result": "OK"
+        },
+        {
+          "name": "admission::tests::client_budget_is_independent_per_state_and_never_a_shared_authority_lock",
+          "result": "OK"
+        },
+        {
+          "name": "admission::tests::closed_database_preserves_process_liveness_and_fails_readiness",
+          "result": "OK"
+        },
+        {
+          "name": "admission::tests::full_request_budget_and_oversized_body_do_not_reach_authority",
+          "result": "OK"
+        },
+        {
+          "name": "admission::tests::only_the_configured_exact_peer_may_forward_one_canonical_source",
+          "result": "OK"
+        },
+        {
+          "name": "admission::tests::untrusted_forwarding_cannot_change_the_real_peer_budget",
+          "result": "OK"
+        },
+        {
+          "name": "auth_admin::logout_registration_tests::logout_defaults_and_invalid_target_combinations_are_explicit",
+          "result": "OK"
+        },
+        {
+          "name": "auth_admin::logout_registration_tests::owner_target_binding_and_expired_target_pure_stop_are_canonical",
+          "result": "FAILED"
+        },
+        {
+          "name": "auth_invitations::activation::page_tests::public_invitation_page_is_a_safe_shell_without_database_or_session_authority",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::activation::page_tests::public_invitation_page_rejects_noncanonical_ids_queries_and_disabled_sso",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::keys::tests::invitation_keyset_enforces_purpose_versions_and_independent_material",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::tests::phase20_invitation_acceptance_creates_only_new_account_and_recovers_original_operation",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::tests::phase20_invitation_acceptance_rejects_untrusted_stale_sources_and_rolls_back_mandatory_writes",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::tests::phase20_invitation_concurrent_recovery_claims_and_username_collisions_create_at_most_one_account",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::tests::phase20_invitation_delivery_commit_fences_original_proof_and_late_deadlines",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::tests::phase20_invitation_issue_requires_current_owner_channel_and_only_leased_worker_gets_material",
+          "result": "OK"
+        },
+        {
+          "name": "auth_invitations::tests::phase20_invitation_runtime_login_keeps_owner_facts_read_only_and_activates_through_narrow_fences",
+          "result": "OK"
+        },
+        {
+          "name": "auth_review::tests::phase19_auth_client_list_query_passes_private_guard_without_opening_other_routes",
+          "result": "OK"
+        },
+        {
+          "name": "auth_review::tests::phase19_review_projection_is_versioned_private_and_source_snapshot_bound",
+          "result": "OK"
+        },
+        {
+          "name": "auth_review::tests::phase19_third_party_client_registration_and_runtime_require_current_environment_admission",
+          "result": "OK"
+        },
+        {
+          "name": "config::runtime_boundaries_tests::defaults_are_finite_and_forwarding_is_not_trusted_implicitly",
+          "result": "OK"
+        },
+        {
+          "name": "config::runtime_boundaries_tests::invalid_capacity_and_proxy_settings_cannot_silently_disable_bounds",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::customer_registration_uses_a_canonical_uuidv7",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::database_is_explicit_and_provider_requires_the_account_origin",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::issuer_and_origin_never_follow_a_task_or_internal_host",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::password_login_and_provider_budgets_reject_invalid_bounds",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::production_sso_requires_an_independent_totp_encryption_key",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::runtime_defaults_disable_provider_and_customer_binding",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::totp_encryption_key_must_be_a_nonzero_32_byte_hex_value",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::absolute_ca_files_are_bounded_validated_and_closed",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::certificate_chain_and_original_hostname_are_never_bypassed",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::declared_streamed_and_exact_response_bounds_are_enforced",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::dns_timeout_and_request_rejection_are_bounded_and_redacted",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::environment_proxies_are_ignored_in_an_isolated_process",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::owned_loopback_tcp_fixture_is_reachable",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::production_forbids_the_presence_of_test_origins",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::production_ip_policy_rejects_metadata_private_and_reserved_ipv4_and_ipv6",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::redirects_are_not_followed_and_network_requests_are_not_retried",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::settings_are_explicit_and_test_exceptions_cannot_expand_scope",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::slow_response_cannot_extend_the_total_three_second_deadline",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::urls_owner_ips_and_every_dns_answer_are_checked_before_connecting",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::transport::tests::verified_tls_pins_one_dns_snapshot_and_preserves_original_host_and_proof",
+          "result": "OK"
+        },
+        {
+          "name": "delivery::worker::registration_tests::client_cancellation_and_signing_are_serialized_before_dispatch_decision",
+          "result": "FAILED"
+        },
+        {
+          "name": "delivery::worker::registration_tests::third_party_delivery_requires_current_approved_backchannel_admission",
+          "result": "FAILED"
+        },
+        {
+          "name": "delivery::worker::tests::concurrent_leases_retry_budget_and_stale_completion_are_bounded",
+          "result": "FAILED"
+        },
+        {
+          "name": "delivery::worker::tests::consent_and_security_sources_fanout_and_summarize_without_secret_queues",
+          "result": "FAILED"
+        },
+        {
+          "name": "delivery::worker::tests::logout_payload_is_signed_for_original_rp_and_target_generation",
+          "result": "FAILED"
+        },
+        {
+          "name": "delivery::worker::tests::signing_lock_wait_rechecks_original_lease_before_material_leaves_database",
+          "result": "FAILED"
+        },
+        {
+          "name": "error::tests::unavailable_authority_is_not_reported_as_an_authentication_failure",
+          "result": "OK"
+        },
+        {
+          "name": "internal::tests::service_basic_is_canonical_and_separate_from_browser_auth",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::clock_forward_and_rollback_do_not_reset_live_budget_or_panic",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::concurrent_source_admission_consumes_exactly_one_shared_budget",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::extreme_forward_clock_never_overflows_or_expires_new_windows_immediately",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::inactive_entries_expire_and_reclaim_both_indexes_in_bounded_batches",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::random_username_and_source_flood_stays_inside_shared_hard_capacity",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::saturation_denies_new_identity_without_resetting_existing_budget",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::successful_proof_clears_account_but_keeps_source_admission_budget",
+          "result": "OK"
+        },
+        {
+          "name": "login_limits::tests::zero_budgets_and_oversized_identities_fail_closed_without_allocating_entries",
+          "result": "OK"
+        },
+        {
+          "name": "network::tests::slow_http_body_times_out_before_authority_and_releases_admission",
+          "result": "OK"
+        },
+        {
+          "name": "network::tests::socket_capacity_is_held_until_drop_and_idle_connections_expire",
+          "result": "OK"
+        },
+        {
+          "name": "observability::pg_tests::canonical_delivery_and_degraded_source_metrics_are_read_only_and_use_one_connection",
+          "result": "FAILED"
+        },
+        {
+          "name": "observability::pg_tests::delivery_query_failure_and_pool_saturation_are_visible_with_a_bounded_scrape",
+          "result": "FAILED"
+        },
+        {
+          "name": "observability::tests::cancelled_http_work_is_observed_without_a_successful_response",
+          "result": "OK"
+        },
+        {
+          "name": "observability::tests::database_failure_does_not_report_a_healthy_empty_delivery_queue",
+          "result": "OK"
+        },
+        {
+          "name": "observability::tests::known_route_labels_match_current_router_parameter_names",
+          "result": "OK"
+        },
+        {
+          "name": "observability::tests::metrics_authentication_rejects_before_observing_database_and_does_not_set_cookies",
+          "result": "OK"
+        },
+        {
+          "name": "observability::tests::metrics_settings_require_independent_bounded_operational_credentials",
+          "result": "OK"
+        },
+        {
+          "name": "observability::tests::request_bodies_headers_and_queries_never_enter_metrics_or_password_logs",
+          "result": "OK"
+        },
+        {
+          "name": "observability::tests::request_cardinality_and_histograms_have_no_request_derived_labels",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::context::crypto::tests::credential_is_authenticated_and_bound_to_the_exact_interaction",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::keys::config_tests::phase23_keyset_rejects_invalid_configuration_and_mismatched_private_material",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::keys::lifecycle_tests::phase23_consent_commands_keep_immutable_receipts_under_runtime_login",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::keys::lifecycle_tests::phase23_keys_permissions_intent_and_failed_audit_receipt_are_atomic",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::keys::lifecycle_tests::phase23_keys_publish_activate_replay_terminal_and_emergency_boundaries",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::keys::lifecycle_tests::phase23_keys_signer_highwater_transactions_serialize_activation_and_retirement",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::logout::tests::current_app_and_global_preserve_consent_and_original_operation",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::logout::tests::logout_rejects_wrong_original_source_and_atomic_audit_failure",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::logout::tests::simultaneous_original_operation_commits_once_and_different_operations_do_not_adopt_source",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::phase22_tests::actual_client_table_lock_failure_is_503_and_preserves_original_tokens",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::phase22_tests::client_budget_cannot_be_reset_by_rotating_socket_sources",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::phase22_tests::independent_nodes_logout_operation_is_one_durable_commit",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::phase22_tests::independent_nodes_redeem_one_actual_authorization_code_once",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::phase22_tests::independent_nodes_refresh_race_detects_reuse_without_crossing_sources",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::phase22_tests::saturated_and_closed_pools_return_503_without_clearing_legal_sources",
+          "result": "FAILED"
+        },
+        {
+          "name": "oidc::oauth::tests::authorization_scopes_accept_registered_resource_names_and_require_openid",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::oauth::tests::pkce_uses_the_rfc7636_s256_transform",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::oauth::tests::standard_prompts_reject_unknown_or_conflicting_none_values",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::protocol::tests::callbacks_keep_exact_registered_url_and_bind_issuer",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::protocol::tests::duplicate_encoded_names_and_controls_are_rejected",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::protocol::tests::retired_protocol_and_registry_routes_are_absent",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::subjects::tests::id_token_and_userinfo_share_only_consented_profile_claims",
+          "result": "OK"
+        },
+        {
+          "name": "oidc::subjects::tests::picture_claim_requires_an_exact_https_url",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::admission_bounds_running_and_waiting_jobs_before_copying_inputs",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::asynchronous_argon2_preserves_legacy_hash_and_default_cost",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::cancelling_a_running_request_keeps_both_permits_until_work_exits",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::execution_timeout_keeps_both_permits_until_work_exits",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::overload_preserves_http_429_and_retry_after_contract",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::oversized_password_is_rejected_before_admission_with_utf8_byte_boundary",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::production_writes_reject_demo_and_short_passwords_with_development_compatibility",
+          "result": "OK"
+        },
+        {
+          "name": "password::tests::queued_deadline_does_not_block_the_tokio_worker_or_leak_admission",
+          "result": "OK"
+        },
+        {
+          "name": "sso::mfa::tests::base32_seed_has_no_padding_and_rounds_up",
+          "result": "OK"
+        },
+        {
+          "name": "sso::mfa::tests::totp_uses_rfc6238_sha1_six_digit_vectors_and_blocks_replay",
+          "result": "OK"
+        },
+        {
+          "name": "sso::mfa_recovery::tests::approval_signature_binds_two_distinct_people_and_the_recovery_reason",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::accounts::phase12_account_required_writes_and_receipt_suppression_roll_back",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::accounts::phase13_created_account_starts_at_generation_one_and_recovers_the_same_receipt",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_admin_tests::phase04_client_can_stop_after_application_scopes_are_withdrawn",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_admin_tests::phase04_unified_client_api_enforces_policy_paging_and_credential_lifecycle",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_admin_tests::phase07_consent_groups_require_explicit_context_bound_membership",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_consents::phase07_consent_coverage_expansion_and_group_isolation_use_canonical_authority",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_consents::phase07_revoke_delete_reauthorize_and_logout_keep_generation_fences",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::customer_proof_tests::phase14_customer_bff_and_resource_proofs_are_canonical_private_and_source_bound",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase08_authorization_code_pkce_consent_pairwise_id_token_and_userinfo_use_one_registry",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase08_totp_encryption_replay_recovery_and_two_person_reset_are_transactional",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase09_resource_access_is_audience_scope_bound_and_revocation_is_token_local",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase10_expired_consumed_refresh_still_revokes_live_family",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase10_refresh_rotation_reuse_concurrency_limits_and_offline_source_are_enforced",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase10_scope_shrink_cannot_mask_consumed_refresh_replay",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase11_client_credentials_are_machine_bound_to_active_registered_permissions",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase11_credential_age_caps_authentication_machine_grants_and_introspection",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase12_invalid_client_context_never_redirects_to_unregistered_callback",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase12_unified_context_selection_is_source_bound_recoverable_and_one_time",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::phase19_third_party_access_token_requires_current_environment_admission",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_protocol::resource_proof_tests::phase15_private_resource_proof_separates_issuer_credentials_scope_and_business_sources",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::auth_subjects::phase06_pairwise_subjects_are_sector_scoped_stable_and_retired_with_accounts",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::canonical_key_retirement_requires_receipt_audit_and_single_target_write",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::phase03_application_projection_is_service_scoped_versioned_and_recoverable",
+          "result": "OK"
+        },
+        {
+          "name": "util::audit_tests::phase12_audit_silent_insert_suppression_rolls_back_mutation_and_receipt",
+          "result": "OK"
+        },
+        {
+          "name": "util::uuid7::tests::generated_identifiers_are_v7_and_distinct",
+          "result": "OK"
+        }
+      ],
+      "summaries": [
+        {
+          "result": "FAILED",
+          "passed": 119,
+          "failed": 22,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ],
+      "timedOut": false,
+      "compilerErrorCodes": []
+    }
+  ],
+  "limits": [
+    "No browser, external client, actual service HTTPS or release acceptance claim.",
+    "Any ignored, skipped or failed test remains explicit. Test PostgreSQL schemas may be narrow fixtures."
+  ],
+  "failureTestNames": [
+    "auth_admin::logout_registration_tests::owner_target_binding_and_expired_target_pure_stop_are_canonical",
+    "delivery::worker::registration_tests::client_cancellation_and_signing_are_serialized_before_dispatch_decision",
+    "delivery::worker::registration_tests::third_party_delivery_requires_current_approved_backchannel_admission",
+    "delivery::worker::tests::concurrent_leases_retry_budget_and_stale_completion_are_bounded",
+    "delivery::worker::tests::consent_and_security_sources_fanout_and_summarize_without_secret_queues",
+    "delivery::worker::tests::logout_payload_is_signed_for_original_rp_and_target_generation",
+    "delivery::worker::tests::signing_lock_wait_rechecks_original_lease_before_material_leaves_database",
+    "observability::pg_tests::canonical_delivery_and_degraded_source_metrics_are_read_only_and_use_one_connection",
+    "observability::pg_tests::delivery_query_failure_and_pool_saturation_are_visible_with_a_bounded_scrape",
+    "oidc::keys::lifecycle_tests::phase23_consent_commands_keep_immutable_receipts_under_runtime_login",
+    "oidc::keys::lifecycle_tests::phase23_keys_permissions_intent_and_failed_audit_receipt_are_atomic",
+    "oidc::keys::lifecycle_tests::phase23_keys_publish_activate_replay_terminal_and_emergency_boundaries",
+    "oidc::keys::lifecycle_tests::phase23_keys_signer_highwater_transactions_serialize_activation_and_retirement",
+    "oidc::oauth::logout::tests::current_app_and_global_preserve_consent_and_original_operation",
+    "oidc::oauth::logout::tests::logout_rejects_wrong_original_source_and_atomic_audit_failure",
+    "oidc::oauth::logout::tests::simultaneous_original_operation_commits_once_and_different_operations_do_not_adopt_source",
+    "oidc::oauth::phase22_tests::actual_client_table_lock_failure_is_503_and_preserves_original_tokens",
+    "oidc::oauth::phase22_tests::client_budget_cannot_be_reset_by_rotating_socket_sources",
+    "oidc::oauth::phase22_tests::independent_nodes_logout_operation_is_one_durable_commit",
+    "oidc::oauth::phase22_tests::independent_nodes_redeem_one_actual_authorization_code_once",
+    "oidc::oauth::phase22_tests::independent_nodes_refresh_race_detects_reuse_without_crossing_sources",
+    "oidc::oauth::phase22_tests::saturated_and_closed_pools_return_503_without_clearing_legal_sources"
+  ],
+  "resourceObservation": {
+    "databases": {
+      "added": [],
+      "removed": []
+    },
+    "roles": {
+      "added": [],
+      "removed": []
+    }
+  },
+  "sourceMismatchAfter": [],
+  "finishedAtUtc": "2026-10-29T11:26:27.903176+00:00",
+  "totals": {
+    "passed": 119,
+    "failed": 22,
+    "ignored": 0,
+    "filtered": 0
+  },
+  "cleanup": {
+    "rawLogsRetained": 0,
+    "temporaryDirectoriesCreatedByRunner": 0,
+    "testFixturesSelfClean": true,
+    "globalObservationMayIncludeConcurrentRootFixtures": true
+  }
+}

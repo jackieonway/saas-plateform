@@ -14,7 +14,6 @@ export const ROUTE_TITLES: Record<string, string> = {
   "/system/roles": "角色管理",
   "/system/regions": "地区管理",
   "/system/oauth/clients": "OAuth 客户端",
-  "/system/oauth/tokens": "设备与会话",
   "/system/audit-logs": "审计日志",
   "/system/monitor": "平台监控",
   "/system/notifications": "通知中心",

@@ -1,0 +1,22 @@
+{
+  "contractVersion": "unified-auth-phase23-hba-read-only-preflight/1",
+  "observedAt": "2026-10-28T13:20:47.989699+00:00",
+  "cluster": {
+    "systemIdentifier": "7701548153213487841",
+    "dataDirectory": "/tmp/rust-saas-unified-auth-20261028/data",
+    "hbaFile": "/tmp/rust-saas-unified-auth-20261028/data/pg_hba.conf",
+    "ssl": "off",
+    "passwordEncryption": "scram-sha-256"
+  },
+  "hbaBaselineSha256": "e6305f548fd8096217d02a8f93b5c50716d58df1d2441b12346dfe57db7027fd",
+  "hbaUid": 1000,
+  "hbaGid": 1000,
+  "hbaMode": "0o600",
+  "hbaChanged": false,
+  "hbaReloaded": false,
+  "currentLoopbackTrustCannotValidatePasswords": true,
+  "plannedScopedScramSource": "127.0.0.2/32",
+  "actualRuleRequiresFinalExplicitRoleAndDatabaseList": true,
+  "rootIsOnlyHbaMutationOwner": true,
+  "productionPostgres5432Untouched": true
+}

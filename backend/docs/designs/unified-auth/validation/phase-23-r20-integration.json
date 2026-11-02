@@ -1,0 +1,876 @@
+{
+  "contractVersion": "unified-auth-phase23-real-https/1",
+  "startedAt": "2026-10-29T04:53:38.898Z",
+  "result": "FAIL",
+  "tlsErrorsIgnored": false,
+  "positiveMfaSeededBySql": false,
+  "httpIssuerFixtures": false,
+  "fixtureSignedReceiverNegatives": true,
+  "trustedDeliveryOwnerProofs": "owned SQL fixture bindings plus actual worker delivery",
+  "checks": [
+    {
+      "caseId": "PREFLIGHT",
+      "status": "PASS",
+      "realEnrollment": true,
+      "currentBrowserTotpSourceVerified": true
+    },
+    {
+      "caseId": "RECOVERY_KEY_PREPARATION",
+      "status": "PASS",
+      "caseCount": 2,
+      "checkpointCReady": true,
+      "keyLifecycleExecuted": false
+    },
+    {
+      "caseId": "CHECKPOINT_PREPARATION",
+      "status": "PASS",
+      "freshLiveUserAndMachineCarriers": true,
+      "sourceReallyResumed": true
+    },
+    {
+      "caseId": "POST_CHECKPOINT_DENY",
+      "status": "PASS",
+      "emergencyCRevoked": true,
+      "refreshReuseDenied": true,
+      "bffLogoutCommands": 2,
+      "standardLogoutReceipt": true,
+      "offlineConsentRevokedAndDisplayHidden": true
+    },
+    {
+      "caseId": "DISASTER_CUT",
+      "status": "PASS",
+      "targetFreshStarted": true,
+      "sourceRemainsQuarantined": true,
+      "originalCodeRejectedWhileUnexpired": true
+    },
+    {
+      "caseId": "OLD_RAW_CARRIERS_REJECTED",
+      "status": "PASS",
+      "originalProtocolProcessRetained": true,
+      "exactOriginalCookieBytesResubmitted": true,
+      "oldUserAccess": 4,
+      "oldRefresh": 2,
+      "oldMachine": 1,
+      "oldClientSecrets": 4,
+      "oldPrimaryPasswords": 4,
+      "oldCode": 1,
+      "oldBffCookies": 2,
+      "originalDatabaseAccessDeadlines": true,
+      "deadlinesCheckedAfterDenial": true,
+      "minimumOldAccessRemainingMs": 176999,
+      "oldCodeRemainingMs": 5131
+    },
+    {
+      "caseId": "RECOVERED_OLD_INVARIANTS",
+      "status": "PASS",
+      "beforeAnyFreshPositiveLogin": true
+    }
+  ],
+  "endpoints": {
+    "GET https://console.saas.test/auth/login 303": 3,
+    "GET https://auth.saas.test/oauth/authorize 303": 20,
+    "GET https://auth.saas.test/oauth/login 200": 20,
+    "GET https://auth.saas.test/sso/assets/identity.css 200": 28,
+    "GET https://auth.saas.test/sso/assets/identity.js 200": 20,
+    "GET https://auth.saas.test/oauth/interaction/:id 200": 38,
+    "GET https://auth.saas.test/api/sso/preauth 200": 21,
+    "POST https://auth.saas.test/api/sso/login 200": 15,
+    "POST https://auth.saas.test/oauth/interaction/:id 200": 19,
+    "GET https://console.saas.test/auth/callback 303": 4,
+    "GET https://console.saas.test/ 200": 4,
+    "GET https://console.saas.test/assets/index-Ps9xfk9t.css 200": 4,
+    "GET https://console.saas.test/assets/index-BpLa4Vch.js 200": 4,
+    "GET https://console.saas.test/auth/config 200": 13,
+    "GET https://console.saas.test/assets/inter-latin-wght-normal-Dx4kXJAl.woff2 200": 4,
+    "GET https://console.saas.test/auth/session 200": 24,
+    "GET https://auth.saas.test/sso/security 200": 1,
+    "GET https://auth.saas.test/sso/assets/applications.css 200": 3,
+    "GET https://auth.saas.test/sso/assets/security.js 200": 1,
+    "GET https://auth.saas.test/api/sso/session 200": 4,
+    "GET https://auth.saas.test/api/sso/mfa/status 200": 2,
+    "POST https://auth.saas.test/api/sso/mfa/enrollment 200": 1,
+    "POST https://auth.saas.test/api/sso/mfa/enrollment/confirm 200": 1,
+    "GET https://console.saas.test/auth/step-up 303": 2,
+    "POST https://auth.saas.test/api/sso/login 428": 2,
+    "GET https://auth.saas.test/oauth/jwks 200": 3,
+    "GET https://customer.saas.test:24446/auth/callback 200": 9,
+    "POST https://console.saas.test/auth/context-token 200": 17,
+    "POST https://console.saas.test/api/oidc/keys/publish 200": 2,
+    "POST https://console.saas.test/api/oidc/keys/activate 200": 2,
+    "POST https://console.saas.test/api/identity/invitations 200": 2,
+    "GET https://auth.saas.test/sso/invitations/:id 200": 5,
+    "GET https://auth.saas.test/sso/assets/invitation.js 200": 5,
+    "POST https://auth.saas.test/api/sso/invitations/:id/accept 200": 2,
+    "POST https://console.saas.test/api/identity/clients 200": 1,
+    "POST https://console.saas.test/api/identity/clients/:id/credentials 200": 2,
+    "GET https://customer.saas.test:24446/api/session 200": 1,
+    "GET https://customer.saas.test:24446/demo-resource 200": 1,
+    "GET https://customer.saas.test/ 200": 4,
+    "GET https://customer.saas.test/assets/index-DJLdva9A.css 200": 4,
+    "GET https://customer.saas.test/assets/index-u1OsXVgx.js 200": 4,
+    "GET https://customer.saas.test/auth/config 200": 10,
+    "GET https://customer.saas.test/auth/session 200": 6,
+    "GET https://customer.saas.test/auth/login-bootstrap 200": 1,
+    "POST https://customer.saas.test/auth/login 200": 2,
+    "GET https://customer.saas.test/auth/callback 303": 2,
+    "GET https://customer.saas.test/api/profile 200": 2,
+    "GET https://customer.saas.test/auth/session 503": 1,
+    "POST https://console.saas.test/auth/backchannel-logout 200": 3,
+    "POST https://console.saas.test/auth/backchannel-logout 409": 1,
+    "POST https://customer.saas.test/auth/backchannel-logout 200": 3,
+    "POST https://customer.saas.test/auth/backchannel-logout 409": 1,
+    "GET https://console.saas.test/api/auth/profile 200": 1,
+    "PUT https://console.saas.test/api/organizations/:id 200": 2,
+    "POST https://console.saas.test/api/oidc/keys/phase23-c/revoke 200": 1,
+    "POST https://console.saas.test/auth/backchannel-logout 400": 1,
+    "POST https://customer.saas.test/auth/backchannel-logout 400": 1,
+    "POST https://console.saas.test/api/identity/invitations/:id/revoke 200": 1,
+    "POST https://auth.saas.test/api/sso/invitations/:id/accept 409": 3,
+    "POST https://console.saas.test/api/identity/clients/:id/credentials/revoke 200": 1,
+    "PATCH https://console.saas.test/api/identity/clients/:id 200": 1,
+    "DELETE https://console.saas.test/api/memberships/:id 200": 1,
+    "GET https://auth.saas.test/sso/applications 200": 2,
+    "GET https://auth.saas.test/sso/assets/applications.js 200": 2,
+    "GET https://auth.saas.test/api/sso/consents 200": 1,
+    "POST https://auth.saas.test/api/sso/consents/:id/revoke 200": 1,
+    "DELETE https://auth.saas.test/api/sso/consents/:id 200": 1,
+    "POST https://console.saas.test/auth/logout 200": 1,
+    "POST https://customer.saas.test/auth/logout 200": 1,
+    "GET https://auth.saas.test/api/sso/session 401": 2,
+    "GET https://console.saas.test/auth/session 401": 1,
+    "GET https://console.saas.test/api/auth/profile 401": 1,
+    "GET https://customer.saas.test/auth/session 401": 1,
+    "POST https://auth.saas.test/api/sso/login 401": 4,
+    "GET https://auth.saas.test/oauth/interaction/:id 401": 1
+  },
+  "timing": {
+    "checkpointPauseStartedAt": "2026-10-29T04:56:20.777Z",
+    "checkpointPauseEndedAt": "2026-10-29T04:56:30.122Z",
+    "actualFaultStartedAt": "2026-10-29T04:56:47.602Z"
+  },
+  "validationProfile": "recovery",
+  "keyLifecycleExecuted": false,
+  "scramBefore": {
+    "caseCount": 6,
+    "cases": [
+      {
+        "label": "IDENTITY_CORRECT",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "IDENTITY_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PLATFORM_CORRECT",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "PLATFORM_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PORTAL_CORRECT",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "PORTAL_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      }
+    ],
+    "contractVersion": "unified-auth-phase23-scram/1",
+    "freshConnectionsRequired": true,
+    "hbaChangedByWrapper": false,
+    "mode": "SOURCE",
+    "probeBinarySha256": "ea942fd0899e555065b01d74af08dabf2d199d6b0df5207d808cece2e720f7ca",
+    "result": "PASS"
+  },
+  "browserVersion": "156.0.8078.4",
+  "identitySelections": [
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "employee",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "customer",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "CUSTOMER"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    }
+  ],
+  "adminTotpSource": {
+    "currentBffBound": true,
+    "browserCookieBound": true,
+    "exactGlobalSourceBound": true,
+    "liveCanonicalSource": true,
+    "mfaMethod": "totp",
+    "verifiedWithinFiveMinutes": true
+  },
+  "keyCases": [
+    {
+      "caseId": "RK01_C_D_PREPUBLICATION",
+      "status": "PASS",
+      "statusScope": "RECOVERY_PREPARATION_ONLY",
+      "evidence": {
+        "minimumPublishSeconds": 61,
+        "observedPublishSeconds": 61.622153997421265,
+        "observedPublishStartDbEpoch": 1793249650.986583,
+        "observedGateDbEpoch": 1793249712.608737,
+        "sdkCacheAgeBeforeActivationSeconds": 65,
+        "unknownKidRefetchAfterSeconds": 60,
+        "cacheMutationRequested": false,
+        "requestedWaitMs": 58164,
+        "polls": 6
+      }
+    },
+    {
+      "caseId": "RK02_RECOVERY_CARRIERS_READY",
+      "status": "PASS",
+      "statusScope": "RECOVERY_PREPARATION_ONLY",
+      "evidence": {
+        "publishedNonactiveKid": "phase23-c",
+        "activeKid": "phase23-d",
+        "standardSdkIssuances": 2,
+        "stableSubject": true,
+        "originalCStillValid": true,
+        "requestedLegacyOidcTokenTtlSeconds": 600,
+        "legacySettingAppliedToCanonicalTokens": false,
+        "carrierDeadlinesRequireActualObservation": true,
+        "revocationDeferredUntilAfterCheckpoint": true,
+        "fullKeyLifecycleExecuted": false,
+        "sameSdkProcessRetained": true
+      }
+    }
+  ],
+  "invitationBefore": [
+    {
+      "caseId": "DR_INVITATION_CHECKPOINT",
+      "status": "PASS",
+      "consumedInvitations": 1,
+      "pendingDeliveredInvitations": 1,
+      "activationReceipts": 1,
+      "accountsCreated": 1,
+      "businessAuthoritiesCreated": 0
+    }
+  ],
+  "policyBefore": [
+    {
+      "caseId": "DR_POLICY_CHECKPOINT",
+      "status": "PASS",
+      "dedicatedClients": 1,
+      "credentialVersions": 1,
+      "machineStatus": 200,
+      "resourceStatus": 200,
+      "retainedRequiredScope": "demo.read",
+      "optionalScopeBeforeContraction": "demo.admin"
+    }
+  ],
+  "serviceGetSource": [
+    {
+      "name": "account",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "review",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "invitation",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "authAdmin",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "oidcAdmin",
+      "source": true,
+      "target": false
+    }
+  ],
+  "serviceContextSource": [
+    {
+      "name": "selection",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "portalConsumer",
+      "source": true,
+      "target": false
+    }
+  ],
+  "serviceAccessSource": [
+    {
+      "name": "source",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "portalSource",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "customerAuthority",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "profile",
+      "source": true,
+      "target": false
+    }
+  ],
+  "recoveryCheckpointSteps": {
+    "adapterPrepare": true,
+    "coreInit": true,
+    "coreCapture": true,
+    "negativeBaselineSaved": true
+  },
+  "recoverySubstage": "START_TARGET_BUSINESS_POOLS",
+  "checkpoint": {
+    "sequence": 1,
+    "sourceEnvironmentSha256": "9acb509ec443468f3da2bab5719cbe58c5e860e521ed7686f7cb086dbfabca5a",
+    "stoppedWriterDatabases": 2,
+    "method": "sequential pg_dump while all three writers stopped"
+  },
+  "sourceResumedBusinessAfterCheckpoint": true,
+  "keyEmergency": {
+    "cachedRsaMath": true,
+    "freshAuthorityRejectsC": true,
+    "opaqueGrantStillLiveBeforeRecovery": true,
+    "validD": true
+  },
+  "invitationAfterCheckpoint": [
+    {
+      "caseId": "DR_INVITATION_POSTCHECKPOINT_REVOKE",
+      "status": "PASS",
+      "revokedInvitations": 1,
+      "oldTokenDenied": 1,
+      "newAccounts": 0
+    }
+  ],
+  "policyAfterCheckpoint": [
+    {
+      "caseId": "DR_POLICY_POSTCHECKPOINT",
+      "status": "PASS",
+      "rotatedCredentialVersions": 2,
+      "revokedCredentials": 2,
+      "oldCredentialStatuses": [
+        401,
+        401
+      ],
+      "sameOldTokenActive": false,
+      "rejectionProvedBeforeDisable": true,
+      "retainedScope": "demo.read",
+      "removedScope": "demo.admin",
+      "extraClientDisabled": true,
+      "retiredMemberships": 1,
+      "retiredMemberIdentityVersion": 2
+    }
+  ],
+  "protocolFailures": [
+    {
+      "command": "replay",
+      "code": "SDK_REJECTED",
+      "status": 400
+    },
+    {
+      "command": "refresh",
+      "code": "SDK_REJECTED",
+      "status": 400
+    },
+    {
+      "command": "finish",
+      "code": "SDK_REJECTED",
+      "status": 400,
+      "stage": "finishLogin",
+      "sdkCode": "OAUTH_RESPONSE_BODY_ERROR",
+      "callbackCodePresent": true,
+      "callbackErrorPresent": false,
+      "tokenResponseCount": 1,
+      "lastTokenStatus": 400
+    },
+    {
+      "command": "userinfo",
+      "code": "SDK_REJECTED",
+      "status": 401
+    },
+    {
+      "command": "userinfo",
+      "code": "SDK_REJECTED",
+      "status": 401
+    },
+    {
+      "command": "userinfo",
+      "code": "SDK_REJECTED",
+      "status": 401
+    },
+    {
+      "command": "userinfo",
+      "code": "SDK_REJECTED",
+      "status": 401
+    },
+    {
+      "command": "refresh",
+      "code": "SDK_REJECTED",
+      "status": 400
+    },
+    {
+      "command": "refresh",
+      "code": "SDK_REJECTED",
+      "status": 400
+    }
+  ],
+  "recoveryStepMilliseconds": {
+    "STOP_SOURCE_WRITERS": 889,
+    "CAPTURE_LATEST_DENY": 2150,
+    "QUARANTINE_SOURCE": 508,
+    "RESTORE_RECONCILE_REARM_GATE": 10909,
+    "ACTUAL_TARGET_ACL_DRIFT": 3877,
+    "ROTATE_DATABASE_PASSWORDS": 520,
+    "FRESH_CONNECTION_SCRAM": 1074,
+    "START_TARGET_IDENTITY_PAIR": 1019,
+    "START_TARGET_BUSINESS_POOLS": 2488
+  },
+  "latestDenySequence": 2,
+  "recoveryNegatives": {
+    "format": "identity-recovery-negative-probe/1",
+    "status": "PASS",
+    "sequence": 2,
+    "validationLayer": "REAL_AUTHENTICATED_FILE_LOADERS_AND_READONLY_PG_PREFLIGHT",
+    "restoreSqlExecuted": false,
+    "databaseWrites": false,
+    "cases": [
+      {
+        "case": "ciphertext-tamper",
+        "status": "PASS",
+        "code": "RECOVERY_ARCHIVE_DIGEST_MISMATCH",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "manifest-tamper",
+        "status": "PASS",
+        "code": "RECOVERY_AUTHENTICATION_FAILED",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "wrong-encryption-key",
+        "status": "PASS",
+        "code": "RECOVERY_ARCHIVE_AUTHENTICATION_FAILED",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "mixed-source-binding",
+        "status": "PASS",
+        "code": "RECOVERY_CHECKPOINT_BINDING_MISMATCH",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "signed-old-floor",
+        "status": "PASS",
+        "code": "RECOVERY_EXTERNAL_FLOOR_ROLLBACK",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "signed-old-current",
+        "status": "PASS",
+        "code": "RECOVERY_REJECTED",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "signed-old-record",
+        "status": "PASS",
+        "code": "RECOVERY_REJECTED",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "missing-chain",
+        "status": "PASS",
+        "code": "RECOVERY_REJECTED",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      },
+      {
+        "case": "extra-chain",
+        "status": "PASS",
+        "code": "RECOVERY_REJECTED",
+        "preflightBefore": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "preflightAfter": {
+          "sourceConnectionCount": 0,
+          "targetDatabaseCount": 0
+        },
+        "originalBytesRestored": true
+      }
+    ],
+    "sourceSnapshot": "phase23-tools-r18",
+    "sourceArtifactSha256": "1dcaec4c634a53fbe04e7219d494c53810c4361e9f1be8d68fbf00d15d2e07f4",
+    "separatelyExecuted": true,
+    "inputDigestsVerified": true
+  },
+  "recoveryCycle": {
+    "completeRtoClaim": false,
+    "elapsedMilliseconds": 10079,
+    "opensTraffic": false,
+    "stageCount": 5,
+    "status": "GATE_PASSED_QUARANTINED"
+  },
+  "actualAclDrift": {
+    "caseId": "DR_ACTUAL_TARGET_DATABASE_ACL_DRIFT",
+    "status": "PASS",
+    "revokedConnectObserved": true,
+    "gateCode": "RECOVERY_DATABASE_ACL_CHANGED",
+    "originalEffectiveAclRestored": true,
+    "targetStayedQuarantined": true
+  },
+  "scramAfter": {
+    "caseCount": 9,
+    "cases": [
+      {
+        "label": "IDENTITY_OLD",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "IDENTITY_NEW",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "IDENTITY_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PLATFORM_OLD",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PLATFORM_NEW",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "PLATFORM_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PORTAL_OLD",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PORTAL_NEW",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "PORTAL_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      }
+    ],
+    "contractVersion": "unified-auth-phase23-scram/1",
+    "freshConnectionsRequired": true,
+    "hbaChangedByWrapper": false,
+    "mode": "RESTORE",
+    "probeBinarySha256": "ea942fd0899e555065b01d74af08dabf2d199d6b0df5207d808cece2e720f7ca",
+    "result": "PASS"
+  },
+  "oldCarrierCheck": "CUSTOMER_BFF_COOKIE",
+  "oldCodeRemainingObservationMs": 5131,
+  "oldAuthorizationCode": {
+    "status": "PASS",
+    "originalUnconsumedCode": true,
+    "canonicalPolicySeconds": 60,
+    "remainingAfterDenialMs": 5131,
+    "checkedBeforeBusinessPoolsStarted": true
+  },
+  "invitationAfterRecovery": [
+    {
+      "caseId": "DR_INVITATION_ORIGINAL_RECEIPT",
+      "status": "PASS",
+      "sameOperationStatus": 200,
+      "immutableTuplePreserved": true,
+      "receiptCount": 1,
+      "accountCount": 1,
+      "restoredAccountDisabled": true,
+      "businessAuthoritiesCreated": 0
+    },
+    {
+      "caseId": "DR_INVITATION_OLD_TOKENS",
+      "status": "PASS",
+      "freshOperations": 2,
+      "consumedStatus": 409,
+      "revokedStatus": 409,
+      "newAccounts": 0
+    }
+  ],
+  "policyAfterRecovery": [
+    {
+      "caseId": "DR_POLICY_RESTORED_QUARANTINE",
+      "status": "PASS",
+      "extraClientDisabled": true,
+      "retiredUserDisabled": true,
+      "retiredMembershipDisabled": true,
+      "rearmedExtraAuthorities": 0,
+      "retainedScope": "demo.read",
+      "removedScope": "demo.admin",
+      "oldCredentialStatuses": [
+        401,
+        401
+      ],
+      "sameOldTokenActive": false,
+      "credentialHighwater": 2,
+      "memberIdentityHighwater": 2,
+      "userSessionHighwater": 4
+    }
+  ],
+  "businessRpo": {
+    "sourceMutationVia": "actual authorized platform PUT",
+    "restoredObservationVia": "guarded owner SQL",
+    "checkpointValueRestored": true,
+    "postCheckpointValueLost": true,
+    "restoredOrganizationStatus": "DISABLED",
+    "securityIsolationSeparate": true
+  },
+  "invariants": {
+    "completeRtoClaim": false,
+    "counts": {
+      "absentPostCheckpointRows": 8,
+      "consentsClosed": 5,
+      "deliveryRows": 9,
+      "garbageCollectedRows": 1,
+      "immutableFacts": 210,
+      "oldCarrierRows": 191,
+      "policyRows": 47,
+      "quarantinedPrincipals": 18,
+      "versionFloors": 445
+    },
+    "fullKeyLifecycleChecked": false,
+    "opensTraffic": false,
+    "status": "PASS",
+    "validationProfile": "recovery"
+  },
+  "failedStep": "FRESH_RECOVERED_BUSINESS",
+  "failureCode": "BROWSER_STEP_TIMEOUT",
+  "page": {
+    "origin": "https://auth.saas.test",
+    "pathname": "/oauth/login",
+    "screen": "CONSENT_REQUIRED",
+    "candidateCount": 0,
+    "candidateMemberTypes": [],
+    "identityBusy": false,
+    "organizationStepVisible": false,
+    "selectionSearchActive": false,
+    "consentEnabled": true
+  },
+  "protocolLogRedaction": {
+    "logFiles": 15,
+    "candidatesCompared": 107,
+    "candidateFindings": 0
+  },
+  "ownerLogRedaction": {
+    "logFiles": 15,
+    "candidatesCompared": 78,
+    "candidateFindings": 0
+  },
+  "environmentCleanupFirstPass": {
+    "awaitHba": true,
+    "collectorCanaryScan": {
+      "candidateFindings": 0,
+      "logBytes": 65111,
+      "logFiles": 14,
+      "messagesComparedOnlyInMemory": 0
+    },
+    "collectorPrivateMessagesComparedOnlyInMemory": 0,
+    "containersCreated": 0,
+    "containersReused": 0,
+    "databasesRemoved": 0,
+    "dockerAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+    "dockerBefore": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+    "errors": [],
+    "filesystemAfter": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1453993984 6721601536  18% /tmp\n",
+    "filesystemBefore": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1411465216 6764130304  18% /tmp\n",
+    "privateBytesRemoved": 0,
+    "privateFilesRemoved": 0,
+    "processesRemaining": 0,
+    "remainingLeaseRecords": 0,
+    "result": "AWAIT_HBA",
+    "retainedSharedPostgresAndPublicBuildInputs": true,
+    "rolesRemoved": 0,
+    "rootHbaJournalRemovedByThisWrapper": false,
+    "status": "PHASE23_CLEANUP",
+    "windowsWslVdiskCompactionClaimed": false
+  },
+  "tlsProtocols": [
+    "TLS 1.3"
+  ],
+  "endedAt": "2026-10-29T04:58:24.953Z",
+  "cleanupRequiresEnvironmentAndHbaOwners": true,
+  "checkpointTaken": true
+}

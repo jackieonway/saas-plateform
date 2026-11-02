@@ -79,9 +79,14 @@ impl FromRequestParts<AppState> for NotificationContext {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, AppError> {
-        let claims = jwt::verify(&bearer_token(&parts.headers)?, &state.config.jwt_secret)
-            .map_err(|_| AppError::unauthorized("会话凭证无效或已过期"))?;
-        if claims.typ != "session" {
+        let claims = jwt::verify_internal(
+            &bearer_token(&parts.headers)?,
+            &state.config.jwt_secret,
+            jwt::InternalUse::PlatformSession,
+            Some(jwt::PLATFORM_API_AUDIENCE),
+        )
+        .map_err(|_| AppError::unauthorized("会话凭证无效或已过期"))?;
+        if claims.typ != "platform_session" {
             return Err(AppError::unauthorized("通知需要具体成员会话"));
         }
         let id = |value: Option<&str>| {
@@ -95,7 +100,7 @@ impl FromRequestParts<AppState> for NotificationContext {
         let session_id = id(claims.sid.as_deref())?;
         let account_version = claims
             .ver
-            .filter(|version| *version >= 0)
+            .filter(|version| *version >= 1)
             .ok_or_else(|| AppError::unauthorized("会话缺少账号版本，请重新认证"))?;
         let expiry = DateTime::<Utc>::from_timestamp(claims.exp, 0)
             .filter(|expiry| *expiry > Utc::now())
@@ -112,6 +117,7 @@ impl FromRequestParts<AppState> for NotificationContext {
         let context =
             context.ok_or_else(|| AppError::unauthorized("通知成员会话已失效，请重新认证"))?;
         crate::bff::require_platform_session(state, context.session_id).await?;
+        context.revalidate(&state.pool).await?;
         Ok(context)
     }
 }

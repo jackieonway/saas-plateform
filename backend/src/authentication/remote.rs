@@ -14,8 +14,8 @@ use crate::config::Config;
 use crate::error::AppError;
 use crate::platform_accounts::{
     AccountAdministrationPort, AccountCredential, AccountFuture, AccountMutationTx,
-    AuthenticationPort, CreatedAccount, CredentialHash, LoginIdentifier, NewAccount,
-    PasswordChange, PreparedPassword,
+    AuthenticationPort, CreatedAccount, CredentialHash, NewAccount, PasswordChange,
+    PreparedPassword,
 };
 
 pub(crate) struct RemoteAccounts {
@@ -305,6 +305,8 @@ fn validate_receipt(
     digest: &str,
 ) -> Result<Receipt, AppError> {
     let receipt: Receipt = serde_json::from_value(value).map_err(|_| AppError::Unavailable)?;
+    let before = canonical_version(&receipt.before_version)?;
+    let after = canonical_version(&receipt.after_version)?;
     if receipt.operation_id != operation
         || receipt.target_user_id != target
         || !crate::util::uuid7::is_uuid_v7(operation)
@@ -312,7 +314,8 @@ fn validate_receipt(
         || receipt.canonical_digest != digest
         || receipt.state != "COMPLETED"
         || !valid_digest(digest)
-        || canonical_version(&receipt.after_version)? < canonical_version(&receipt.before_version)?
+        || after < before
+        || (before == 0 && after != 1)
     {
         return Err(AppError::Unavailable);
     }
@@ -362,51 +365,6 @@ fn hmac_sha256(secret: &[u8], message: &[u8]) -> [u8; 32] {
 }
 
 impl AuthenticationPort for RemoteAccounts {
-    fn candidates<'a>(
-        &'a self,
-        identifier: LoginIdentifier<'a>,
-    ) -> AccountFuture<'a, Vec<AccountCredential>> {
-        Box::pin(async move {
-            #[derive(Deserialize)]
-            #[serde(deny_unknown_fields)]
-            struct Candidates {
-                accounts: Vec<AccountDto>,
-            }
-            let value = self.request(Method::POST, "/internal/identity/accounts/candidates", Some(&json!({"identifier":identifier.identifier,"phone":identifier.phone,"email":identifier.email}))).await?;
-            let result: Candidates =
-                serde_json::from_value(value).map_err(|_| AppError::Unavailable)?;
-            if result.accounts.len() > 65 {
-                return Err(AppError::Unavailable);
-            }
-            result
-                .accounts
-                .into_iter()
-                .map(AccountDto::credential)
-                .collect()
-        })
-    }
-
-    fn by_username<'a>(
-        &'a self,
-        username: &'a str,
-    ) -> AccountFuture<'a, Option<AccountCredential>> {
-        Box::pin(async move {
-            let rows = self
-                .candidates(LoginIdentifier {
-                    identifier: username,
-                    phone: "",
-                    email: "",
-                })
-                .await?;
-            let mut exact = rows.into_iter().filter(|row| row.username == username);
-            let account = exact.next();
-            if exact.next().is_some() {
-                return Err(AppError::Unavailable);
-            }
-            Ok(account)
-        })
-    }
-
     fn by_user_id(&self, id: Uuid) -> AccountFuture<'_, AccountCredential> {
         Box::pin(self.snapshot(id))
     }
@@ -429,6 +387,7 @@ impl AuthenticationPort for RemoteAccounts {
         })
     }
 
+    #[cfg(test)]
     fn credential_matches<'a>(
         &'a self,
         _tx: &'a mut dyn AccountMutationTx,
@@ -470,13 +429,6 @@ impl AccountAdministrationPort for RemoteAccounts {
         _id: Uuid,
         _status: &'a str,
     ) -> AccountFuture<'a, bool> {
-        Box::pin(async { Err(AppError::Unavailable) })
-    }
-    fn revoke_all<'a>(
-        &'a self,
-        _tx: &'a mut dyn AccountMutationTx,
-        _id: Uuid,
-    ) -> AccountFuture<'a, u64> {
         Box::pin(async { Err(AppError::Unavailable) })
     }
 }
@@ -528,6 +480,14 @@ mod tests {
         let mut reversed = value.clone();
         reversed["afterVersion"] = json!("0");
         assert!(validate_receipt(reversed, operation, target, &digest).is_err());
+        let mut created = value.clone();
+        created["beforeVersion"] = json!("0");
+        created["afterVersion"] = json!("1");
+        assert!(validate_receipt(created.clone(), operation, target, &digest).is_ok());
+        for invalid_after in ["0", "2"] {
+            created["afterVersion"] = json!(invalid_after);
+            assert!(validate_receipt(created.clone(), operation, target, &digest).is_err());
+        }
         let mut extra = value;
         extra["password"] = json!("leak");
         assert!(validate_receipt(extra, operation, target, &digest).is_err());

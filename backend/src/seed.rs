@@ -1,7 +1,7 @@
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::util::{hash, password};
+use crate::util::password;
 
 const DEMO_USERS: &[(&str, &str)] = &[
     ("admin", "admin123"),
@@ -11,15 +11,6 @@ const DEMO_USERS: &[(&str, &str)] = &[
     ("tianqi", "Tq@12345"),
     ("chenjiu", "Cj@12345"),
 ];
-const DEMO_CLIENT_SECRETS: &[&str] = &[
-    "platform-web-secret",
-    "api-service-secret",
-    "resource-portal-secret",
-    "micro-vue-shell-secret",
-    "micro-jquery-shell-secret",
-    "micro-report-shell-secret",
-];
-
 pub fn is_demo_password(candidate: &str) -> bool {
     DEMO_USERS
         .iter()
@@ -46,13 +37,6 @@ pub async fn check_production_credentials(pool: &PgPool) -> anyhow::Result<()> {
             }
         }
     }
-    let hashes: Vec<String> = DEMO_CLIENT_SECRETS
-        .iter()
-        .map(|secret| hash::sha256_hex(secret))
-        .collect();
-    let unsafe_clients: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM oauth_clients WHERE status='ENABLED' AND client_secret_hash=ANY($1))")
-        .bind(&hashes).fetch_one(pool).await?;
-    anyhow::ensure!(!unsafe_clients, "PRODUCTION_DEMO_CLIENT_CREDENTIAL: rotate or disable enabled documented demonstration clients before startup");
     Ok(())
 }
 
@@ -83,14 +67,6 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         "production bootstrap password does not satisfy requirements"
     );
     password::validate_for_config(admin_password, config)?;
-    let hashes: Vec<String> = DEMO_CLIENT_SECRETS
-        .iter()
-        .map(|secret| hash::sha256_hex(secret))
-        .collect();
-    sqlx::query("UPDATE oauth_clients SET status='DISABLED' WHERE client_secret_hash=ANY($1)")
-        .bind(&hashes)
-        .execute(&mut *tx)
-        .await?;
     let tenant = scalar_uuid(&mut tx, "INSERT INTO tenants(name,code,description,is_platform, id) VALUES('平台管理租户','admin-tenant','平台控制层',true, $1) RETURNING id").await?;
     let root = insert_org(&mut tx, tenant, None, "平台总部", "HQ", 1, "平台管理组织").await?;
     let system = insert_app(&mut tx, "system", "系统管理", "LayoutGrid", "/system", 1).await?;
@@ -170,7 +146,13 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
             "system:authorization",
         ),
         (system, "用户管理", "/system/users", "User", "system:user"),
-        (system, "客户管理", "/system/customers", "UsersRound", "system:user"),
+        (
+            system,
+            "客户管理",
+            "/system/customers",
+            "UsersRound",
+            "system:user",
+        ),
         (system, "角色管理", "/system/roles", "Shield", "system:role"),
         (
             system,
@@ -195,16 +177,9 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         ),
         (
             system,
-            "OAuth 客户端",
+            "统一接入管理",
             "/system/oauth/clients",
             "Key",
-            "system:oauth",
-        ),
-        (
-            system,
-            "设备与会话",
-            "/system/oauth/tokens",
-            "MonitorSmartphone",
             "system:oauth",
         ),
         (
@@ -236,14 +211,15 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
             | "/system/organizations"
             | "/system/departments"
             | "/system/authorizations" => directories.get("organizations").copied(),
-            "/system/users" | "/system/customers" | "/system/roles" => directories.get("users").copied(),
+            "/system/users" | "/system/customers" | "/system/roles" => {
+                directories.get("users").copied()
+            }
             "/system/applications" | "/system/menus" | "/system/settings" => {
                 directories.get("configuration").copied()
             }
-            "/system/oauth/clients"
-            | "/system/oauth/tokens"
-            | "/system/audit-logs"
-            | "/system/monitor" => directories.get("open").copied(),
+            "/system/oauth/clients" | "/system/audit-logs" | "/system/monitor" => {
+                directories.get("open").copied()
+            }
             _ => None,
         };
         let menu = insert_menu(
@@ -263,6 +239,10 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         grant_role_menu(&mut tx, role, menu).await?;
         grant_tenant_menu(&mut tx, tenant, menu).await?;
         grant_org_menu(&mut tx, root, menu).await?;
+        if path == "/system/oauth/clients" {
+            initialize_auth_management_permissions(&mut tx, system, menu, tenant, root, role)
+                .await?;
+        }
         if permission == "system:tenant" {
             let button = insert_menu(
                 &mut tx,
@@ -613,31 +593,17 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         true,
     )
     .await?;
-    let oauth_clients_menu = insert_menu(
+    let unified_clients_menu = insert_menu(
         &mut tx,
         sys,
         Some(open_dir),
         "MENU",
-        "OAuth 客户端",
+        "统一接入管理",
         "/system/oauth/clients",
         "Key",
         "",
         "system:oauth",
         1,
-        true,
-    )
-    .await?;
-    let device_session_menu = insert_menu(
-        &mut tx,
-        sys,
-        Some(open_dir),
-        "MENU",
-        "设备与会话",
-        "/system/oauth/tokens",
-        "MonitorSmartphone",
-        "",
-        "system:oauth",
-        2,
         true,
     )
     .await?;
@@ -885,6 +851,15 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     )
     .await?;
     initialize_data_grant_permissions(&mut tx, sys, authz_mgmt, tenant, root, super_role).await?;
+    initialize_auth_management_permissions(
+        &mut tx,
+        sys,
+        unified_clients_menu,
+        tenant,
+        root,
+        super_role,
+    )
+    .await?;
 
     // ===== 角色菜单 =====
     for m in [
@@ -907,8 +882,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         menu_mgmt,
         platform_settings,
         open_dir,
-        oauth_clients_menu,
-        device_session_menu,
+        unified_clients_menu,
         audit_menu,
         monitor_menu,
         a_overview,
@@ -970,8 +944,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         menu_mgmt,
         platform_settings,
         open_dir,
-        oauth_clients_menu,
-        device_session_menu,
+        unified_clients_menu,
         audit_menu,
         monitor_menu,
         a_overview,
@@ -1010,8 +983,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         menu_mgmt,
         platform_settings,
         open_dir,
-        oauth_clients_menu,
-        device_session_menu,
+        unified_clients_menu,
         audit_menu,
         monitor_menu,
         a_overview,
@@ -1109,64 +1081,6 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         grant_org_menu(&mut tx, star_root, m).await?;
     }
 
-    // ===== OAuth 客户端 (secret 存 SHA-256) =====
-    insert_client(
-        &mut tx,
-        "platform-web",
-        Some("platform-web-secret"),
-        "Web 控制台",
-        "Web 应用演示客户端 (授权码 + PKCE)",
-        "CONFIDENTIAL",
-        "https://oauthdebugger.com/callback,http://localhost:9000/callback",
-        "authorization_code,refresh_token",
-        "profile,email",
-        7200,
-        604800,
-    )
-    .await?;
-    insert_client(
-        &mut tx,
-        "smart-tv",
-        None,
-        "智能电视",
-        "设备码流程演示客户端 (RFC 8628)",
-        "PUBLIC",
-        "",
-        "urn:ietf:params:oauth:grant-type:device_code,refresh_token",
-        "profile",
-        7200,
-        604800,
-    )
-    .await?;
-    insert_client(
-        &mut tx,
-        "api-service",
-        Some("api-service-secret"),
-        "API 服务",
-        "服务间调用客户端 (client_credentials)",
-        "CONFIDENTIAL",
-        "",
-        "client_credentials",
-        "profile",
-        7200,
-        604800,
-    )
-    .await?;
-    insert_client(
-        &mut tx,
-        "resource-portal",
-        Some("resource-portal-secret"),
-        "资源门户",
-        "资源门户客户端 (SSO 会话派生授权码)",
-        "CONFIDENTIAL",
-        "http://localhost:9000/callback",
-        "authorization_code,refresh_token",
-        "profile,email",
-        7200,
-        604800,
-    )
-    .await?;
-
     tx.commit().await?;
     tracing::info!(
         "种子数据写入完成: 2 租户(含 1 平台租户) / 3 应用 / 29 菜单 / 7 组织 / 6 部门 / 6 用户 / 4 角色 / 4 OAuth 客户端"
@@ -1183,6 +1097,52 @@ async fn scalar_uuid(tx: &mut Transaction<'_, Postgres>, sql: &str) -> anyhow::R
 
 /// Called only by fresh bootstrap. Existing installations must register and
 /// authorize these independent permissions through explicit management actions.
+/// Fine permissions are actual menu grants. The legacy system:oauth value
+/// continues to select the navigation entry and grants no management action.
+async fn initialize_auth_management_permissions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    application: Uuid,
+    parent: Uuid,
+    tenant: Uuid,
+    organization: Uuid,
+    role: Uuid,
+) -> anyhow::Result<()> {
+    for (index, (title, permission)) in [
+        ("查看统一接入", "system:oauth:view"),
+        ("登记统一接入", "system:oauth:register"),
+        ("审核合作方申请", "system:oauth:review"),
+        ("发布生产接入", "system:oauth:publish"),
+        ("轮换客户端凭据", "system:oauth:rotate"),
+        ("停用统一接入", "system:oauth:disable"),
+        ("管理授权范围", "system:oauth:scopes"),
+        ("管理账号邀请", "system:oauth:invite"),
+        ("管理客户端公钥", "system:oauth:keys"),
+        ("委派合作方应用", "system:oauth:assign"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let button = insert_menu(
+            tx,
+            application,
+            Some(parent),
+            "BUTTON",
+            title,
+            "",
+            "",
+            "",
+            permission,
+            index as i32 + 1,
+            false,
+        )
+        .await?;
+        grant_role_menu(tx, role, button).await?;
+        grant_tenant_menu(tx, tenant, button).await?;
+        grant_org_menu(tx, organization, button).await?;
+    }
+    Ok(())
+}
+
 async fn initialize_data_grant_permissions(
     tx: &mut Transaction<'_, Postgres>,
     system: Uuid,
@@ -1479,44 +1439,5 @@ async fn grant_org_menu(
         .bind(menu)
         .execute(&mut **tx)
         .await?;
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-#[cfg(test)]
-async fn insert_client(
-    tx: &mut Transaction<'_, Postgres>,
-    client_id: &str,
-    secret: Option<&str>,
-    name: &str,
-    desc: &str,
-    client_type: &str,
-    redirect_uris: &str,
-    grant_types: &str,
-    scopes: &str,
-    access_validity: i32,
-    refresh_validity: i32,
-) -> anyhow::Result<()> {
-    let secret_hash = secret.map(hash::sha256_hex);
-    sqlx::query(
-        "INSERT INTO oauth_clients \
-         (client_id, client_secret_hash, client_name, description, client_type, redirect_uris, grant_types, scopes, access_token_validity, refresh_token_validity, id, subject_mode, allowed_member_types, access_policy_version) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1)",
-    )
-    .bind(client_id)
-    .bind(secret_hash)
-    .bind(name)
-    .bind(desc)
-    .bind(client_type)
-    .bind(redirect_uris)
-    .bind(grant_types)
-    .bind(scopes)
-    .bind(access_validity)
-    .bind(refresh_validity)
-    .bind(crate::util::uuid7::new_uuid())
-    .bind(if grant_types == "client_credentials" { "MACHINE" } else { "USER" })
-    .bind(if grant_types == "client_credentials" { Vec::<String>::new() } else { vec!["EMPLOYEE".to_string()] })
-    .execute(&mut **tx)
-    .await?;
     Ok(())
 }

@@ -1,0 +1,18 @@
+{
+  "snapshot": "phase25-tools-r6",
+  "snapshotSha256": "c795b314a63ad9ed0200ead36eeb790112862e7b5fdf939ded964cf1e813b2e0",
+  "manifestFileSha256": "94d10a693bd632beae7fe54e4e5e1877a7b4baf3f88d36921af0ce6fd9f285ce",
+  "sourceSha256": {
+    "saas-plateform/backend/tests/unified-auth-https/phase25-ui-browser.mjs": "0850490bae6b7d24016cf73426b4197a7669f7daadb0998d225e1a98d2260d84",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-identity-driver.mjs": "cd808bd45e2fd256ea91303eff9b04195865623e75c896bf75cf2a6c7fee3015",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.mjs": "f9ac04f11c342ebaf2c9fc9ad7b089d551b174a2b241c0cb49a1f4eb1821e33b",
+    "saas-identity/static/identity/identity.js": "a00dc2e4e04ef7700a5513ce7b10705470d32e5c4357a3422af9586bf239027b",
+    "saas-identity/static/identity/login.html": "0ab799e16f7b0b7a458bb66531281c4f5fc6bed72e8e0c245850d9f4f2bf40e2",
+    "saas-plateform/frontend/src/pages/system/oauth/UnifiedClientsPage.tsx": "b157a06f3a9097d1f8c5300f50f76d39d7786f5934302f4882c31d3111c2c223"
+  },
+  "privateEnvironmentRead": false,
+  "databaseQueries": 0,
+  "closedUiReportSha256": "7621b071410d0685f6ade15dfc78e5708318fbfd543fd5309029d5fe972031ab",
+  "verifiedAtUtc": "2026-10-29T12:53:25.3076420Z",
+  "currentInputsMatch": true
+}

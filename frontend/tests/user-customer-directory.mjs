@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { componentFixture, success, elements } from './helpers/component-fixture.mjs'
-import * as model from '../src/pages/system/users/membership-model.ts'
+import { componentFixture, success, elements, button } from './helpers/component-fixture.mjs'
+import * as uuid from '../src/lib/uuid.ts'
+
+const model = componentFixture('src/pages/system/users/membership-model.ts', [], { '@/lib/uuid': uuid }).exports
 
 const id = n => `019c0000-0000-7000-8000-${String(n).padStart(12,'0')}`
 const capabilities = {lifecycleEnabled:true,customerMembershipsEnabled:true,dualMembershipsEnabled:true}
 const member = type => ({id:id(type==='EMPLOYEE'?3:4),userId:id(1),organizationId:id(2),memberType:type,status:'ENABLED',identityVersion:1,departmentId:null,position:'',updatedAt:'2026-10-27T00:00:00Z'})
 
-test('users page has one employee information directory without customer or global-account tabs', () => {
+test('users page has one employee management directory without customer or global-account tabs', () => {
   const f=componentFixture('src/pages/system/users/UsersPage.tsx',['UsersPage'],{
     '@/stores/auth':{useAuthStore:selector=>selector({contextKey:'scope'})},
     './MembershipActionDialog':{MembershipActionDialog:'MembershipActionDialog'},
@@ -16,6 +18,56 @@ test('users page has one employee information directory without customer or glob
   const tree=f.render('UsersPage')
   assert.equal(tree.type.name,'UserDirectory')
   assert.equal(tree.props.memberType,'EMPLOYEE')
+})
+
+function directoryFixture() {
+  const writes = [], messages = []
+  const form = { control: {}, reset() {}, handleSubmit: callback => callback }
+  const f = componentFixture('src/pages/system/users/UsersPage.tsx', ['UserDirectory'], {
+    '@/stores/auth': { useAuthStore: selector => selector({ contextKey: 'scope', profile: { user: { id: id(9) } } }) },
+    '@/hooks/use-authorized-paths': { useAuthorizedPaths: () => ({ access: () => ({ status: 'allowed' }) }) },
+    '@/hooks/use-synced-keyword': { useSyncedKeyword: () => ['', () => {}] },
+    '@/hooks/use-page-recovery': { usePageRecovery() {} },
+    '@/hooks/use-table-density': { useTableDensity: () => ({ density: 'normal' }), DENSITY_BODY_CLASS: {} },
+    '@/hooks/use-column-visibility': { useColumnVisibility: () => ({ visibleSet: new Set(), isVisible: () => true }) },
+    '@/lib/format': { useDebounced: value => value, formatDateTime: () => '', GENDER_LABELS: {} },
+    '@/lib/form': { zResolver: () => undefined },
+    'react-hook-form': { useForm: () => form },
+    '@/api/users': { usersApi: { update: async (...args) => writes.push(args) } },
+    './MembershipActionDialog': { MembershipActionDialog: 'MembershipActionDialog' },
+    './membership-model': model,
+    sonner: { toast: { success: value => messages.push(value), error: value => messages.push(value) } },
+  })
+  f.queries.set('membership-capabilities', success(capabilities))
+  f.queries.set('tenants', success([]))
+  f.queries.set('users', success({ records: [{ id: id(1), username: 'editable', realName: 'Before', email: 'before@example.test', phone: '13800138000', status: 'ENABLED', memberships: ['EMPLOYEE', 'CUSTOMER'].map(type => ({ organizationId: id(2), organizationName: 'Org', memberType: type, status: 'ENABLED' })) }], total: 1 }))
+  return { ...f, writes, messages }
+}
+
+for (const memberType of ['EMPLOYEE', 'CUSTOMER']) test(`${memberType} profiles are editable by default and cleared contacts are sent explicitly`, async () => {
+  const f = directoryFixture()
+  let tree = f.render('UserDirectory', { memberType })
+  const edit = elements(tree, n => n.type === 'Button' && n.props['aria-label'] === '编辑')[0]
+  assert(edit, 'The default production directory must expose profile editing')
+  const employeeActions = elements(tree, n => n.type === 'Button' && ['员工成员批量维护', '分配角色'].includes(n.props['aria-label']))
+  assert.equal(employeeActions.length, memberType === 'EMPLOYEE' ? 2 : 0)
+  edit.props.onClick()
+  tree = f.render('UserDirectory', { memberType })
+  elements(tree, n => n.type === 'form' && n.props.id === 'user-form')[0].props.onSubmit({ realName: 'After', email: '', phone: '', gender: 'FEMALE' })
+  await f.mutations[0].promise
+  assert.deepEqual(f.writes, [[id(1), { realName: 'After', email: '', phone: '', gender: 'FEMALE' }]])
+  assert.equal(f.messages.at(-1), '用户已更新')
+  const header = elements(tree, n => n.type === 'PageHeader')[0]
+  header.props.actions.props.onClick()
+  tree = f.render('UserDirectory', { memberType })
+  assert.equal(elements(tree, n => n.type === 'MembershipActionDialog')[0].props.action.memberType, memberType)
+})
+
+test('an explicitly read-only directory still hides account mutations', () => {
+  const f = directoryFixture()
+  const tree = f.render('UserDirectory', { memberType: 'EMPLOYEE', informationOnly: true })
+  assert.equal(elements(tree, n => n.type === 'Button' && n.props['aria-label'] === '编辑').length, 0)
+  assert.equal(elements(tree, n => n.type === 'Switch').length, 0)
 })
 
 for(const type of ['EMPLOYEE','CUSTOMER']) test(`adding ${type} binds a searched account even when the other relationship exists`, async () => {
@@ -38,7 +90,7 @@ for(const type of ['EMPLOYEE','CUSTOMER']) test(`adding ${type} binds a searched
     elements(tree,n=>n.type==='Input'&&n.props.id==='member-binding-source')[0].props.onChange({target:{value:'已核实所属组织'}})
   }
   tree=f.render('MembershipActionDialog',props)
-  const submit=elements(tree,n=>n.type==='Button'&&n.props.children===`添加${type==='EMPLOYEE'?'员工':'客户'}`)[0]
+  const submit=button(tree,`添加${type==='EMPLOYEE'?'员工':'客户'}`)
   assert.equal(submit.props.disabled,false)
   assert.doesNotMatch(JSON.stringify(tree),/改用明确的第二身份流程/)
   await submit.props.onClick()
@@ -55,5 +107,5 @@ test('same-type existing relationship remains blocked instead of creating a dupl
   })
   f.queries.set('membership-counterpart', {...success({records:[member('EMPLOYEE')]}),isFetching:false})
   const tree=f.render('MembershipActionDialog',{action:{kind:'create',memberType:'EMPLOYEE'},namespace:'scope',capabilities,organizations:[],onClose(){},onSaved(){}})
-  assert.equal(elements(tree,n=>n.type==='Button'&&n.props.children==='添加员工')[0].props.disabled,true)
+  assert.equal(button(tree,'添加员工').props.disabled,true)
 })

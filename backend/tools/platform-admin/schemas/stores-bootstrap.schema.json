@@ -7,7 +7,6 @@
   "required": [
     "schemaVersion",
     "application",
-    "oauthClient",
     "menus",
     "grants"
   ],
@@ -69,60 +68,9 @@
           "const": "ENABLED"
         },
         "allowedMemberTypes": {
-          "const": ["EMPLOYEE"]
-        }
-      }
-    },
-    "oauthClient": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "clientName",
-        "clientType",
-        "grantTypes",
-        "scopes",
-        "redirectUris",
-        "accessTokenValidity",
-        "refreshTokenValidity",
-        "provisioning",
-        "subjectMode",
-        "allowedMemberTypes"
-      ],
-      "properties": {
-        "clientName": {
-          "const": "stores-client"
-        },
-        "clientType": {
-          "const": "CONFIDENTIAL"
-        },
-        "subjectMode": {
-          "const": "MACHINE"
-        },
-        "allowedMemberTypes": {
-          "const": []
-        },
-        "grantTypes": {
           "const": [
-            "client_credentials"
+            "EMPLOYEE"
           ]
-        },
-        "scopes": {
-          "const": [
-            "openid"
-          ]
-        },
-        "redirectUris": {
-          "const": []
-        },
-        "accessTokenValidity": {
-          "const": 300
-        },
-        "refreshTokenValidity": {
-          "const": 300
-        },
-        "provisioning": {
-          "type": "string",
-          "minLength": 1
         }
       }
     },

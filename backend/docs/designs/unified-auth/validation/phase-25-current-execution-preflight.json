@@ -1,0 +1,45 @@
+{
+  "contractVersion": "unified-auth-phase25-current-execution-preflight/1",
+  "recordedAtUtc": "2026-10-29T11:25:02.6664233Z",
+  "phase": 25,
+  "currentLedgerPhase": 25,
+  "predecessorReport": "phase-24.md",
+  "candidate": "phase25-apps-r2",
+  "plannedTools": "phase25-tools-r2",
+  "applicationProjects": [
+    "saas-identity",
+    "saas-plateform",
+    "saas-customer-portal",
+    "saas-stores",
+    "saas-work-orders",
+    "saas-notification",
+    "saas-micro-app-sdk",
+    "saas-examples"
+  ],
+  "containersCreated": 0,
+  "containersReused": 0,
+  "containerBudget": 0,
+  "nativeSharedPostgresPort": 55494,
+  "postgresIdentity": "Must verify protected current phase23-cluster-binding.json and live system identifier; historical IDs are not authority",
+  "runtimeOwner": "root task; unprivileged applications",
+  "resourcePlan": [
+    "Use the one existing task cluster and build cache, with newly marked canonical shared, portal, stores and work-orders databases and owner/runtime roles",
+    "One private mount namespace/TLS gateway/collector/standard RP, owned bounded service supervisors, one second identity process for cross-process invariants",
+    "No real target 5432, existing business databases, public Windows gateway, system hosts, DNS or live keys modified",
+    "Task-owned HBA window only via phase23-hba install/restore and exact deployment binding, after business fixture cleanup",
+    "Full wrapper finally stops business/core, clears only owned databases/roles/logs/private key/backup material, restores original HBA and removes own Windows proxy/browser temporary logs",
+    "Component agent uses independent prefixes and cannot clean root runtime databases"
+  ],
+  "baselineDockerContext": "default",
+  "baselineDocker": {
+    "containers": 0,
+    "images": 0,
+    "buildCacheBytes": 0,
+    "volumes": 0
+  },
+  "knownBlockers": [
+    "Four earlier Windows frontend temporary trees and thirty node_modules junctions remain after two automatic approval rejections; no deletion executed; see phase-25-frontend-cleanup-retry.json"
+  ],
+  "evidencePolicy": "Fresh component, PG, TLS/browser, independent standards client, capacity/fault/recovery and cleanup results stay separate; no full-phase completion inferred from candidate build",
+  "actualIntegrationRunStarted": false
+}

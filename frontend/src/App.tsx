@@ -6,8 +6,6 @@ import { usePlatformBrandingMetadata } from "@/hooks/use-platform-branding"
 
 const AppLayout = lazy(() => import("@/components/layout/AppLayout"))
 const LoginPage = lazy(() => import("@/pages/login/LoginPage"))
-const DevicePage = lazy(() => import("@/pages/device/DevicePage"))
-const ConsentPage = lazy(() => import("@/pages/consent/ConsentPage"))
 const DashboardPage = lazy(() => import("@/pages/dashboard/DashboardPage"))
 const ProfilePage = lazy(() => import("@/pages/profile/ProfilePage"))
 const EmbedPage = lazy(() => import("@/pages/embed/EmbedPage"))
@@ -24,7 +22,6 @@ const CustomersPage = lazy(() => import("@/pages/system/customers/CustomersPage"
 const RolesPage = lazy(() => import("@/pages/system/roles/RolesPage"))
 const RegionsPage = lazy(() => import("@/pages/system/regions/RegionsPage"))
 const OAuthClientsPage = lazy(() => import("@/pages/system/oauth/ClientsPage"))
-const OAuthTokensPage = lazy(() => import("@/pages/system/oauth/TokensPage"))
 const AuditLogsPage = lazy(() => import("@/pages/system/audit/AuditLogsPage"))
 const MonitorPage = lazy(() => import("@/pages/system/monitor/MonitorPage"))
 const NotificationsPage = lazy(() => import("@/pages/system/notifications/NotificationsPage"))
@@ -59,12 +56,10 @@ export default function App() {
   usePlatformBrandingMetadata()
   const { pathname } = useLocation()
   return (
-    <RouteRecoveryBoundary key={pathname === "/login" || pathname === "/device" || pathname === "/consent" ? pathname : "protected"}>
+    <RouteRecoveryBoundary key={pathname === "/login" ? pathname : "protected"}>
       <Routes>
         {/* 公开路由 */}
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/device" element={<DevicePage />} />
-        <Route path="/consent" element={<ConsentPage />} />
 
         {/* 受保护路由(AppLayout 内含登录守卫) */}
         <Route element={<ProtectedLayout />}>
@@ -87,7 +82,6 @@ export default function App() {
           <Route path="/system/roles" element={<RolesPage />} />
           <Route path="/system/regions" element={<RegionsPage />} />
           <Route path="/system/oauth/clients" element={<OAuthClientsPage />} />
-          <Route path="/system/oauth/tokens" element={<OAuthTokensPage />} />
           <Route path="/system/audit-logs" element={<AuditLogsPage />} />
           <Route path="/system/monitor" element={<MonitorPage />} />
           <Route path="/system/notifications" element={<NotificationsPage />} />

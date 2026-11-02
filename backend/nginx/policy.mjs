@@ -130,7 +130,8 @@ export function proxyHeaders(origin) {
 }
 
 export function privateLocations() {
-  return `        location = /api/internal { return 404; }
+  return `        location ~ ^/api/apps/[^/]+/authorize$ { return 404; }
+        location = /api/internal { return 404; }
         location ^~ /api/internal/ { return 404; }
         location = /internal { return 404; }
         location ^~ /internal/ { return 404; }
@@ -138,8 +139,6 @@ export function privateLocations() {
         location ^~ /work-orders-api/internal/ { return 404; }
         location = /stores-api/internal { return 404; }
         location ^~ /stores-api/internal/ { return 404; }
-        location = /oauth-playground-api/internal { return 404; }
-        location ^~ /oauth-playground-api/internal/ { return 404; }
         location = /notification-api/metrics { return 404; }
         location ^~ /notification-api/metrics/ { return 404; }
         location = /metrics { return 404; }
@@ -148,97 +147,25 @@ export function privateLocations() {
         location ^~ /work-orders-api/metrics/ { return 404; }
         location = /stores-api/metrics { return 404; }
         location ^~ /stores-api/metrics/ { return 404; }
-        location = /oauth-playground-api/metrics { return 404; }
-        location ^~ /oauth-playground-api/metrics/ { return 404; }
         location = /socket.io/metrics { return 404; }
         location ^~ /socket.io/metrics/ { return 404; }
-        location ~ ^/(?:@vite|@fs|@id|__vite|node_modules)(?:/|$) { return 404; }
-`
-}
-
-/** The OAuth demonstrator is a separate service, not a platform API consumer.
- * Never forward the platform's bearer/session credentials to either upstream. */
-export function oauthPlaygroundMaps({ api, assets }) {
-  return (api ? `    map $http_cookie $oauth_playground_cookie {
-        default "";
-        "~(?:^|;[[:space:]]*)oauth_playground=(?<oauth_playground_cookie_value>[^;]*)" "oauth_playground=$oauth_playground_cookie_value";
-    }
-    map $http_cookie $oauth_playground_host_cookie {
-        default "";
-        "~(?:^|;[[:space:]]*)__Host-oauth_playground=(?<oauth_pg_host_cookie_value>[^;]*)" "__Host-oauth_playground=$oauth_pg_host_cookie_value";
-    }
-    map "$oauth_playground_cookie|$oauth_playground_host_cookie" $oauth_playground_cookies {
-        default "$oauth_playground_cookie; $oauth_playground_host_cookie";
-        "|" "";
-        "~^[|]" $oauth_playground_host_cookie;
-        "~[|]$" $oauth_playground_cookie;
-    }
-` : '') + (assets ? `    map $request_method $oauth_playground_static_allow {
-        default "GET, HEAD";
-        GET "";
-        HEAD "";
-    }
-` : '')
-}
-
-export function oauthPlaygroundLocations(origin, { api, assets }) {
-  const apiDirectives = api ? `            set $oauth_playground ${quote(api)};
-            rewrite ^/oauth-playground-api(/.*)?$ /api$1 break;
-            proxy_http_version 1.1;
-${proxyHeaders(origin)}            proxy_set_header Authorization "";
-            proxy_set_header Cookie $oauth_playground_cookies;
-            proxy_set_header Origin $http_origin;
-            proxy_set_header Upgrade "";
-            proxy_set_header Connection "";
-            proxy_connect_timeout 5s;
-            proxy_send_timeout 30s;
-            proxy_read_timeout 30s;
-            proxy_hide_header Cache-Control;
-            add_header Cache-Control "no-store" always;
-            add_header X-Content-Type-Options "nosniff" always;
-            proxy_pass http://$oauth_playground;
-` : null
-  const apiLocation = (modifier, prefix) => apiDirectives ? `        location ${modifier}${prefix} {
-${apiDirectives}        }
-` : `        location ${modifier}${prefix} { return 404; }
-`
-  const staticDirectives = (rewrite) => `            if ($request_method !~ ^(GET|HEAD)$) { return 405; }
-            set $oauth_playground_static ${quote(assets)};
-            rewrite ${rewrite} break;
-            proxy_http_version 1.1;
-${proxyHeaders(origin)}            proxy_set_header Authorization "";
-            proxy_set_header Cookie "";
-            proxy_set_header Upgrade "";
-            proxy_set_header Connection "";
-            proxy_connect_timeout 5s;
-            proxy_send_timeout 30s;
-            proxy_read_timeout 30s;
-            proxy_hide_header Cache-Control;
-            proxy_hide_header Referrer-Policy;
-            proxy_hide_header X-Content-Type-Options;
-            add_header Cache-Control "no-store" always;
-            add_header Referrer-Policy "no-referrer" always;
-            add_header X-Content-Type-Options "nosniff" always;
-            add_header Allow $oauth_playground_static_allow always;
-            proxy_pass http://$oauth_playground_static;
-`
-  return apiLocation('= ', '/oauth-playground-api') + apiLocation('^~ ', '/oauth-playground-api/') + (assets ? `        location = /callback {
-            access_log off;
-${staticDirectives('^ /callback.html')}        }
-        location = /sub/oauth-playground {
-            if ($request_method !~ ^(GET|HEAD)$) { return 405; }
-            add_header Cache-Control "no-store" always;
-            add_header Referrer-Policy "no-referrer" always;
-            add_header X-Content-Type-Options "nosniff" always;
-            add_header Allow $oauth_playground_static_allow always;
-            return 308 ${origin.origin}/sub/oauth-playground/$is_args$args;
-        }
-        location ^~ /sub/oauth-playground/ {
-${staticDirectives('^/sub/oauth-playground/(.*)$ /$1')}        }
-` : `        location = /callback { return 404; }
+        location = /oauth { return 404; }
+        location ^~ /oauth/ { return 404; }
+        location = /oidc { return 404; }
+        location ^~ /oidc/ { return 404; }
+        location = /api/oauth { return 404; }
+        location ^~ /api/oauth/ { return 404; }
+        location = /api/oidc { return 404; }
+        location ^~ /api/oidc/ { return 404; }
+        location = /oauth-playground-api { return 404; }
+        location ^~ /oauth-playground-api/ { return 404; }
         location = /sub/oauth-playground { return 404; }
         location ^~ /sub/oauth-playground/ { return 404; }
-`)
+        location = /callback { return 404; }
+        location = /device { return 404; }
+        location = /consent { return 404; }
+        location ~ ^/(?:@vite|@fs|@id|__vite|node_modules)(?:/|$) { return 404; }
+`
 }
 
 export function apiLocations(origin, upstreams) {
@@ -274,7 +201,7 @@ ${directives}        }
 ${directives}        }
 `
   }
-  return location('auth', upstreams.backend, { sensitive: true }) + location('api', upstreams.backend, { release: true }) + location('api', upstreams.backend) + location('oauth', upstreams.backend) + location('work-orders-api', upstreams.workOrders) + location('stores-api', upstreams.stores) + location('socket.io', upstreams.notification, { socket: true })
+  return location('auth', upstreams.backend, { sensitive: true }) + location('api', upstreams.backend, { release: true }) + location('api', upstreams.backend) + location('work-orders-api', upstreams.workOrders) + location('stores-api', upstreams.stores) + location('socket.io', upstreams.notification, { socket: true })
 }
 
 export function staticMaps() {

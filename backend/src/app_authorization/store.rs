@@ -9,6 +9,7 @@ use crate::{app_token::AppTokenInfo, authorization, error::AppError, state::ORG_
 
 #[derive(Serialize, Deserialize)]
 pub(super) struct ContextRows {
+    pub business_expires_at: Option<chrono::DateTime<chrono::Utc>>,
     pub identity: (String, String, String, String, String, String, String, bool),
     pub menu_rows: Vec<Value>,
     pub roles: Vec<(Uuid, String, String)>,
@@ -29,15 +30,27 @@ pub(super) async fn load(
         return Err(AppError::forbidden("客户身份不能读取员工授权投影"));
     }
     let timer = crate::observability::stages().timer(operational_telemetry::Stage::BusinessSql);
-    let result = load_inner(pool, binding, environment).await;
+    let result = load_inner(pool, binding, environment, true).await;
     timer.finish(crate::observability::outcome(&result));
     result
+}
+
+pub(super) async fn load_resource(
+    pool: &PgPool,
+    binding: &AppTokenInfo,
+    environment: &str,
+) -> Result<ContextRows, AppError> {
+    if binding.member_type != "EMPLOYEE" {
+        return Err(AppError::forbidden("资源员工上下文拒绝客户身份"));
+    }
+    load_inner(pool, binding, environment, false).await
 }
 
 async fn load_inner(
     pool: &PgPool,
     binding: &AppTokenInfo,
     environment: &str,
+    platform_session: bool,
 ) -> Result<ContextRows, AppError> {
     // The menu query factory is shared with the existing platform menu facade.
     // Its positional contract is organization/user/tenant/application.
@@ -53,13 +66,17 @@ async fn load_inner(
         r#"
 WITH identity_row AS (
     SELECT u.username,COALESCE(u.real_name,'') AS real_name,t.code,t.name AS tenant_name,
-      o.name AS org_name,COALESCE(org_path(o.id),'') AS org_path,a.name AS app_name,u.is_super_admin
+      o.name AS org_name,COALESCE(org_path(o.id),'') AS org_path,a.name AS app_name,u.is_super_admin,
+      LEAST(t.expires_at,org_chain_expires_at(o.id)) AS business_expires_at
     FROM users u JOIN tenants t ON t.id=$3
       JOIN organizations o ON o.id=$1 AND o.tenant_id=t.id JOIN applications a ON a.id=$4
-      JOIN platform_sessions s ON s.id=$9 AND s.user_id=u.id AND s.tenant_id=t.id
+      LEFT JOIN platform_sessions s ON s.id=$9 AND s.user_id=u.id AND s.tenant_id=t.id
         AND s.organization_id=o.id AND s.membership_id=$6 AND s.member_type='EMPLOYEE'
         AND s.identity_version=$7 AND s.account_version=$8 AND platform_session_active(s.id)
     WHERE u.id=$2 AND a.status='ENABLED' AND 'EMPLOYEE'=ANY(a.allowed_member_types)
+      AND (($10 AND s.id IS NOT NULL) OR (NOT $10 AND identity_binding_active(u.id,t.id,o.id,$8,$6,'EMPLOYEE',$7)))
+      AND EXISTS(SELECT 1 FROM tenant_applications WHERE tenant_id=t.id AND application_id=a.id)
+      AND EXISTS(SELECT 1 FROM organization_applications WHERE organization_id=o.id AND application_id=a.id)
 ), menu_rows(id,parent_id,type,title,path,icon,permission,link_url,link_target,sort_order,visible,created_at) AS (
     SELECT * FROM ({effective}) ordinary WHERE NOT (SELECT is_super_admin FROM identity_row)
     UNION ALL
@@ -90,6 +107,7 @@ WITH identity_row AS (
     SELECT runtime_mode,entry_type,entry_url,version,id FROM application_effective_entry($4,$5)
 )
 SELECT jsonb_build_object(
+ 'business_expires_at',LEAST((SELECT business_expires_at FROM identity_row),(SELECT min(org_chain_expires_at(id)) FROM subtree)),
  'identity',(SELECT jsonb_build_array(username,real_name,code,tenant_name,org_name,org_path,app_name,is_super_admin) FROM identity_row),
  'menu_rows',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'parentId',parent_id,'type',type,'title',title,
    'path',path,'icon',icon,'permission',permission,'linkUrl',link_url,'linkTarget',link_target,'sortOrder',sort_order,'visible',visible)
@@ -113,6 +131,7 @@ SELECT jsonb_build_object(
         .bind(binding.identity_version)
         .bind(binding.account_version)
         .bind(binding.session_id)
+        .bind(platform_session)
         .fetch_optional(&mut *connection)
         .await?
         .ok_or_else(|| AppError::unauthorized("应用成员身份已在授权计算期间失效"))?;

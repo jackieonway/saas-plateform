@@ -1,0 +1,44 @@
+{
+  "contractVersion": "unified-auth-phase25-management-registry-diagnosis/1",
+  "recordedAtUtc": "2026-10-29T13:00:23.3655893Z",
+  "reviewer": "/root/runtime_matrix_plan",
+  "result": "PRODUCTION_CONTRACT_MISMATCH_IDENTIFIED",
+  "sourceSnapshotContext": "DIAGNOSIS_TIME_BEFORE_PRODUCTION_PROJECTION_FIX",
+  "sourceSnapshotNote": "sourceSha256 records the source inspected when this diagnosis was written; it is not the frozen runtime input manifest for actual r4",
+  "runnerDiagnosticsExecutedInActualR4": false,
+  "runnerDiagnosticsContext": "The diagnostic helper was added after the actual r4 failure and was syntax/component checked separately; its observations are available only to a subsequent frozen run",
+  "actualFailure": {
+    "httpStatus": 503,
+    "groupResult": "FAILED",
+    "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-management-current-r4.json",
+    "endpoint": "/api/identity/clients",
+    "passedSubchecks": 2,
+    "sha256": "234b169329e9ac134bfbd4341bf29a52595430dd793f0a40dacec81ea83b04fb"
+  },
+  "sourceSha256": {
+    "saas-plateform/backend/src/oidc/remote_admin.rs": "75879c39c23dfb0cf11206ab0d4b599405ac5e788395ce78a6843edc9bde930f",
+    "saas-identity/src/auth_admin.rs": "3364fa3fb68156336f05cd9c866f91bc503f99fc611adc1c47f40cb41857ab21",
+    "saas-plateform/backend/tests/unified-auth-https/phase21-fixture.py": "941d1de3f841b0107db3facb200753e2b99129ecde843001fd656ea27f57caa1",
+    "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs": "db2565ab86f2135031ee4d0d5b39d4e42e50684af0a84ea5b738eb37e6d47275",
+    "saas-plateform/backend/migrations/0001_init.sql": "626862ee41b929a623bb68e6acfcfdd51f01869987bceb437bedee116ddc825b"
+  },
+  "evidence": [
+    "Platform query target permits limit=10&offset=0 and identity has records/page response with identical pagination fields",
+    "Identity private guard explicitly permits GET /internal/identity/auth/clients query parameters",
+    "Canonical auth_clients has an internal UUIDv7 id and separate unique text client_id with length1..100",
+    "Identity ClientRow.json returns actual public client_id in clientId",
+    "Current standard RP/MACHINE fixture creates four distinct public p21-* identifiers that are not their internal row UUIDs",
+    "Platform auth_client_projection requires clientId equal id, rejecting those rows and therefore the complete current response"
+  ],
+  "runnerChange": "Added fixed status/body-kind/pagination/count/error-code and distinct-public-ID count diagnostics without raw identifiers, names, secrets or arbitrary response text; original PASS assertions unchanged",
+  "runtimeReadAttempt": {
+    "result": "OWNED_ENVIRONMENT_UNAVAILABLE",
+    "exceptionType": "FileNotFoundError",
+    "reason": "Root cleanup had already removed private environment; no environment or source database was recreated or modified"
+  },
+  "productionFilesModifiedByReviewer": false,
+  "nodeSyntaxPassed": true,
+  "gitDiffCheckPassed": true,
+  "recommendedFix": "Coordinate a production projection fix accepting bounded public client identifiers independently from internal UUIDv7 ids; preserve internal operation/resource bindings and add regression for real RP/MACHINE metadata plus invalid public identifier rejection",
+  "newActualHttpsPassClaimed": false
+}

@@ -160,8 +160,8 @@ pub(crate) fn validate(b: &Bundle) -> Result<()> {
         }
         decode(e)?;
     }
-    // Every entry is a regular file. Reject file/directory collisions before
-    // restore creates any databases or writes the first artifact.
+    // Every entry is a regular file. Reject file/directory collisions while
+    // authenticating the bundle, before any consumer can materialize it.
     for path in &paths {
         let mut ancestor = *path;
         while let Some((parent, _)) = ancestor.rsplit_once('/') {

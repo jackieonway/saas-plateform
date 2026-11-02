@@ -1,0 +1,21 @@
+{
+  "contractVersion": "unified-auth-owned-build-cache-migration/1",
+  "recordedAt": "2026-10-28T08:05:55.716991+00:00",
+  "source": "/tmp/rust-saas-unified-auth-20261028/target-linux",
+  "destination": "/var/tmp/rust-saas-unified-auth-20261028/target-linux",
+  "originalPathPreservedBySymlink": true,
+  "verifiedFiles": 7887,
+  "verifiedLogicalBytes": 8528375140,
+  "sha256VerifiedForEveryRegularFile": true,
+  "hardLinksPreserved": true,
+  "oldStoppedBinaryCopiesRemovedBytes": 489025632,
+  "tmpfsFreeBytesBeforeReclamation": 38408192,
+  "tmpfsFreeBytesAfterMigration": 7909376000,
+  "postgresStopped": false,
+  "wslStopped": false,
+  "existingBusinessDataModified": false,
+  "externalCleanupLeasePid": 288336,
+  "cleanupTrigger": "external-build-cache.cleanup.request or owned task OWNER removal",
+  "finalCleanupPending": true,
+  "windowsVirtualDiskCompacted": false
+}

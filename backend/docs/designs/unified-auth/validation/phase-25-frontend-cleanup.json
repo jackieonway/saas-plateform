@@ -1,0 +1,279 @@
+{
+  "contractVersion": "unified-auth-phase25-frontend-cleanup/1",
+  "status": "AUTOMATIC_APPROVAL_REJECTED",
+  "date": "2026-10-29T10:28:59.3999412Z",
+  "aggregateReport": "phase-25-frontend-components.json",
+  "aggregateSha256": "ecfb5d1552e4f013ca435954e1f9a7c3945492c4ec5866e49d5152055e134884",
+  "candidateCopyConfirmedBy": "/root/phase25_candidate",
+  "candidateSnapshot": "source-snapshot-phase25-apps-r2",
+  "candidateFrontendHashEquality": true,
+  "embeddedProvenanceChecks": 170,
+  "records": [
+    {
+      "owner": "rust-saas-unified-auth-phase25-frontends/1",
+      "regularFiles": 1020,
+      "directories": 160,
+      "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo",
+      "existsAfterRejectedCleanup": true,
+      "dependencyJunctions": [
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-work-orders\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-work-orders\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-stores\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-stores\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-plateform\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-plateform\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-micro-app-sdk\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-micro-app-sdk\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-examples\\websocket\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\websocket\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-examples\\report-center\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\report-center\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-examples\\oidc-rp\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\oidc-rp\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-examples\\micro-vue\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\micro-vue\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-examples\\micro-jquery\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\micro-jquery\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo\\saas-customer-portal\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-customer-portal\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        }
+      ],
+      "logicalBytes": 16964189
+    },
+    {
+      "owner": "rust-saas-unified-auth-phase25-frontends/1",
+      "regularFiles": 794,
+      "directories": 150,
+      "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE",
+      "existsAfterRejectedCleanup": true,
+      "dependencyJunctions": [
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-work-orders\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-work-orders\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-stores\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-stores\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-plateform\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-plateform\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-micro-app-sdk\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-micro-app-sdk\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-examples\\websocket\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\websocket\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-examples\\report-center\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\report-center\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-examples\\oidc-rp\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\oidc-rp\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-examples\\micro-vue\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\micro-vue\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-examples\\micro-jquery\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\micro-jquery\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE\\saas-customer-portal\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-customer-portal\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        }
+      ],
+      "logicalBytes": 14422762
+    },
+    {
+      "owner": "rust-saas-unified-auth-phase25-frontends/1",
+      "regularFiles": 956,
+      "directories": 146,
+      "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U",
+      "existsAfterRejectedCleanup": true,
+      "dependencyJunctions": [
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-work-orders\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-work-orders\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-stores\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-stores\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-plateform\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-plateform\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-micro-app-sdk\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-micro-app-sdk\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-examples\\websocket\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\websocket\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-examples\\report-center\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\report-center\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-examples\\oidc-rp\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\oidc-rp\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-examples\\micro-vue\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\micro-vue\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-examples\\micro-jquery\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-examples\\micro-jquery\\node_modules"
+          ],
+          "type": "Junction"
+        },
+        {
+          "path": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U\\saas-customer-portal\\frontend\\node_modules",
+          "target": [
+            "D:\\WorkSpace\\rust\\rust-saas\\saas-customer-portal\\frontend\\node_modules"
+          ],
+          "type": "Junction"
+        }
+      ],
+      "logicalBytes": 15266439
+    },
+    {
+      "owner": "rust-saas-unified-auth-phase25-npm/1",
+      "regularFiles": 1936,
+      "directories": 461,
+      "path": "C:/Users/MECHREVO/AppData/Local/Temp/rust-saas-phase25-npm-0WZPX8",
+      "existsAfterRejectedCleanup": true,
+      "dependencyJunctions": [],
+      "logicalBytes": 14953850
+    }
+  ],
+  "remainingRegularFiles": 4706.0,
+  "remainingLogicalBytes": 61607240.0,
+  "remainingDirectories": 917.0,
+  "remainingDependencyJunctions": 30.0,
+  "rejectedAction": "Native PowerShell directed cleanup of the three new OWNER-guarded frontend workspaces and isolated npm runtime, with exact temporary path and dependency junction-target checks before removal.",
+  "rejectionReason": "blocked by policy",
+  "commandExecuted": false,
+  "removedResources": 0,
+  "workaroundAttempted": false,
+  "existingDependencyRootsPreserved": true,
+  "existingLiveDistChanged": false,
+  "aggregateCleanupFieldClarification": "The earlier existingNodeModulesAndDistUntouched field means dependency roots/package sources and live dist were preserved. The actual Chromium HTTP-fixture may refresh the pre-existing Vite optimizer cache; no claim that every cache byte under node_modules stayed unchanged.",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "databaseUsed": false,
+  "wslEnvironmentTouched": false,
+  "windowsVhdxReclamationClaimed": false
+}

@@ -219,21 +219,9 @@ const scenarios = {
     assert(state.requests.some((request) => request.pathname === "/api/platform/branding"), "Login branding must be loaded from the public endpoint.")
     assert.equal(state.requests.some((request) => request.pathname === "/api/platform/settings"), false, "Login must not read private platform settings.")
   }),
-  authorization_branding: async () => withFixture({ startPath: "/device" }, async ({ page, state }) => {
-    for (const [route, title] of [["/device", "设备授权"], ["/consent", "授权确认"]]) {
-      if (route !== "/login") await page.evaluate(({ proof, profile }) => window.__replaceFixtureSession("test-platform-settings-session", proof, profile), { proof: identityForProfile(profile(state)), profile: profile(state) })
-      if (new URL(page.url()).pathname !== route) await page.goto(origin + route)
-      await page.getByText(state.settings.platformName, { exact: true }).waitFor()
-      await page.getByText(state.settings.platformDescription, { exact: true }).waitFor()
-      await page.getByText(state.settings.footerText, { exact: true }).waitFor()
-      await page.locator(`img[src="${state.settings.logoUrl}"]`).first().waitFor()
-      await expectTitle(page, `${title} · ${state.settings.platformName}`)
-    }
-    assert.equal(state.requests.some((request) => request.pathname === "/api/platform/settings"), false, "Device and consent branding must use the public branding contract.")
-  }),
   empty_footers: async () => withFixture({ authenticated: false, startPath: "/login", settings: { ...originalSettings, footerText: "" } }, async ({ page, state }) => {
     await expectLogin(page, state.settings)
-    for (const [route, title] of [["/login", "统一登录"], ["/device", "设备授权"], ["/consent", "授权确认"]]) {
+    for (const [route, title] of [["/login", "统一登录"]]) {
       if (route !== "/login") await page.evaluate(({ proof, profile }) => window.__replaceFixtureSession("test-platform-settings-session", proof, profile), { proof: identityForProfile(profile(state)), profile: profile(state) })
       if (new URL(page.url()).pathname !== route) await page.goto(origin + route)
       await page.getByText(state.settings.platformName, { exact: true }).first().waitFor()

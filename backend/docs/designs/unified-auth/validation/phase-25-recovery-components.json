@@ -1,0 +1,556 @@
+{
+  "contractVersion": "unified-auth-phase25-recovery-components/1",
+  "phase": 25,
+  "status": "PASS",
+  "evidenceLayer": "PURE_COMPONENT_REAL_FILES_CRYPTO_CLI_WITH_MOCKED_POSTGRES",
+  "scope": "Current frozen candidate recovery, deny-only reconciliation, anchored witness, catalog inventory and negative-loader components only; no live database, service runtime, backup/restore, HTTPS or whole-phase acceptance claim.",
+  "snapshot": {
+    "label": "phase25-apps-r2",
+    "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+    "manifestSha256": "bc6cac8f2ea794b7b8a39b50e4f21fb8b77301f9fd6f4a86a752a1cce8d452b1"
+  },
+  "runner": "unittest.TextTestRunner with structured per-case outcomes and TemporaryDirectory creation/removal inventory; source files unchanged",
+  "startedAtUtc": "2026-10-29T11:20:29.509431+00:00",
+  "finishedAtUtc": "2026-10-29T11:20:31.868802+00:00",
+  "durationSeconds": 2.359,
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "inputSha256": {
+    "saas-plateform/backend/ops/identity-recovery/core.py": "f9bd3aae8417bb9316f5ff36e1af2a5f95034725d44287e0025e5710f3fe7005",
+    "saas-plateform/backend/ops/identity-recovery/inventory.py": "1079362a3707550bec5160f70e1dea4fa0c7f12b7df82dfe1f35f31ef3e768db",
+    "saas-plateform/backend/ops/identity-recovery/negative_probe.py": "05f6ed1f5c69cf50b3a9f41009b2d5f69e41684e321111a4172af2d0e2d3582d",
+    "saas-plateform/backend/ops/identity-recovery/reconcile.py": "e5a6aa4df3804dc82bede2344be2dcb70910e7de2f8256082e56b8e742e4cc31",
+    "saas-plateform/backend/ops/identity-recovery/recovery.py": "99b4a108b9b1c013d31a04db7d26a440581d078c3a3710fe0aed3f431b3e42b5",
+    "saas-plateform/backend/ops/identity-recovery/test_core.py": "64b9d4b103287d21e7c6e7247c72c998369676c9e315fe4de27cd930a5fe1667",
+    "saas-plateform/backend/ops/identity-recovery/test_inventory.py": "c935c6b59348433d9e1776dab6d573903b4b3f733061756d63ff6df6cb733537",
+    "saas-plateform/backend/ops/identity-recovery/test_negative_probe.py": "38ed3a09f6796925b8fee7acfae83fff7715605387e41124a2b5be4c7b2e0c77",
+    "saas-plateform/backend/ops/identity-recovery/test_reconcile.py": "0505ed9a643c24bee47ce13bd75937b986362a013912d03897662c41208ff3e5",
+    "saas-plateform/backend/ops/identity-recovery/test_witness.py": "99dd0427f5957ba54b29807fa46c9ad39c934e380ac5defa2c6de3176760fd92",
+    "saas-plateform/backend/ops/identity-recovery/witness.py": "5f96fc2402ec88bcdb5f41ca7e876691b87ed5846887c21a5bdc07f527e3e90d"
+  },
+  "testsRun": 119,
+  "passed": 119,
+  "failed": 0,
+  "errors": 0,
+  "skipped": 0,
+  "cases": [
+    {
+      "id": "test_core.CoreTests.test_aead_binds_kind_task_and_plaintext",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_ancestor_swap_cannot_escape_write_or_read",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_argv_never_contains_connection_password",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_authenticated_metadata_rejects_tamper_and_wrong_key",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_catalog_includes_partial_unique_fences",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_catalog_or_acl_change_rejected_even_without_data_change",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_cli_never_prints_exception_payload",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_corrupt_archive_rejected_before_any_create_database",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_driver_uses_authenticated_witness_and_independent_sequence",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_duplicate_and_nonfinite_json",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_external_floor_requires_independent_sequence",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_fifo_is_rejected_before_it_can_block_cleanup",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_intermediate_secret_denial_survives_overwrite_and_delete",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_new_secrets_cannot_reuse_another_direction_old_secret",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_parent_symlink_is_rejected",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_private_config_accepts_new_cluster_and_exact_uint64_boundaries",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_private_config_rejects_noncanonical_or_out_of_range_cluster_id",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_private_mode_symlink_and_no_clobber",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_rearm_obeys_actual_membership_generation_trigger",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_registration_gate_accepts_only_exact_selected_binding_and_generated_floor",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_registration_gate_rejects_extra_rows_and_client_ahead_of_exact_registration_floor",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_role_escalation_rejects_before_unchanged_catalog",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_start_gate_checks_registration_semantics_even_if_receipt_hash_matches_wrong_state",
+      "result": "PASS"
+    },
+    {
+      "id": "test_core.CoreTests.test_valid_config_cannot_bypass_observed_cluster_binding",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_bff_nullable_groups_cannot_be_partly_cleared",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_booleans_are_not_version_integers",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_capture_uses_one_statement_per_database_and_sorted_snapshot",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_counter_and_key_window_cannot_regress",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_delivered_job_may_attach_original_consent_event_once",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_delivery_attempt_budget_and_terminal_state_cannot_reset",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_duplicate_json_keys_rejected_without_echoing_value",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_duplicate_pk_and_uuid_v4_rejected",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_empty_has_every_family_and_is_valid",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_explicit_canonical_table_coverage_matches_current_sources",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_field_contract_preserves_critical_boundary_columns",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_format_missing_and_extra_families_are_rejected",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_highwater_covers_counters_and_key_validation_deadline",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_job_cannot_omit_its_target_or_source",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_key_material_cannot_be_rebound",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_live_catalog_type_nullability_pk_and_extra_auth_drift_rejected",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_membership_and_location_columns_match_current_ddl_completely",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_nonnull_position_and_coordinates_are_hashed_before_witness",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_old_bff_logout_operation_cannot_change",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_row_and_text_limits_reject_without_truncating",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_secret_projection_covers_phc_json_and_callback_material",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_source_tombstone_cannot_be_deleted_or_changed",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_timestamp_requires_actual_date_and_zone",
+      "result": "PASS"
+    },
+    {
+      "id": "test_inventory.InventoryTests.test_unknown_and_missing_columns_are_rejected",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_baseline_requires_true_sequence_one_and_probe_independent_floor",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_change_exact_never_overwrites_unexpected_existing_bytes",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_cli_failure_never_prints_raw_exception_or_secret",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_concurrent_change_is_preserved_with_private_before_image",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_finally_restores_on_loader_exception_and_leaves_no_journal",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_missing_file_and_extra_file_mutations_restore_exact_original_set",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_nine_real_file_and_cli_loaders_reject_and_restore_exact_bytes",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_preexisting_corruption_does_not_count_as_a_successful_probe",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_readonly_pg_preflight_checks_zero_connections_and_absent_targets",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_tampered_baseline_rejects_before_mutation",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_tool_timeout_restores_bytes_checks_pg_again_and_reports_completed_cases",
+      "result": "PASS"
+    },
+    {
+      "id": "test_negative_probe.ProbeTests.test_unstructured_tool_failure_is_not_a_successful_negative",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_a_new_security_source_without_exact_replay_order_blocks",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_account_floor_precedes_disable_and_survives_status_trigger",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_canonical_all_old_carriers_are_explicitly_closed",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_changed_client_policy_is_disabled_and_never_rearmed_implicitly",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_changed_disabled_stale_or_ineligible_registration_bindings_stay_quarantined",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_changed_target_is_denied_despite_database_allowing_reactivation",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_client_without_checkpoint_credential_still_uses_deleted_history_id",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_credential_history_is_typed_does_not_rearm_unknown_and_never_lowers",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_credential_version_floor_includes_new_postcheckpoint_versions",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_deleted_browser_consent_client_and_credential_keep_external_floors",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_deleted_distinct_credential_id_keeps_full_history_client_floor",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_delivery_budget_and_terminal_tuple_cannot_regress",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_deny_only_set_intersection_does_not_insert_new_permissions",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_employee_registration_without_consumer_still_requires_explicit_client_selection",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_existing_immutable_receipt_cannot_be_updated",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_external_highwater_is_typed_and_cannot_exhaust_or_inject",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_external_key_window_and_deleted_job_attempt_budget_are_not_reset",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_missing_original_receipt_source_cannot_be_manufactured",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_new_consent_receipt_is_imported_before_old_carriers_are_revoked",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_no_safe_active_key_or_changed_public_material_is_closed",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_post_backup_key_revocation_and_window_are_preserved",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_post_checkpoint_backchannel_sources_and_jtis_are_inserted_without_fk",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_raw_receipt_must_match_authenticated_projection",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_rearm_allowlist_is_checked_against_eligible_ids",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_registration_cannot_rebind_behind_authenticated_application_highwater",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_registration_verification_pins_full_tuple_exact_client_floor_and_no_extra_rows",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_registrations_start_disabled_and_only_exact_selected_client_consumer_can_advance",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_retired_account_is_never_eligible",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_same_source_different_subject_refuses_merge",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_service_rotation_eligibility_uses_public_policy_and_disables_old_secret",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_sql_strings_are_escaped_without_shell_or_dollar_quoting",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_three_snapshot_deleted_user_and_membership_use_external_history",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_unknown_refresh_and_browser_generation_do_not_roll_back",
+      "result": "PASS"
+    },
+    {
+      "id": "test_reconcile.ReconcileTests.test_verification_checks_floor_old_sources_and_terminal_delivery",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_authenticated_history_retains_intermediate_secret_projection_after_delete",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_authenticated_old_record_replay_and_old_current_reject",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_bounded_storage_refuses_growth_without_new_record",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_chain_roundtrip_permissions_and_compare_exchange",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_current_and_record_modification_reject_without_payload_echo",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_highwater_regression_rejects_before_committed_record",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_history_never_returns_a_partially_verified_or_incomplete_chain",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_history_rejects_complete_directory_rollback_with_external_floor",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_missing_record_or_orphan_is_not_automatically_healed",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_signed_invalid_chain_transition_is_rechecked_on_full_load",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_symlink_hardlink_and_public_modes_fail_closed",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_symlinked_ancestor_and_concurrent_writer_fail_closed",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.FileTests.test_whole_directory_rollback_is_caught_by_independent_floor",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_candidate_external_minimum_sequence_is_required",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_canonical_v2_roundtrip_binds_whole_inventory",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_checkpoint_cluster_issuer_and_task_are_bound",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_duplicate_json_and_extra_missing_safety_family_reject",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_encoder_supports_typed_business_text_and_signed_sort_positions",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_epoch_and_capture_time_do_not_regress",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_floor_of_deleted_objects_is_retained",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_real_key_window_and_emergency_revocation_cannot_roll_back",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_real_typed_rp_source_and_replay_facts_cannot_be_lost_or_rebound",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_v1_format_is_not_a_fallback",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_versions_boolean_values_bad_keys_and_plain_error_text_reject",
+      "result": "PASS"
+    },
+    {
+      "id": "test_witness.MemoryTests.test_wrong_key_or_changed_payload_fails_authentication",
+      "result": "PASS"
+    }
+  ],
+  "resourcePreflight": {
+    "dbAndDockerCallsitesInspected": true,
+    "realPostgresCommands": "mocked by component tests",
+    "realChildCommands": "Python status/guard CLIs only",
+    "containersCreated": 0,
+    "containersReused": 0,
+    "liveDatabaseConnections": 0
+  },
+  "cleanup": {
+    "uniqueTemporaryDirectoriesCreated": 51,
+    "allTemporaryDirectoriesRemoved": true,
+    "remainingPaths": [],
+    "bytecodeDisabled": true,
+    "inputFilesUnchanged": true,
+    "windowsVdiskCompactionClaimed": false
+  },
+  "limitations": [
+    "PostgreSQL preflight and SQL execution mocked; no current database restore evidence.",
+    "No application processes, TLS/browser, key lifecycle, RPO/RTO or release facts established."
+  ],
+  "reproducibleCommand": [
+    "PYTHONDONTWRITEBYTECODE=1",
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-plateform/backend/ops/identity-recovery",
+    "-p",
+    "test_*.py",
+    "-v"
+  ],
+  "executedCommand": [
+    "wsl.exe",
+    "-d",
+    "Ubuntu",
+    "--",
+    "python3",
+    "-B",
+    "-"
+  ],
+  "executedRunnerDescription": "Inline Python runner sets PYTHONDONTWRITEBYTECODE=1 and sys.dont_write_bytecode, calls unittest.defaultTestLoader.discover(snapshot recovery directory, pattern=test_*.py), then unittest.TextTestRunner with structured TextTestResult and tempfile.mkdtemp path inventory. No test functions or recovery code patched."
+}

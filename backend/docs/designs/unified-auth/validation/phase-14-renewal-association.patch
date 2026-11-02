@@ -1,0 +1,116 @@
+--- a/backend/src/customer_portal/store.rs
++++ b/backend/src/customer_portal/store.rs
+@@ -341,10 +341,74 @@
+     .await?;
+     let managed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM context_selection_registrations WHERE client_id=$1 AND enabled)").bind(source.client_id).fetch_one(&mut *tx).await?;
+     if managed {
+-        let association:Option<(Uuid,i64)>=sqlx::query_as("SELECT bff_session_id,bff_context_version FROM customer_portal_contexts WHERE user_id=$1 AND oidc_client_id=$2 AND oidc_grant_id=$3 AND membership_id=$4 AND identity_version=$5 AND revoked_at IS NULL AND bff_session_id IS NOT NULL AND bff_context_version IS NOT NULL ORDER BY created_at DESC LIMIT 1")
+-            .bind(source.user_id).bind(source.client_id).bind(source.grant_id).bind(membership).bind(version).fetch_optional(&mut *tx).await?;
+-        let association =
+-            association.ok_or_else(|| AppError::forbidden("客户身份需先由认证中心确认"))?;
++        // The prior capability is revoked before an access-token rotation. It
++        // remains provenance for its one committed selection, never a live
++        // bearer and never a source of newly reconstructed membership.
++        let associations:Vec<(Uuid,i64,Uuid,String,String)>=sqlx::query_as(
++            "SELECT c.bff_session_id,c.bff_context_version,c.id,s.selection::text,s.result::text \
++             FROM context_selections s JOIN customer_portal_contexts c ON s.result->>'kind'='CUSTOMER' \
++               AND s.result->>'contextId'=c.id::text \
++             WHERE s.consumed_at IS NOT NULL AND c.user_id=$1 AND c.oidc_client_id=$2 \
++               AND c.oidc_grant_id=$3 AND c.membership_id=$4 AND c.identity_version=$5 \
++               AND c.issuer=$6 AND c.global_session_id=$7 AND c.account_version=$8 \
++               AND c.oidc_client_policy_version=$9 AND c.auth_time=$10 \
++               AND c.profile_client_ref=$11 AND c.profile_client_policy_version=$12 \
++               AND c.application_id=$13 AND c.application_policy_version=$14 \
++               AND c.organization_id=$15 AND c.tenant_id=$16 AND c.member_type='CUSTOMER' \
++               AND c.bff_session_id IS NOT NULL AND c.bff_context_version IS NOT NULL")
++            .bind(source.user_id).bind(source.client_id).bind(source.grant_id).bind(membership).bind(version)
++            .bind(&source.issuer).bind(source.global_session_id).bind(source.account_version)
++            .bind(source.client_policy_version).bind(source.auth_time).bind(registration.id)
++            .bind(registration.client_policy_version).bind(registration.application_id)
++            .bind(registration.application_policy_version).bind(organization).bind(result.2.tenant_id).fetch_all(&mut *tx).await?;
++        if associations.len() != 1 {
++            return Err(AppError::forbidden("客户身份缺少唯一的原认证中心确认"));
++        }
++        let association = associations
++            .into_iter()
++            .next()
++            .ok_or(AppError::Unavailable)?;
++        let selected: saas_platform_backend::context_selection::Selection =
++            serde_json::from_str(&association.3).map_err(|_| AppError::Unavailable)?;
++        let committed: saas_platform_backend::context_selection_store::ContextResult =
++            serde_json::from_str(&association.4).map_err(|_| AppError::Unavailable)?;
++        let original = &selected.binding.source;
++        let member = &selected.member;
++        use saas_platform_backend::context_selection::MemberType;
++        if original.issuer != source.issuer
++            || original.user_id.uuid() != source.user_id
++            || original.global_session_id.uuid() != source.global_session_id
++            || original.account_version.value() != source.account_version
++            || original.auth_time.timestamp() != source.auth_time
++            || selected.binding.registration.client_id.uuid() != source.client_id
++            || selected.binding.registration.client_policy_version.value()
++                != source.client_policy_version
++            || selected.binding.registration.member_type != MemberType::Customer
++            || !selected
++                .binding
++                .registration
++                .application
++                .as_ref()
++                .is_some_and(|application| {
++                    application.id.uuid() == registration.application_id
++                        && application.policy_version.value()
++                            == registration.application_policy_version
++                })
++            || member.user_id.uuid() != source.user_id
++            || member.membership_id.uuid() != membership
++            || member.organization_id.uuid() != organization
++            || member.tenant_id.uuid() != result.2.tenant_id
++            || member.identity_version.value() != version
++            || member.member_type != MemberType::Customer
++            || !matches!(committed,saas_platform_backend::context_selection_store::ContextResult::Customer{context_id,version} if context_id.uuid()==association.2 && version.value()==association.1)
++        {
++            return Err(AppError::forbidden("客户续期不能替换原确认的来源或成员"));
++        }
++        let switched:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM context_selections WHERE consumed_at IS NOT NULL AND result->>'kind'='CUSTOMER' AND selection#>>'{binding,intent,kind}'='SWITCH' AND selection#>>'{binding,intent,sessionId}'=$1 AND selection#>>'{binding,intent,expectedVersion}'=$2 AND (result->>'version')::bigint>$3)")
++            .bind(association.0.to_string()).bind(association.1.to_string()).bind(association.1).fetch_one(&mut *tx).await?;
++        if switched {
++            return Err(AppError::forbidden("原客户上下文已提交切换，不能再次续期"));
++        }
+         sqlx::query("UPDATE customer_portal_contexts SET bff_session_id=$2,bff_context_version=$3 WHERE id=$1").bind(result.1.id).bind(association.0).bind(association.1).execute(&mut *tx).await?;
+     }
+     tx.commit().await.map_err(|_| AppError::Unavailable)?;
+--- a/backend/src/context_selection_store.rs
++++ b/backend/src/context_selection_store.rs
+@@ -191,7 +191,7 @@
+     lock_issue_capacity(tx).await?;
+     // Keep committed results through their original recovery deadline. Never
+     // delete live consumed records merely to make capacity for a new operation.
+-    sqlx::query("DELETE FROM context_selections WHERE transaction_id IN (SELECT transaction_id FROM context_selections WHERE expires_at<=clock_timestamp() ORDER BY expires_at LIMIT 256)")
++    sqlx::query("DELETE FROM context_selections WHERE transaction_id IN (SELECT transaction_id FROM context_selections WHERE consumed_at IS NULL AND expires_at<=clock_timestamp() ORDER BY expires_at LIMIT 256)")
+         .execute(&mut **tx).await?;
+     if let Some(existing) = recover_issued(
+         tx,
+--- a/backend/src/customer_portal_tests/selection.rs
++++ b/backend/src/customer_portal_tests/selection.rs
+@@ -196,8 +196,13 @@
+         let mut wrong=body.clone();wrong["bffSessionId"]=json!(Uuid::now_v7());
+         expect(&call(&app,"result",&auth,wrong).await?,StatusCode::FORBIDDEN,"result for another BFF session")?;
+         expect(&call(&app,"result",&f.basic(),body.clone()).await?,StatusCode::FORBIDDEN,"profile credentials cannot consume selection")?;
++        expect(&f.call("revoke",json!({"oidcAccessToken":f.access,"customerContext":token})).await?,StatusCode::OK,"old capability is revoked before access-token rotation")?;
+         let renewed=f.select().await?;
+         expect(&f.profile(&renewed).await?,StatusCode::OK,"renewal of the selected identity remains available")?;
++        expect(&f.profile(token).await?,StatusCode::UNAUTHORIZED,"renewal never revives old capability")?;
++        let associated:bool=sqlx::query_scalar("SELECT old.revoked_at IS NOT NULL AND renewed.revoked_at IS NULL AND old.id<>renewed.id AND old.bff_session_id=renewed.bff_session_id AND old.bff_context_version=renewed.bff_context_version AND old.oidc_grant_id=renewed.oidc_grant_id AND old.global_session_id=renewed.global_session_id AND old.membership_id=renewed.membership_id AND old.identity_version=renewed.identity_version AND (SELECT count(*)=1 FROM context_selections WHERE consumed_at IS NOT NULL) FROM customer_portal_contexts old JOIN customer_portal_contexts renewed ON renewed.token_hash=$2 WHERE old.token_hash=$1")
++            .bind(hash::sha256_hex(token)).bind(hash::sha256_hex(&renewed)).fetch_one(&db.pool).await?;
++        ensure!(associated,"renewal changed original selection/BFF/source or revived revoked capability");
+         let old_session:Uuid=serde_json::from_value(body["bffSessionId"].clone())?;
+         let access="d".repeat(64);let (sid,grant)=source(&db.pool,f.user,f.rp,&access).await?;
+         let mut switched=issue(&f,&sources,service,Uuid::now_v7(),(&access,grant,sid),Intent::Switch{session_id:id(old_session),expected_version:ver(1)}).await?;
+@@ -206,6 +211,7 @@
+         ensure!(new.status==StatusCode::OK,"customer switch failed: {} {}",new.status,new.body);
+         expect(&f.profile(token).await?,StatusCode::UNAUTHORIZED,"old customer context was revoked")?;
+         expect(&f.profile(&renewed).await?,StatusCode::UNAUTHORIZED,"all old renewed contexts were revoked")?;
++        expect(&f.call("context",json!({"oidcAccessToken":f.access,"membershipId":f.customer,"organizationId":f.org,"expectedIdentityVersion":"5"})).await?,StatusCode::FORBIDDEN,"committed switch permanently fences old BFF renewal even while old grant is live")?;
+         let recovered=call(&app,"result",&auth,switched.clone()).await?;
+         ensure!(recovered.status==StatusCode::OK && recovered.body==new.body,"switch recovery changed the committed result");
+         sqlx::query("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1 WHERE id=$1").bind(f.customer).execute(&db.pool).await?;

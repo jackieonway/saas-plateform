@@ -1,4 +1,4 @@
-/** Actual ApplicationsPage/ClientsPage, production main/session gate and QueryClient.
+/** Actual ApplicationsPage and application access policy, production main/session gate and QueryClient.
  * HTTP authority is controlled; this does not establish backend/database behavior.
  * ADMISSION_POLICY_BROWSER_REPORT_DIR must be an explicit absolute output folder.
  * Run only from the root browser gate; the authoring task does not launch it.
@@ -32,14 +32,6 @@ const system = { id: ids.system, code: 'system', name: '系统管理', icon: 'Se
 const application = { id: ids.app, code: 'policy-demo', name: '准入验收应用', icon: 'Contact', basePath: '/micro/policy-demo', status: 'ENABLED',
   description: '独立应用身份准入', menuCount: 1, entryType: 'HTML', runtimeMode: 'TRUSTED', entryUrl: '/fixture-app/index.html', sortOrder: 1,
   allowedMemberTypes: ['EMPLOYEE'], accessPolicyVersion: 5 }
-const client = (key, name, type, mode = 'USER') => ({ id: ids[key], clientId: key === 'console' ? 'platform-console-legacy' : `policy-${key}`,
-  clientName: name, clientType: type, subjectMode: mode, status: 'ENABLED', requirePkce: false,
-  allowedMemberTypes: mode === 'MACHINE' ? [] : ['EMPLOYEE'], accessPolicyVersion: key === 'public' ? 3 : 1,
-  grantTypes: mode === 'MACHINE' ? ['client_credentials'] : ['authorization_code'], scopes: ['profile'],
-  redirectUris: key === 'console' || mode === 'MACHINE' ? [] : ['https://fixture.example.test/callback'],
-  applicationId: null, applicationName: null, accessTokenValidity: 7200, refreshTokenValidity: 604800, description: '' })
-const initialClients = () => [client('public', '公开人员入口', 'PUBLIC'), client('confidential', '服务端人员入口', 'CONFIDENTIAL'),
-  client('machine', '自动同步服务', 'CONFIDENTIAL', 'MACHINE'), client('console', '控制台固定来源', 'PUBLIC')]
 const profile = apps => profileWithIdentity({
   user: { id: ids.actor, username: 'policy-reviewer', realName: '准入验收管理员', email: '', phone: '', avatar: '', gender: 'UNKNOWN', isSuperAdmin: false },
   tenant: { id: ids.tenant, name: '平台验收租户', code: 'policy-platform', isPlatform: true }, platformContext: true,
@@ -75,13 +67,13 @@ async function fixture(options = {}) {
   const context = await browser.newContext({ viewport: options.mobile ? { width: 390, height: 844 } : { width: 1440, height: 1080 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   page.setDefaultTimeout(12_000)
-  const state = { apps: structuredClone([system, application]), clients: initialClients(), requests: [], policyResponses: [], writes: [], commits: [], errors: [], unexpected: [],
+  const state = { apps: structuredClone([system, application]), requests: [], policyResponses: [], writes: [], commits: [], errors: [], unexpected: [],
     profileReads: 0, conflictIssued: false, profileGate: deferred(), pendingGate: deferred(), saved: false }
   page.on('pageerror', error => state.errors.push(error.message))
   await installSession(context, token, proof)
   await context.addInitScript(() => localStorage.setItem('platform-theme', 'light'))
-  const routePath = options.clients ? '/system/oauth/clients' : '/system/applications'
-  const sourcePage = options.clients ? '/src/pages/system/oauth/ClientsPage.tsx' : '/src/pages/system/applications/ApplicationsPage.tsx'
+  const routePath = '/system/applications'
+  const sourcePage = '/src/pages/system/applications/ApplicationsPage.tsx'
   await context.route(url => url.origin === origin && url.pathname === '/src/main.tsx', async route => {
     const response = await route.fetch()
     let body = await response.text()
@@ -158,10 +150,9 @@ async function fixture(options = {}) {
       ])
       if (url.pathname === '/api/admission-fixture/pending') { await state.pendingGate.promise; return fulfill(route, { oldProjection: true }) }
       if (url.pathname === '/api/applications' && method === 'GET') return fulfill(route, state.apps)
-      if (url.pathname === '/api/oauth/clients' && method === 'GET') return fulfill(route, state.clients)
-      const match = /^\/api\/(applications|oauth\/clients)\/([^/]+)\/access-policy$/.exec(url.pathname)
+      const match = /^\/api\/(applications)\/([^/]+)\/access-policy$/.exec(url.pathname)
       if (match) {
-        const owner = (match[1] === 'applications' ? state.apps : state.clients).find(owner => owner.id === match[2])
+        const owner = state.apps.find(owner => owner.id === match[2])
         assert(owner, 'Policy must bind an exact known owner')
         const current = () => ({ id: owner.id, status: owner.status, allowedMemberTypes: owner.allowedMemberTypes,
           accessPolicyVersion: owner.accessPolicyVersion, ...(owner.subjectMode ? { subjectMode: owner.subjectMode } : {}) })
@@ -179,8 +170,6 @@ async function fixture(options = {}) {
         assert(Number.isSafeInteger(item.body.accessPolicyVersion) && item.body.accessPolicyVersion > 0)
         assert.equal(typeof item.body.reason, 'string'); assert(item.body.reason.trim())
         assert(item.body.allowedMemberTypes.every(type => ['EMPLOYEE', 'CUSTOMER'].includes(type)))
-        if (owner.clientId === 'platform-console-legacy') return refuse(route, 403, '内置来源固定为员工入口')
-        if (owner.subjectMode === 'MACHINE' && item.body.allowedMemberTypes.length) return refuse(route, 400, '机器用途不能允许人员成员')
         if (options.conflictOnce && owner.id === ids.public && !state.conflictIssued) {
           state.conflictIssued = true; owner.accessPolicyVersion++; owner.allowedMemberTypes = ['EMPLOYEE', 'CUSTOMER']
           return refuse(route, 409, '策略已被其他操作更新')
@@ -283,74 +272,8 @@ try {
     for (const key of refreshed.queryKeys.filter(key => ['profile', 'auth-menus', 'permissions'].includes(key[0]))) assert.equal(key.at(-1), refreshed.epoch)
   })
 
-  await scenario('client 409 reloads current set and requires a fresh reason and confirmation', { clients: true, conflictOnce: true }, async f => {
-    const before = await f.page.evaluate(() => window.__admissionPolicyFixture.snapshot())
-    const dialog = await openClient(f, '公开人员入口')
-    await dialog.getByRole('checkbox', { name: '允许客户身份', exact: true }).check()
-    await reason(dialog).fill('第一次已审阅的客户入口调整'); await confirmation(dialog).check(); await save(dialog).click()
-    await dialog.getByRole('alert').filter({ hasText: '请基于最新策略重新确认' }).waitFor()
-    await dialog.getByText('v4', { exact: true }).waitFor()
-    assert.equal(await reason(dialog).inputValue(), ''); assert.equal(await confirmation(dialog).isChecked(), false)
-    assert(await save(dialog).isDisabled()); assert.equal(f.state.writes.length, 1); assert.equal(f.state.commits.length, 0)
-    assert.equal(f.state.writes[0].body.accessPolicyVersion, 3)
-    assert.equal((await f.page.evaluate(() => window.__admissionPolicyFixture.snapshot())).epoch, before.epoch)
-    await screenshot(f, 'desktop-client-policy-conflict.png')
-    await dialog.getByRole('checkbox', { name: '允许员工身份', exact: true }).uncheck()
-    await reason(dialog).fill('重新核验 v4 后确认客户专用入口'); await confirmation(dialog).check(); await save(dialog).click()
-    await waitState(() => f.state.commits.length === 1, 'Only explicit resubmission commits after conflict')
-    assert.equal(f.state.writes.length, 2); assert.equal(f.state.writes[1].body.accessPolicyVersion, 4)
-    assert.equal(f.state.writes[1].body.reason, '重新核验 v4 后确认客户专用入口')
-  })
-
-  await scenario('USER member defaults remain independent of PUBLIC CONFIDENTIAL and MACHINE purpose', { clients: true }, async f => {
-    for (const [name, clientType] of [['公开人员入口', '公开'], ['服务端人员入口', '机密']]) {
-      const row = f.page.getByRole('row').filter({ has: f.page.getByText(name, { exact: true }) })
-      await row.getByText(clientType, { exact: true }).waitFor()
-      const dialog = await openClient(f, name)
-      await dialog.getByText('客户端用途：人员登录', { exact: true }).waitFor()
-      assert(await dialog.getByRole('checkbox', { name: '允许员工身份', exact: true }).isChecked())
-      await dialog.getByRole('button', { name: '取消', exact: true }).click()
-    }
-    let dialog = await openClient(f, '自动同步服务')
-    await dialog.getByText('机器凭据 · 无人员身份准入', { exact: true }).waitFor()
-    assert.equal(await dialog.getByRole('checkbox').count(), 0); assert.equal(await save(dialog).count(), 0)
-    await screenshot(f, 'desktop-machine-policy.png'); await dialog.getByRole('button', { name: '关闭', exact: true }).click()
-    await f.page.getByRole('button', { name: '新建客户端', exact: true }).click(); dialog = f.page.getByRole('dialog')
-    await dialog.getByRole('heading', { name: '新建 OAuth 客户端', exact: true }).waitFor()
-    assert(await dialog.getByRole('checkbox', { name: '员工', exact: true }).isChecked())
-    assert.equal(await dialog.getByRole('checkbox', { name: '客户', exact: true }).isChecked(), false)
-    await screenshot(f, 'desktop-new-user-default.png')
-    await dialog.getByRole('combobox', { name: '主体用途', exact: true }).click()
-    await f.page.getByRole('option', { name: '机器凭据 · MACHINE', exact: true }).click()
-    assert.equal(await dialog.getByRole('checkbox', { name: '员工', exact: true }).count(), 0)
-    assert(await dialog.getByRole('combobox', { name: /^客户端类型/ }).isDisabled())
-    assert.match(await dialog.getByRole('combobox', { name: /^客户端类型/ }).innerText(), /CONFIDENTIAL/)
-    await dialog.getByRole('button', { name: '取消', exact: true }).click()
-    assert.equal(f.state.writes.length, 0)
-  })
-
-  await scenario('fixed console source remains employee only and never offers customer save', { clients: true }, async f => {
-    const dialog = await openClient(f, '控制台固定来源')
-    await dialog.getByText('内置控制台来源固定为员工入口。请为客户入口单独登记客户端。', { exact: true }).waitFor()
-    assert(await dialog.getByRole('checkbox', { name: '允许员工身份', exact: true }).isChecked())
-    assert(await dialog.getByRole('checkbox', { name: '允许客户身份', exact: true }).isDisabled())
-    assert.equal(await save(dialog).count(), 0); assert.equal(f.state.writes.length, 0)
-  })
-
-  await scenario('mobile policy dialogs fit viewport and preserve explicit impact acknowledgement', { clients: true, mobile: true }, async f => {
-    const dialog = await openClient(f, '服务端人员入口')
-    await dialog.getByRole('checkbox', { name: '允许客户身份', exact: true }).check()
-    await reason(dialog).fill('移动端核验后的客户入口准入调整')
-    assert(await save(dialog).isDisabled())
-    const bounds = await dialog.boundingBox(); assert(bounds.x >= 0 && bounds.x + bounds.width <= 391)
-    assert(await f.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Table overflow remains in its own container')
-    await screenshot(f, 'mobile-client-admission.png')
-    await confirmation(dialog).check(); assert.equal(await save(dialog).isDisabled(), false)
-    assert.equal(f.state.writes.length, 0)
-  })
-
   await fs.writeFile(path.join(reportDirectory, 'admission-policy-browser.json'), JSON.stringify({
-    status: 'PASS', scope: 'Actual React/Vite management pages, production session gate and cache with controlled HTTP authority; no database or live backend claim',
+    status: 'PASS', scope: 'Actual ApplicationsPage, production session gate and cache with controlled HTTP authority; no database or live backend claim',
     browser: await browser.version(), scenarios, screenshots,
   }, null, 2) + '\n')
   console.log(`Admission policy browser passed (${scenarios.length} scenarios). Report: ${reportDirectory}`)

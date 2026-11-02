@@ -1,6 +1,7 @@
 //! Platform OIDC relying party. Browser cookies and upstream tokens never
 //! replace the exact platform membership proof required by business APIs.
 
+pub(crate) mod backchannel;
 mod context;
 mod crypto;
 mod protocol;

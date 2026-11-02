@@ -72,3 +72,7 @@ server.log
 /backend/.business-checkouts/
 /frontend/deploy/micro-apps/
 /frontend/tests/browser/.browsers/
+
+# Python runtime caches
+__pycache__/
+*.py[cod]

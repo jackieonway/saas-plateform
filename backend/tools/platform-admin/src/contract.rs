@@ -150,12 +150,6 @@ impl KnownApp {
             Self::Stores => "/micro/stores",
         }
     }
-    pub(crate) fn client_name(self) -> &'static str {
-        match self {
-            Self::WorkOrders => "work-orders-client",
-            Self::Stores => "stores-client",
-        }
-    }
     pub(crate) fn entry_url(self) -> &'static str {
         match self {
             Self::WorkOrders => "http://127.0.0.1:3013/index.html",

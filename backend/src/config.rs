@@ -23,8 +23,7 @@ pub struct Config {
     pub bootstrap_admin_username: Option<String>,
     pub bootstrap_admin_password: Option<String>,
     pub session_ttl_hours: i64,
-    pub access_token_ttl_seconds: i64,
-    pub refresh_token_ttl_seconds: i64,
+    pub bff_context_renewal_ttl_seconds: i64,
     pub public_app_url: String,
     pub application_environment: String,
     pub micro_gateway_origin: String,
@@ -39,15 +38,13 @@ pub struct Config {
     pub login_max_entries: usize,
     pub login_window_seconds: u64,
     pub login_source_requests: u32,
-    pub login_user_failures: u32,
     pub login_identifier_max_bytes: usize,
     pub login_verify_budget_ms: u64,
     pub micro_ca_cert_file: Option<String>,
     pub micro_ca_certificates: Vec<reqwest::Certificate>,
-    pub oauth_introspection_client_requests_per_minute: usize,
-    pub oauth_auth_failure_requests_per_minute: usize,
-    pub oauth_introspection_attempts_per_minute: usize,
-    pub oauth_auto_purge: bool,
+    pub resource_service_requests_per_minute: usize,
+    pub resource_service_auth_failures_per_minute: usize,
+    pub resource_service_attempts_per_minute: usize,
     /// Writes outside isolated test fixtures require a verified Phase 6 receipt.
     pub membership_lifecycle_enabled: bool,
     pub customer_memberships_enabled: bool,
@@ -65,22 +62,22 @@ pub struct Config {
     pub identity_service_ca_file: Option<String>,
     pub customer_authority_service_client_id: Option<String>,
     pub customer_authority_service_client_secret: Option<String>,
-    pub identity_admin_service_client_id: Option<String>,
-    pub identity_admin_service_client_secret: Option<String>,
+    pub identity_key_admin_service_client_id: Option<String>,
+    pub identity_key_admin_service_client_secret: Option<String>,
+    pub identity_projection_service_client_id: Option<String>,
+    pub identity_projection_service_client_secret: Option<String>,
+    pub identity_auth_admin_service_client_id: Option<String>,
+    pub identity_auth_admin_service_client_secret: Option<String>,
+    pub identity_review_service_client_id: Option<String>,
+    pub identity_review_service_client_secret: Option<String>,
+    pub identity_invitation_service_client_id: Option<String>,
+    pub identity_invitation_service_client_secret: Option<String>,
     pub context_source_service_client_id: Option<String>,
     pub context_source_service_client_secret: Option<String>,
+    pub resource_proof_service_client_id: Option<String>,
+    pub resource_proof_service_client_secret: Option<String>,
     pub(crate) identity_http_client: Option<reqwest::Client>,
-    pub sso_enabled: bool,
-    pub sso_origin: Option<String>,
-    pub sso_session_ttl_seconds: i64,
-    pub sso_preauth_ttl_seconds: i64,
-    pub oidc_enabled: bool,
     pub oidc_issuer: Option<String>,
-    pub(crate) oidc_keys: Option<Arc<crate::oidc::KeySet>>,
-    pub oidc_code_ttl_seconds: i64,
-    pub oidc_token_ttl_seconds: i64,
-    pub oidc_refresh_ttl_seconds: i64,
-    pub oidc_interaction_ttl_seconds: i64,
     pub bff_oidc_issuer: Option<String>,
     pub bff_oidc_client_id: Option<uuid::Uuid>,
     pub bff_oidc_client_secret: Option<String>,
@@ -349,6 +346,24 @@ impl Config {
             "BFF_ENABLED",
             "BFF_LEGACY_LOGIN_ENABLED",
             "BFF_LEGACY_HUMAN_CLIENTS",
+            "SSO_ENABLED",
+            "SSO_ORIGIN",
+            "SSO_SESSION_TTL_SECONDS",
+            "SSO_PREAUTH_TTL_SECONDS",
+            "OIDC_ENABLED",
+            "OIDC_KEYSET_PATH",
+            "OIDC_CODE_TTL_SECONDS",
+            "OIDC_TOKEN_TTL_SECONDS",
+            "OIDC_REFRESH_TTL_SECONDS",
+            "OIDC_INTERACTION_TTL_SECONDS",
+            "OAUTH_AUTO_PURGE",
+            "OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE",
+            "OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE",
+            "OAUTH_INTROSPECTION_ATTEMPTS_PER_MINUTE",
+            "IDENTITY_ADMIN_SERVICE_CLIENT_ID",
+            "IDENTITY_ADMIN_SERVICE_CLIENT_SECRET",
+            "ACCESS_TOKEN_TTL_SECONDS",
+            "REFRESH_TOKEN_TTL_SECONDS",
         ] {
             anyhow::ensure!(
                 !env.contains_key(retired),
@@ -491,10 +506,9 @@ impl Config {
             bootstrap_admin_username: optional(env, "BOOTSTRAP_ADMIN_USERNAME"),
             bootstrap_admin_password: optional(env, "BOOTSTRAP_ADMIN_PASSWORD"),
             session_ttl_hours: number(env, "SESSION_TTL_HOURS", 12, 1, 720)?,
-            access_token_ttl_seconds: number(env, "ACCESS_TOKEN_TTL_SECONDS", 7200, 1, 86400)?,
-            refresh_token_ttl_seconds: number(
+            bff_context_renewal_ttl_seconds: number(
                 env,
-                "REFRESH_TOKEN_TTL_SECONDS",
+                "BFF_CONTEXT_RENEWAL_TTL_SECONDS",
                 604800,
                 1,
                 7776000,
@@ -522,34 +536,32 @@ impl Config {
             login_max_entries: number(env, "LOGIN_MAX_ENTRIES", 4096, 3, 1000000)? as usize,
             login_window_seconds: number(env, "LOGIN_WINDOW_SECONDS", 600, 1, 86400)? as u64,
             login_source_requests: number(env, "LOGIN_SOURCE_REQUESTS", 60, 1, 100000)? as u32,
-            login_user_failures: number(env, "LOGIN_USER_FAILURES", 5, 1, 1000)? as u32,
             login_identifier_max_bytes: number(env, "LOGIN_IDENTIFIER_MAX_BYTES", 320, 1, 1024)?
                 as usize,
             login_verify_budget_ms: number(env, "LOGIN_VERIFY_BUDGET_MS", 10000, 1, 120000)? as u64,
             micro_ca_cert_file,
             micro_ca_certificates,
-            oauth_introspection_client_requests_per_minute: number(
+            resource_service_requests_per_minute: number(
                 env,
-                "OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE",
+                "RESOURCE_SERVICE_REQUESTS_PER_MINUTE",
                 600,
                 1,
                 100000,
             )? as usize,
-            oauth_auth_failure_requests_per_minute: number(
+            resource_service_auth_failures_per_minute: number(
                 env,
-                "OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE",
+                "RESOURCE_SERVICE_AUTH_FAILURES_PER_MINUTE",
                 30,
                 1,
                 10000,
             )? as usize,
-            oauth_introspection_attempts_per_minute: number(
+            resource_service_attempts_per_minute: number(
                 env,
-                "OAUTH_INTROSPECTION_ATTEMPTS_PER_MINUTE",
+                "RESOURCE_SERVICE_ATTEMPTS_PER_MINUTE",
                 3000,
                 1,
                 1000000,
             )? as usize,
-            oauth_auto_purge: boolean(env, "OAUTH_AUTO_PURGE", false)?,
             membership_lifecycle_enabled: boolean(env, "MEMBERSHIP_LIFECYCLE_ENABLED", false)?,
             customer_memberships_enabled: boolean(env, "CUSTOMER_MEMBERSHIPS_ENABLED", false)?,
             dual_memberships_enabled: boolean(env, "DUAL_MEMBERSHIPS_ENABLED", false)?,
@@ -572,11 +584,50 @@ impl Config {
                 env,
                 "CUSTOMER_AUTHORITY_SERVICE_CLIENT_SECRET",
             ),
-            identity_admin_service_client_id: optional_v7(env, "IDENTITY_ADMIN_SERVICE_CLIENT_ID")?
-                .map(|id| id.to_string()),
-            identity_admin_service_client_secret: optional(
+            identity_key_admin_service_client_id: optional_v7(
                 env,
-                "IDENTITY_ADMIN_SERVICE_CLIENT_SECRET",
+                "IDENTITY_KEY_ADMIN_SERVICE_CLIENT_ID",
+            )?
+            .map(|id| id.to_string()),
+            identity_key_admin_service_client_secret: optional(
+                env,
+                "IDENTITY_KEY_ADMIN_SERVICE_CLIENT_SECRET",
+            ),
+            identity_projection_service_client_id: optional_v7(
+                env,
+                "IDENTITY_PROJECTION_SERVICE_CLIENT_ID",
+            )?
+            .map(|id| id.to_string()),
+            identity_projection_service_client_secret: optional(
+                env,
+                "IDENTITY_PROJECTION_SERVICE_CLIENT_SECRET",
+            ),
+            identity_auth_admin_service_client_id: optional_v7(
+                env,
+                "IDENTITY_AUTH_ADMIN_SERVICE_CLIENT_ID",
+            )?
+            .map(|id| id.to_string()),
+            identity_auth_admin_service_client_secret: optional(
+                env,
+                "IDENTITY_AUTH_ADMIN_SERVICE_CLIENT_SECRET",
+            ),
+            identity_review_service_client_id: optional_v7(
+                env,
+                "IDENTITY_REVIEW_SERVICE_CLIENT_ID",
+            )?
+            .map(|id| id.to_string()),
+            identity_review_service_client_secret: optional(
+                env,
+                "IDENTITY_REVIEW_SERVICE_CLIENT_SECRET",
+            ),
+            identity_invitation_service_client_id: optional_v7(
+                env,
+                "IDENTITY_INVITATION_SERVICE_CLIENT_ID",
+            )?
+            .map(|id| id.to_string()),
+            identity_invitation_service_client_secret: optional(
+                env,
+                "IDENTITY_INVITATION_SERVICE_CLIENT_SECRET",
             ),
             identity_http_client: identity_http_client(env)?,
             context_source_service_client_id: optional_v7(env, "CONTEXT_SOURCE_SERVICE_CLIENT_ID")?
@@ -585,39 +636,13 @@ impl Config {
                 env,
                 "CONTEXT_SOURCE_SERVICE_CLIENT_SECRET",
             ),
-            sso_enabled: boolean(env, "SSO_ENABLED", false)?,
-            sso_origin: optional(env, "SSO_ORIGIN")
-                .map(|raw| {
-                    let allowed = origins(&raw, "SSO_ORIGIN", true)?;
-                    anyhow::ensure!(
-                        allowed.len() == 1 && allowed[0] == raw,
-                        "SSO_ORIGIN must be one exact HTTPS origin"
-                    );
-                    Ok::<_, anyhow::Error>(raw)
-                })
-                .transpose()?,
-            sso_session_ttl_seconds: number(env, "SSO_SESSION_TTL_SECONDS", 43200, 1, 86400)?,
-            sso_preauth_ttl_seconds: number(env, "SSO_PREAUTH_TTL_SECONDS", 300, 30, 600)?,
-            oidc_enabled: boolean(env, "OIDC_ENABLED", false)?,
-            oidc_issuer: optional(env, "OIDC_ISSUER"),
-            oidc_keys: if boolean(env, "OIDC_ENABLED", false)? {
-                Some(Arc::new(crate::oidc::KeySet::load(
-                    &optional(env, "OIDC_KEYSET_PATH")
-                        .ok_or_else(|| anyhow::anyhow!("OIDC_KEYSET_PATH_REQUIRED"))?,
-                )?))
-            } else {
-                None
-            },
-            oidc_code_ttl_seconds: number(env, "OIDC_CODE_TTL_SECONDS", 120, 1, 300)?,
-            oidc_token_ttl_seconds: number(env, "OIDC_TOKEN_TTL_SECONDS", 300, 1, 600)?,
-            oidc_refresh_ttl_seconds: number(env, "OIDC_REFRESH_TTL_SECONDS", 43200, 1, 86400)?,
-            oidc_interaction_ttl_seconds: number(
+            resource_proof_service_client_id: optional_v7(env, "RESOURCE_PROOF_SERVICE_CLIENT_ID")?
+                .map(|id| id.to_string()),
+            resource_proof_service_client_secret: optional(
                 env,
-                "OIDC_INTERACTION_TTL_SECONDS",
-                300,
-                30,
-                600,
-            )?,
+                "RESOURCE_PROOF_SERVICE_CLIENT_SECRET",
+            ),
+            oidc_issuer: optional(env, "OIDC_ISSUER"),
             bff_oidc_issuer: optional(env, "BFF_OIDC_ISSUER"),
             bff_oidc_client_id: optional_v7(env, "BFF_OIDC_CLIENT_ID")?,
             bff_oidc_client_secret: optional(env, "BFF_OIDC_CLIENT_SECRET"),
@@ -655,7 +680,7 @@ impl Config {
         );
         if config.customer_portal_port_enabled {
             anyhow::ensure!(
-                (config.oidc_enabled || config.identity_remote_enabled)
+                config.identity_remote_enabled
                     && config.customer_portal_oidc_client_id.is_some()
                     && config.customer_profile_client_ref.is_some()
                     && config.customer_profile_application_id.is_some(),
@@ -667,6 +692,64 @@ impl Config {
                 == config.context_source_service_client_secret.is_some(),
             "CONTEXT_SOURCE_SERVICE_PAIR_REQUIRED"
         );
+        anyhow::ensure!(
+            config.resource_proof_service_client_id.is_some()
+                == config.resource_proof_service_client_secret.is_some(),
+            "RESOURCE_PROOF_SERVICE_PAIR_REQUIRED"
+        );
+        if let Some(id) = &config.resource_proof_service_client_id {
+            anyhow::ensure!(
+                config.identity_remote_enabled,
+                "RESOURCE_PROOF_REQUIRES_REMOTE_IDENTITY"
+            );
+            validate_identity_secret(config.resource_proof_service_client_secret.as_deref())?;
+            for (other_id, other_secret) in [
+                (
+                    &config.identity_service_client_id,
+                    &config.identity_service_client_secret,
+                ),
+                (
+                    &config.identity_key_admin_service_client_id,
+                    &config.identity_key_admin_service_client_secret,
+                ),
+                (
+                    &config.identity_projection_service_client_id,
+                    &config.identity_projection_service_client_secret,
+                ),
+                (
+                    &config.identity_auth_admin_service_client_id,
+                    &config.identity_auth_admin_service_client_secret,
+                ),
+                (
+                    &config.customer_authority_service_client_id,
+                    &config.customer_authority_service_client_secret,
+                ),
+                (
+                    &config.context_source_service_client_id,
+                    &config.context_source_service_client_secret,
+                ),
+                (
+                    &config.identity_review_service_client_id,
+                    &config.identity_review_service_client_secret,
+                ),
+                (
+                    &config.identity_invitation_service_client_id,
+                    &config.identity_invitation_service_client_secret,
+                ),
+            ] {
+                anyhow::ensure!(
+                    other_id.as_ref() != Some(id)
+                        && other_secret.as_ref()
+                            != config.resource_proof_service_client_secret.as_ref(),
+                    "RESOURCE_PROOF_SERVICE_MUST_BE_SEPARATE"
+                );
+            }
+            anyhow::ensure!(
+                config.bff_oidc_client_secret.as_ref()
+                    != config.resource_proof_service_client_secret.as_ref(),
+                "RESOURCE_PROOF_SERVICE_MUST_BE_SEPARATE"
+            );
+        }
         if config.context_source_service_client_id.is_some() {
             anyhow::ensure!(
                 config.identity_remote_enabled,
@@ -679,8 +762,8 @@ impl Config {
                     &config.identity_service_client_secret,
                 ),
                 (
-                    &config.identity_admin_service_client_id,
-                    &config.identity_admin_service_client_secret,
+                    &config.identity_key_admin_service_client_id,
+                    &config.identity_key_admin_service_client_secret,
                 ),
                 (
                     &config.customer_authority_service_client_id,
@@ -701,10 +784,7 @@ impl Config {
         }
         if config.identity_remote_enabled {
             anyhow::ensure!(
-                !config.sso_enabled
-                    && !config.oidc_enabled
-                    && !config.auto_create_database
-                    && config.imported_database.is_none(),
+                !config.auto_create_database && config.imported_database.is_none(),
                 "IDENTITY_REMOTE_REQUIRES_SEPARATE_PROVIDER_AND_EXPLICIT_DATABASE"
             );
             let endpoint = config
@@ -716,8 +796,13 @@ impl Config {
                 allowed.len() == 1 && allowed[0] == endpoint,
                 "IDENTITY_SERVICE_URL_MUST_BE_EXACT_HTTPS_ORIGIN"
             );
+            let issuer = config
+                .oidc_issuer
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("IDENTITY_REMOTE_REQUIRES_STABLE_ISSUER"))?;
+            let configured_issuer = origins(issuer, "OIDC_ISSUER", true)?;
             anyhow::ensure!(
-                config.oidc_issuer.as_deref() == Some(endpoint),
+                configured_issuer.len() == 1 && configured_issuer[0] == issuer,
                 "IDENTITY_REMOTE_REQUIRES_STABLE_ISSUER"
             );
             anyhow::ensure!(
@@ -740,52 +825,156 @@ impl Config {
                 );
             }
             anyhow::ensure!(
-                config.identity_admin_service_client_id.is_some()
-                    == config.identity_admin_service_client_secret.is_some(),
-                "IDENTITY_ADMIN_SERVICE_PAIR_REQUIRED"
+                config.identity_key_admin_service_client_id.is_some()
+                    == config.identity_key_admin_service_client_secret.is_some(),
+                "IDENTITY_KEY_ADMIN_SERVICE_PAIR_REQUIRED"
             );
-            if config.identity_admin_service_client_id.is_some() {
-                validate_identity_secret(config.identity_admin_service_client_secret.as_deref())?;
+            if config.identity_key_admin_service_client_id.is_some() {
+                validate_identity_secret(
+                    config.identity_key_admin_service_client_secret.as_deref(),
+                )?;
                 anyhow::ensure!(
-                    config.identity_admin_service_client_id != config.identity_service_client_id
-                        && config.identity_admin_service_client_id
+                    config.identity_key_admin_service_client_id
+                        != config.identity_service_client_id
+                        && config.identity_key_admin_service_client_id
                             != config.customer_authority_service_client_id,
                     "IDENTITY_SERVICE_PURPOSES_MUST_BE_SEPARATE"
                 );
             }
+            anyhow::ensure!(
+                config.identity_projection_service_client_id.is_some()
+                    == config.identity_projection_service_client_secret.is_some(),
+                "IDENTITY_PROJECTION_SERVICE_PAIR_REQUIRED"
+            );
+            if config.identity_projection_service_client_id.is_some() {
+                validate_identity_secret(
+                    config.identity_projection_service_client_secret.as_deref(),
+                )?;
+                anyhow::ensure!(
+                    config.identity_projection_service_client_id
+                        != config.identity_service_client_id
+                        && config.identity_projection_service_client_id
+                            != config.customer_authority_service_client_id
+                        && config.identity_projection_service_client_id
+                            != config.identity_key_admin_service_client_id,
+                    "IDENTITY_SERVICE_PURPOSES_MUST_BE_SEPARATE"
+                );
+                anyhow::ensure!(
+                    config.identity_projection_service_client_secret
+                        != config.identity_service_client_secret
+                        && config.identity_projection_service_client_secret
+                            != config.customer_authority_service_client_secret
+                        && config.identity_projection_service_client_secret
+                            != config.identity_key_admin_service_client_secret,
+                    "IDENTITY_SERVICE_SECRETS_MUST_BE_SEPARATE"
+                );
+            }
+            anyhow::ensure!(
+                config.identity_auth_admin_service_client_id.is_some()
+                    == config.identity_auth_admin_service_client_secret.is_some(),
+                "IDENTITY_AUTH_ADMIN_SERVICE_PAIR_REQUIRED"
+            );
+            if config.identity_auth_admin_service_client_id.is_some() {
+                validate_identity_secret(
+                    config.identity_auth_admin_service_client_secret.as_deref(),
+                )?;
+                anyhow::ensure!(
+                    config.identity_auth_admin_service_client_id
+                        != config.identity_service_client_id
+                        && config.identity_auth_admin_service_client_id
+                            != config.customer_authority_service_client_id
+                        && config.identity_auth_admin_service_client_id
+                            != config.identity_key_admin_service_client_id
+                        && config.identity_auth_admin_service_client_id
+                            != config.identity_projection_service_client_id,
+                    "IDENTITY_SERVICE_PURPOSES_MUST_BE_SEPARATE"
+                );
+                anyhow::ensure!(
+                    config.identity_auth_admin_service_client_secret
+                        != config.identity_service_client_secret
+                        && config.identity_auth_admin_service_client_secret
+                            != config.customer_authority_service_client_secret
+                        && config.identity_auth_admin_service_client_secret
+                            != config.identity_key_admin_service_client_secret
+                        && config.identity_auth_admin_service_client_secret
+                            != config.identity_projection_service_client_secret,
+                    "IDENTITY_SERVICE_SECRETS_MUST_BE_SEPARATE"
+                );
+            }
         }
-        if config.sso_enabled {
-            let origin = config
-                .sso_origin
-                .as_deref()
-                .ok_or_else(|| anyhow::anyhow!("SSO_ORIGIN_REQUIRED"))?;
-            let identity =
-                reqwest::Url::parse(origin).map_err(|_| anyhow::anyhow!("SSO_ORIGIN_INVALID"))?;
-            let platform_origins = origins(&config.public_app_url, "PUBLIC_APP_URL", false)?;
+        for (label, id, secret) in [
+            (
+                "IDENTITY_REVIEW",
+                &config.identity_review_service_client_id,
+                &config.identity_review_service_client_secret,
+            ),
+            (
+                "IDENTITY_INVITATION",
+                &config.identity_invitation_service_client_id,
+                &config.identity_invitation_service_client_secret,
+            ),
+        ] {
             anyhow::ensure!(
-                platform_origins.len() == 1 && platform_origins[0] == config.public_app_url,
-                "PUBLIC_APP_URL must be one exact HTTP(S) origin when SSO is enabled"
+                id.is_some() == secret.is_some(),
+                "{label}_SERVICE_PAIR_REQUIRED"
             );
-            let platform = reqwest::Url::parse(&config.public_app_url)
-                .map_err(|_| anyhow::anyhow!("PUBLIC_APP_URL_INVALID"))?;
-            anyhow::ensure!(
-                identity.host_str() != platform.host_str(),
-                "SSO_ORIGIN must use a separate authentication host"
-            );
+            if id.is_some() {
+                validate_identity_secret(secret.as_deref())?;
+            }
         }
-        if config.oidc_enabled {
-            anyhow::ensure!(config.sso_enabled, "OIDC_REQUIRES_SSO");
-            let issuer = config
-                .oidc_issuer
-                .as_deref()
-                .ok_or_else(|| anyhow::anyhow!("OIDC_ISSUER_REQUIRED"))?;
-            let allowed = origins(issuer, "OIDC_ISSUER", true)?;
-            anyhow::ensure!(
-                allowed.len() == 1
-                    && allowed[0] == issuer
-                    && config.sso_origin.as_deref() == Some(issuer),
-                "OIDC_ISSUER must equal the exact HTTPS SSO_ORIGIN"
-            );
+        let management_pairs = [
+            (
+                &config.identity_service_client_id,
+                &config.identity_service_client_secret,
+            ),
+            (
+                &config.customer_authority_service_client_id,
+                &config.customer_authority_service_client_secret,
+            ),
+            (
+                &config.identity_key_admin_service_client_id,
+                &config.identity_key_admin_service_client_secret,
+            ),
+            (
+                &config.identity_projection_service_client_id,
+                &config.identity_projection_service_client_secret,
+            ),
+            (
+                &config.identity_auth_admin_service_client_id,
+                &config.identity_auth_admin_service_client_secret,
+            ),
+            (
+                &config.context_source_service_client_id,
+                &config.context_source_service_client_secret,
+            ),
+            (
+                &config.identity_review_service_client_id,
+                &config.identity_review_service_client_secret,
+            ),
+            (
+                &config.identity_invitation_service_client_id,
+                &config.identity_invitation_service_client_secret,
+            ),
+            (
+                &config.resource_proof_service_client_id,
+                &config.resource_proof_service_client_secret,
+            ),
+        ];
+        for (index, (id, secret)) in management_pairs.iter().enumerate() {
+            for (other_id, other_secret) in &management_pairs[index + 1..] {
+                let duplicate_id = id
+                    .as_ref()
+                    .zip(other_id.as_ref())
+                    .is_some_and(|(left, right)| left == right);
+                let duplicate_secret = secret
+                    .as_ref()
+                    .zip(other_secret.as_ref())
+                    .is_some_and(|(left, right)| left == right);
+                anyhow::ensure!(
+                    !duplicate_id && !duplicate_secret,
+                    "IDENTITY_MANAGEMENT_PURPOSES_AND_SECRETS_MUST_BE_SEPARATE"
+                );
+            }
         }
         if config.bff_oidc_issuer.is_some() {
             let platform = origins(&config.public_app_url, "PUBLIC_APP_URL", true)?;
@@ -955,13 +1144,21 @@ impl Config {
         );
         anyhow::ensure!(self.bff_token_keys.is_some(), "BFF_TOKEN_KEY_FILE_REQUIRED");
         anyhow::ensure!(self.bff_http_client.is_some(), "BFF_HTTPS_CLIENT_REQUIRED");
+        anyhow::ensure!(
+            self.identity_remote_enabled
+                && self.identity_service_url.is_some()
+                && self.identity_http_client.is_some(),
+            "BFF_PRIVATE_IDENTITY_REQUIRED"
+        );
+        anyhow::ensure!(
+            self.context_source_service_client_id.is_some()
+                && self.context_source_service_client_secret.is_some(),
+            "BFF_ACCOUNT_PROOF_SERVICE_REQUIRED"
+        );
         Ok(())
     }
     pub fn is_production(&self) -> bool {
         production_mode(&self.app_env, &self.application_environment)
-    }
-    pub fn public_base(&self) -> String {
-        self.public_app_url.trim_end_matches('/').to_owned()
     }
 }
 
@@ -991,6 +1188,24 @@ mod tests {
             "BFF_ENABLED",
             "BFF_LEGACY_LOGIN_ENABLED",
             "BFF_LEGACY_HUMAN_CLIENTS",
+            "SSO_ENABLED",
+            "SSO_ORIGIN",
+            "SSO_SESSION_TTL_SECONDS",
+            "SSO_PREAUTH_TTL_SECONDS",
+            "OIDC_ENABLED",
+            "OIDC_KEYSET_PATH",
+            "OIDC_CODE_TTL_SECONDS",
+            "OIDC_TOKEN_TTL_SECONDS",
+            "OIDC_REFRESH_TTL_SECONDS",
+            "OIDC_INTERACTION_TTL_SECONDS",
+            "OAUTH_AUTO_PURGE",
+            "OAUTH_INTROSPECTION_CLIENT_REQUESTS_PER_MINUTE",
+            "OAUTH_AUTH_FAILURE_REQUESTS_PER_MINUTE",
+            "OAUTH_INTROSPECTION_ATTEMPTS_PER_MINUTE",
+            "IDENTITY_ADMIN_SERVICE_CLIENT_ID",
+            "IDENTITY_ADMIN_SERVICE_CLIENT_SECRET",
+            "ACCESS_TOKEN_TTL_SECONDS",
+            "REFRESH_TOKEN_TTL_SECONDS",
         ] {
             for value in ["true", "false", ""] {
                 assert!(Config::from_values(&HashMap::from([(key.into(), value.into())])).is_err());
@@ -1063,13 +1278,12 @@ mod tests {
     fn production_defaults_are_explicit_and_safe() {
         let c = Config::from_values(&production()).unwrap();
         assert!(c.is_production());
-        assert!(!c.oauth_auto_purge);
         assert!(!c.membership_lifecycle_enabled);
         assert!(!c.customer_memberships_enabled);
         assert!(!c.dual_memberships_enabled);
         assert!(!c.auto_create_database);
         assert_eq!(c.cors_allowed_origins, ["https://localhost:8443"]);
-        assert_eq!(c.oauth_introspection_client_requests_per_minute, 600);
+        assert_eq!(c.resource_service_requests_per_minute, 600);
         assert!(c.bootstrap_admin_password.is_none());
     }
 
@@ -1136,7 +1350,7 @@ mod tests {
         for key in [
             "IDENTITY_SERVICE_CLIENT_ID",
             "CUSTOMER_AUTHORITY_SERVICE_CLIENT_ID",
-            "IDENTITY_ADMIN_SERVICE_CLIENT_ID",
+            "IDENTITY_KEY_ADMIN_SERVICE_CLIENT_ID",
         ] {
             for invalid in [
                 "019a1163-0000-4000-8000-000000000001",
@@ -1147,11 +1361,18 @@ mod tests {
                     Config::from_values(&HashMap::from([(key.into(), invalid.into())])).is_err()
                 );
             }
-            assert!(Config::from_values(&HashMap::from([(
+            let configured = Config::from_values(&HashMap::from([(
                 key.into(),
-                "019a1163-0000-7000-8000-000000000001".into()
-            )]))
-            .is_ok());
+                "019a1163-0000-7000-8000-000000000001".into(),
+            )]));
+            assert!(
+                configured.is_ok(),
+                "valid {key} rejected: {}",
+                configured
+                    .err()
+                    .map(|error| error.to_string())
+                    .unwrap_or_default()
+            );
         }
     }
 
@@ -1232,8 +1453,6 @@ mod tests {
             ("CORS_ALLOWED_ORIGINS", "*"),
             ("CORS_ALLOWED_ORIGINS", "null"),
             ("SESSION_TTL_HOURS", "0"),
-            ("ACCESS_TOKEN_TTL_SECONDS", "nope"),
-            ("OAUTH_AUTO_PURGE", "typo"),
             ("TRUSTED_PROXY_IPS", "0.0.0.0/0"),
             ("MICRO_CA_CERT_FILE", "relative-secret-path"),
             ("DATABASE_URL", "http://sensitive:secret@host/test"),
@@ -1314,7 +1533,6 @@ mod tests {
             ("LOGIN_MAX_ENTRIES", "2"),
             ("LOGIN_WINDOW_SECONDS", "86401"),
             ("LOGIN_SOURCE_REQUESTS", "0"),
-            ("LOGIN_USER_FAILURES", "0"),
             ("LOGIN_IDENTIFIER_MAX_BYTES", "1025"),
             ("LOGIN_VERIFY_BUDGET_MS", "0"),
         ] {

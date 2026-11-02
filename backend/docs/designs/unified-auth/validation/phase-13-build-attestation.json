@@ -1,0 +1,17 @@
+{
+  "builtAt": "2026-10-28T04:16:46.392605+00:00",
+  "snapshotLabel": "phase13-service-lock",
+  "snapshotSha256": "17d9fa7399571282d44f3d3ff5dd5e354773753bdebf514044b4d6f9cea0341a",
+  "binaries": {
+    "saas-identity": "b88f1fe6e7be8d35f678a2b2368119acc2f752457b7f645b69321ca7d03d793e",
+    "saas-platform-backend": "888333a65cfd7d28cd1542dd5e012e372a524b9215856735c82ebefd3b546480",
+    "platform-migrate": "acdc49bf0ac854453db526bc48866dd923ef1f95955c9af6d4334a8411478902",
+    "saas-customer-portal-backend": "8a57d22f920f2f13323c56a08656e623a896d4d010fbc65903c3efbba5d24e0a",
+    "portal-migrate": "119ea6996c2ad580051254dfa0ab88b8eb99de9f9ad6665cce86d9b4c76bc076"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
+    "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)"
+  },
+  "inputState": "Eight independent repositories; pre-existing uncommitted phase changes preserved. Immutable task snapshot, not a release or deployment claim."
+}

@@ -86,8 +86,11 @@ async fn cases(pool: PgPool) -> TestResult<()> {
     let employee = id();
     let customer = id();
     let client = id();
+    let auth_client = id();
     let service = id();
+    let consumer_service = id();
     let application = id();
+    let customer_application = id();
     sqlx::query(
         "INSERT INTO tenants(id,name,code) VALUES($1,'Selection tenant','selection-tenant')",
     )
@@ -100,6 +103,7 @@ async fn cases(pool: PgPool) -> TestResult<()> {
         sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,identity_version) VALUES($1,$2,$3,$4,1)").bind(member.uuid()).bind(user.uuid()).bind(org.uuid()).bind(kind).execute(&pool).await?;
     }
     sqlx::query("INSERT INTO applications(id,name,code,base_path,status,allowed_member_types) VALUES($1,'Selection app','selection-app','/selection','ENABLED',ARRAY['EMPLOYEE'])").bind(application.uuid()).execute(&pool).await?;
+    sqlx::query("INSERT INTO applications(id,name,code,base_path,status,allowed_member_types) VALUES($1,'Customer selection app','customer-selection-app','/customer-selection','ENABLED',ARRAY['CUSTOMER'])").bind(customer_application.uuid()).execute(&pool).await?;
     sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
         .bind(tenant.uuid())
         .bind(application.uuid())
@@ -112,9 +116,25 @@ async fn cases(pool: PgPool) -> TestResult<()> {
     .bind(application.uuid())
     .execute(&pool)
     .await?;
-    sqlx::query("INSERT INTO context_selection_services(id,secret_hash,purpose,allowed_oidc_clients,status) VALUES($1,$2,'CONTEXT_SELECTION_AUTHORITY',ARRAY[$3]::uuid[],'ENABLED')")
-        .bind(service.uuid()).bind(crate::util::hash::sha256_hex(&"b".repeat(64))).bind(client.uuid()).execute(&pool).await?;
+    sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+        .bind(tenant.uuid())
+        .bind(customer_application.uuid())
+        .execute(&pool)
+        .await?;
+    sqlx::query(
+        "INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)",
+    )
+    .bind(org.uuid())
+    .bind(customer_application.uuid())
+    .execute(&pool)
+    .await?;
+    sqlx::query("INSERT INTO context_selection_services(id,secret_hash,purpose,allowed_auth_clients,status) VALUES($1,$2,'CONTEXT_SELECTION_AUTHORITY',ARRAY[$3,$4]::uuid[],'ENABLED')")
+        .bind(service.uuid()).bind(crate::util::hash::sha256_hex(&"b".repeat(64))).bind(client.uuid()).bind(auth_client.uuid()).execute(&pool).await?;
+    sqlx::query("INSERT INTO context_selection_services(id,secret_hash,purpose,allowed_auth_clients,status) VALUES($1,$2,'CONTEXT_SELECTION_CONSUMER',ARRAY[$3]::uuid[],'ENABLED')")
+        .bind(consumer_service.uuid()).bind(crate::util::hash::sha256_hex(&"c".repeat(64))).bind(auth_client.uuid()).execute(&pool).await?;
     sqlx::query("INSERT INTO context_selection_registrations(client_id,client_policy_version,member_type,application_id,application_policy_version) VALUES($1,2,'EMPLOYEE',$2,1)").bind(client.uuid()).bind(application.uuid()).execute(&pool).await?;
+    sqlx::query("INSERT INTO context_selection_registrations(client_id,client_registry,client_policy_version,member_type,application_id,application_policy_version,consumer_service_id) VALUES($1,'AUTH',3,'CUSTOMER',$2,1,$3)")
+        .bind(auth_client.uuid()).bind(customer_application.uuid()).bind(consumer_service.uuid()).execute(&pool).await?;
     let active = Arc::new(AtomicBool::new(true));
     let proof = SourceProof {
         contract_version: ContractVersion::V1,
@@ -134,12 +154,17 @@ async fn cases(pool: PgPool) -> TestResult<()> {
             purpose: "PLATFORM_CONSOLE".to_owned(),
             allowed_member_types: vec!["EMPLOYEE".to_owned()],
             redirect_uri: "https://platform.saas.test/auth/callback".to_owned(),
+            client_registry: Some("AUTH".into()),
+            subject_mode: Some("USER".into()),
+            context_mode: Some("PLATFORM_CONTEXT".into()),
+            application_id: Some(application),
         },
         source_expires_at: Utc::now() + Duration::minutes(5),
         interaction_expires_at: Utc::now() + Duration::minutes(5),
     };
     let mut config = crate::config::Config::from_values(&Default::default())?;
     config.oidc_issuer = Some("https://auth.saas.test".to_owned());
+    config.bff_token_keys = Some(Arc::new(crate::bff::CipherKeys::fixture()));
     let mut state = AppState::new(pool.clone(), Arc::new(config));
     state.context_selection_authority = Arc::new(Authority {
         proof,
@@ -220,17 +245,126 @@ async fn cases(pool: PgPool) -> TestResult<()> {
                 .is_some_and(|v| v.len() == 64),
         "confirmation creates a backend credential: {status}"
     );
+    let (replay_status, replay) = post(
+        &app,
+        "/internal/platform/context-selection/confirm",
+        &authorization,
+        confirm,
+    )
+    .await?;
+    let persisted: (i64, String, String) = sqlx::query_as(
+        "SELECT count(*),min(credential_hash),min(credential_ciphertext) \
+         FROM context_selections WHERE transaction_id=$1",
+    )
+    .bind(
+        selected["transactionId"]
+            .as_str()
+            .unwrap()
+            .parse::<Uuid>()?,
+    )
+    .fetch_one(&pool)
+    .await?;
+    ensure!(
+        replay_status == StatusCode::OK
+            && replay["credential"] == selected["credential"]
+            && persisted.0 == 1
+            && persisted.1
+                == crate::util::hash::sha256_hex(selected["credential"].as_str().unwrap())
+            && persisted.2.starts_with("v1.owned-domain-fixture.")
+            && !persisted.2.contains(selected["credential"].as_str().unwrap()),
+        "same transaction recovers one identical credential from ciphertext, without storing the raw token"
+    );
+
+    // Canonical auth_* clients are admitted only by their exact application,
+    // policy version and employee/customer purpose registration.
+    let auth_active = Arc::new(AtomicBool::new(true));
+    let auth_proof = SourceProof {
+        contract_version: ContractVersion::V1,
+        transaction_id: id(),
+        intent: Intent::Login {},
+        source: Source {
+            issuer: "https://auth.saas.test".to_owned(),
+            user_id: user,
+            account_version: version(1),
+            global_session_id: id(),
+            interaction_id: id(),
+            auth_time: Utc::now() - Duration::minutes(1),
+        },
+        client: Client {
+            id: auth_client,
+            policy_version: version(3),
+            purpose: "CUSTOMER_PORTAL".to_owned(),
+            allowed_member_types: vec!["CUSTOMER".to_owned()],
+            redirect_uri: "https://customer.saas.test/auth/callback".to_owned(),
+            client_registry: Some("AUTH".to_owned()),
+            subject_mode: Some("USER".to_owned()),
+            context_mode: Some("PLATFORM_CONTEXT".to_owned()),
+            application_id: Some(customer_application),
+        },
+        source_expires_at: Utc::now() + Duration::minutes(5),
+        interaction_expires_at: Utc::now() + Duration::minutes(5),
+    };
+    let mut auth_config = crate::config::Config::from_values(&Default::default())?;
+    auth_config.oidc_issuer = Some("https://auth.saas.test".to_owned());
+    auth_config.bff_token_keys = Some(Arc::new(crate::bff::CipherKeys::fixture()));
+    let mut auth_state = AppState::new(pool.clone(), Arc::new(auth_config));
+    auth_state.context_selection_authority = Arc::new(Authority {
+        proof: auth_proof,
+        active: auth_active,
+    });
+    let auth_app = routes().with_state(auth_state);
+    let auth_request = json!({"contractVersion":"context-selection/1","sourceProof":"a".repeat(64),"expectedClientId":auth_client});
+    let (auth_status, auth_choices) = post(
+        &auth_app,
+        "/internal/platform/context-selection/choices",
+        &authorization,
+        auth_request.clone(),
+    )
+    .await?;
+    ensure!(
+        auth_status == StatusCode::OK
+            && auth_choices["members"]
+                .as_array()
+                .is_some_and(|v| v.len() == 1)
+            && auth_choices["members"][0]["membershipId"] == customer.uuid().to_string()
+            && auth_choices["members"][0]["memberType"] == "CUSTOMER",
+        "canonical AUTH client was not isolated to its registered customer application"
+    );
+    let mut auth_confirm = auth_request;
+    auth_confirm["membershipId"] = json!(customer);
+    let (auth_confirm_status, auth_selected) = post(
+        &auth_app,
+        "/internal/platform/context-selection/confirm",
+        &authorization,
+        auth_confirm,
+    )
+    .await?;
+    ensure!(
+        auth_confirm_status == StatusCode::OK
+            && auth_selected["credential"]
+                .as_str()
+                .is_some_and(|v| v.len() == 64),
+        "canonical AUTH customer confirmation did not issue its bounded private result: {auth_confirm_status} {auth_selected}"
+    );
+
+    let resource_service = id();
+    sqlx::query("INSERT INTO platform_resource_services(id,service_id,secret_hash,purpose,application_id,allowed_member_types,allowed_operations,audience) VALUES($1,'owned-cross-purpose-resource',$2,'APP_RESOURCE',$3,ARRAY['EMPLOYEE'],ARRAY['selection:read'],'selection-app')")
+        .bind(resource_service.uuid()).bind(crate::util::hash::sha256_hex(&"b".repeat(64))).bind(application.uuid()).execute(&pool).await?;
     ensure!(
         post(
             &app,
-            "/internal/platform/context-selection/confirm",
+            "/internal/platform/context-selection/choices",
             &authorization,
-            confirm
+            request.clone()
         )
         .await?
-        .0 == StatusCode::CONFLICT,
-        "same transaction cannot issue independent credentials"
+        .0 == StatusCode::FORBIDDEN,
+        "a resource service secret cannot authenticate a context selection authority"
     );
+    sqlx::query("DELETE FROM platform_resource_services WHERE id=$1")
+        .bind(resource_service.uuid())
+        .execute(&pool)
+        .await?;
     active.store(false, Ordering::SeqCst);
     ensure!(
         post(

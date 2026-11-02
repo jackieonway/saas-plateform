@@ -112,7 +112,7 @@ async fn url_entries_resolve_environment_and_revision_consistently() -> Result<(
     let database = TestDatabase::create().await?;
     let result: Result<()> = async {
         let h = Harness::create(&database.pool,"https://apps.example.test").await?;
-        oauth_client(&database.pool,h.main_app,"url-entry-client").await?;
+
         let app_token = h.app_token(&h.a,"release-app").await?;
         ensure!(current_context(&h,&app_token).await?["application"]["entryUrl"] == "/legacy/release-app/index.html","legacy fallback changed before URL configuration");
         let prior_release:Uuid=sqlx::query_scalar("INSERT INTO application_releases(application_id,environment,version,entry_type,entry_url,validation_status,checked_at,id) \

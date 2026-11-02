@@ -1,0 +1,20 @@
+{
+  "contractVersion": "unified-auth-phase25-readonly-startup-probe/1",
+  "result": "FAIL",
+  "startedAtEpoch": 1793274937.7558062,
+  "evidenceLayer": "ACTUAL_POSTGRESQL_LOGIN_ROLE",
+  "databasePrefix": "p25ddl_",
+  "dedicatedDatabasesCreated": 1,
+  "dedicatedRolesCreated": 2,
+  "dockerContainersCreated": 0,
+  "dockerContainersReused": 0,
+  "formalOrSharedApplicationDatabasesModified": false,
+  "stage": "RESTRICTED_LOGIN",
+  "failureCode": "PHASE25_DDL_PROBE_SQL_FAILED_UNKNOWN",
+  "cleanup": {
+    "databases": 0,
+    "roles": 0,
+    "failures": []
+  },
+  "finishedAtEpoch": 1793274938.090756
+}

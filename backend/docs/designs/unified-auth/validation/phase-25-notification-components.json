@@ -1,0 +1,322 @@
+{
+  "contractVersion": "unified-auth-phase25-component-suite/1",
+  "phase": 25,
+  "service": "notification",
+  "snapshot": "phase25-apps-r2",
+  "exactTestSelector": null,
+  "integrationTestTarget": null,
+  "fullServiceSuiteClaimed": true,
+  "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+  "manifestSha256": "bc6cac8f2ea794b7b8a39b50e4f21fb8b77301f9fd6f4a86a752a1cce8d452b1",
+  "sourceInputs": {
+    "saas-notification/.dockerignore": "cdd62c72f96cbf903862cbfd62919e0fb932921c0bdcde633f86795c961e9c69",
+    "saas-notification/Cargo.lock": "e48633df42f016c7cc94f45c98fd250dce76c2e8c22c81c0764f40fe8d782d2d",
+    "saas-notification/Cargo.toml": "6aa8055bdd716c4dc70ecdc09a85d4df6c64291672b536956e190b5b445c2466",
+    "saas-notification/Dockerfile": "91d4226347594fb2e557319117c1275b9c5281708f33ad0bf3499e16b254afe3",
+    "saas-notification/config.env.example": "2bf98a4c1c7b2e258aaa461aa325a8672f8fbf1c44634c7918bd1c72ec0802a3",
+    "saas-notification/rust-toolchain.toml": "174a086284d57e79557b62bc627e96257893375dfd37239e3c3e830ce2629b95",
+    "saas-notification/src/config.rs": "2dbef2953ca8ea33e6844ce5df23d5a94ce32d3f25f1d43bad5f2be32d37e7a3",
+    "saas-notification/src/identifiers.rs": "006b71ee953f8e441a22019ea33200e9fcc48104785604348aefa58cf2dea375",
+    "saas-notification/src/lib.rs": "c1f8119f097ddbd2aeb68ad29fea6e1ee61c281d38cce51cc53f79a604412acf",
+    "saas-notification/src/main.rs": "b0779e8c2d6aed6891b1912716790ccbe7a9e04d654de7fac4cd5a398518a69b",
+    "saas-notification/src/metrics.rs": "66cb113d9cfc361b5e92ab32f7571f760e18e157d38978bee8d68c1df2726f45",
+    "saas-notification/src/platform.rs": "808b37b794a8d24dbc1bc68ec21aeb233d3da0ec913654c62fee506acadec6cf",
+    "saas-notification/src/protocol.rs": "fb82cf01850221a31da3eaf0652d598dfa84c9951342cb76b3e3ec937575af97",
+    "saas-notification/src/scheduler.rs": "dcd305293039e3413cec544e004ebf9682e6208ebd0072a83684560ae873b0d1",
+    "saas-notification/src/server.rs": "5d40e4cf53a4470290952835daed0352bb332a9250b671485c5fb0719740be95",
+    "saas-notification/src/store.rs": "b2b62a2c2b9d0ef0c516f4110d937e7f4c7b96ec693f99e136ea94eefd585c36",
+    "saas-notification/src/transport.rs": "b91b901bf7f1ba25592cba6699c44c4646af51f8460f6dec04719d65971196bf",
+    "saas-notification/tests/identity_isolation.rs": "a70eeee435ab1688bad9074e8f8c34857bd84674aa5fde586447493ac598b55c"
+  },
+  "startedAtUtc": "2026-10-29T11:57:00.934610+00:00",
+  "status": "PASS",
+  "runnerSha256": "bc91041e17a4a9149af3495a0086afb164467836e78a5aa002439bc39da3f318",
+  "allSnapshotInputsVerified": 1527,
+  "auxiliaryBinaries": {
+    "saas-platform-admin": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/bin/saas-platform-admin",
+      "sha256": "3e79b86c9eca51121f42afd9fdc91d29550fc904ede7e5b7a5f7219f802e694d"
+    },
+    "saas-notification-ws": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/bin/saas-notification-ws",
+      "sha256": "c867668b96b073d8836c4f988cfed75ddc195a4c140fd160345fb3e6394b3237"
+    },
+    "node": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/phase21-node-runtime/bin/node",
+      "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+      "attestationSha256": "6166a4852f44ede83518ab89e35b0f5781d4121ce9d36563552f07e38e63c91f"
+    }
+  },
+  "buildAttestationSha256": "2fc3250ce7a11b902e1724209a177753916549cb95aceb4efe95419e64f0f600",
+  "layers": [
+    "RUST_COMPONENT",
+    "EXPLICIT_TASK_OWNED_POSTGRESQL_ROUTER"
+  ],
+  "clusterSystemIdentifier": "7701992637128815755",
+  "clusterBindingSha256": "81efbc1c1be5f03145d6a5ef150a22b38919285a20e05be1f43e056eba2d7aaa",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "hbaWrites": 0,
+  "runs": [
+    {
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "-j2",
+        "--all-targets",
+        "--",
+        "--include-ignored",
+        "--test-threads=1"
+      ],
+      "startedAtUtc": "2026-10-29T11:57:00.939473+00:00",
+      "returnCode": 0,
+      "durationSeconds": 74.754,
+      "rawOutputSha256": "ea78fcae0c4528ed26ca50b9c57f0a991dfb80c36bd0354bf7c0a0d755ddfaeb",
+      "cases": [
+        {
+          "name": "config::tests::explicit_configuration_enforces_tls_and_rejects_platform_signing_keys",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::origin_canonicalization_and_validation_capacity_cannot_relax_the_boundary",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::timers_paths_and_scheduler_budgets_are_bounded",
+          "result": "OK"
+        },
+        {
+          "name": "identifiers::tests::generated_request_ids_remain_distinct_under_concurrent_creation",
+          "result": "OK"
+        },
+        {
+          "name": "identifiers::tests::typed_ids_reject_legacy_versions_nil_and_non_rfc_variants",
+          "result": "OK"
+        },
+        {
+          "name": "metrics::tests::health_requires_every_dependency_and_output_has_only_static_series",
+          "result": "OK"
+        },
+        {
+          "name": "platform::tests::delivery_denials_do_not_reclassify_the_whole_session",
+          "result": "OK"
+        },
+        {
+          "name": "platform::tests::inflight_guard_releases_counters_on_cancellation_and_preserves_high_water",
+          "result": "OK"
+        },
+        {
+          "name": "platform::tests::platform_body_enforces_media_type_declared_size_and_actual_size",
+          "result": "OK"
+        },
+        {
+          "name": "protocol::tests::an_existing_connection_cannot_replace_any_member_or_account_generation",
+          "result": "OK"
+        },
+        {
+          "name": "protocol::tests::authentication_is_one_bounded_token_field_without_identity_claims",
+          "result": "OK"
+        },
+        {
+          "name": "protocol::tests::authority_proof_is_strict_and_public_ack_keeps_its_original_fields",
+          "result": "OK"
+        },
+        {
+          "name": "protocol::tests::hints_require_the_exact_versioned_recipient_proof",
+          "result": "OK"
+        },
+        {
+          "name": "protocol::tests::platform_context_checks_contract_identity_expiry_and_hides_session",
+          "result": "OK"
+        },
+        {
+          "name": "scheduler::tests::a_panicking_handler_releases_its_partition_and_other_work_continues",
+          "result": "OK"
+        },
+        {
+          "name": "scheduler::tests::concrete_memberships_and_identity_generations_have_independent_queue_limits",
+          "result": "OK"
+        },
+        {
+          "name": "scheduler::tests::flood_respects_every_admission_limit_and_global_concurrency",
+          "result": "OK"
+        },
+        {
+          "name": "scheduler::tests::invalid_limits_and_unstarted_runner_shutdown_are_explicit",
+          "result": "OK"
+        },
+        {
+          "name": "scheduler::tests::shutdown_drops_pending_values_and_awaits_active_future_cancellation",
+          "result": "OK"
+        },
+        {
+          "name": "scheduler::tests::slow_recipient_does_not_block_another_and_each_key_remains_ordered",
+          "result": "OK"
+        },
+        {
+          "name": "scheduler::tests::total_queue_limit_applies_even_with_free_partitions_and_per_key_capacity",
+          "result": "OK"
+        },
+        {
+          "name": "server::tests::invalid_or_duplicate_sid_cannot_skip_engine_admission",
+          "result": "OK"
+        },
+        {
+          "name": "server::tests::request_headers_keep_only_one_valid_v7_or_receive_a_fresh_id",
+          "result": "OK"
+        },
+        {
+          "name": "store::tests::archived_rows_and_another_membership_or_generation_never_match_a_hint",
+          "result": "OK"
+        },
+        {
+          "name": "store::tests::notification_dto_exposes_only_the_versioned_public_fields",
+          "result": "OK"
+        },
+        {
+          "name": "store::tests::persisted_rows_require_exact_owner_source_and_publication_shape",
+          "result": "OK"
+        },
+        {
+          "name": "store::tests::retry_is_jittered_exponential_and_absolutely_bounded",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::a_health_request_detaches_old_ownership_without_reopening_revoked_io",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::a_successful_revocation_claim_cannot_be_overwritten_by_a_later_owner",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::close_wakes_both_pending_directions_and_does_not_lose_early_close",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::global_registry_prunes_closed_controls_even_when_request_metadata_is_retained",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::global_shutdown_wakes_idle_and_partial_http_before_any_namespace_exists",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::keepalive_reassignment_removes_the_previous_engines_kill_right",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::membership_is_weak_deduplicated_pruned_and_closed_for_future_members",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::normal_io_delegates_until_group_revocation",
+          "result": "OK"
+        },
+        {
+          "name": "transport::tests::retained_request_metadata_does_not_retain_a_dropped_tcp_permit",
+          "result": "OK"
+        },
+        {
+          "name": "dual_identity_delivery_local_revocation_replacement_and_reconnect",
+          "result": "OK"
+        },
+        {
+          "name": "legacy_hints_null_recipient_proofs_and_authority_faults_fail_closed",
+          "result": "OK"
+        },
+        {
+          "name": "periodic_member_and_account_proof_changes_close_without_a_hint",
+          "result": "OK"
+        }
+      ],
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": 36,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ],
+      "testExecutables": [
+        {
+          "pathRelativeToTarget": "debug/deps/saas_notification_ws-9a2c63647c3c730e",
+          "sha256": "1c9e90bd7e6150ba35e689597a7d30c9b41c83f1f517773056a09e031818468c"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/saas_notification_ws-a1db8f733e8b2733",
+          "sha256": "f0dd908c4904bc14528ed3bb76ee505dba924d5f479338fcad970d866d419bae"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/identity_isolation-3c5e02c0c2e42094",
+          "sha256": "39ad23be6073b3cfaf14913825b98b8da32aab77db054bf5c30a7f16eb2db08e"
+        }
+      ],
+      "processCleanup": {
+        "status": "PASS",
+        "originalProcessesSignalled": 0,
+        "activeProcessesRemaining": 0,
+        "processGroup": 36527,
+        "processStartTickFloor": 1519805,
+        "interrupted": false
+      },
+      "timedOut": false,
+      "compilerErrorCodes": []
+    }
+  ],
+  "limits": [
+    "No browser, external client, actual service HTTPS or release acceptance claim.",
+    "Any ignored, skipped or failed test remains explicit. Test PostgreSQL schemas may be narrow fixtures."
+  ],
+  "resourceObservation": {
+    "databases": {
+      "added": [],
+      "removed": []
+    },
+    "roles": {
+      "added": [],
+      "removed": []
+    }
+  },
+  "sourceMismatchAfter": [],
+  "auxiliaryMismatchAfter": [],
+  "finishedAtUtc": "2026-10-29T11:58:16.695018+00:00",
+  "totals": {
+    "passed": 39,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0
+  },
+  "cleanup": {
+    "rawLogsRetained": 0,
+    "temporaryDirectoriesCreatedByRunner": 1,
+    "temporaryRuntimeDirectory": "/tmp/rust-saas-unified-auth-20261028/phase25-component-notification-b7a05f9634604e69984f6a6f74a899a7",
+    "temporaryRuntimeDirectoryRemoved": true,
+    "remainingTemporaryFilesRemoved": 0,
+    "remainingTemporaryLogicalBytesRemoved": 0,
+    "testFixturesSelfClean": true,
+    "componentFixtureResiduals": {
+      "databases": [],
+      "roles": []
+    },
+    "globalObservationMayIncludeConcurrentRootFixtures": true,
+    "databaseDeletionByThisRunner": false
+  }
+}

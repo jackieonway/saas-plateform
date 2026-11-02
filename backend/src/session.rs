@@ -59,10 +59,6 @@ pub(crate) async fn device_sessions(
 
 const PLATFORM_REFRESH_PREFIX: &str = "psr_";
 
-pub(crate) fn is_platform_refresh(token: &str) -> bool {
-    token.starts_with(PLATFORM_REFRESH_PREFIX)
-}
-
 /// Only a hash is stored; prefix separates platform sessions from OAuth client grants.
 pub(crate) async fn issue_refresh_in_tx(
     tx: &mut Transaction<'_, Postgres>,
@@ -117,7 +113,7 @@ pub(crate) async fn lock_oidc_source_in_tx(
     if bff_session.is_none() {
         return Err(AppError::unauthorized("来源会话缺少认证绑定"));
     }
-    let locked: bool = sqlx::query_scalar("SELECT identity_lock_oidc_source($1,$2)")
+    let locked: bool = sqlx::query_scalar("SELECT identity_lock_auth_source($1,$2)")
         .bind(&client)
         .bind(issuer)
         .fetch_one(&mut **tx)
@@ -125,26 +121,6 @@ pub(crate) async fn lock_oidc_source_in_tx(
         .map_err(|_| AppError::Unavailable)?;
     if !locked {
         return Err(AppError::unauthorized("OIDC 来源客户端已失效"));
-    }
-    Ok(())
-}
-
-/// An independent statement after source/policy waits and again before commit.
-pub(crate) async fn require_source_active_in_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    session_id: Uuid,
-) -> Result<(), AppError> {
-    let active: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM platform_sessions s WHERE s.id=$1 AND s.bff_session_id IS NOT NULL \
-         AND platform_source_active(s.origin_issuer,s.origin_client_ref,s.origin_client_policy_version,s.member_type) \
-         AND platform_session_active(s.id))",
-    )
-    .bind(session_id)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(|_| AppError::Unavailable)?;
-    if !active {
-        return Err(AppError::unauthorized("来源平台上下文已失效"));
     }
     Ok(())
 }

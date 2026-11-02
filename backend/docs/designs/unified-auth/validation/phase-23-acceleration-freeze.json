@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "toolsSnapshot": "phase23-tools-r17",
+  "toolsSnapshotSha256": "73caf5db2de1529ff9d4d1041ca26eab2c30e1fff7b86d858aec60b792f9662e",
+  "buildSnapshot": "phase23-apps-r2",
+  "buildSnapshotSha256": "37a34a9cf20d5d58ee063ada2dbbb624befe4f5afc6435e72f5d38b101ea59c3",
+  "inputCount": 937,
+  "compiledInputCount": 844,
+  "binariesChecked": 6,
+  "requiredHelpers": [
+    "phase23-carrier-window.mjs",
+    "phase23-carrier-window.test.mjs",
+    "phase23-recovery-probe.py",
+    "test_phase23_recovery_probe.py"
+  ],
+  "inputProvenance": {
+    "compiledInputsFrom": "phase23-apps-r2",
+    "compiledSnapshotSha256": "37a34a9cf20d5d58ee063ada2dbbb624befe4f5afc6435e72f5d38b101ea59c3",
+    "toolInputsFrom": "phase23-tools-r16",
+    "toolSnapshotSha256": "aae772c3e4448a51ec2b7179c0ea7c702f68b23d582acaae18aba13b44953ba8",
+    "reason": "Keep the attested Phase23 application and frontend revision; freeze current recovery and carrier tools independently. Live unrelated frontend changes are not part of this rehearsal."
+  },
+  "validationLevel": "READ_ONLY_FROZEN_INPUTS_AND_BINARIES"
+}

@@ -109,10 +109,8 @@ pub(crate) fn run(
                     "native database connection failed"
                 } else if program == "pg_dump" {
                     "native pg_dump failed"
-                } else if program == "pg_restore" {
-                    "native pg_restore failed; targets remain quarantined"
                 } else {
-                    "native SQL failed; targets remain quarantined"
+                    "native SQL failed"
                 }));
             }
             break;

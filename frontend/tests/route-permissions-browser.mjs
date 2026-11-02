@@ -128,7 +128,7 @@ async function fixture(pathname, options = {}) {
       await menusGate
       return fulfill(route, options.menusError ? { message: "菜单授权服务不可用" } : { menus: state.menus }, options.menusError ? 503 : 200)
     }
-    if (url.pathname === "/api/oauth/session-token" && options.microApp) return fulfill(route,
+    if (url.pathname === "/api/apps/session-token" && options.microApp) return fulfill(route,
       { accessToken: "guard-micro-token", tokenType: "Bearer", expiresIn: 60, audience: microApp.code })
     if (url.pathname === `/api/apps/${microApp.code}/context` && options.microApp) {
       state.contextRequests++
@@ -149,7 +149,7 @@ async function fixture(pathname, options = {}) {
     if (url.pathname === "/api/notifications/socket-context") return fulfill(route, { userId: profile.user.id,
       tenantId: profile.tenant.id, organizationId: profile.organization.id, sessionVersion: 0 })
     if (url.pathname === "/api/notifications" || url.pathname === "/api/auth/login-history") return fulfill(route, { records: [], total: 0, page: 1, size: 10 })
-    if (url.pathname === "/api/auth/my-sessions") return fulfill(route, { sessions: [], summary: { active: 0, revoked: 0 } })
+    if (url.pathname === "/api/auth/my-sessions") return fulfill(route, { platformSessions: [] })
     if (url.pathname === "/api/tenants/options" && options.scopedManagement) return fulfill(route, [state.profile.tenant])
     if (url.pathname === "/api/organizations/tree" && options.scopedManagement) return fulfill(route, [{
       id: state.profile.organization.id, name: "当前组织", code: "current-org", tenantId: state.profile.tenant.id,
@@ -193,7 +193,7 @@ try {
   browser = await launchBrowser()
   const deniedPaths = ["/system/tenants", "/system/settings", "/system/applications", "/system/menus",
     "/system/organizations", "/system/departments", "/system/authorizations", "/system/users", "/system/roles",
-    "/system/regions", "/system/oauth/clients", "/system/oauth/tokens", "/system/audit-logs", "/system/monitor",
+    "/system/regions", "/system/oauth/clients", "/system/audit-logs", "/system/monitor",
     "/athena/overview", "/athena/reports/sales", "/athena/reports/operations", "/athena/sources",
     "/hermes/inbox", "/hermes/notifications", "/SYSTEM/TENANTS", "/system/%74enants", "/system/tenants/"]
   for (const pathname of deniedPaths) {
@@ -236,17 +236,8 @@ try {
     assert.equal(state.requests.some((request) => request.pathname === "/api/tenants"), true)
     assert.equal(await page.getByText("无访问权限", { exact: true }).count(), 0)
   })
-  for (const [grantedPath, deniedPath] of [["/system/oauth/clients", "/system/oauth/tokens"], ["/system/oauth/tokens", "/system/oauth/clients"]]) {
-    await check(`shared permission code cannot grant unauthorized sibling host menu ${deniedPath}`, deniedPath, {
-      permissions: ["system:oauth"], menus: [{ id: "guard-oauth-menu", parentId: null, type: "MENU", title: "OAuth 授权菜单",
-        path: grantedPath, icon: "Key", permission: "system:oauth", sortOrder: 1, visible: true }],
-    }, async ({ page, state }) => {
-      await page.getByText("无访问权限", { exact: true }).waitFor()
-      noBusinessRequests(state)
-    })
-  }
   for (const [path, permission] of [["/system/settings", "system:settings"], ["/system/applications", "system:application"],
-    ["/system/menus", "system:menu"], ["/system/oauth/clients", "system:oauth"], ["/system/oauth/tokens", "system:oauth"]]) {
+    ["/system/menus", "system:menu"], ["/system/oauth/clients", "system:oauth"]]) {
     await check(`platform child capability false denies global page ${path} before data requests`, path, {
       isPlatform: true, platformContext: false, permissions: [permission], menus: [{ id: "global-granted-menu", parentId: null,
         type: "MENU", title: "已授权平台功能", path, icon: "Settings", permission, sortOrder: 1, visible: true }],

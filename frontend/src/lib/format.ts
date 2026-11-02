@@ -132,8 +132,6 @@ export const GRANT_TYPE_LABELS: Record<string, string> = {
   authorization_code: "授权码模式",
   refresh_token: "刷新令牌",
   client_credentials: "客户端凭证",
-  password: "资源密码模式",
-  "urn:ietf:params:oauth:grant-type:device_code": "设备码模式",
 }
 
 export const GENDER_LABELS: Record<string, string> = {

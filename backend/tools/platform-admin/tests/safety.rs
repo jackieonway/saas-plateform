@@ -316,9 +316,6 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
     let bootstrap: Value =
         serde_json::from_str(include_str!("../manifests/stores-bootstrap.manifest.json")).unwrap();
     let app = json!({"id":app_id,"code":"stores","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/stores","status":"ENABLED","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1});
-    let client = json!({"id":"22222222-2222-7222-8222-222222222222","clientId":"owned-client","clientName":"stores-client",
-        "clientType":"CONFIDENTIAL","status":"ENABLED","grantTypes":["client_credentials"],"scopes":["openid"],"redirectUris":[],
-        "accessTokenValidity":300,"refreshTokenValidity":300,"applicationId":app_id,"clientSecret":"REMOTE_SECRET_CANARY","subjectMode":"MACHINE","allowedMemberTypes":[],"accessPolicyVersion":1});
     let menus = bootstrap["menus"]
         .as_array()
         .unwrap()
@@ -341,7 +338,7 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
     listener.set_nonblocking(true).unwrap();
     let handle = thread::spawn(move || {
         let mut requests = Vec::new();
-        for _ in 0..6 {
+        for _ in 0..4 {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
             let (mut stream, _) = loop {
                 match listener.accept() {
@@ -374,7 +371,6 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
             );
             let body = match path {
                 "/api/applications" => json!([app.clone()]),
-                "/api/oauth/clients" => json!([client.clone()]),
                 value if value.starts_with("/api/menus/tree?applicationId=") => {
                     json!({"menus":menus})
                 }
@@ -392,7 +388,6 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
         requests
     });
     let mut environment = env(origin);
-    environment.insert("PLATFORM_CLIENT_ID".into(), "owned-client".into());
     environment.insert(
         "PLATFORM_CLIENT_SECRET".into(),
         "LOCAL_SECRET_CANARY".into(),
@@ -416,7 +411,7 @@ fn repeated_stores_bootstrap_reads_exact_existing_menus_without_secret_or_client
         assert!(!output.to_string().contains("CANARY"));
     }
     let requests = handle.join().unwrap();
-    assert_eq!(requests.len(), 6);
+    assert_eq!(requests.len(), 4);
     assert!(
         requests
             .iter()

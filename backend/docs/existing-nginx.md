@@ -39,7 +39,7 @@ docker compose --env-file /srv/saas/private/platform.env -f compose.host-nginx.y
 
 | 路径 | 规则 |
 | --- | --- |
-| `/api`、`/oauth` | 保留原路径转到平台 API |
+| `/auth`、`/api` | 保留原路径转到平台 API；`/auth` 归 BFF Cookie owner |
 | `/micro-proxy/` | 保留完整路径和查询到平台 API，禁止升级连接 |
 | `/work-orders-api`、`/stores-api` | 保留前缀到独立业务 API |
 | `/sub-apps/<code>/versions/<version>/` | 精确版本路由，剥离版本前缀到对应静态服务 |
@@ -71,23 +71,14 @@ docker compose --env-file /srv/saas/private/platform.env --env-file /srv/saas/pr
 
 私有 CA 按已有 overlay 配置信任。`/socket.io/` 转给回环通知端口，保留升级头和读取期限。来源、身份和授权仍由通知服务检查。
 
-## 5. 可选 OAuth 演练
+## 5. 认证中心和标准客户端
 
-独立演练 API 与静态服务可分别使用回环上游 `127.0.0.1:3011` 和 `127.0.0.1:3010`。在私有 JSON 设置真实 `publicOrigin`、`backend: "127.0.0.1:13001"`、`frontend: "127.0.0.1:18080"`、`oauthPlayground` 和 `oauthPlaygroundStatic`，生成完整候选文件：
+认证中心使用独立 HTTPS 域名、固定 issuer 和自己的 `/oauth/*`；公开网关拒绝其 `/internal/*`。平台域名的旧 `/oauth`、`/oidc`、`/api/oauth`、`/api/oidc`、演练、设备授权及旧 consent 路径固定 404，不能改为转发或 SPA fallback。
 
-```sh
-node nginx/render.mjs /srv/saas/private/oauth-gateway.json /srv/saas/config/oauth-gateway.review.conf
-```
-
-将生成的 OAuth `map` 及 location 合并到已有站点，核对重复定义与完整代理头。保留以下规则：
-
-- `/oauth-playground-api` 及子路径改写为独立 API `/api`，`internal`、`metrics` 固定 404。
-- API 仅发送准确匹配的 `oauth_playground`、`__Host-oauth_playground` Cookie，清空 Authorization 和升级头，保留 Origin 与 Set-Cookie。
-- `/callback` 只允许 GET/HEAD 加载 `callback.html`，保留查询、关闭访问日志并禁止缓存；其他方法 405。
-- `/sub/oauth-playground` 补斜线跳转，其子路径剥离前缀提供静态资源；静态上游不接收 Cookie 或 Authorization。
-
-回调资产使用 `/sub/oauth-playground/assets/*`。演练 API 的 `OAUTH_PUBLIC_ORIGIN`、平台注册准确 redirect URI（公开来源加 `/callback`）和网关来源一致；qiankun 入口为公开来源加 `/sub/oauth-playground/`。使用真实构建产物，未配置的演练入口保持 404。
+第三方接入使用[独立 OIDC RP 与机器 CLI](../../../saas-examples/oidc-rp/README.md)，在其自己的 HTTPS 来源登记准确 callback。平台网关不代理该 RP 的 Cookie、callback 或客户端凭据。
 
 ## 6. 已有 Nginx 也在容器内时
 
 容器 Nginx 的回环地址指其自身。应加入受控 edge 网络，改用 `backend:3001`、`frontend-web:8080` 和业务 DNS，重新核对可信代理 IP、证书、CSP 和路由。渲染策略和临时 HTTPS 检查见[网关说明](../nginx/README.md)。
+
+私有 `POST /api/apps/{code}/authorize` 由独立 APP_RESOURCE 服务调用，公开网关固定返回 404；浏览器 `/api/apps/session-token` 和应用 context 继续转发。业务 API 的 `PLATFORM_API_ORIGIN` 与通知服务的 `PLATFORM_API_BASE_URL` 必须使用另行配置的私有 HTTPS listener，且证书主机名、CA 和精确路径可达性经过核对。当前公开网关模板不创建该私有 listener；配置缺口属于发布前置，不能改用公开 origin 绕过隔离。

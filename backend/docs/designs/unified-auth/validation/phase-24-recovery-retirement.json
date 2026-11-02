@@ -1,0 +1,292 @@
+{
+  "contractVersion": "unified-auth-phase24-recovery-retirement/1",
+  "currentWindowsStaticVerification": {
+    "catalogCapturePreserved": true,
+    "catalogMatchesExpectedSha256": true,
+    "earlyRefusalBeforeConfigLoad": true,
+    "oldResetConstantAndRestoreExecutionAbsent": true,
+    "oldResetFileAbsent": true,
+    "platformImportedIncludePreserved": true,
+    "readmeLocalLinks": {
+      "broken": 0,
+      "checked": 8,
+      "details": [
+        {
+          "document": "saas-plateform/backend/ops/recovery/README.md",
+          "exists": true,
+          "target": "config.example.json"
+        },
+        {
+          "document": "saas-plateform/backend/ops/recovery/README.md",
+          "exists": true,
+          "target": "src/config.rs"
+        },
+        {
+          "document": "saas-plateform/backend/ops/recovery/README.md",
+          "exists": true,
+          "target": "../identity-recovery/README.md"
+        },
+        {
+          "document": "saas-plateform/backend/ops/README.md",
+          "exists": true,
+          "target": "../docs/fresh-installation.md"
+        },
+        {
+          "document": "saas-plateform/backend/ops/README.md",
+          "exists": true,
+          "target": "identity-deployment/README.md"
+        },
+        {
+          "document": "saas-plateform/backend/ops/README.md",
+          "exists": true,
+          "target": "monitoring/README.md"
+        },
+        {
+          "document": "saas-plateform/backend/ops/README.md",
+          "exists": true,
+          "target": "recovery/README.md"
+        },
+        {
+          "document": "saas-plateform/backend/ops/README.md",
+          "exists": true,
+          "target": "identity-recovery/README.md"
+        }
+      ]
+    },
+    "restoreOnlyConfigurationAbsent": true,
+    "runtimeCommandsExecutedDuringReportAssembly": 0,
+    "workflowMatchesExpectedSha256": true
+  },
+  "environment": {
+    "cargo": "1.97.0",
+    "databaseAccessRequired": false,
+    "networkServicesRequired": false,
+    "runtimeHost": "Local WSL Linux before restart",
+    "runtimeUser": "jackie",
+    "rust": "1.97.0"
+  },
+  "evidenceBoundary": {
+    "claimsExcluded": [
+      "Actual backup or remote verification success",
+      "Actual database restore or identity recovery acceptance",
+      "Post-restart component rerun",
+      "Phase 25 current full-release acceptance",
+      "Production deployment, RPO/RTO or storage-reclamation acceptance"
+    ],
+    "currentManifestMeaning": "The manifest below records the current R15 directory and ops index bytes after the owning agent declared the source stable. It is not a recovered pre-restart all-file runtime attestation.",
+    "currentWorkflowMatchesRecordedPostFixSource": true,
+    "fullHistoricalRuntimeInputManifestAvailable": false,
+    "oldTaskRuntimeUnavailable": "WSL restarted after the recorded component runs. No old task cluster, process, binary, cache or temporary directory is assumed to remain available.",
+    "reportAssemblyEnvironment": "Windows; current source reads, SHA-256 hashing, static assertions and JSON generation only.",
+    "runtimeEvidenceSource": "Actual pre-restart tool execution results supplied by the owning parent agent in this chat.",
+    "runtimeResultsRepeatedAfterWslRestart": false,
+    "workflowRuntimeSourceSha256": "dbc02359e7067746f24038997d4dfd5705105bf5fa88e9601961bed852602588"
+  },
+  "implementation": {
+    "automaticForwardingToCanonicalRestore": false,
+    "canonicalRecoveryPointer": "saas-plateform/backend/ops/identity-recovery/README.md",
+    "deletedExecutionPaths": [
+      "CREATE DATABASE",
+      "pg_restore",
+      "Restored artifact directory/file writes",
+      "RESET SQL invocation",
+      "invalidate.sql old OAuth/session reset"
+    ],
+    "fixedRestoreError": "CANONICAL_IDENTITY_RECOVERY_REQUIRED",
+    "preservedCapabilities": [
+      "Bundle authentication, encryption and safe-path checks",
+      "Read-only catalog capture",
+      "Native backup tooling and bounded HTTP verification helpers",
+      "Strict private source-credential configuration"
+    ],
+    "preservedOperations": [
+      "backup",
+      "backup-new",
+      "verify",
+      "age"
+    ],
+    "removedConfiguration": [
+      "admin_service",
+      "databases[].target",
+      "databases[].owner",
+      "restored_artifacts"
+    ],
+    "restoreOnlySchemaFunctionRemoved": "schema::canonicalize",
+    "restoreRefusalPrecedes": [
+      "Configuration read",
+      "Operation lock creation",
+      "Scratch directory creation",
+      "SQL or database mutation",
+      "Native PostgreSQL subprocess",
+      "Remote object retrieval",
+      "Monitoring event or sequence mutation"
+    ],
+    "retainedPlatformInclude": {
+      "consumer": "saas-plateform/backend/src/database/imported.rs",
+      "sha256": "de9d1a6aff681e8afe06dbe8bd770029b9f5493a9b69d5c36aae9ee137e7db46",
+      "source": "saas-plateform/backend/ops/recovery/src/uuid_inventory/catalog.rs",
+      "sourceUnchanged": true
+    },
+    "unusedCanonicalSqlAssetsRetained": [
+      "canonical-stores.sql",
+      "canonical-work-orders.sql"
+    ]
+  },
+  "manifest": {
+    "aggregateAlgorithm": "SHA-256 of UTF-8 Python json.dumps(entries, sort_keys=True, separators=(comma,colon), ensure_ascii=True). entries is the exact path-to-{bytes,sha256} object below; paths use workspace-relative forward slashes.",
+    "aggregateSha256": "60d370b2190dc17e4b18e66744b2ec8b29797fb4445ea026810d98f90d626580",
+    "entries": {
+      "saas-plateform/backend/ops/README.md": {
+        "bytes": 1230,
+        "sha256": "6aa240f2effd4866d3f6ad918ba5d779965348df16840d546f7f85b73a8b9b94"
+      },
+      "saas-plateform/backend/ops/recovery/Cargo.lock": {
+        "bytes": 32111,
+        "sha256": "3f9a8966edcc00f38ce0a118a042799291f1fcaf03a3b84022481007ae102761"
+      },
+      "saas-plateform/backend/ops/recovery/Cargo.toml": {
+        "bytes": 506,
+        "sha256": "d98db17e43d26e2f780b39daed532d6bbdda9f756069b65382cfba41eef102f3"
+      },
+      "saas-plateform/backend/ops/recovery/README.md": {
+        "bytes": 3186,
+        "sha256": "6798b8e0817be10f617277dca13d47debccbcb0f1c87545b50f4b8e6fe31c86c"
+      },
+      "saas-plateform/backend/ops/recovery/canonical-stores.sql": {
+        "bytes": 405,
+        "sha256": "4ad65f2cb90f7980678c27d3e6c9e53505b68de0a989a303e089c1301f5610f0"
+      },
+      "saas-plateform/backend/ops/recovery/canonical-work-orders.sql": {
+        "bytes": 415,
+        "sha256": "f46221401a40c72f1517115c24a2e038d076efd48581bfa4c25ae7b9956f6540"
+      },
+      "saas-plateform/backend/ops/recovery/catalog.sql": {
+        "bytes": 2595,
+        "sha256": "d3c2bef1a0444b8f2a07a46c726fa96353be431b7e9b1be9f553fd094ddf489e"
+      },
+      "saas-plateform/backend/ops/recovery/config.example.json": {
+        "bytes": 921,
+        "sha256": "a2c57942d55bd832222f7b8ef8047c9bd7bba7866aa18910b06bbff948823fbf"
+      },
+      "saas-plateform/backend/ops/recovery/src/bundle.rs": {
+        "bytes": 14332,
+        "sha256": "28f0bba224f4ecb7e8d217e4c70ddc25022952571b12addae481fdd22dea9540"
+      },
+      "saas-plateform/backend/ops/recovery/src/config.rs": {
+        "bytes": 4211,
+        "sha256": "abddcf9bf22d52118ebcd9f9f1a387b11f1229b64c9f65aa8da0c4d6dd8c9a04"
+      },
+      "saas-plateform/backend/ops/recovery/src/lib.rs": {
+        "bytes": 811,
+        "sha256": "2b1999dc86768222549737614551a1b31ca5264d2661e6cf03e236ce554570b6"
+      },
+      "saas-plateform/backend/ops/recovery/src/main.rs": {
+        "bytes": 701,
+        "sha256": "efe25d1d8ec2372319053431a794fe19b4944bae16c8b23eeee6782be2c89c72"
+      },
+      "saas-plateform/backend/ops/recovery/src/native.rs": {
+        "bytes": 4712,
+        "sha256": "2403457b87f536ebdd96d396cf321df82d32b0059ca6755de35a6d4790fee845"
+      },
+      "saas-plateform/backend/ops/recovery/src/schema.rs": {
+        "bytes": 321,
+        "sha256": "36e72467a5fe7c875d9e85688f2a2ae2072d20e58eaa7eb81202279d350a7cb9"
+      },
+      "saas-plateform/backend/ops/recovery/src/uuid_inventory/catalog.rs": {
+        "bytes": 19544,
+        "sha256": "de9d1a6aff681e8afe06dbe8bd770029b9f5493a9b69d5c36aae9ee137e7db46"
+      },
+      "saas-plateform/backend/ops/recovery/src/uuid_inventory/mod.rs": {
+        "bytes": 19663,
+        "sha256": "d7768af26dfc7c55827aec26d4fac69e264b18e5de6f279c3a0c5ace3cd8e8ec"
+      },
+      "saas-plateform/backend/ops/recovery/src/workflow.rs": {
+        "bytes": 11019,
+        "sha256": "dbc02359e7067746f24038997d4dfd5705105bf5fa88e9601961bed852602588"
+      },
+      "saas-plateform/backend/ops/recovery/tests/restore_refusal.rs": {
+        "bytes": 842,
+        "sha256": "080c768ae8fb2ce675f85d52cbc8c8af7efa784d2ffe71568119027b843e5c01"
+      }
+    },
+    "fileCount": 18,
+    "perFileAlgorithm": "SHA-256 of raw file bytes; no newline normalization.",
+    "scope": "All ordinary current files beneath saas-plateform/backend/ops/recovery excluding target/.git/__pycache__, plus saas-plateform/backend/ops/README.md. The formal report and unrelated sso_session test changes are excluded.",
+    "totalBytes": 117525
+  },
+  "phase": 24,
+  "recordDate": "2026-10-29",
+  "recordedVerification": {
+    "commandPathConvention": "Commands are normalized for reproduction with the current workspace WSL manifest path; environment assignments and ephemeral build-cache paths are not reconstructed.",
+    "diffWhitespace": {
+      "result": "PASS",
+      "scope": "R15 changed files; owning agent recorded diff check before restart."
+    },
+    "format": {
+      "result": "PASS",
+      "scope": "R15 recovery crate; owning agent recorded cargo fmt success before restart."
+    },
+    "postFixComponents": {
+      "cliIntegrationTests": {
+        "failed": 0,
+        "passed": 1
+      },
+      "command": "cargo test --offline --locked -j2 --manifest-path /mnt/d/WorkSpace/rust/rust-saas/saas-plateform/backend/ops/recovery/Cargo.toml --all-targets --all-features -- --test-threads=1",
+      "libUnitTests": {
+        "failed": 0,
+        "passed": 7
+      },
+      "mainUnitTests": {
+        "run": 0
+      },
+      "preservedDispatchAssertion": "Each supported command continues to reject a relative config path with the existing absolute-private-file error; this does not exercise real backup, remote verification or age retrieval.",
+      "preservedDispatchCoverage": [
+        "backup",
+        "backup-new",
+        "verify",
+        "age"
+      ],
+      "refusalCoverage": {
+        "cliEnvironmentCleared": true,
+        "cliErrorExactlyFixedWithCanonicalRunbookPointer": true,
+        "cliExitCode": 1,
+        "cliInvocations": 4,
+        "cliPathEmpty": true,
+        "cliStdoutEmpty": true,
+        "libraryConfigPathCases": 4,
+        "relativeEmptyDirectoryAndMissingConfigPathsCovered": true
+      },
+      "result": "PASS",
+      "totalPassed": 8
+    },
+    "redRegression": {
+      "actualFixedErrorBeforeFix": "absolute private file required",
+      "command": "cargo test --offline --locked -j2 --manifest-path /mnt/d/WorkSpace/rust/rust-saas/saas-plateform/backend/ops/recovery/Cargo.toml workflow::tests::restore_refuses_before_configuration_or_any_external_operation -- --exact --nocapture",
+      "expectedFixedError": "CANONICAL_IDENTITY_RECOVERY_REQUIRED",
+      "purpose": "Demonstrated that the old dispatcher reached configuration validation before rejecting restore.",
+      "result": "EXPECTED_FAIL",
+      "testsFailed": 1
+    },
+    "strictClippy": {
+      "command": "cargo clippy --offline --locked -j2 --manifest-path /mnt/d/WorkSpace/rust/rust-saas/saas-plateform/backend/ops/recovery/Cargo.toml --all-targets --all-features -- -D warnings",
+      "result": "PASS"
+    }
+  },
+  "resources": {
+    "cliTestChildInvocations": 4,
+    "componentTemporaryFiles": "Existing bundle unit tests use their own temporary fixtures; the owning agent reported completion and cleanup. No new runtime files were created while assembling this report.",
+    "databaseOrRestoreSqlExecuted": false,
+    "databasesCreated": 0,
+    "dockerCreated": 0,
+    "dockerDiskUsageMeasured": false,
+    "dockerReused": 0,
+    "hbaWrites": 0,
+    "networkServiceRequests": 0,
+    "restoreNativeProcessesLaunched": 0,
+    "retainedRuntimeAfterRestart": "Not asserted; the former WSL task environment was lost.",
+    "windowsVhdxRecoveryClaim": false
+  },
+  "retirementItem": "R15",
+  "scope": "Retire the generic three-database restore execution path and retain bounded backup, verify, age and catalog contracts.",
+  "status": "PASS"
+}

@@ -1,0 +1,198 @@
+{
+  "phase": 18,
+  "status": "HISTORICAL_PRE_REVIEW_MANIFEST_NOT_CURRENT_ACCEPTANCE",
+  "sourceManifest": {
+    "algorithm": "SHA256",
+    "canonicalization": "sorted path:sha256 joined with LF; UTF-8",
+    "sha256": "a778b3e48054c625697e5804c5d60aecff42101bc137ce6c3ac1c63eb82cb1a5",
+    "files": [
+      {
+        "path": "saas-micro-app-sdk/package.json",
+        "sha256": "005df7683358163390a77269d6b54956f76048e86a5ff35992f4674d93e209ab",
+        "bytes": 744
+      },
+      {
+        "path": "saas-micro-app-sdk/releases/3.0.0/artifact-manifest.json",
+        "sha256": "02fe52794596edf08e8220c60aff3640a1401f0416ebec71ca0d37b154c40b47",
+        "bytes": 1916
+      },
+      {
+        "path": "saas-notification/Cargo.lock",
+        "sha256": "e48633df42f016c7cc94f45c98fd250dce76c2e8c22c81c0764f40fe8d782d2d",
+        "bytes": 67324
+      },
+      {
+        "path": "saas-notification/Cargo.toml",
+        "sha256": "6aa8055bdd716c4dc70ecdc09a85d4df6c64291672b536956e190b5b445c2466",
+        "bytes": 1150
+      },
+      {
+        "path": "saas-notification/src/config.rs",
+        "sha256": "2dbef2953ca8ea33e6844ce5df23d5a94ce32d3f25f1d43bad5f2be32d37e7a3",
+        "bytes": 16360
+      },
+      {
+        "path": "saas-notification/src/identifiers.rs",
+        "sha256": "006b71ee953f8e441a22019ea33200e9fcc48104785604348aefa58cf2dea375",
+        "bytes": 1874
+      },
+      {
+        "path": "saas-notification/src/lib.rs",
+        "sha256": "c1f8119f097ddbd2aeb68ad29fea6e1ee61c281d38cce51cc53f79a604412acf",
+        "bytes": 233
+      },
+      {
+        "path": "saas-notification/src/main.rs",
+        "sha256": "b0779e8c2d6aed6891b1912716790ccbe7a9e04d654de7fac4cd5a398518a69b",
+        "bytes": 200
+      },
+      {
+        "path": "saas-notification/src/metrics.rs",
+        "sha256": "66cb113d9cfc361b5e92ab32f7571f760e18e157d38978bee8d68c1df2726f45",
+        "bytes": 8431
+      },
+      {
+        "path": "saas-notification/src/platform.rs",
+        "sha256": "808b37b794a8d24dbc1bc68ec21aeb233d3da0ec913654c62fee506acadec6cf",
+        "bytes": 11478
+      },
+      {
+        "path": "saas-notification/src/protocol.rs",
+        "sha256": "fb82cf01850221a31da3eaf0652d598dfa84c9951342cb76b3e3ec937575af97",
+        "bytes": 15777
+      },
+      {
+        "path": "saas-notification/src/scheduler.rs",
+        "sha256": "dcd305293039e3413cec544e004ebf9682e6208ebd0072a83684560ae873b0d1",
+        "bytes": 21461
+      },
+      {
+        "path": "saas-notification/src/server.rs",
+        "sha256": "5d40e4cf53a4470290952835daed0352bb332a9250b671485c5fb0719740be95",
+        "bytes": 30441
+      },
+      {
+        "path": "saas-notification/src/store.rs",
+        "sha256": "b2b62a2c2b9d0ef0c516f4110d937e7f4c7b96ec693f99e136ea94eefd585c36",
+        "bytes": 17897
+      },
+      {
+        "path": "saas-notification/src/transport.rs",
+        "sha256": "b91b901bf7f1ba25592cba6699c44c4646af51f8460f6dec04719d65971196bf",
+        "bytes": 22894
+      },
+      {
+        "path": "saas-notification/tests/identity_isolation.rs",
+        "sha256": "a70eeee435ab1688bad9074e8f8c34857bd84674aa5fde586447493ac598b55c",
+        "bytes": 35315
+      },
+      {
+        "path": "saas-plateform/backend/src/app_authorization.rs",
+        "sha256": "a6dda5c8901bc456c828e62ab7507530bb57cd477733a2c923adf2b09220b95f",
+        "bytes": 13551
+      },
+      {
+        "path": "saas-plateform/backend/src/directory_authorization.rs",
+        "sha256": "cec4fbf7b4d456a620554f0efb7f9baacc08e287c913f55f4f829823793818b5",
+        "bytes": 11941
+      },
+      {
+        "path": "saas-plateform/backend/src/identity_deployment_tests/phase15_http.rs",
+        "sha256": "3b6e5b31ad784e4607d95360ecd7e2dd66d09a7c84a6d8f388028c3343ffde29",
+        "bytes": 37609
+      },
+      {
+        "path": "saas-plateform/backend/src/notifications.rs",
+        "sha256": "57272873ea04746bab81e340f055f48c081aa32cb51564570e9809f7237d2391",
+        "bytes": 32266
+      },
+      {
+        "path": "saas-plateform/backend/src/routes/notifications.rs",
+        "sha256": "2cf6a8c0aa9334ac50e9f044035cbcc0dfb5f7110ee10a880e6176eb9d9d6d5e",
+        "bytes": 28327
+      },
+      {
+        "path": "saas-plateform/frontend/package.json",
+        "sha256": "6f1b1b19732793e5e6376542d8f6587ef3828c5ce83544fbd1e61d022b9b7e4a",
+        "bytes": 5854
+      },
+      {
+        "path": "saas-plateform/frontend/src/lib/bff-session.ts",
+        "sha256": "c3259ba5931943c9b917f04b8fd8b25727b2734ded28b85b4557a3290051f660",
+        "bytes": 29400
+      },
+      {
+        "path": "saas-plateform/frontend/tests/bff-session.mjs",
+        "sha256": "b9f553e23dfd5f9b192874b5d4fcbb4a814d68f4f67814ce1d327709007765a6",
+        "bytes": 26573
+      },
+      {
+        "path": "saas-plateform/frontend/tests/browser/identity-fixture.mjs",
+        "sha256": "e3394fd921cacb7545cfa88312df790a5442587561d209ad7c8158fd72da90e8",
+        "bytes": 7735
+      },
+      {
+        "path": "saas-plateform/frontend/tests/notification-frontend-browser.mjs",
+        "sha256": "8ef96b719c4f988c75b6fa4207f89d60f846321b04b6e7ed6bf59d390766dd36",
+        "bytes": 56394
+      },
+      {
+        "path": "saas-plateform/frontend/vendor/micro-app-sdk/artifact-manifest.json",
+        "sha256": "02fe52794596edf08e8220c60aff3640a1401f0416ebec71ca0d37b154c40b47",
+        "bytes": 1916
+      },
+      {
+        "path": "saas-work-orders/backend/migrations/0001_work_orders.sql",
+        "sha256": "91d5e3c0d2255524fcaadbe5661fc641974ac6046b11b2d2d2f86335a28c074a",
+        "bytes": 12494
+      },
+      {
+        "path": "saas-work-orders/backend/src/authorization.rs",
+        "sha256": "a6465160d63371d69179c39ee049f6baedb7ece1cfaf966f8a2c696a4f9777a5",
+        "bytes": 9596
+      },
+      {
+        "path": "saas-work-orders/backend/src/authorization/client.rs",
+        "sha256": "f371ea4697ad375f53526351d26f683c91e0630c523e60b066784f3baa433bef",
+        "bytes": 20712
+      },
+      {
+        "path": "saas-work-orders/backend/src/authorization/policy.rs",
+        "sha256": "c6ff93a9158494a8a2890bb13d57f3b3af8d06c8d7daaaaeb95b42de7b19265e",
+        "bytes": 15002
+      },
+      {
+        "path": "saas-work-orders/backend/src/authorization/policy/resource.rs",
+        "sha256": "451a29239fd1ab8d5415568b6d066dd872d1d543c04b99b7fed176ebb9345d88",
+        "bytes": 12059
+      },
+      {
+        "path": "saas-work-orders/backend/src/config.rs",
+        "sha256": "922489a897de62de67d66fdbfe5c27e53909b170f437c42ef26bff19871c57a4",
+        "bytes": 26644
+      },
+      {
+        "path": "saas-work-orders/backend/src/reminders.rs",
+        "sha256": "e75e6d7bd9efa07e8e6047933a72513d9a2cd216e0e6265cab3e17b9ced54187",
+        "bytes": 2261
+      },
+      {
+        "path": "saas-work-orders/backend/src/reminders/dto.rs",
+        "sha256": "165cde258b2fc9ba77219f5572345d87fdd60449d84ba22536164eab90674b36",
+        "bytes": 9342
+      },
+      {
+        "path": "saas-work-orders/backend/src/reminders/store.rs",
+        "sha256": "10410e1f3604049f9e0516e8ff353e6fc556b44e1b0ef87b974398e3baf95a50",
+        "bytes": 5437
+      },
+      {
+        "path": "saas-work-orders/backend/tests/reminder_contracts.rs",
+        "sha256": "f9625d7d19aa23c2c227b4fe65ee7c106273ff4848fc139767c944069095214a",
+        "bytes": 71104
+      }
+    ],
+    "staleForCurrentReview": true,
+    "note": "Initial phase manifest retained for provenance; root must refresh the full manifest after both host and private-recipient repairs."
+  }
+}

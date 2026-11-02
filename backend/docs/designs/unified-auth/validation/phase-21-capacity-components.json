@@ -1,0 +1,88 @@
+{
+  "date": "2026-10-28T11:41:14.994642+00:00",
+  "scope": "independent RP source/replay capacity fail-closed repair",
+  "red": {
+    "command": "node --test --test-concurrency=1 oidc-rp/tests/capacity.test.mjs",
+    "tests": 2,
+    "passed": 0,
+    "failed": 2,
+    "result": "EXPECTED_FAILURE",
+    "httpStatus": 503,
+    "httpCode": "SOURCE_CAPACITY",
+    "failedAssertion": "CAPACITY_FAILURE_MUST_CLOSE_LOCAL_AUTHENTICATION",
+    "actualAuthenticated": true,
+    "expectedAuthenticated": false,
+    "oldProductionSource": {
+      "src/store.mjs": "1ab3ffc2f0a092e94955b346cb6c11577b5b29abaf81ac537ae0a4ffcdd0258e",
+      "src/app.mjs": "489421e9971255b1fdd223804a26f53529a53ef18a6c4887ca9d7dd55ae18696"
+    }
+  },
+  "greenFocused": {
+    "tests": 11,
+    "passed": 11,
+    "failed": 0,
+    "durationMs": 3151.1424
+  },
+  "greenFull": {
+    "command": "npm --prefix oidc-rp test",
+    "tests": 46,
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 13612.0683
+  },
+  "syntax": "PASS",
+  "diffCheck": "PASS",
+  "currentRp": {
+    "inputs": {
+      "src/app.mjs": "621129fc0838b3adc80204c2e03f29666e55dbaa85a19edc8c3b5dbb013e0109",
+      "src/backchannel.mjs": "61a2bd05c795390f33fa403e9b7f83059b37063c0c33a448a676bc6c7e27be7a",
+      "src/config.mjs": "05d80f16c20ad27aae2b7ba069698c05186b544664e2a4b119bd7c7ae453a7ee",
+      "src/oidc.mjs": "dc87ba55094f841f8fb515d6b9904d98a7b7e2a28c98d9f434c6c19df43c2506",
+      "src/store.mjs": "0ea97aa7378c2ae368084acff4d100c63ccfb2ff783e5f011f018bc79aa06e70",
+      "src/transport.mjs": "20ec3360ad0e354afd57479d437731a270755087f58eb55ef12fae51a1441b05",
+      "public/app.js": "5ee0feed9771c5ae5cc5bfa0689ef3e51e00ad66095645b4a3c884a586b48c7a",
+      "public/index.html": "531aa3c8cef4391ce55e5aa119808b9ae0666e7e17cdb89a4f44b241e103d3b2",
+      "public/style.css": "5b684ba4d5ffdd37aac8726b9382351a439e9e439175f79ca501f042c815f27b",
+      "server.mjs": "6dd231739c0a32eeb6a6f87a361386fcd741f983a65cff38bfe3282769d390d9",
+      "machine.mjs": "7bbe37d8acbcf3cea1657a87da884e952827d3acbdcf3f8b6a351a06bbcba45b",
+      "package.json": "5add1eacc24926b54e576bdd44cd6e2f8736b2ea12f1aa0172a280d4a5c69d0b",
+      "package-lock.json": "21c07d7780538f611551a5d248c41a87893dc7dffe36b92acec592c4852c26ce",
+      "config.env.example": "9ca2a689816608e9feaa6439ccde292b3c76bddd9f653e3564e913b2aa61ccbf"
+    },
+    "sourceSha256": "72e685c26f4aae783c8b0f16e9c5e0ce692cd86fa0782f912ca5250a13d3fc0a"
+  },
+  "independentReview": {
+    "reviewer": "/root/phase24_inventory",
+    "result": "PASS",
+    "newP1P2": 0,
+    "methods": [
+      "exact source SHA comparison",
+      "pure-memory original capacity repro on final code",
+      "old-generation callback fence",
+      "unknown source attachment overflow rejection",
+      "bounded source count and no eviction",
+      "read-only review of all 11 new HTTP cases"
+    ],
+    "fullSuiteRerunByReviewer": false,
+    "tlsOrDatabaseUsedByReviewer": false
+  },
+  "originalActualHttps": {
+    "file": "phase-21-https-browser.json",
+    "sha256": "c18fac53077962e5a9da200159ddae22b8d6e9f4f58b33cbd19317115a47e471",
+    "rpSourceSha256": "791bb5b83fab6ed06f031fe48e6cc4e5fa9c9fa4eb16141b09995126c91e64b0",
+    "newSourcePassedByThisOldResult": false
+  },
+  "revalidation": {
+    "status": "PASS",
+    "resultFile": "phase-21-capacity-https-browser.json",
+    "passed": 15,
+    "failed": 0,
+    "sha256": "9d804a473d7ea26b6016e8b8b8bb22f8dfe61991b6706698d6996d050d5bda95",
+    "rpSourceSha256": "72e685c26f4aae783c8b0f16e9c5e0ce692cd86fa0782f912ca5250a13d3fc0a"
+  },
+  "componentContainersCreated": 0,
+  "componentDatabasesCreated": 0,
+  "componentTemporaryCertificatesRemaining": 0,
+  "componentTemporaryPrivateFilesRemaining": 0
+}

@@ -56,7 +56,7 @@ struct TenantInsightData {
     organizations: i64,
     roles: i64,
     logins7d: i64,
-    active_tokens: i64,
+    active_platform_sessions: i64,
     /// 近 7 天 (含今天) 每日 LOGIN 数, 旧 → 新, 缺天补 0
     logins_trend: Vec<i64>,
 }
@@ -67,7 +67,7 @@ struct TenantInsightData {
 /// - users: users 表无 tenant_id 列, 按 memberships → organizations.tenant_id 归属去重统计;
 /// - organizations / roles: 限定当前组织及下级组织；平台根上下文可统计全平台;
 /// - logins7d / logins_trend: audit_logs 自带 tenant_id (LOGIN 审计写入时均携带登录上下文租户);
-/// - active_tokens: oauth_tokens 中绑定该租户、未吊销且未过期的 access 令牌。
+/// - active_platform_sessions: platform_sessions 中绑定该租户、未撤销且未到期的平台会话。
 /// - 所有成员、日志、令牌与趋势均应用同一组织范围，避免租户总计泄漏上级或平级数据。
 async fn load_tenant_insights(
     pool: &PgPool,
@@ -84,9 +84,9 @@ async fn load_tenant_insights(
          (SELECT count(*) FROM audit_logs a WHERE a.action = 'LOGIN' AND a.tenant_id = t.id \
            AND a.created_at >= date_trunc('day', now()) - interval '6 days' \
            AND ($2::uuid[] IS NULL OR a.organization_id = ANY($2))), \
-         (SELECT count(*) FROM oauth_tokens ot WHERE ot.token_type = 'access' \
-           AND ot.revoked = false AND ot.expires_at > now() AND ot.tenant_id = t.id \
-           AND ($2::uuid[] IS NULL OR ot.organization_id = ANY($2))) \
+         (SELECT count(*) FROM platform_sessions ps WHERE ps.revoked_at IS NULL \
+           AND ps.expires_at > now() AND ps.tenant_id = t.id \
+           AND ($2::uuid[] IS NULL OR ps.organization_id = ANY($2))) \
          FROM tenants t WHERE ($1::uuid IS NULL OR t.id = $1) ORDER BY t.created_at",
     )
     .bind(tenant_scope)
@@ -115,7 +115,17 @@ async fn load_tenant_insights(
     Ok(rows
         .into_iter()
         .map(
-            |(id, name, code, status, users, organizations, roles, logins7d, active_tokens)| {
+            |(
+                id,
+                name,
+                code,
+                status,
+                users,
+                organizations,
+                roles,
+                logins7d,
+                active_platform_sessions,
+            )| {
                 let logins_trend: Vec<i64> = (0..7)
                     .rev()
                     .map(|i| {
@@ -134,7 +144,7 @@ async fn load_tenant_insights(
                     organizations,
                     roles,
                     logins7d,
-                    active_tokens,
+                    active_platform_sessions,
                     logins_trend,
                 }
             },
@@ -165,7 +175,7 @@ async fn tenant_insights(
             json!({
                 "tenantId": r.id, "tenantName": r.name, "tenantCode": r.code, "status": r.status,
                 "users": r.users, "organizations": r.organizations, "roles": r.roles,
-                "logins7d": r.logins7d, "activeTokens": r.active_tokens, "loginsTrend": r.logins_trend,
+                "logins7d": r.logins7d, "activePlatformSessions": r.active_platform_sessions, "loginsTrend": r.logins_trend,
             })
         })
         .collect();
@@ -192,7 +202,7 @@ async fn export_tenant_insights_csv(
     let rows =
         load_tenant_insights(&state.pool, tenant_scope, organization_scope.as_deref()).await?;
     let mut csv = String::from(
-        "\u{FEFF}租户名称,租户编码,状态,用户数,组织数,角色数,近7天登录,活跃令牌,近7天登录趋势\n",
+        "\u{FEFF}租户名称,租户编码,状态,用户数,组织数,角色数,近7天登录,活跃平台会话,近7天登录趋势\n",
     );
     for r in &rows {
         // 状态输出中文 (Excel 友好); 非预期状态原样输出
@@ -216,7 +226,7 @@ async fn export_tenant_insights_csv(
             r.organizations,
             r.roles,
             r.logins7d,
-            r.active_tokens,
+            r.active_platform_sessions,
             trend,
         ));
     }
@@ -294,7 +304,7 @@ async fn system(State(state): State<AppState>, user: CurrentUser) -> Result<Json
          GREATEST(COALESCE(c.reltuples, 0), 0)::bigint AS rows, \
          COALESCE(pg_total_relation_size(c.oid), 0)::bigint AS size_bytes \
          FROM (VALUES (1,'tenants'),(2,'organizations'),(3,'users'),(4,'roles'),(5,'menus'), \
-               (6,'applications'),(7,'audit_logs'),(8,'notifications'),(9,'oauth_tokens'),(10,'oauth_device_codes')) AS t(ord, name) \
+               (6,'applications'),(7,'audit_logs'),(8,'notifications'),(9,'platform_sessions'),(10,'platform_app_capabilities')) AS t(ord, name) \
          LEFT JOIN pg_class c ON c.relname = t.name AND c.relkind = 'r' \
              AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = current_schema()) \
          ORDER BY t.ord",
@@ -337,8 +347,8 @@ async fn overview(
          (SELECT count(*) FROM roles), \
          (SELECT count(*) FROM applications), \
          (SELECT count(*) FROM menus), \
-         (SELECT count(*) FROM oauth_clients), \
-         (SELECT count(*) FROM oauth_tokens WHERE revoked = false AND expires_at > now() AND token_type = 'access'), \
+         (SELECT count(*) FROM platform_app_capabilities), \
+         (SELECT count(*) FROM platform_sessions WHERE revoked_at IS NULL AND expires_at > now()), \
          (SELECT count(*) FROM audit_logs WHERE action = 'LOGIN' AND created_at >= date_trunc('day', now()))",
     )
     .fetch_one(&state.pool)
@@ -350,8 +360,8 @@ async fn overview(
         role_count,
         application_count,
         menu_count,
-        oauth_client_count,
-        active_token_count,
+        internal_capability_count,
+        active_platform_session_count,
         today_login_count,
     ) = stats;
 
@@ -390,8 +400,8 @@ async fn overview(
         "roleCount": role_count,
         "applicationCount": application_count,
         "menuCount": menu_count,
-        "oauthClientCount": oauth_client_count,
-        "activeTokenCount": active_token_count,
+        "internalCapabilityCount": internal_capability_count,
+        "activePlatformSessionCount": active_platform_session_count,
         "todayLoginCount": today_login_count,
         "recentLogins": recent_logins,
         "loginTrend7d": fill_trend(&login_rows),

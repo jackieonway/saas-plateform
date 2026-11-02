@@ -18,7 +18,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::routes;
-use crate::util::jwt;
 
 const SECRET: &str = "entity-creation-isolated-tests-only";
 const MANAGEMENT_PERMISSIONS: [&str; 6] = [
@@ -187,29 +186,7 @@ fn id(value: &Value) -> Result<Uuid> {
 }
 
 async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<String> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let session = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(session.to_string()),
-            ver: Some(version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 struct Harness {
@@ -1178,7 +1155,7 @@ async fn fresh_development_bootstrap_requires_explicit_admin_and_never_installs_
             accounts == vec!["fresh-owner".to_string()],
             "bootstrap installed historical demo users"
         );
-        let clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients")
+        let clients: i64 = sqlx::query_scalar("SELECT count(*) FROM auth_clients")
             .fetch_one(&db.pool)
             .await?;
         ensure!(clients == 0, "bootstrap installed historical OAuth clients");

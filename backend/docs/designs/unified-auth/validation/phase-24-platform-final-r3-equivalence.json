@@ -1,0 +1,82 @@
+{
+  "baseSnapshot": "phase24-final-r1",
+  "baseSnapshotSha256": "5f191160608a118298727e3027304f05cf710e88ea403a853a063c696b029df0",
+  "intermediateSnapshot": "phase24-final-r2",
+  "intermediateSnapshotSha256": "e1f3e17d31a3b96e548115559127308aa594f40f1e737268907c5523fa474926",
+  "currentSnapshot": "phase24-final-r3",
+  "currentSnapshotSha256": "78d6b1604ae590888353619d40c32f0758926388729346459f75cab08ad97f45",
+  "intermediateEquivalenceReport": {
+    "path": "phase-24-platform-final-r2-equivalence.json",
+    "sha256": "948b1ec63df9846452c8e35241dbc3f227db3a9ff4a01b4a2b11f02b91afe7af"
+  },
+  "platformInputCounts": {
+    "r2": 390,
+    "r3": 390
+  },
+  "r2ToR3ChangedInputs": {
+    "saas-plateform/backend/src/bff/context.rs": {
+      "before": "39725dde6399511c9c1922e2e722e2ee61062879bf24799559cd51195127b758",
+      "after": "d75872dd801f2fcda2b639caa3ba8a450148e519172cb52a654688a9b63f8f03"
+    },
+    "saas-plateform/backend/src/bff_tests/canonical.rs": {
+      "before": "9ab306f62f55054fe3ac5616861b11fcd1818e0d8f40cedf0dbd234c62b98af6",
+      "after": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351"
+    },
+    "saas-plateform/backend/src/identity_deployment_tests.rs": {
+      "before": "8ed4d0183e652052576c7802fd88837fdbb6426aead9bbf4afb70a4ea7044215",
+      "after": "e749c63a4d00d290aec2664241eaa2d6b3fed97043274a2ff11dd53e6e1b7f79"
+    },
+    "saas-plateform/backend/src/organization_subtree_reporting_tests.rs": {
+      "before": "8c383df0460bfbc17e411641ef1d3918b4a309e5975c061d7a7b2dd1cc4889ab",
+      "after": "0c957c6f95aa4dfb8cfcc76b1cfd2365eb0f2bc850a6e7c0649a190169462286"
+    },
+    "saas-plateform/backend/src/state.rs": {
+      "before": "e07cd1f05e4f95eb28d9b2b324e3d836a6166e15b4b779c7808fc48e57f9e1ae",
+      "after": "2a6be2772ada94edb9a32e2feb0352f9e61fb3ab98aadda174162b0fe56036a1"
+    }
+  },
+  "r2ToR3AddedInputs": [],
+  "r2ToR3RemovedInputs": [],
+  "onlyFiveExpectedInputsChangedFromR2": true,
+  "productionWhitespaceProofs": {
+    "saas-plateform/backend/src/bff/context.rs": {
+      "onlyWhitespaceChanged": true,
+      "beforeSha256": "39725dde6399511c9c1922e2e722e2ee61062879bf24799559cd51195127b758",
+      "afterSha256": "d75872dd801f2fcda2b639caa3ba8a450148e519172cb52a654688a9b63f8f03",
+      "whitespaceNormalizedSha256": "0678da940177b6d32cbe2e19d72ef92af61171f4d2eefaf9a54e17202ad2eeb0",
+      "reviewedDiff": "Only existing expression line wrapping or blank line after documentation; no SQL, string literal, statement, configuration, or branch change."
+    },
+    "saas-plateform/backend/src/state.rs": {
+      "onlyWhitespaceChanged": true,
+      "beforeSha256": "e07cd1f05e4f95eb28d9b2b324e3d836a6166e15b4b779c7808fc48e57f9e1ae",
+      "afterSha256": "2a6be2772ada94edb9a32e2feb0352f9e61fb3ab98aadda174162b0fe56036a1",
+      "whitespaceNormalizedSha256": "49a561377d74b46488f4030997d3a1900f6d9790c06485b7714dd1a90611416a",
+      "reviewedDiff": "Only existing expression line wrapping or blank line after documentation; no SQL, string literal, statement, configuration, or branch change."
+    }
+  },
+  "r1ToR3ChangedCompiledInputPaths": [
+    "saas-plateform/backend/src/authentication_boundary_tests.rs",
+    "saas-plateform/backend/src/bff/context.rs",
+    "saas-plateform/backend/src/bff_tests/canonical.rs",
+    "saas-plateform/backend/src/identity_deployment_tests.rs",
+    "saas-plateform/backend/src/management_audit_tests.rs",
+    "saas-plateform/backend/src/organization_subtree_reporting_tests.rs",
+    "saas-plateform/backend/src/release_tests/database_upgrade.rs",
+    "saas-plateform/backend/src/routes/department_organization_tests.rs",
+    "saas-plateform/backend/src/state.rs"
+  ],
+  "r1ToR3UnchangedCompiledInputCount": 213,
+  "nonPlatformCompiledInputsFromR2Unchanged": true,
+  "currentMismatch": [],
+  "testChangeScopeReview": "All semantic edits from r1/r2 are confined to the seven revalidated test groups and their private helpers. No global environment or cross-group shared fixture changed. Production context/state edits from r2 are whitespace only.",
+  "plannedCoverage": {
+    "historicalFullCases": 431,
+    "oldAffectedCases": 49,
+    "currentAffectedCases": 50,
+    "unaffectedPassingCases": 382,
+    "currentUniqueCases": 432,
+    "originallyIgnoredExecuted": 191
+  },
+  "status": "PASS",
+  "createdUtc": "2026-10-29T09:15:13.735912+00:00"
+}

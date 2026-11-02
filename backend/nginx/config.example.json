@@ -7,8 +7,6 @@
   "frontend": "frontend-web:8080",
   "notification": null,
   "workOrders": null,
-  "oauthPlayground": null,
-  "oauthPlaygroundStatic": null,
   "zipStatic": null,
   "trustedProxyIps": [],
   "versionRoutes": [],

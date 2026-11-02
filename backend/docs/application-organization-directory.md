@@ -4,13 +4,13 @@
 
 ## 边界与用途登记
 
-组织管理的 `/api/organizations/tree` 需要平台会话和 `system:organization`，包含管理资料，不能用作应用业务目录。本接口使用应用专用 Bearer token，不扩充 SDK 2 的 MicroProps，也不把平台管理会话或客户端 secret 交给微应用。
+组织管理的 `/api/organizations/tree` 需要平台会话和 `system:organization`，包含管理资料，不能用作应用业务目录。本接口使用应用专用 Bearer token，不扩充 SDK 3.0.0 的 MicroProps 2.0，也不把平台管理会话或客户端 secret 交给微应用。
 
 在 `DATA_GRANT_POLICY.applications[]` 增加独立的 `organizationLookups`，默认空、未登记即拒绝。示例片段应放在真实应用策略中：
 
 ```json
 {
-  "applicationId": "11111111-1111-4111-8111-111111111111",
+  "applicationId": "11111111-1111-7111-8111-111111111111",
   "capabilities": [{"resource":"store","action":"read","scopes":["ORG","ORG_SUBTREE"]}],
   "organizationLookups": [{"resource":"store","action":"read","organizationType":"STORE"}]
 }

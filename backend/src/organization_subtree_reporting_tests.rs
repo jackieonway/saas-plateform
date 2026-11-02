@@ -17,7 +17,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::routes;
-use crate::util::jwt;
 
 const SECRET: &str = "organization-subtree-reporting-tests-only";
 
@@ -176,29 +175,7 @@ async fn user(pool: &PgPool, name: &str, org: Uuid, super_admin: bool) -> Result
 }
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<String> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let session = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(session.to_string()),
-            ver: Some(version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 async fn call(
@@ -301,7 +278,8 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
         }
         let mut ancestor_role = Uuid::nil();
         for (org, name) in [(ancestor,"report ancestor"),(current,"report current"),(child,"report descendant"),(sibling,"report sibling")] {
-            user(pool, &format!("{name} user"), org, false).await?;
+            let report_user = user(pool, &format!("{name} user"), org, false).await?;
+            crate::sso_test_fixture::session(pool, report_user, tenant, org).await?;
             let role: Uuid = sqlx::query_scalar(
                 "INSERT INTO roles(tenant_id,organization_id,name,code,id) VALUES($1,$2,$3,$3,$4) RETURNING id",
             ).bind(tenant).bind(org).bind(format!("{name} role")).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
@@ -309,9 +287,6 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
             sqlx::query("INSERT INTO audit_logs(tenant_id,organization_id,username,organization_name,action,detail) \
                          VALUES($1,$2,$3,$3,'LOGIN',$3)")
                 .bind(tenant).bind(org).bind(name).execute(pool).await?;
-            sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,client_id,tenant_id,organization_id,expires_at,id) \
-                         VALUES($1,'access','report-client',$2,$3,now()+interval '1 hour',$4)")
-                .bind(crate::util::uuid7::new_uuid().to_string()).bind(tenant).bind(org).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         }
         user(pool, "report foreign user", foreign, false).await?;
         sqlx::query("INSERT INTO audit_logs(tenant_id,organization_id,username,organization_name,action,detail) \
@@ -344,20 +319,23 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
         ]))?;
         let app = routes::api_router().with_state(crate::sso_test_fixture::state(pool.clone(), Arc::new(config)));
 
-        for account in [manager, global_admin] {
-            let token = session(pool, account, tenant, current).await?;
-            let organizations = call(&app, &token, Method::GET,
+        let report_tokens = [
+            session(pool, manager, tenant, current).await?,
+            session(pool, global_admin, tenant, current).await?,
+        ];
+        for token in &report_tokens {
+            let organizations = call(&app, token, Method::GET,
                 &format!("/api/organizations/tree?tenantId={tenant}"), None, StatusCode::OK).await?;
             let current_row = organizations.as_array().and_then(|rows| rows.iter().find(|row| row["id"] == json!(current)))
                 .ok_or_else(|| anyhow!("current organization must remain the scoped tree root"))?;
             ensure!(current_row["userCount"] == 3,
                 "same-account employee/customer rows were counted as two people: {organizations}");
-            call(&app, &token, Method::GET, "/api/search?q=%00", None, StatusCode::BAD_REQUEST).await?;
+            call(&app, token, Method::GET, "/api/search?q=%00", None, StatusCode::BAD_REQUEST).await?;
             for query in ["%25", "_", "%5C"] {
-                let search = call(&app, &token, Method::GET, &format!("/api/search?q={query}&limit=10"), None, StatusCode::OK).await?;
+                let search = call(&app, token, Method::GET, &format!("/api/search?q={query}&limit=10"), None, StatusCode::OK).await?;
                 ensure!(search == json!({"users":[],"tenants":[],"organizations":[],"roles":[]}), "search interpreted a literal keyword as a SQL pattern: {search}");
             }
-            let search = call(&app, &token, Method::GET, "/api/search?q=report&limit=10", None, StatusCode::OK).await?;
+            let search = call(&app, token, Method::GET, "/api/search?q=report&limit=10", None, StatusCode::OK).await?;
             for key in ["organizations", "roles"] {
                 ensure!(search[key].as_array().is_some_and(|rows| rows.len() == 2), "unscoped {key}: {search}");
             }
@@ -367,33 +345,33 @@ async fn reporting_scope(platform_tenant: bool) -> Result<()> {
             ensure!(search["organizations"].as_array().unwrap().iter().all(|row|
                 row["path"].as_str().is_some_and(|path| path.starts_with("report current"))), "relative path leaked ancestor");
             // Deliberate out-of-scope tenant filter cannot expand the scoped audit data.
-            let audit = call(&app, &token, Method::GET, "/api/audit-logs?size=100", None, StatusCode::OK).await?;
+            let audit = call(&app, token, Method::GET, "/api/audit-logs?size=100", None, StatusCode::OK).await?;
             ensure!(audit["total"] == 2 && !audit.to_string().contains("report ancestor")
                 && !audit.to_string().contains("report sibling") && !audit.to_string().contains("report unassigned"), "unscoped audit: {audit}");
-            let foreign_audit = call(&app, &token, Method::GET,
+            let foreign_audit = call(&app, token, Method::GET,
                 &format!("/api/audit-logs?tenant_id={foreign_tenant}"), None, StatusCode::OK).await?;
             ensure!(foreign_audit["total"] == 0, "foreign filter expanded audit scope");
-            let audit_csv = csv(&app, &token, "/api/audit-logs/export").await?;
+            let audit_csv = csv(&app, token, "/api/audit-logs/export").await?;
             ensure!(audit_csv.contains("report current") && audit_csv.contains("report descendant")
                 && !audit_csv.contains("report ancestor") && !audit_csv.contains("report sibling")
                 && !audit_csv.contains("report unassigned") && !audit_csv.contains("report foreign"), "audit export leaked subtree");
-            let tenants = call(&app, &token, Method::GET, "/api/tenants", None, StatusCode::OK).await?;
+            let tenants = call(&app, token, Method::GET, "/api/tenants", None, StatusCode::OK).await?;
             ensure!(tenants["total"] == 1 && tenants["records"][0]["organizationCount"] == 2
                 && tenants["records"][0]["userCount"] == 4 && tenants["records"][0]["authorizedAppCount"] == 1,
                 "tenant summary exposed upstream totals: {tenants}");
-            let choices = call(&app, &token, Method::GET, "/api/tenants/options", None, StatusCode::OK).await?;
+            let choices = call(&app, token, Method::GET, "/api/tenants/options", None, StatusCode::OK).await?;
             ensure!(choices.as_array().is_some_and(|rows| rows.len()==1) && choices[0]["id"]==json!(tenant), "unscoped tenant choice");
-            let insights = call(&app, &token, Method::GET, "/api/monitor/tenant-insights", None, StatusCode::OK).await?;
+            let insights = call(&app, token, Method::GET, "/api/monitor/tenant-insights", None, StatusCode::OK).await?;
             let row = &insights["insights"][0];
             ensure!(insights["insights"].as_array().is_some_and(|rows| rows.len() == 1)
                 && row["users"] == 4 && row["organizations"] == 2 && row["roles"] == 2
-                && row["logins7d"] == 2 && row["activeTokens"] == 2, "unscoped insights: {insights}");
+                && row["logins7d"] == 2 && row["activePlatformSessions"] == 4, "unscoped insights: {insights}");
             ensure!(row["loginsTrend"].as_array().unwrap().iter().filter_map(Value::as_i64).sum::<i64>() == 2,
                 "login trend included outside subtree");
-            let insight_csv = csv(&app, &token, "/api/monitor/tenant-insights/export").await?;
-            ensure!(insight_csv.contains(",4,2,2,2,2,") && !insight_csv.contains("report foreign"), "insights export totals not scoped");
+            let insight_csv = csv(&app, token, "/api/monitor/tenant-insights/export").await?;
+            ensure!(insight_csv.contains(",4,2,2,2,4,") && !insight_csv.contains("report foreign"), "insights export totals not scoped");
             for path in ["/api/monitor/overview", "/api/monitor/system"] {
-                call(&app, &token, Method::GET, path, None, StatusCode::FORBIDDEN).await?;
+                call(&app, token, Method::GET, path, None, StatusCode::FORBIDDEN).await?;
             }
         }
 

@@ -10,21 +10,17 @@ use std::{
 pub(crate) struct Database {
     pub kind: String,
     pub source_service: String,
-    pub target: String,
-    pub owner: String,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Config {
     pub profile: String,
     pub service_file: PathBuf,
-    pub admin_service: String,
     pub databases: Vec<Database>,
     pub key_file: PathBuf,
     pub scratch: PathBuf,
     pub local_bundle: PathBuf,
     pub artifact_root: PathBuf,
-    pub restored_artifacts: PathBuf,
     pub remote_url: String,
     pub remote_token_file: PathBuf,
     pub ca_file: PathBuf,
@@ -65,10 +61,7 @@ impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         let c: Self = serde_json::from_slice(&private_file(path)?)
             .map_err(|_| Error("invalid configuration"))?;
-        if c.profile != "pilot"
-            || !(1..=1800).contains(&c.timeout_seconds)
-            || !identifier(&c.admin_service)
-        {
+        if c.profile != "pilot" || !(1..=1800).contains(&c.timeout_seconds) {
             return Err(Error("unsupported profile or budget"));
         }
         let kinds: BTreeSet<_> = c.databases.iter().map(|d| d.kind.as_str()).collect();
@@ -76,32 +69,22 @@ impl Config {
         {
             return Err(Error("three distinct database kinds required"));
         }
-        let mut targets = BTreeSet::new();
         for d in &c.databases {
-            if !identifier(&d.source_service)
-                || !identifier(&d.target)
-                || !identifier(&d.owner)
-                || !d.target.starts_with("recovery_")
-                || !targets.insert(&d.target)
-            {
-                return Err(Error("unsafe or duplicate target"));
+            if !identifier(&d.source_service) {
+                return Err(Error("invalid source service"));
             }
         }
         for p in [
             &c.scratch,
             &c.local_bundle,
             &c.artifact_root,
-            &c.restored_artifacts,
             &c.sequence_file,
         ] {
             if !p.is_absolute() {
                 return Err(Error("absolute paths required"));
             }
         }
-        if c.key_file == c.local_bundle
-            || c.key_file.starts_with(&c.artifact_root)
-            || c.key_file.starts_with(&c.restored_artifacts)
-        {
+        if c.key_file == c.local_bundle || c.key_file.starts_with(&c.artifact_root) {
             return Err(Error("key must be separate from recovery material"));
         }
         for url in [&c.remote_url, &c.monitor_url] {

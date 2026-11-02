@@ -4,8 +4,8 @@
 
 - [身份数据库 owner/ACL](identity-deployment/README.md)：共享平台库中的账号与业务权限隔离。
 - [监控](monitoring/README.md)：探针、指标、告警和受限运维入口。
-- [备份恢复](recovery/README.md)：加密快照、完整性核验与隔离恢复。
-- [身份感知恢复](identity-recovery/README.md)：恢复后的会话撤销与重新验收。
+- [快照备份与核验](recovery/README.md)：平台／门店／工单三库的加密归档、远端完整性和年龄核验；通用 restore 已关闭。
+- [身份感知恢复](identity-recovery/README.md)：共享认证库与客户门户库的唯一 canonical 恢复流程，包含最新 deny 见证、隔离与 gate；不直接恢复门店／工单业务库。
 
 运维必须指定实际数据库、角色、来源和凭据，记录当前 schema/二进制/配置版本。数据库 readiness、在线身份 proof 和业务授权分别验证，不能用本地投影代替不可用的认证中心。
 

@@ -1,0 +1,11 @@
+{
+  "contractVersion": "unified-auth-runtime-log-redaction/1",
+  "date": "2026-10-28T10:01:22.023051+00:00",
+  "logFilesScanned": 7,
+  "bytesScanned": 2973433,
+  "runtimeAndDeliveredInvitationMaterialComparedInMemory": true,
+  "secretValuesExported": false,
+  "findings": [],
+  "identityDeliveryTerminalWarnings": 0,
+  "result": "PASS"
+}

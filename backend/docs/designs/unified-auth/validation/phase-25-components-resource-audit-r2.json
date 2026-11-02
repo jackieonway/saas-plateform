@@ -1,0 +1,36 @@
+{
+  "contractVersion": "unified-auth-phase25-component-resource-audit/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T12:02:14.275233+00:00",
+  "status": "PASS",
+  "auditedServices": [
+    "identity",
+    "platform",
+    "portal",
+    "notification"
+  ],
+  "clusterMatchedProtectedBinding": true,
+  "clusterSystemIdentifier": "7701992637128815755",
+  "componentFixtureResourcesRemaining": {
+    "databases": [],
+    "roles": []
+  },
+  "ownedRunnerTemporaryDirectoriesRemaining": [],
+  "oldDefaultTmpKnownFixturePrefixesRemaining": [],
+  "remainingComponentRunnerPids": [],
+  "frozenR2InputMismatches": [],
+  "snapshotInputsVerified": 1527,
+  "dockerContext": "default",
+  "dockerSystemDfAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "databaseDeletionByAudit": false,
+  "filesDeletedByAudit": false,
+  "retainedSharedPostgresCargoCacheAndCandidateInputs": true,
+  "windowsVdiskCompactionClaimed": false,
+  "limits": [
+    "Post-run independent audit only; not retroactive interruption/failure-cleanup testing of the earlier runner.",
+    "Other root or business-agent resources use different prefixes and are excluded.",
+    "stores/orders await updated production-source candidate; neither has been executed by this agent yet."
+  ]
+}

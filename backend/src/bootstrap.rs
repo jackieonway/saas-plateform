@@ -132,56 +132,12 @@ pub(crate) async fn run() -> anyhow::Result<()> {
     }
 
     let state = AppState::try_new(pool, config.clone())?;
-    crate::oidc::initialize(&state)
-        .await
-        .map_err(|_| anyhow::anyhow!("OIDC_PROVIDER_INITIALIZATION_FAILED"))?;
     artifact_distribution::start(state.clone());
-
-    // 后台维护任务: 每 10 分钟把过期仍 PENDING 的设备码标记为 EXPIRED (供设备码轮询端点识别)
-    {
-        let maintenance_pool = state.pool.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(600)).await;
-                if sqlx::query(
-                    "UPDATE oauth_device_codes SET status = 'EXPIRED' WHERE expires_at < now() AND status = 'PENDING'",
-                )
-                .execute(&maintenance_pool)
-                .await
-                .is_err() {
-                    tracing::warn!(error_code="DEVICE_EXPIRY_MAINTENANCE_FAILED", "Device expiry maintenance failed");
-                }
-            }
-        });
-    }
-
-    // Historical deletion is opt-in. The default preserves OAuth history;
-    // operators may explicitly invoke the audited administrative purge endpoint.
-    if config.oauth_auto_purge {
-        let purge_pool = state.pool.clone();
-        tokio::spawn(async move {
-            loop {
-                match routes::oauth_admin::purge_stale_oauth_data(&purge_pool).await {
-                    Ok((tokens, devices)) => {
-                        tracing::info!(
-                            "OAuth 历史数据清理完成: 删除令牌 {tokens} 行, 设备码 {devices} 行"
-                        );
-                    }
-                    Err(_) => tracing::warn!(
-                        error_code = "OAUTH_PURGE_FAILED",
-                        "OAuth historical purge failed"
-                    ),
-                }
-                tokio::time::sleep(Duration::from_secs(3600)).await;
-            }
-        });
-    }
 
     let mut app = axum::Router::new()
         .merge(routes::api_router_for_deployment(
             config.identity_remote_enabled,
         ))
-        .nest("/oauth", routes::oauth2::oauth_router())
         .with_state(state.clone());
 
     // 生产单进程模式: 仅宿主 HTML 导航使用 SPA fallback，缺失资源/API 保留 404。
@@ -242,15 +198,41 @@ async fn verify_identity_deployment(pool: &sqlx::PgPool, config: &Config) -> any
              AND NOT has_column_privilege(current_user,'public.users','id','UPDATE') \
              AND NOT has_any_column_privilege(current_user,'public.users','INSERT') \
              AND NOT has_table_privilege(current_user,'public.users','TRIGGER') \
+             AND NOT EXISTS(SELECT 1 FROM unnest(ARRAY[ \
+                 'platform_app_capabilities','platform_resource_services','platform_resource_bindings','platform_machine_delegations']::text[]) AS target(name) \
+                 WHERE to_regclass('public.'||target.name) IS NULL \
+                    OR NOT (has_table_privilege(current_user,'public.'||target.name,'SELECT') \
+                        AND has_table_privilege(current_user,'public.'||target.name,'INSERT') \
+                        AND has_table_privilege(current_user,'public.'||target.name,'UPDATE') \
+                        AND has_table_privilege(current_user,'public.'||target.name,'DELETE')) \
+                    OR (SELECT relowner FROM pg_catalog.pg_class WHERE oid=to_regclass('public.'||target.name)) \
+                       IS DISTINCT FROM (SELECT oid FROM pg_catalog.pg_roles WHERE rolname=d.platform_owner)) \
+             AND has_function_privilege(current_user,'public.platform_app_capability_active(text)','EXECUTE') \
+             AND public.identity_phase20_schema_ready() \
+             AND has_function_privilege(current_user,'public.platform_identity_management_actor_active(uuid,uuid,text,boolean,boolean)','EXECUTE') \
+             AND has_function_privilege(current_user,'public.identity_admin_assurance(uuid,uuid,uuid,bigint,uuid,bigint,text)','EXECUTE') \
+             AND NOT has_function_privilege(current_user,'public.identity_auth_review_intent_active(uuid,uuid,text,text,text,jsonb)','EXECUTE') \
+             AND NOT has_function_privilege(current_user,'public.identity_auth_invitation_intent_active(uuid,uuid,text,text,text,uuid,uuid)','EXECUTE') \
+             AND has_table_privilege(current_user,'public.platform_auth_release_bindings','SELECT') \
+             AND NOT has_any_column_privilege(current_user,'public.platform_auth_release_bindings','INSERT,UPDATE,REFERENCES') \
+             AND NOT has_table_privilege(current_user,'public.platform_auth_release_bindings','DELETE,TRUNCATE,TRIGGER') \
              AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class a \
                  JOIN pg_catalog.pg_namespace an ON an.oid=a.relnamespace \
                  WHERE an.nspname='public' AND a.relname IN \
-                 ('sso_sessions','sso_login_challenges','oidc_provider_settings','oidc_clients', \
-                  'oidc_authorization_requests','oidc_grants','oidc_authorization_codes', \
-                  'oidc_access_tokens','oidc_refresh_tokens','oidc_signing_keys', \
-                  'oidc_account_logout_receipts','identity_service_clients','identity_audit_logs', \
-                  'identity_account_command_receipts','identity_oidc_admin_receipts', \
-                  'identity_account_revocation_facts','oidc_context_clients','oidc_context_interactions','oidc_consents') AND \
+                 ('sso_sessions','sso_login_challenges','auth_provider_settings','auth_signing_keys', \
+                  'auth_clients','auth_client_credentials','auth_client_permissions', \
+                  'auth_applications','auth_application_admissions','auth_subject_sectors','auth_subject_links', \
+                  'auth_authorization_requests','auth_authorization_codes','auth_grants', \
+                  'auth_access_tokens','auth_access_token_scopes','auth_grant_scopes', \
+                  'auth_refresh_families','auth_refresh_tokens','auth_rp_sessions','auth_context_interactions', \
+                  'auth_consents','auth_consent_scopes','auth_consent_groups','auth_consent_group_clients', \
+                  'auth_consent_revocation_outbox','auth_logout_command_receipts','auth_delivery_jobs','auth_delivery_targets', \
+                  'auth_invitations','auth_invitation_verifications','auth_invitation_activation_receipts', \
+                  'auth_totp_enrollments','auth_totp_factors','auth_totp_recovery_codes', \
+                  'auth_mfa_recovery_receipts','auth_mfa_recovery_approvals','auth_security_notification_outbox', \
+                  'identity_service_clients','identity_audit_logs','identity_account_command_receipts', \
+                  'identity_auth_command_receipts','identity_consent_command_receipts', \
+                  'identity_account_revocation_facts') AND \
                  (has_any_column_privilege(current_user,a.oid,'SELECT') \
                   OR has_any_column_privilege(current_user,a.oid,'INSERT') \
                   OR has_any_column_privilege(current_user,a.oid,'UPDATE') \

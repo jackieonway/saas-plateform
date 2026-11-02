@@ -1,19 +1,27 @@
-# OAuth 签发与来源校验
+# 统一 OAuth / OIDC 签发与来源校验
 
-账号登录由 SSO/OIDC 提供。平台 OAuth 保留应用授权码、设备授权、已登记 refresh 与机器 `client_credentials`，不接受 password grant 或公开 `psr_` 平台刷新。
+`saas-identity` 是唯一客户端登记和 OAuth/OIDC 签发权威。管理平台与客户门户分别作为独立 BFF，人员与机器使用同一注册簿中的不同客户端。平台不挂载公开 OAuth 签发、设备授权或旧客户端登记接口；认证中心不可用时失败关闭。
 
-## 客户端管理与分页
+## 唯一公开协议
 
-`/system/oauth/clients` 分为“业务 OAuth 客户端”和“统一登录 OIDC 客户端”。管理平台、客户门户使用认证中心登记的 `oidc_clients`，分别由 BFF 的客户端标识、secret 和精确回调部署配置引用；不硬编码在业务 OAuth 列表，也不要求在 `oauth_clients` 复制一份控制台客户端。统一登录标签通过平台受权限保护的 `/api/oidc/clients` 读取当前登记，可查看用途、允许身份、回调/退出返回地址、refresh 设置及策略版本，不返回 secret。
+Discovery 位于准确 HTTPS issuer 的 `/.well-known/openid-configuration`。身份服务提供 `/oauth/authorize`、`/oauth/token`、`/oauth/userinfo`、`/oauth/introspect`、`/oauth/revoke`、`/oauth/jwks` 与受控 `/oauth/logout`。客户端以 Discovery 为准，并验证 issuer、CA、精确回调、state、nonce 和 S256。当前不提供 password、implicit 或设备授权。
 
-业务 OAuth 列表使用 `GET /api/oauth/clients?page=1&size=10`，返回 `{records,total,page,size}`。复用平台有界分页参数：page 至少 1、至多一百万，size 为 1–200、默认 10。按 `created_at,id` 稳定排序，并在同一只读可重复读事务中查询总数、页面和应用名称，避免并发变化导致元数据错配。不带 page/size 时保留数组响应，以兼容原有调用。分页和旧接口使用相同的平台上下文及 `system:oauth` 权限门禁，均不返回凭据。
+USER 客户端使用 code + S256，按登记选择 `ACCOUNT_ONLY` 或 `PLATFORM_CONTEXT`；后者还限定员工／客户及业务应用资格。MACHINE 客户端单独登记为 CONFIDENTIAL、SERVICE、NONE，只允许受批 resource/scope 的 `client_credentials`，没有人员成员或 ID Token。ID Token 不用于业务 API。
 
-前端支持每页 10/20/50 条、前后翻页和跳页；修改每页数量回到第一页，删除末页最后记录后恢复到有效页。统一登录登记接口仍按其既有合同返回 `records`，其标签内按本次完整登记结果分页展示。
+公开 `sub` 是受审 sector 下稳定的 opaque 标识，客户端不解析为内部 UUID。默认 Access Token 为 opaque 并绑定精确 resource、audience、scope、原 grant、同意及来源代际。在线 refresh 不超过原 SSO/业务来源绝对期限；离线授权只适用于另行批准的 ACCOUNT_ONLY，不能靠请求 `offline_access` 自行取得。refresh 轮换和重用拒绝不修复旧来源。
 
-授权码和设备批准来自当前有效员工上下文。签发与兑换保存具体账号/成员代际、客户端与应用策略版本、原平台会话来源；等待锁和提交前重新核对原始权限。刷新不能扩大 scope，重放及失效来源拒绝，不通过读取当前代际修复旧授权。
+## 统一客户端管理
 
-人员和机器客户端按明确用途登记；机器用途只允许 CONFIDENTIAL client_credentials，不包含成员身份，也不发放未经登记的 refresh。Public 客户端不能获得机器能力。发现文档不声明 password grant。
+`/system/oauth/clients` 使用唯一注册簿，可按应用、合作方、环境、人员／机器和状态筛选。平台 `GET /api/identity/clients` 代理身份私有 `/internal/identity/auth/clients`，分页使用 `limit=1..100`、`offset=0..100000`，默认 50/0，返回 `{records,page:{limit,offset,total}}`，不再提供旧数组合同或双标签客户端列表。
 
-签发、消费一次性凭据、写入 token pair 与审计处于同一受控事务。数据库只保存摘要和必要来源证明；访问 token 使用独立 jti，撤销一个 token 不误伤其他有效授权。账号、成员、组织、客户端和应用变更按相应作用域实时拒绝旧凭据。
+客户端命令使用独立 `AUTH_ADMIN` 服务身份，配置 `IDENTITY_AUTH_ADMIN_SERVICE_CLIENT_ID` / `IDENTITY_AUTH_ADMIN_SERVICE_CLIENT_SECRET`。应用投影另用 `APPLICATION_PROJECTION`；审核、邀请及密钥使用各自用途。所有写入复核当前员工、细分权限、来源、近期 TOTP、期望版本和原 operation。提交结果未知时查询原 operation，不换编号重复创建或轮换。secret 摘要持久化，明文只在获准创建／轮换返回中短暂展示。
 
-应用 API 的 userinfo、introspect、业务 context 和通知 proof 都须检查当前来源，JWT 签名并非独立授权。来源不可用返回失败，客户端不得自动改用另一认证协议。
+## 密钥管理
+
+平台 `/api/identity/keys/publish`、`/activate`、`/{kid}` 和 `/{kid}/revoke` 分别调用私有 `/internal/identity/auth/keys/*`；原操作查询使用 `/api/identity/key-operations/{id}`。配置独立 `IDENTITY_KEY_ADMIN_SERVICE_CLIENT_ID` / `IDENTITY_KEY_ADMIN_SERVICE_CLIENT_SECRET`，身份服务登记用途必须为 `KEY_ADMIN`。该身份不复用客户端管理、应用投影、账号命令或 RP secret。管理端还要求 `system:oauth:keys` 和近期真实 TOTP；公钥发布与私钥部署分别进行。完整步骤见[签名密钥轮换](../../../saas-identity/docs/signing-key-rotation.md)。
+
+## 平台内部能力和资源服务
+
+宿主通过 `POST /api/apps/session-token` 获取绑定原 BFF 来源和具体应用 audience 的短期 `app_session`。它有独立 token_use、摘要账本和验证器，不能用作公开 OAuth grant，也不提供外部客户端注册或 refresh。具体接口见[应用授权合同](application-authorization-contract.md)。
+
+业务 API 使用平台独立 `APP_RESOURCE` 服务凭据调用私有资源授权，身份的 canonical opaque Token 与内部 `app_session` 分别验证。身份、成员、组织、客户端、应用或服务范围收缩后拒绝原凭据；统一权威失联不会切回平台签发。第三方标准接入示例为[独立 OIDC RP 与机器 CLI](../../../saas-examples/oidc-rp/README.md)。

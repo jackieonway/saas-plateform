@@ -20,13 +20,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::state::AppState;
-use crate::util::{hash, jwt, uuid7::new_uuid};
+use crate::util::{jwt, uuid7::new_uuid};
 
 const SECRET: &str = "owned-phase04-notification-identity-only";
 const CODE: &str = "phase04-notifications";
-const ORIGIN: &str = "phase04-owned-human";
-const SERVICE: &str = "phase04-owned-service";
 const REASON: &str = "Owned Phase 4 identity notification fixture";
 const PROOF_PATH: &str = "/api/internal/notifications/context-proof";
 
@@ -265,50 +262,72 @@ async fn credentials(pool: &PgPool, member: &Member, application: Uuid) -> Resul
         .bind(member.user)
         .fetch_one(pool)
         .await?;
-    let sid = new_uuid();
-    sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-        VALUES($1,$2,$3,$4,now()+interval '1 hour',$5,$6,$7,$8,'urn:saas:legacy-platform',$9,1)")
-        .bind(sid).bind(member.user).bind(member.tenant).bind(member.org).bind(account_version).bind(member.id).bind(member.kind).bind(member.version).bind(ORIGIN).execute(pool).await?;
     let now = chrono::Utc::now().timestamp();
-    let session = jwt::sign(
+    let app = if member.kind == "EMPLOYEE" {
+        crate::sso_test_fixture::app_capability(
+            pool,
+            member.user,
+            member.tenant,
+            member.org,
+            application,
+            CODE,
+            SECRET,
+        )
+        .await?
+    } else {
+        // A customer-shaped internal token is an explicit negative input. It has
+        // no admitted employee source or stored application capability.
+        let sid = crate::sso_test_fixture::session_for_member(
+            pool,
+            member.user,
+            member.tenant,
+            member.org,
+            member.kind,
+        )
+        .await?;
+        jwt::sign_internal(
+            &jwt::Claims {
+                sub: member.user.to_string(),
+                typ: "app_session".into(),
+                tenant: Some(member.tenant.to_string()),
+                org: Some(member.org.to_string()),
+                sid: Some(sid.to_string()),
+                ver: Some(account_version),
+                cid: Some(CODE.into()),
+                scope: Some("app:access".into()),
+                aud: Some(CODE.into()),
+                jti: Some(new_uuid().to_string()),
+                iat: now,
+                exp: now + 300,
+            },
+            jwt::InternalUse::AppSession,
+            SECRET,
+        )?
+    };
+    let app_claims = jwt::verify_internal(&app, SECRET, jwt::InternalUse::AppSession, Some(CODE))?;
+    let sid: Uuid = app_claims
+        .sid
+        .as_deref()
+        .ok_or_else(|| anyhow!("fixture capability source missing"))?
+        .parse()?;
+    let session = jwt::sign_internal(
         &jwt::Claims {
             sub: member.user.to_string(),
-            typ: "session".into(),
+            typ: "platform_session".into(),
             tenant: Some(member.tenant.to_string()),
             org: Some(member.org.to_string()),
             sid: Some(sid.to_string()),
             ver: Some(account_version),
             cid: None,
             scope: None,
-            aud: None,
+            aud: Some(jwt::PLATFORM_API_AUDIENCE.into()),
             jti: None,
             iat: now,
             exp: now + 3600,
         },
+        jwt::InternalUse::PlatformSession,
         SECRET,
     )?;
-    let jti = new_uuid();
-    let app = jwt::sign(
-        &jwt::Claims {
-            sub: member.user.to_string(),
-            typ: "access".into(),
-            tenant: Some(member.tenant.to_string()),
-            org: Some(member.org.to_string()),
-            sid: None,
-            ver: None,
-            cid: Some(SERVICE.into()),
-            scope: Some("profile".into()),
-            aud: Some(CODE.into()),
-            jti: Some(jti.to_string()),
-            iat: now,
-            exp: now + 300,
-        },
-        SECRET,
-    )?;
-    sqlx::query("INSERT INTO oauth_tokens(id,token_hash,token_type,user_id,client_id,tenant_id,organization_id,expires_at,token_use,audience,jti,application_id,platform_session_id,storage_version,account_version,membership_id,member_type,identity_version,client_policy_version,application_policy_version,origin_issuer,origin_client_ref,origin_client_policy_version,application_service_client_ref) \
-        VALUES($1,$2,'access',$3,$4,$5,$6,now()+interval '5 minutes','app',$7,$8,$9,$10,2,$11,$12,$13,$14,1,1,'urn:saas:legacy-platform',$15,1,$4)")
-        .bind(new_uuid()).bind(hash::sha256_hex(&app)).bind(member.user).bind(SERVICE).bind(member.tenant).bind(member.org).bind(CODE).bind(jti).bind(application).bind(sid)
-        .bind(account_version).bind(member.id).bind(member.kind).bind(member.version).bind(ORIGIN).execute(pool).await?;
     Ok(Credentials {
         sid,
         session,
@@ -376,10 +395,6 @@ impl Harness {
                 .await?;
             }
         }
-        sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,grant_types,subject_mode,allowed_member_types) VALUES($1,$2,'Owned Phase 4 human','PUBLIC','authorization_code','USER',ARRAY['EMPLOYEE','CUSTOMER']::text[])")
-            .bind(new_uuid()).bind(ORIGIN).execute(pool).await?;
-        sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,client_secret_hash,grant_types,subject_mode,allowed_member_types,application_id) VALUES($1,$2,'Owned Phase 4 service','CONFIDENTIAL',$3,'client_credentials','MACHINE',ARRAY[]::text[],$4)")
-            .bind(new_uuid()).bind(SERVICE).bind(hash::sha256_hex("owned-phase04-service-secret")).bind(application).execute(pool).await?;
         let manager = member(
             pool,
             account(pool, "phase04-manager", true).await?,
@@ -403,9 +418,8 @@ impl Harness {
             ("CUSTOMER_MEMBERSHIPS_ENABLED".into(), "true".into()),
             ("DUAL_MEMBERSHIPS_ENABLED".into(), "true".into()),
         ]))?;
-        let state = AppState::new(pool.clone(), Arc::new(config));
+        let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
         let app = crate::routes::api_router()
-            .nest("/oauth", crate::routes::oauth2::oauth_router())
             .layer(middleware::from_fn_with_state(
                 state.clone(),
                 crate::observability::observe,
@@ -469,6 +483,11 @@ async fn fixture_notification(pool: &PgPool, target: &Member, label: &str) -> Re
     Ok(id)
 }
 
+async fn stored_receipts(pool: &PgPool, target: &Member) -> Result<BTreeSet<Uuid>> {
+    Ok(sqlx::query_scalar("SELECT id FROM notifications WHERE recipient_membership_id=$1 AND recipient_member_type=$2 AND recipient_identity_version=$3 ORDER BY id")
+        .bind(target.id).bind(target.kind).bind(target.version).fetch_all(pool).await?.into_iter().collect())
+}
+
 fn ids(list: &Value) -> Result<BTreeSet<Uuid>> {
     list["records"]
         .as_array()
@@ -504,7 +523,7 @@ async fn notification_identity_phase04_employee_audiences_deduplicate_and_emit_b
         let disabled=h.person("phase04-audience-disabled",h.child,"EMPLOYEE","DISABLED").await?;
         let disabled_customer=member(&h.pool,disabled.user,h.tenant,h.child,"CUSTOMER","ENABLED").await?;
         let customer_credentials=credentials(&h.pool,&customer,h.application).await?;
-        ensure!(crate::app_token::inspect(&h.pool,&customer_credentials.app,&jwt::verify(&customer_credentials.app,SECRET)?).await?.is_some(),"customer publisher fixture must first have a genuinely admitted bound app token");
+        ensure!(crate::app_token::inspect(&h.pool,&customer_credentials.app,&jwt::verify_internal(&customer_credentials.app,SECRET,jwt::InternalUse::AppSession,Some(CODE))?).await?.is_none(),"customer-shaped publisher unexpectedly entered employee authority");
         let mut listener=PgListener::connect_with(&h.pool).await?;
         listener.listen("new_notification").await?;
         let target=json!({"kind":"USER","userId":employee.user,"organizationId":h.child});
@@ -583,9 +602,10 @@ async fn notification_identity_phase04_inbox_mutations_and_legacy_archive_never_
         let old_system=new_uuid();
         sqlx::query("INSERT INTO notifications(id,user_id,title,source_kind,tenant_id,organization_id) VALUES($1,$2,'phase04-unbound-system','SYSTEM',$3,$4)").bind(old_system).bind(employee.user).bind(h.tenant).bind(h.child).execute(&h.pool).await?;
         ensure!(ids(&h.list(&employee_credentials).await?)?==own.iter().copied().collect(),"employee inbox leaked customer/other-org/NULL-proof rows");
-        ensure!(ids(&h.list(&customer_credentials).await?)?==foreign.iter().copied().collect(),"customer inbox leaked employee/other-org/NULL-proof rows");
+        expect(&h.api(&customer_credentials.session,Method::GET,"/api/notifications",Value::Null).await?,StatusCode::UNAUTHORIZED,"customer cannot open employee inbox")?;
+        ensure!(stored_receipts(&h.pool,&customer).await?==foreign.iter().copied().collect(),"customer stored receipts changed during employee read");
         ensure!(ids(&h.list(&other_credentials).await?)?==BTreeSet::from([other_id]),"second employee organization reused first organization's receipt inbox");
-        for (creds,expected) in [(&employee_credentials,5),(&customer_credentials,5),(&other_credentials,1)]{
+        for (creds,expected) in [(&employee_credentials,5),(&other_credentials,1)]{
             let unread=h.api(&creds.session,Method::GET,"/api/notifications/unread-count",Value::Null).await?;expect(&unread,StatusCode::OK,"isolated unread count")?;ensure!(unread.body["count"]==expected,"unread count crossed identity");
         }
         for foreign_id in [foreign[0],other_id,legacy,old_system]{
@@ -596,13 +616,19 @@ async fn notification_identity_phase04_inbox_mutations_and_legacy_archive_never_
         let batch=h.api(&employee_credentials.session,Method::PUT,"/api/notifications/read-batch",json!({"ids":[own[0],foreign[0],other_id,legacy,old_system]})).await?;
         expect(&batch,StatusCode::OK,"mixed identity read-batch")?;ensure!(batch.body["updated"]==1,"read-batch mutated another recipient");
         let all=h.api(&customer_credentials.session,Method::PUT,"/api/notifications/read-all",Value::Null).await?;
-        expect(&all,StatusCode::OK,"customer read-all")?;ensure!(all.body["updated"]==5,"customer read-all did not stay in exact customer receipt generation");
+        expect(&all,StatusCode::UNAUTHORIZED,"customer cannot mutate employee inbox through read-all")?;
         let employee_unread=h.api(&employee_credentials.session,Method::GET,"/api/notifications/unread-count",Value::Null).await?;
         ensure!(employee_unread.body["count"]==4,"customer read-all changed employee read state");
+        let employee_all=h.api(&employee_credentials.session,Method::PUT,"/api/notifications/read-all",Value::Null).await?;
+        expect(&employee_all,StatusCode::OK,"employee exact-generation read-all")?;
+        ensure!(employee_all.body["updated"]==4,"employee read-all crossed receipt identity");
         let deleted=h.api(&customer_credentials.session,Method::DELETE,"/api/notifications",json!({"ids":[foreign[0],own[0],other_id,legacy,old_system]})).await?;
-        expect(&deleted,StatusCode::OK,"mixed identity batch-delete")?;ensure!(deleted.body["deleted"]==1,"batch-delete removed another recipient");
+        expect(&deleted,StatusCode::UNAUTHORIZED,"customer cannot mutate employee inbox through batch-delete")?;
+        let own_batch=h.api(&employee_credentials.session,Method::DELETE,"/api/notifications",json!({"ids":[own[0],foreign[0],other_id,legacy,old_system]})).await?;
+        expect(&own_batch,StatusCode::OK,"employee mixed-identity batch-delete")?;
+        ensure!(own_batch.body["deleted"]==1,"employee batch-delete removed another receipt identity");
         let single=h.api(&employee_credentials.session,Method::DELETE,&format!("/api/notifications/{}",own[1]),Value::Null).await?;expect(&single,StatusCode::OK,"own employee delete")?;
-        ensure!(ids(&h.list(&employee_credentials).await?)?.len()==4&&ids(&h.list(&customer_credentials).await?)?.len()==4,"read/delete mutations mixed the two inboxes");
+        ensure!(ids(&h.list(&employee_credentials).await?)?.len()==3&&stored_receipts(&h.pool,&customer).await?.len()==5,"read/delete mutations mixed the two inboxes");
         let untouched:bool=sqlx::query_scalar("SELECT count(*)=3 AND bool_and(NOT is_read AND read_at IS NULL) FROM notifications WHERE id=ANY($1)").bind(vec![other_id,legacy,old_system]).fetch_one(&h.pool).await?;
         ensure!(untouched,"unbound archives or second-org receipt were mutated through mixed IDs");
         let archived=h.api(&h.admin.session,Method::GET,"/api/notifications/legacy?size=100",Value::Null).await?;
@@ -629,7 +655,12 @@ async fn notification_identity_phase04_public_payload_and_internal_context_proof
         let customer_credentials=credentials(&h.pool,&customer,h.application).await?;
         let employee_id=fixture_notification(&h.pool,&employee,"phase04-proof-employee").await?;
         let customer_id=fixture_notification(&h.pool,&customer,"phase04-proof-customer").await?;
-        for (target,creds,own,foreign) in [(&employee,&employee_credentials,employee_id,customer_id),(&customer,&customer_credentials,customer_id,employee_id)]{
+        for path in [format!("/api/notifications/{customer_id}"),format!("/api/notifications/socket-context?notificationId={customer_id}"),format!("{PROOF_PATH}?notificationId={customer_id}")] {
+            expect(&h.api(&customer_credentials.session,Method::GET,&path,Value::Null).await?,StatusCode::UNAUTHORIZED,"customer has no employee notification proof")?;
+        }
+        ensure!(stored_receipts(&h.pool,&customer).await?==BTreeSet::from([customer_id]),"employee proof checks changed customer receipt");
+        {
+            let (target,creds,own,foreign)=(&employee,&employee_credentials,employee_id,customer_id);
             let detail=h.api(&creds.session,Method::GET,&format!("/api/notifications/{own}"),Value::Null).await?;
             expect(&detail,StatusCode::OK,"owned identity detail")?;
             ensure!(detail.body["link"]==json!(format!("/owned/{}/{}",target.id,target.version)),"public notification jump link was mixed across recipient identities");
@@ -647,9 +678,9 @@ async fn notification_identity_phase04_public_payload_and_internal_context_proof
                 let connect=h.api(&creds.session,Method::GET,prefix,Value::Null).await?;expect(&connect,StatusCode::OK,"initial/reconnect proof binds exact active identity")?;
             }
         }
-        let mut forged=jwt::verify(&employee_credentials.session,SECRET)?;
+        let mut forged=jwt::verify_internal(&employee_credentials.session,SECRET,jwt::InternalUse::PlatformSession,Some(jwt::PLATFORM_API_AUDIENCE))?;
         forged.ver=Some(employee_credentials.account_version+1);
-        let forged=jwt::sign(&forged,SECRET)?;
+        let forged=jwt::sign_internal(&forged,jwt::InternalUse::PlatformSession,SECRET)?;
         expect(&h.api(&forged,Method::GET,PROOF_PATH,Value::Null).await?,StatusCode::UNAUTHORIZED,"JWT account version mismatch")?;
         expect(&h.api("invalid-owned-token",Method::GET,PROOF_PATH,Value::Null).await?,StatusCode::UNAUTHORIZED,"internal proof never accepts an unverified bearer")?;
         Ok(())
@@ -677,20 +708,21 @@ async fn notification_identity_phase04_local_departure_and_replacement_preserve_
                 let target_id=fixture_notification(&h.pool,&target,"phase04-other-identity").await?;
                 let second_id=fixture_notification(&h.pool,&second,"phase04-other-org").await?;
                 let old_row:Value=sqlx::query_scalar("SELECT to_jsonb(n) FROM notifications n WHERE id=$1").bind(old_id).fetch_one(&h.pool).await?;
-                expect(&h.api(&source_credentials.session,Method::GET,&format!("{PROOF_PATH}?notificationId={old_id}"),Value::Null).await?,StatusCode::OK,"original online receipt proof")?;
+                expect(&h.api(&source_credentials.session,Method::GET,&format!("{PROOF_PATH}?notificationId={old_id}"),Value::Null).await?,if kind=="EMPLOYEE" {StatusCode::OK}else{StatusCode::UNAUTHORIZED},"original employee proof/customer refusal")?;
                 let (method,path,body)=match operation {
                     "disable"=>(Method::PUT,format!("/api/memberships/{}/status",source.id),json!({"expectedIdentityVersion":1,"status":"DISABLED","reason":REASON})),
                     "delete"=>(Method::DELETE,format!("/api/memberships/{}",source.id),json!({"expectedIdentityVersion":1,"reason":REASON})),
                     "replace"=>(Method::POST,format!("/api/memberships/{}/replace-identity",source.id),json!({"memberType":target_kind,"expectedIdentityVersion":1,"expectedTargetIdentityVersion":1,"accountBindingConfirmed":true,"bindingSource":"Owned Phase 4 explicit target","reason":REASON})),
                     _=>unreachable!(),
                 };
-                expect(&h.api(&h.admin.session,method,&path,body).await?,StatusCode::OK,"local receipt identity lifecycle change")?;
+                expect(&h.api(&h.admin.session,method,&path,body).await?,StatusCode::OK,&format!("local receipt identity lifecycle change {kind}/{operation}"))?;
                 for path in ["/api/notifications".to_owned(),"/api/notifications/socket-context".to_owned(),PROOF_PATH.to_owned(),format!("{PROOF_PATH}?notificationId={old_id}")]{
                     expect(&h.api(&source_credentials.session,Method::GET,&path,Value::Null).await?,StatusCode::UNAUTHORIZED,"old identity connection/reconnect/replay after local departure")?;
                 }
-                ensure!(ids(&h.list(&target_credentials).await?)?==BTreeSet::from([target_id]),"local lifecycle change revoked or mixed the other identity receipt");
+                ensure!(stored_receipts(&h.pool,&target).await?==BTreeSet::from([target_id]),"local lifecycle change mixed the other identity receipt");
+                if target.kind=="EMPLOYEE" {ensure!(ids(&h.list(&target_credentials).await?)?==BTreeSet::from([target_id]),"local lifecycle revoked another employee identity");}
                 ensure!(ids(&h.list(&second_credentials).await?)?==BTreeSet::from([second_id]),"local lifecycle change revoked another organization's employee receipt");
-                expect(&h.api(&target_credentials.session,Method::GET,&format!("{PROOF_PATH}?notificationId={target_id}"),Value::Null).await?,StatusCode::OK,"other identity online receipt remains valid")?;
+                expect(&h.api(&target_credentials.session,Method::GET,&format!("{PROOF_PATH}?notificationId={target_id}"),Value::Null).await?,if target.kind=="EMPLOYEE" {StatusCode::OK}else{StatusCode::UNAUTHORIZED},"other employee proof/customer refusal remains unchanged")?;
                 let retained:Value=sqlx::query_scalar("SELECT to_jsonb(n) FROM notifications n WHERE id=$1").bind(old_id).fetch_one(&h.pool).await?;
                 ensure!(retained==old_row,"local lifecycle rewrote/deleted the receipt tombstone instead of denying the old proof");
                 let returned=if operation=="delete"{
@@ -700,10 +732,12 @@ async fn notification_identity_phase04_local_departure_and_replacement_preserve_
                     Member{version:3,..source.clone()}
                 };
                 let fresh=credentials(&h.pool,&returned,h.application).await?;
-                ensure!(ids(&h.list(&fresh).await?)?.is_empty(),"new identity generation inherited an old notification receipt");
-                expect(&h.api(&fresh.session,Method::GET,&format!("{PROOF_PATH}?notificationId={old_id}"),Value::Null).await?,StatusCode::NOT_FOUND,"new generation cannot replay old receipt")?;
+                ensure!(stored_receipts(&h.pool,&returned).await?.is_empty(),"new identity generation inherited an old notification receipt");
+                if returned.kind=="EMPLOYEE" {ensure!(ids(&h.list(&fresh).await?)?.is_empty(),"new employee generation exposed old receipt");}
+                expect(&h.api(&fresh.session,Method::GET,&format!("{PROOF_PATH}?notificationId={old_id}"),Value::Null).await?,if returned.kind=="EMPLOYEE" {StatusCode::NOT_FOUND}else{StatusCode::UNAUTHORIZED},"new generation cannot replay old receipt")?;
                 let new_id=fixture_notification(&h.pool,&returned,"phase04-current-generation").await?;
-                ensure!(ids(&h.list(&fresh).await?)?==BTreeSet::from([new_id]),"new identity generation did not receive only its current exact proof");
+                ensure!(stored_receipts(&h.pool,&returned).await?==BTreeSet::from([new_id]),"new identity generation lost current exact stored proof");
+                if returned.kind=="EMPLOYEE" {ensure!(ids(&h.list(&fresh).await?)?==BTreeSet::from([new_id]),"new employee generation did not receive only current proof");}
                 expect(&h.api(&source_credentials.session,Method::GET,PROOF_PATH,Value::Null).await?,StatusCode::UNAUTHORIZED,"reenable cannot restore old online connection proof")?;
             }
         }
@@ -727,24 +761,30 @@ async fn notification_identity_phase04_preferences_are_exact_member_generation_a
         let other_credentials=credentials(&h.pool,&other,h.application).await?;
         sqlx::query("INSERT INTO notification_prefs(user_id,dnd_enabled,dnd_start,dnd_end,muted_types) VALUES($1,true,'01:02','03:04','SECURITY')").bind(employee.user).execute(&h.pool).await?;
         let default=json!({"dndEnabled":false,"dndStart":"22:00","dndEnd":"07:00","mutedTypes":[]});
-        for creds in [&employee_credentials,&customer_credentials,&other_credentials]{
+        for creds in [&employee_credentials,&other_credentials]{
             let r=h.api(&creds.session,Method::GET,"/api/notifications/prefs",Value::Null).await?;expect(&r,StatusCode::OK,"member preference default")?;
             ensure!(r.body==default,"old account-level preference was copied into a current member");
         }
         let employee_prefs=json!({"dndEnabled":true,"dndStart":"19:00","dndEnd":"06:00","mutedTypes":["INFO"]});
         let customer_prefs=json!({"dndEnabled":true,"dndStart":"20:00","dndEnd":"08:00","mutedTypes":["WARNING"]});
-        for (creds,body) in [(&employee_credentials,&employee_prefs),(&customer_credentials,&customer_prefs)]{
+        {
+            let (creds,body)=(&employee_credentials,&employee_prefs);
             let r=h.api(&creds.session,Method::PUT,"/api/notifications/prefs",body.clone()).await?;expect(&r,StatusCode::OK,"exact identity preference update")?;
             let read=h.api(&creds.session,Method::GET,"/api/notifications/prefs",Value::Null).await?;
             ensure!(read.body==*body&&keys(&read.body)==BTreeSet::from(["dndEnabled","dndStart","dndEnd","mutedTypes"]),"member preferences changed old JSON DTO or another identity's value");
         }
+        sqlx::query("INSERT INTO notification_member_prefs(membership_id,identity_version,dnd_enabled,dnd_start,dnd_end,muted_types) VALUES($1,1,true,'20:00','08:00','WARNING')").bind(customer.id).execute(&h.pool).await?;
+        let customer_row:Value=sqlx::query_scalar("SELECT to_jsonb(p) FROM notification_member_prefs p WHERE membership_id=$1").bind(customer.id).fetch_one(&h.pool).await?;
+        expect(&h.api(&customer_credentials.session,Method::PUT,"/api/notifications/prefs",customer_prefs.clone()).await?,StatusCode::UNAUTHORIZED,"customer cannot write employee preferences")?;
         ensure!(h.api(&other_credentials.session,Method::GET,"/api/notifications/prefs",Value::Null).await?.body==default,"same-user second-org preferences were shared");
         expect(&h.api(&h.admin.session,Method::PUT,&format!("/api/memberships/{}/status",employee.id),json!({"expectedIdentityVersion":1,"status":"DISABLED","reason":REASON})).await?,StatusCode::OK,"disable preference owner")?;
         expect(&h.api(&h.admin.session,Method::PUT,&format!("/api/memberships/{}/status",employee.id),json!({"expectedIdentityVersion":2,"status":"ENABLED","reason":REASON})).await?,StatusCode::OK,"reenable preference owner")?;
         let returned=Member{version:3,..employee.clone()};
         let fresh=credentials(&h.pool,&returned,h.application).await?;
         ensure!(h.api(&fresh.session,Method::GET,"/api/notifications/prefs",Value::Null).await?.body==default,"new member generation inherited the old generation's preference");
-        ensure!(h.api(&customer_credentials.session,Method::GET,"/api/notifications/prefs",Value::Null).await?.body==customer_prefs,"employee preference generation change affected customer preference");
+        expect(&h.api(&customer_credentials.session,Method::GET,"/api/notifications/prefs",Value::Null).await?,StatusCode::UNAUTHORIZED,"customer cannot read employee preferences")?;
+        let retained_customer_row:Value=sqlx::query_scalar("SELECT to_jsonb(p) FROM notification_member_prefs p WHERE membership_id=$1").bind(customer.id).fetch_one(&h.pool).await?;
+        ensure!(retained_customer_row==customer_row,"employee preference generation change affected stored customer preference");
         let rows:i64=sqlx::query_scalar("SELECT count(*) FROM notification_member_prefs WHERE membership_id=ANY($1)").bind(vec![employee.id,customer.id,other.id]).fetch_one(&h.pool).await?;
         ensure!(rows==2,"preference reads copied old rows or fabricated another generation");
         Ok(())
@@ -785,11 +825,18 @@ async fn notification_identity_phase04_account_revocation_and_authority_failure_
         let other_credentials = credentials(&h.pool, &other, h.application).await?;
         let id = fixture_notification(&h.pool, &employee, "phase04-authority-employee").await?;
         fixture_notification(&h.pool, &customer, "phase04-authority-customer").await?;
-        for creds in [
-            &employee_credentials,
-            &customer_credentials,
-            &other_credentials,
-        ] {
+        expect(
+            &h.api(
+                &customer_credentials.session,
+                Method::GET,
+                PROOF_PATH,
+                Value::Null,
+            )
+            .await?,
+            StatusCode::UNAUTHORIZED,
+            "customer source refused before account revocation",
+        )?;
+        for creds in [&employee_credentials, &other_credentials] {
             expect(
                 &h.api(&creds.session, Method::GET, PROOF_PATH, Value::Null)
                     .await?,
@@ -827,7 +874,7 @@ async fn notification_identity_phase04_account_revocation_and_authority_failure_
             .await?;
         expect(&proof, StatusCode::OK, "fresh account-generation context")?;
         ensure!(
-            proof.body["accountVersion"].as_i64() == Some(1),
+            proof.body["accountVersion"].as_i64() == Some(employee_credentials.account_version + 1),
             "new context proof did not use authoritative account version"
         );
         ensure!(
@@ -924,8 +971,8 @@ async fn notification_identity_phase04_mutation_waits_recheck_member_and_account
     let db = Database::create().await?;
     let result=async {
         let h=Harness::create(&db.pool).await?;
-        for (index,scenario) in ["read_one","read_batch","read_all","delete_one","delete_batch","preferences"].into_iter().enumerate(){
-            let kind=if index%2==0{"EMPLOYEE"}else{"CUSTOMER"};
+        for scenario in ["read_one","read_batch","read_all","delete_one","delete_batch","preferences"]{
+            let kind="EMPLOYEE";
             let actor=h.person(&format!("phase04-wait-{scenario}"),h.child,kind,"ENABLED").await?;
             let counterpart=member(&h.pool,actor.user,h.tenant,h.child,if kind=="EMPLOYEE"{"CUSTOMER"}else{"EMPLOYEE"},"ENABLED").await?;
             let actor_credentials=credentials(&h.pool,&actor,h.application).await?;
@@ -968,7 +1015,8 @@ async fn notification_identity_phase04_mutation_waits_recheck_member_and_account
             expect(&reply,StatusCode::UNAUTHORIZED,"notification mutation revoked during a real late row-lock wait")?;
             ensure!(notification_snapshot(&h.pool).await?==before,"{scenario} committed notification/preferences or success audit after identity revocation");
             if !global {
-                ensure!(ids(&h.list(&counterpart_credentials).await?)?==BTreeSet::from([other_id]),"local waiting-mutation revocation harmed same-org other identity");
+                ensure!(stored_receipts(&h.pool,&counterpart).await?==BTreeSet::from([other_id]),"local waiting-mutation revocation changed other identity receipt");
+                expect(&h.api(&counterpart_credentials.session,Method::GET,PROOF_PATH,Value::Null).await?,StatusCode::UNAUTHORIZED,"customer counterpart remains outside employee authority")?;
             }else{
                 expect(&h.api(&counterpart_credentials.session,Method::GET,PROOF_PATH,Value::Null).await?,StatusCode::UNAUTHORIZED,"global waiting-mutation revocation covers other identity")?;
             }
@@ -1460,6 +1508,17 @@ async fn notification_identity_phase04_actual_platform_and_external_socketio_kee
         let employee = h
             .person("phase04-live-dual", h.child, "EMPLOYEE", "ENABLED")
             .await?;
+        let other = member(
+            &h.pool,
+            employee.user,
+            h.tenant,
+            h.sibling,
+            "EMPLOYEE",
+            "ENABLED",
+        )
+        .await?;
+        let employee_credentials = credentials(&h.pool, &employee, h.application).await?;
+        let other_credentials = credentials(&h.pool, &other, h.application).await?;
         let customer = member(
             &h.pool,
             employee.user,
@@ -1469,19 +1528,22 @@ async fn notification_identity_phase04_actual_platform_and_external_socketio_kee
             "ENABLED",
         )
         .await?;
-        let employee_credentials = credentials(&h.pool, &employee, h.application).await?;
         let customer_credentials = credentials(&h.pool, &customer, h.application).await?;
         let mut rig = ExternalNotifications::start(&db, h.app.clone()).await?;
+        let mut customer_rejected = Polling::open(&rig).await?;
+        customer_rejected
+            .authenticate(&customer_credentials.session)
+            .await?;
+        customer_rejected.rejected().await?;
         let mut employee_socket = Polling::accepted(&rig, &employee_credentials, &employee).await?;
-        let mut customer_socket = Polling::accepted(&rig, &customer_credentials, &customer).await?;
+        let mut other_socket = Polling::accepted(&rig, &other_credentials, &other).await?;
         let employee_id =
             publish_over_http(&rig, &h, "phase04-live-employee-first", &employee).await?;
         employee_socket.notification(employee_id, &employee).await?;
         rig.idle(1).await?;
-        let customer_id =
-            fixture_notification(&h.pool, &customer, "phase04-live-explicit-customer").await?;
-        fixture_hint(&h.pool, customer_id, &customer).await?;
-        customer_socket.notification(customer_id, &customer).await?;
+        let other_id = fixture_notification(&h.pool, &other, "phase04-live-explicit-other").await?;
+        fixture_hint(&h.pool, other_id, &other).await?;
+        other_socket.notification(other_id, &other).await?;
         rig.idle(2).await?;
         let employee_sentinel =
             publish_over_http(&rig, &h, "phase04-live-employee-sentinel", &employee).await?;
@@ -1500,16 +1562,10 @@ async fn notification_identity_phase04_actual_platform_and_external_socketio_kee
             StatusCode::OK,
             "actual HTTP employee revocation while sockets connected",
         )?;
-        let customer_sentinel = fixture_notification(
-            &h.pool,
-            &customer,
-            "phase04-live-customer-after-employee-stop",
-        )
-        .await?;
-        fixture_hint(&h.pool, customer_sentinel, &customer).await?;
-        customer_socket
-            .notification(customer_sentinel, &customer)
-            .await?;
+        let other_sentinel =
+            fixture_notification(&h.pool, &other, "phase04-live-other-after-employee-stop").await?;
+        fixture_hint(&h.pool, other_sentinel, &other).await?;
+        other_socket.notification(other_sentinel, &other).await?;
         rig.idle(4).await?;
         employee_socket.rejected().await?;
         let mut reconnect = Polling::open(&rig).await?;
@@ -1544,18 +1600,29 @@ async fn notification_identity_phase04_actual_platform_and_external_socketio_kee
             &rig.http(
                 &h.admin.session,
                 Method::PUT,
+                &format!("/api/memberships/{}/status", other.id),
+                json!({"expectedIdentityVersion":1,"status":"DISABLED","reason":REASON}),
+            )
+            .await?,
+            StatusCode::OK,
+            "actual HTTP reverse other revocation",
+        )?;
+        other_socket.rejected().await?;
+        expect(
+            &rig.http(
+                &h.admin.session,
+                Method::PUT,
                 &format!("/api/memberships/{}/status", customer.id),
                 json!({"expectedIdentityVersion":1,"status":"DISABLED","reason":REASON}),
             )
             .await?,
             StatusCode::OK,
-            "actual HTTP reverse customer revocation",
+            "customer revocation does not affect accepted employee socket",
         )?;
-        customer_socket.rejected().await?;
         let survivor = publish_over_http(
             &rig,
             &h,
-            "phase04-live-employee-after-customer-stop",
+            "phase04-live-employee-after-other-stop",
             &returned,
         )
         .await?;

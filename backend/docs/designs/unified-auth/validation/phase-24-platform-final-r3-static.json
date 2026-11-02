@@ -1,0 +1,50 @@
+{
+  "snapshot": "phase24-final-r3",
+  "snapshotSha256": "78d6b1604ae590888353619d40c32f0758926388729346459f75cab08ad97f45",
+  "startedUtc": "2026-10-29T09:19:47.238535+00:00",
+  "status": "PASS",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "fullFmt": {
+    "snapshot": "phase24-final-r3",
+    "snapshotSha256": "78d6b1604ae590888353619d40c32f0758926388729346459f75cab08ad97f45",
+    "command": [
+      "/home/jackie/.local/rust-1.97/bin/cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exitCode": 0,
+    "status": "PASS",
+    "durationSeconds": 2.474,
+    "rawLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "finishedUtc": "2026-10-29T09:15:44.835461+00:00"
+  },
+  "frozenMismatchBeforeStatic": [],
+  "currentMismatchBeforeStatic": [],
+  "testBinariesUnchangedBeforeStatic": true,
+  "clippy": {
+    "command": [
+      "/home/jackie/.local/rust-1.97/bin/cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "--all-targets",
+      "--all-features",
+      "-j2",
+      "--message-format=json",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 76.475,
+    "rawLogSha256": "fd722c8bf5bb8e8664ebd033b3a49f871a3e907f5a313799e1f21f13dd97c531",
+    "diagnostics": []
+  },
+  "frozenMismatchAfterStatic": [],
+  "currentMismatchAfterStatic": [],
+  "testBinariesUnchangedAfterStatic": true,
+  "finishedUtc": "2026-10-29T09:21:10.183640+00:00"
+}

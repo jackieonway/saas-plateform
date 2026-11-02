@@ -76,14 +76,6 @@ impl AccountCredential {
     }
 }
 
-/// Console lookup preserves its existing shared username/phone/email aliases.
-/// Legacy OAuth uses `by_username` and never broadens this matching rule.
-pub(crate) struct LoginIdentifier<'a> {
-    pub(crate) identifier: &'a str,
-    pub(crate) phone: &'a str,
-    pub(crate) email: &'a str,
-}
-
 pub(crate) struct NewAccount<'a> {
     pub(crate) id: Uuid,
     pub(crate) username: &'a str,
@@ -118,6 +110,7 @@ pub(crate) trait AccountMutationTx: Send {
     fn lock_account(&mut self, id: Uuid) -> AccountFuture<'_, AccountSnapshot>;
 
     /// Compare the preverified snapshot after the caller's original user lock.
+    #[cfg(test)]
     fn credential_matches<'a>(
         &'a mut self,
         credential: &'a AccountCredential,
@@ -143,14 +136,6 @@ pub(crate) trait AccountMutationTx: Send {
 }
 
 pub(crate) trait AuthenticationPort: Send + Sync {
-    fn candidates<'a>(
-        &'a self,
-        identifier: LoginIdentifier<'a>,
-    ) -> AccountFuture<'a, Vec<AccountCredential>>;
-
-    fn by_username<'a>(&'a self, username: &'a str)
-        -> AccountFuture<'a, Option<AccountCredential>>;
-
     fn by_user_id(&self, id: Uuid) -> AccountFuture<'_, AccountCredential>;
 
     fn verify<'a>(
@@ -159,6 +144,7 @@ pub(crate) trait AuthenticationPort: Send + Sync {
         password: &'a str,
     ) -> AccountFuture<'a, bool>;
 
+    #[cfg(test)]
     fn credential_matches<'a>(
         &'a self,
         tx: &'a mut dyn AccountMutationTx,
@@ -192,10 +178,4 @@ pub(crate) trait AccountAdministrationPort: Send + Sync {
         id: Uuid,
         status: &'a str,
     ) -> AccountFuture<'a, bool>;
-
-    fn revoke_all<'a>(
-        &'a self,
-        tx: &'a mut dyn AccountMutationTx,
-        id: Uuid,
-    ) -> AccountFuture<'a, u64>;
 }

@@ -1,0 +1,40 @@
+{
+  "contractVersion": "unified-auth-fixture-cleanup/1",
+  "recordedAt": "2026-10-28T10:26:19.702759+00:00",
+  "scope": "Phase20 real HTTPS fixture only",
+  "ownedDatabasesRemaining": 0,
+  "ownedRolesRemaining": 0,
+  "applicationServiceRecordsRemaining": 0,
+  "namespaceGatewayProxyCollectorRecordsRemaining": 0,
+  "windowsProxyListenerRemaining": false,
+  "preExistingWindows443Untouched": true,
+  "preExistingWindows443Pid": 5044,
+  "databaseAndRolesCheckedAfterGuardedCleanup": true,
+  "cleanupManifestRemovedByPrepare": true,
+  "privateFilesAndLogsRemoved": [
+    "https-environment.json",
+    "https-bff-keys.json",
+    "https-context-keys.json",
+    "https-portal-keys.json",
+    "https-signing.json",
+    "https-invitation-keys.json",
+    "service-identity.log",
+    "service-platform.log",
+    "service-portal.log",
+    "gateway.log",
+    "browser-proxy-phase20.stderr.log",
+    "browser-proxy-phase20.stdout.log"
+  ],
+  "privateFilesBytesRemoved": 93475,
+  "dockerContext": "default",
+  "dockerContainersCreatedOrReused": 0,
+  "dockerSystemDfBeforeAfter": {
+    "imagesBytes": 0,
+    "containersBytes": 0,
+    "volumesBytes": 0,
+    "buildCacheBytes": 0
+  },
+  "sharedNativePostgresRetainedForLaterPhases": true,
+  "sharedBuildCacheAndSnapshotsRetainedUnderTaskOwnership": true,
+  "windowsVirtualDiskCompacted": false
+}

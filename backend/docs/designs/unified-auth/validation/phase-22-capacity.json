@@ -1,0 +1,296 @@
+{
+  "contractVersion": "unified-auth-phase22-capacity-component/1",
+  "result": "PASS",
+  "date": "2026-10-28T12:28:09.485Z",
+  "sourceRuntimeFile": "phase-22-runtime-before-cookie-fix.json",
+  "sourceRuntimeSha256": "d57516f0ec584327d86ec17fa1151ac7a4b8f1f2bb57a34323345ffaa9f1a16d",
+  "sourceRuntimeOverallResult": "FAILED_AFTER_CAPACITY_AT_PREAUTH_DRIVER_EMPTY_COOKIE",
+  "identityBinarySha256": "7e3bda906d785b35ce8c65261ba3242b5cf0222b4a5276d9dfa13616d65bfe48",
+  "snapshotSha256": "03878de6bb331ada97977d67bb82ed0c93f75ea01a20c68a5556df8abd4de1ad",
+  "capacity": {
+    "CODE": {
+      "contractVersion": "identity-capacity-report/1",
+      "kind": "CODE",
+      "target": {
+        "hostname": "auth.saas.test",
+        "ports": [
+          443
+        ],
+        "transport": "HTTPS",
+        "loopbackOnly": true,
+        "certificateVerification": true,
+        "redirects": false,
+        "implicitRetries": 0,
+        "proxy": false
+      },
+      "budgets": {
+        "ratePerSecond": 25,
+        "concurrency": 8,
+        "requestedDurationSeconds": 30,
+        "requestTimeoutMs": 10000,
+        "maximumSockets": 8,
+        "maximumPending": 8,
+        "maximumWireBytes": 65536,
+        "maximumAttempts": 750
+      },
+      "completion": {
+        "reason": "duration_completed",
+        "sourceExhausted": false,
+        "requestedDurationCompleted": true,
+        "schedulingSeconds": 30.000158181000003,
+        "elapsedSeconds": 30.35083158
+      },
+      "counts": {
+        "attempts": 566,
+        "effectiveSuccess": 566,
+        "denied": 0,
+        "invalid": 0,
+        "rateLimited": 0,
+        "unavailable": 0,
+        "network": 0,
+        "uncertainRetired": 0,
+        "workersRetired": 0
+      },
+      "throughput": {
+        "successRps": 18.648582939420074,
+        "attemptsRps": 18.648582939420074
+      },
+      "latencyMs": {
+        "effectiveSuccess": {
+          "p50": 393.086,
+          "p95": 444.733,
+          "p99": 469.803
+        },
+        "all": {
+          "p50": 393.086,
+          "p95": 444.733,
+          "p99": 469.803
+        }
+      },
+      "scheduler": {
+        "inflightPeak": 8,
+        "pendingPeak": 8,
+        "skippedBusy": 184,
+        "skippedLate": 0
+      },
+      "client": {
+        "cpuUserMs": 3333.74,
+        "cpuSystemMs": 686.21,
+        "cpuOneCorePercent": 13.24494187055154,
+        "memoryStartBytes": {
+          "rss": 54145024,
+          "heapUsed": 11463952,
+          "external": 4851512
+        },
+        "memorySampledPeakBytes": {
+          "rss": 96489472,
+          "heapUsed": 30331144,
+          "external": 6502576
+        },
+        "processLifetimeMaxRssBytes": 96489472
+      },
+      "evidence": {
+        "slaEstablished": false,
+        "successfulProtocolResponsesOnly": true,
+        "bottleneckEstablished": false,
+        "requiresServerMetricsAndFixtureContext": true
+      }
+    },
+    "REFRESH": {
+      "contractVersion": "identity-capacity-report/1",
+      "kind": "REFRESH",
+      "target": {
+        "hostname": "auth.saas.test",
+        "ports": [
+          443
+        ],
+        "transport": "HTTPS",
+        "loopbackOnly": true,
+        "certificateVerification": true,
+        "redirects": false,
+        "implicitRetries": 0,
+        "proxy": false
+      },
+      "budgets": {
+        "ratePerSecond": 25,
+        "concurrency": 8,
+        "requestedDurationSeconds": 120,
+        "requestTimeoutMs": 10000,
+        "maximumSockets": 8,
+        "maximumPending": 8,
+        "maximumWireBytes": 65536,
+        "maximumAttempts": 3000
+      },
+      "completion": {
+        "reason": "duration_completed",
+        "sourceExhausted": false,
+        "requestedDurationCompleted": true,
+        "schedulingSeconds": 120.00105422100002,
+        "elapsedSeconds": 120.10977144000002
+      },
+      "counts": {
+        "attempts": 2889,
+        "effectiveSuccess": 2889,
+        "denied": 0,
+        "invalid": 0,
+        "rateLimited": 0,
+        "unavailable": 0,
+        "network": 0,
+        "uncertainRetired": 0,
+        "workersRetired": 0
+      },
+      "throughput": {
+        "successRps": 24.052997232145927,
+        "attemptsRps": 24.052997232145927
+      },
+      "latencyMs": {
+        "effectiveSuccess": {
+          "p50": 152.117,
+          "p95": 359.811,
+          "p99": 384.559
+        },
+        "all": {
+          "p50": 152.117,
+          "p95": 359.811,
+          "p99": 384.559
+        }
+      },
+      "scheduler": {
+        "inflightPeak": 8,
+        "pendingPeak": 8,
+        "skippedBusy": 111,
+        "skippedLate": 0
+      },
+      "client": {
+        "cpuUserMs": 13373.143,
+        "cpuSystemMs": 3260.065,
+        "cpuOneCorePercent": 13.848338732630927,
+        "memoryStartBytes": {
+          "rss": 54145024,
+          "heapUsed": 11640240,
+          "external": 4901803
+        },
+        "memorySampledPeakBytes": {
+          "rss": 197705728,
+          "heapUsed": 83898648,
+          "external": 10268390
+        },
+        "processLifetimeMaxRssBytes": 197705728
+      },
+      "evidence": {
+        "slaEstablished": false,
+        "successfulProtocolResponsesOnly": true,
+        "bottleneckEstablished": false,
+        "requiresServerMetricsAndFixtureContext": true
+      }
+    },
+    "INTROSPECTION": {
+      "contractVersion": "identity-capacity-report/1",
+      "kind": "INTROSPECTION",
+      "target": {
+        "hostname": "auth.saas.test",
+        "ports": [
+          443
+        ],
+        "transport": "HTTPS",
+        "loopbackOnly": true,
+        "certificateVerification": true,
+        "redirects": false,
+        "implicitRetries": 0,
+        "proxy": false
+      },
+      "budgets": {
+        "ratePerSecond": 200,
+        "concurrency": 16,
+        "requestedDurationSeconds": 120,
+        "requestTimeoutMs": 10000,
+        "maximumSockets": 16,
+        "maximumPending": 16,
+        "maximumWireBytes": 65536,
+        "maximumAttempts": 24000
+      },
+      "completion": {
+        "reason": "duration_completed",
+        "sourceExhausted": false,
+        "requestedDurationCompleted": true,
+        "schedulingSeconds": 120.000338007,
+        "elapsedSeconds": 120.124484082
+      },
+      "counts": {
+        "attempts": 10525,
+        "effectiveSuccess": 10525,
+        "denied": 0,
+        "invalid": 0,
+        "rateLimited": 0,
+        "unavailable": 0,
+        "network": 0,
+        "uncertainRetired": 0,
+        "workersRetired": 0
+      },
+      "throughput": {
+        "successRps": 87.6174418598574,
+        "attemptsRps": 87.6174418598574
+      },
+      "latencyMs": {
+        "effectiveSuccess": {
+          "p50": 151.233,
+          "p95": 376.692,
+          "p99": 408.105
+        },
+        "all": {
+          "p50": 151.233,
+          "p95": 376.692,
+          "p99": 408.105
+        }
+      },
+      "scheduler": {
+        "inflightPeak": 16,
+        "pendingPeak": 16,
+        "skippedBusy": 13449,
+        "skippedLate": 26
+      },
+      "client": {
+        "cpuUserMs": 13374.378,
+        "cpuSystemMs": 3260.994,
+        "cpuOneCorePercent": 13.84844407626698,
+        "memoryStartBytes": {
+          "rss": 54145024,
+          "heapUsed": 11756128,
+          "external": 5287553
+        },
+        "memorySampledPeakBytes": {
+          "rss": 197705728,
+          "heapUsed": 83955912,
+          "external": 10268390
+        },
+        "processLifetimeMaxRssBytes": 197705728
+      },
+      "evidence": {
+        "slaEstablished": false,
+        "successfulProtocolResponsesOnly": true,
+        "bottleneckEstablished": false,
+        "requiresServerMetricsAndFixtureContext": true
+      }
+    }
+  },
+  "serverCapacityObservation": {
+    "samples": 120,
+    "scrapeFailures": 0,
+    "identityCpuOneCorePercent": 145.11806617740785,
+    "identityRssStartBytes": 18214912,
+    "identityRssSampledPeakBytes": 24961024,
+    "databasePoolSizeMaximum": 4,
+    "databasePoolIdleMinimum": 0,
+    "boundedConstraints": {
+      "databasePool": 4,
+      "authRequests": 32,
+      "identityTcp": 64,
+      "totalLoadWorkers": 32
+    },
+    "buildProfile": "dev",
+    "singleSharedDriverProcess": true,
+    "stableProductionBottleneckEstablished": false
+  },
+  "q9TargetEstablished": false,
+  "thirtyMinuteSoakClaimed": false
+}

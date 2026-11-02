@@ -10,7 +10,7 @@ use crate::session;
 use crate::state::AppState;
 use crate::util::jwt;
 
-/// 当前员工会话用户 (解析 Authorization: Bearer <session JWT>)。
+/// 当前员工会话用户 (解析 `Authorization: Bearer <session JWT>`)。
 /// 成员及策略版本来自服务器会话记录；JWT 的 user/org 不构成员工资格。
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // real_name 保留供扩展
@@ -26,12 +26,15 @@ pub struct CurrentUser {
 
 /// 从 Header 取 Bearer Token
 pub fn bearer_token(headers: &HeaderMap) -> Result<String, AppError> {
+    if headers.get_all(header::AUTHORIZATION).iter().count() != 1 {
+        return Err(AppError::unauthorized("凭证头缺失或重复"));
+    }
     headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.is_empty() && s.len() <= 8185 && !s.chars().any(char::is_whitespace))
+        .map(str::to_owned)
         .ok_or_else(|| AppError::unauthorized("未登录或缺少凭证"))
 }
 
@@ -43,9 +46,14 @@ impl FromRequestParts<AppState> for CurrentUser {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let token = bearer_token(&parts.headers)?;
-        let claims = jwt::verify(&token, &state.config.jwt_secret)
-            .map_err(|_| AppError::unauthorized("凭证无效或已过期"))?;
-        if claims.typ != "session" {
+        let claims = jwt::verify_internal(
+            &token,
+            &state.config.jwt_secret,
+            jwt::InternalUse::PlatformSession,
+            Some(jwt::PLATFORM_API_AUDIENCE),
+        )
+        .map_err(|_| AppError::unauthorized("凭证无效或已过期"))?;
+        if claims.typ != "platform_session" {
             return Err(AppError::unauthorized("凭证类型错误, 需要会话令牌"));
         }
         let user_id: Uuid = claims
@@ -70,10 +78,17 @@ impl FromRequestParts<AppState> for CurrentUser {
         let version = claims
             .ver
             .ok_or_else(|| AppError::unauthorized("旧版会话已失效，请重新登录"))?;
+        crate::bff::require_platform_session(state, session_id).await?;
+        jwt::verify_internal(
+            &token,
+            &state.config.jwt_secret,
+            jwt::InternalUse::PlatformSession,
+            Some(jwt::PLATFORM_API_AUDIENCE),
+        )
+        .map_err(|_| AppError::unauthorized("会话已在来源校验期间过期"))?;
         let (username, real_name, is_super_admin) =
             session::active_user(&state.pool, user_id, tenant_id, org_id, session_id, version)
                 .await?;
-        crate::bff::require_platform_session(state, session_id).await?;
         Ok(Self {
             user_id,
             username,

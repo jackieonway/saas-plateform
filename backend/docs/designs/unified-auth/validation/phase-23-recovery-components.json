@@ -1,0 +1,70 @@
+{
+  "contractVersion": "phase-23-recovery-components/2",
+  "status": "PASS",
+  "testedAtUtc": "2026-10-28T15:58:57.5623727Z",
+  "validationLevel": "PURE_PYTHON_AND_OWNED_POSIX_FILE_COMPONENTS",
+  "commands": [
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s saas-plateform/backend/ops/identity-recovery -p 'test_*.py'",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s saas-plateform/backend/tests/unified-auth-https -p 'test_phase23_recovery_*.py'"
+  ],
+  "tests": {
+    "passed": 130,
+    "failed": 0,
+    "skipped": 0,
+    "core": 18,
+    "inventory": 22,
+    "reconcile": 29,
+    "witness": 25,
+    "negativeProbe": 12,
+    "fileAdapter": 14,
+    "cycle": 10
+  },
+  "implementationInputsSha256": {
+    "ops/identity-recovery/core.py": "2e79d01b0fb5a67eb855d27ab90b019c3b8885e7f8d25eb738fb97b96c2ec1df",
+    "ops/identity-recovery/inventory.py": "3a8deb841f3f6ebd84cb745a6d05fbde11caf79d54b3fd61edeb738e6d5be7b5",
+    "ops/identity-recovery/negative_probe.py": "05f6ed1f5c69cf50b3a9f41009b2d5f69e41684e321111a4172af2d0e2d3582d",
+    "ops/identity-recovery/reconcile.py": "b0cb2dcd7cd042aae5e582594e47d5691e9848c71f2750a60be5707bf835e812",
+    "ops/identity-recovery/recovery.py": "99b4a108b9b1c013d31a04db7d26a440581d078c3a3710fe0aed3f431b3e42b5",
+    "ops/identity-recovery/test_core.py": "b496b2ff0ea1dcd4991bb772ba12053f888d9058cc8e5fe0f9a7e8f70e179c91",
+    "ops/identity-recovery/test_inventory.py": "2da1fe1a4c3b5c19dfcfc78c3697aa00d24c02de188b43cdaa537b1991255513",
+    "ops/identity-recovery/test_negative_probe.py": "38ed3a09f6796925b8fee7acfae83fff7715605387e41124a2b5be4c7b2e0c77",
+    "ops/identity-recovery/test_reconcile.py": "efbbf51e0613f18b546f35f000f8bfae1d68aadee9ccf1c983509a72088711a0",
+    "ops/identity-recovery/test_witness.py": "a6ef64af1709a8bd1ab88e414d2ea572bdc96d64f8f77e32358dcba8d5757044",
+    "ops/identity-recovery/witness.py": "5f96fc2402ec88bcdb5f41ca7e876691b87ed5846887c21a5bdc07f527e3e90d",
+    "tests/unified-auth-https/phase23-recovery-files.py": "14a0063f25f0ed06ddf6870ae783e7aa267efc60c9cda465d7838e8063b054d1",
+    "tests/unified-auth-https/test_phase23_recovery_files.py": "9d202c929cd97a3521f8a901bc463995740e4c61a4a98fdedcf3d6804446e778",
+    "tests/unified-auth-https/phase23-recovery-cycle.py": "ce5d93dc5d5647484f6f10d1684ce285312ee098fe9ad78b527995cc025e41ae",
+    "tests/unified-auth-https/test_phase23_recovery_cycle.py": "c741ffaa59b7c64e2625e8d5b617f371118f61d3fdbffdad21b9e1bfaaefcf67"
+  },
+  "inventory": {
+    "platformTables": 86,
+    "portalTables": 5,
+    "fields": 948,
+    "schemaSha256": "77bbe5118ec72efd6cf915485d93579a6b79abd41c09e3dc52fc6b4d971a4f39"
+  },
+  "review": {
+    "remainingP2": 0,
+    "historicalClosure": "Full authenticated history keeps overwritten secret denials and deleted credential-to-client version ownership",
+    "finalCycleLaunchRaceClosed": true,
+    "validationLayers": [
+      "Independent read-only source review",
+      "Pure mocked component regression",
+      "Owned temporary Python process signal regression without applications or PostgreSQL"
+    ],
+    "finalCycleSha256": "ce5d93dc5d5647484f6f10d1684ce285312ee098fe9ad78b527995cc025e41ae"
+  },
+  "boundaries": [
+    "No actual PostgreSQL capture, restore, SQL reconciliation or product HTTPS evidence in this component report",
+    "Negative probe tests use real status/AEAD/file loaders but mocked readonly PG preflight, not actual restore SQL",
+    "No SCRAM password rejection evidence in pure components",
+    "No production restore, continuous RPO/PITR, remote immutable witness or uptime claim",
+    "Recovery cycle tests mock PG/recovery children and exercise SIGTERM only in an isolated temporary Python process; partial cycle elapsed time does not claim end-to-end RTO"
+  ],
+  "resources": {
+    "databaseConnections": 0,
+    "containersCreated": 0,
+    "containersReused": 0,
+    "temporaryDirectories": "unittest TemporaryDirectory, cleaned automatically",
+    "secretsExported": false
+  }
+}

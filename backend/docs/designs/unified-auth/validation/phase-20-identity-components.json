@@ -1,0 +1,99 @@
+{
+  "contractVersion": "phase20-identity-components/1",
+  "date": "2026-10-28",
+  "scope": "component evidence; completed current cross-service/runtime/log/cleanup gates are separately recorded by phase-20.md",
+  "clusterId": "7701548153213487841",
+  "canonicalLogoutPg": {
+    "failed": 0,
+    "ignored": 0,
+    "passed": 3
+  },
+  "workerPg": {
+    "failed": 0,
+    "ignored": 0,
+    "passed": 6
+  },
+  "linuxLib": {
+    "failed": 0,
+    "ignored": 46,
+    "passed": 71
+  },
+  "invitationDirected": {
+    "failed": 0,
+    "ignored": 0,
+    "passed": 7
+  },
+  "invitationPageRouting": {
+    "passed": 2,
+    "failed": 0
+  },
+  "invitationPageNode": {
+    "passed": 6,
+    "failed": 0
+  },
+  "phase08Regression": {
+    "failed": 0,
+    "ignored": 0,
+    "passed": 2
+  },
+  "phase09to11Regression": {
+    "failed": 0,
+    "ignored": 0,
+    "passed": 6
+  },
+  "windowsLibAttempt": {
+    "failed": 6,
+    "ignored": 42,
+    "limitation": "native loopback TCP fixture could not connect; Linux same tests passed without TLS/SSRF changes",
+    "passed": 62
+  },
+  "fmt": "PASS",
+  "strictClippyAllTargets": "PASS",
+  "documentation": "PASS",
+  "cleanup": {
+    "externalMessages": 0,
+    "invitationRoles": 0,
+    "rootSharedClusterAndBuildCache": "retained by coordinator for later stage validation",
+    "containersCreated": 0,
+    "coreDatabases": 0
+  },
+  "sourceSha256": {
+    "src/oidc/oauth.rs": "f2ad3840c9242760031f979140574aa8218c89d9669d92d3b849eeb1c39d0f54",
+    "src/oidc/oauth/logout.rs": "0734a6f3698188d87c68cc0db269f38295d7350f953f91941daa4d1a495d2649",
+    "src/oidc/oauth/logout/tests.rs": "f15495e6432cfd891082fe67bc99a6c229f05c46fb4e64694e5fa2ab0e850569",
+    "src/delivery/mod.rs": "af2b739d2382fc0ff6ccfd8df0d9c57f64929b861bee59dc3b8aaf6e138b4e8b",
+    "src/delivery/worker/tests.rs": "eeb0ea4c2953889782ceb765d2e29df1b1e1eaf581a212b01feb303a91025f2f",
+    "src/delivery/transport.rs": "82a2d02dfe850cf7fee0707a3074853bb4f04ec90e8dbe8fe4856a657062d9c2",
+    "src/delivery/transport_tests.rs": "362300a39ad29eae21436bcd542ed935a449cbd256cd3221bbafd91e50367e6e",
+    "src/test_support.rs": "e33e80f72709fc816cd5f1ad4c8d072f071df27ac67489f1e976da4e5f70d7f0",
+    "src/oidc/keys.rs": "db7078607b3a7a7de59676bf6db09102112cb689fdbc8737af435303f6d374c6",
+    "src/oidc/protocol.rs": "8ff6aadd57df482c55d3ca2ee4f428501b83bc25ad3a2bb2e93591916c3e1853",
+    "src/auth_invitations.rs": "ac686accf69c1aa4ee99f3910c7f3bc0c47d0decbdc752680a1de812a9c2736c",
+    "src/auth_invitations/delivery.rs": "2a5d23e629bfb03542d5974216d27b53f2a1e7083068213c037fdaf1a35ed94f",
+    "src/auth_invitations/trust.rs": "57ab18dceeaa3843382d349c4ac623fae539bb0a6a9d739f0b948ead4d4df7d7",
+    "src/auth_invitations/activation.rs": "7b9d1bfdad436a9fa4ab0721367eafb62c28e00a0c7170bb6f5e1ef6926b1964",
+    "static/identity/invitation.html": "7a0986e1e36d04296636a28fd1d32a01829fd5c1f8e06c6a0bb2dfe81ca1e199",
+    "static/identity/invitation.js": "64cea6a2e44c3a11b626fed9283d4bbe4f62915ee5e91f31cce844a0fb6dc8ce",
+    "src/delivery/worker.rs": "4221aeb82db253cf0c06c12cf388cc2b2b0ac006f744c342e45d0bd266f9b780",
+    "src/delivery/worker/registration_tests.rs": "ac2c2b45f3842e8a8a692b240c5a9f079167d25682ff39ed9ecd6288bfd90fbe"
+  },
+  "phase19ReviewRegression": {
+    "ignored": 0,
+    "failed": 0,
+    "passed": 3
+  },
+  "priorLinuxCorePg": {
+    "seconds": 6.38,
+    "failed": 0,
+    "ignored": 0,
+    "passed": 7,
+    "evidenceBoundary": "prior worker revision; not evidence for final registration-fence repair"
+  },
+  "finalCanonicalCorePg": {
+    "ignored": 0,
+    "passed": 9,
+    "seconds": 14.06,
+    "failed": 0,
+    "platform": "Windows outbound SQL client to owned native PostgreSQL"
+  }
+}

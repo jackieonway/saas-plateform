@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "src/app.mjs": "489421e9971255b1fdd223804a26f53529a53ef18a6c4887ca9d7dd55ae18696",
+    "src/backchannel.mjs": "d4235249d890885a57c20d036d6a2419c044bee93268a1368df739a208256fe5",
+    "src/config.mjs": "05d80f16c20ad27aae2b7ba069698c05186b544664e2a4b119bd7c7ae453a7ee",
+    "src/oidc.mjs": "13546bdb94db6fe63cdfe39c2999dc63d1208c64ea3885cd229b99fae8b5315f",
+    "src/store.mjs": "1ab3ffc2f0a092e94955b346cb6c11577b5b29abaf81ac537ae0a4ffcdd0258e",
+    "src/transport.mjs": "a063c5a324004048401506d006bbda71ab90a8d49980ee4cbf80ad6afd513019",
+    "public/app.js": "5ee0feed9771c5ae5cc5bfa0689ef3e51e00ad66095645b4a3c884a586b48c7a",
+    "public/index.html": "531aa3c8cef4391ce55e5aa119808b9ae0666e7e17cdb89a4f44b241e103d3b2",
+    "public/style.css": "5b684ba4d5ffdd37aac8726b9382351a439e9e439175f79ca501f042c815f27b",
+    "server.mjs": "6dd231739c0a32eeb6a6f87a361386fcd741f983a65cff38bfe3282769d390d9",
+    "machine.mjs": "7bbe37d8acbcf3cea1657a87da884e952827d3acbdcf3f8b6a351a06bbcba45b",
+    "package.json": "5add1eacc24926b54e576bdd44cd6e2f8736b2ea12f1aa0172a280d4a5c69d0b",
+    "package-lock.json": "21c07d7780538f611551a5d248c41a87893dc7dffe36b92acec592c4852c26ce",
+    "config.env.example": "9ca2a689816608e9feaa6439ccde292b3c76bddd9f653e3564e913b2aa61ccbf"
+  },
+  "sourceSha256": "b66e2b88bea552cd9e1d7dd40423fb271787ca6b745bc63df624f92a9b66faf0"
+}

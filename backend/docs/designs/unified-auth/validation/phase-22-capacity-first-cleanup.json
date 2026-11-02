@@ -1,0 +1,43 @@
+{
+  "contractVersion": "unified-auth-phase22-cleanup/1",
+  "result": "FAILED",
+  "dockerContext": "default",
+  "dockerContainersCreated": 0,
+  "dockerContainersReused": 0,
+  "dockerBefore": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+  "ownedApplications": [
+    "identity",
+    "platform"
+  ],
+  "retainedSharedPostgresCluster": "7701548153213487841",
+  "startupUnsafeFiltersRejected": 2,
+  "runtimeExitCode": 1,
+  "ownedDatabaseBytesBeforeDrop": "24281615",
+  "ownedDatabaseAndRolesRemoved": true,
+  "logRedaction": {
+    "files": 6,
+    "bytes": 725,
+    "privateCandidatesComparedInMemory": 2436,
+    "leaks": 0,
+    "defaultInfoObserved": true,
+    "passwordWarningObserved": false
+  },
+  "privateFilesRemoved": 31,
+  "privateBytesRemoved": 325954,
+  "remainingLeaseRecords": 0,
+  "remainingTrackedProcesses": 0,
+  "dockerAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+  "retainedPublicTools": "/tmp/rust-saas-unified-auth-20261028/phase22-tools",
+  "toolsSha256": {
+    "phase22-alerts.mjs": "a54e7431091acd0735664046045562958c2af2fa0ef441d7b02fcfa98b513131",
+    "phase22-load.mjs": "7feaad00314560259c0de0a1eccaea00c31109956025253a72ebdaf3c5f7c99c",
+    "phase22-runtime.mjs": "76091cce35126fb718b6136b43e05e2055469fcb55bc35d96c86cc5183b79359",
+    "run-service.py": "246f14c2324e9ceacdd5250dba4b5430b662db418823dd778d1f3028eb7d72bf",
+    "environment.sh": "8012436fa507e44167704511e7a62548f5cf156a45842d67aee920b233683afd",
+    "phase22-gateway.py": "7fcd40df08a06391f45fdce17a16ab676930fa1b57936e407e4eb8626799f9ef",
+    "gateway.py": "55c6ebf25d1fb04a68ea2d9d7b0487e8c84cd83e0818c847b97cc581145e29af",
+    "phase22-fixture.py": "c60f5be533c923d6fc029b778869c41de65454d951694953eff4c6b6471dca59",
+    "prepare.py": "478977904b37bf389f76ae41e523f67cde7d0cf13f109d4127386a510f6e1ac7"
+  },
+  "cleanupErrors": []
+}

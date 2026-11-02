@@ -1,0 +1,15 @@
+{
+  "contractVersion": "unified-auth-phase25-execution-journal/1",
+  "phase": 25,
+  "runId": "r3",
+  "snapshot": "phase25-tools-r5",
+  "buildSnapshot": "phase25-apps-r3",
+  "startedAtUtc": "2026-10-29T12:38:13.6536562Z",
+  "finishedAtUtc": "2026-10-29T12:39:44.5925692Z",
+  "result": "FAIL",
+  "lastExecutionStage": "ACTUAL_UI",
+  "cleanupFailureCodes": [],
+  "fullRecoveryRequested": true,
+  "productionDeploymentExecuted": false,
+  "secretsOrRawLogsPersisted": false
+}

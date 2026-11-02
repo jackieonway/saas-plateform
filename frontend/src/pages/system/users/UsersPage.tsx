@@ -125,8 +125,8 @@ export default function UsersPage() {
   return <UserDirectory key={`${namespace}:EMPLOYEE`} memberType="EMPLOYEE" />
 }
 
-/** Account information for one membership type; account-wide writes have no entry here. */
-export function UserDirectory({ memberType, informationOnly = true }: { memberType: MembershipMemberType; informationOnly?: boolean }) {
+/** Manage account profiles and employee assignments while binding existing accounts on add. */
+export function UserDirectory({ memberType, informationOnly = false }: { memberType: MembershipMemberType; informationOnly?: boolean }) {
   const namespace = useAuthStore(state => state.contextKey)
   const [bindingOpen, setBindingOpen] = React.useState(false)
   const capabilitiesQuery = useQuery({ queryKey: ["membership-capabilities", namespace], queryFn: ({signal}) => membershipsApi.capabilities(signal), enabled: !!namespace, retry: 1 })
@@ -193,7 +193,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
   usePageRecovery(page, size, listQuery, setPage)
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["users"] })
+    for (const name of ["users", "user-detail", "memberships", "profile"]) void queryClient.invalidateQueries({ queryKey: [name] })
   }
 
   /* ---- 新建 / 编辑 ---- */
@@ -204,11 +204,6 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
     defaultValues: { username: "", password: "", realName: "", email: "", phone: "", gender: "UNKNOWN" },
   })
 
-  const openCreate = () => {
-    setEditing(null)
-    form.reset({ username: "", password: generatePassword(), realName: "", email: "", phone: "", gender: "UNKNOWN" })
-    setDialogOpen(true)
-  }
   const openEdit = (u: UserRecord) => {
     setEditing(u)
     form.reset({
@@ -227,8 +222,8 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
       if (editing) {
         await usersApi.update(editing.id, {
           realName: v.realName,
-          email: v.email || undefined,
-          phone: v.phone || undefined,
+          email: v.email ?? "",
+          phone: v.phone ?? "",
           gender: v.gender,
         })
       } else {
@@ -365,10 +360,10 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
     <div>
       <PageHeader
         title={memberType === "EMPLOYEE" ? "用户管理" : "客户管理"}
-        description={memberType === "EMPLOYEE" ? "查看员工用户信息；添加员工时查询并绑定已有账号。" : "查看客户信息；添加客户时查询并绑定已有账号。"}
+        description={memberType === "EMPLOYEE" ? "维护用户资料、员工组织、部门、岗位和角色；添加员工时绑定已有账号。账号启停、密码与删除影响该账号的所有身份。" : "维护客户账号资料；添加客户时绑定已有账号。账号启停、密码与删除影响该账号的所有身份。"}
         icon={<Users className="size-5" />}
         actions={
-          <Button disabled={informationOnly && !!createGate} title={informationOnly ? createGate ?? undefined : undefined} onClick={() => informationOnly ? setBindingOpen(true) : openCreate()}>
+          <Button disabled={!!createGate} title={createGate ?? undefined} onClick={() => setBindingOpen(true)}>
             <UserPlus className="size-4" />
             {memberType === "EMPLOYEE" ? "添加员工" : "添加客户"}
           </Button>
@@ -481,7 +476,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
             description={keyword || orgFilter ? "调整筛选条件试试" : "查询已有账号并绑定到组织后，将在这里显示"}
             action={
               !keyword && !orgFilter && (
-                <Button size="sm" disabled={informationOnly && !!createGate} onClick={() => informationOnly ? setBindingOpen(true) : openCreate()}>
+                <Button size="sm" disabled={!!createGate} title={createGate ?? undefined} onClick={() => setBindingOpen(true)}>
                   <UserPlus className="size-4" />
                   {memberType === "EMPLOYEE" ? "添加员工" : "添加客户"}
                 </Button>
@@ -627,7 +622,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
                   <TableCell className="pr-5">
                     <div className="flex items-center justify-end gap-0.5">
                       {informationOnly ? <Button variant="ghost" size="sm" onClick={() => setDetailUser(u)}><Eye className="size-4" />详情</Button> : <>
-                      {canReadDataGrants && employeeMemberships(u, true).length > 0 && (
+                      {memberType === "EMPLOYEE" && canReadDataGrants && employeeMemberships(u, true).length > 0 && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button asChild variant="ghost" size="icon" className="size-8">
@@ -653,7 +648,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
                         </TooltipTrigger>
                         <TooltipContent>详情</TooltipContent>
                       </Tooltip>
-                      {employeeMemberships(u).length > 0 && <Tooltip>
+                      {memberType === "EMPLOYEE" && employeeMemberships(u).length > 0 && <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost"
@@ -667,7 +662,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
                         </TooltipTrigger>
                         <TooltipContent>仅批量维护员工关系</TooltipContent>
                       </Tooltip>}
-                      {employeeMemberships(u, true).length > 0 && <Tooltip>
+                      {memberType === "EMPLOYEE" && employeeMemberships(u, true).length > 0 && <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="icon" className="size-8" aria-label="分配角色" onClick={() => setRolesUser(u)}>
                             <Shield className="size-4" />
@@ -681,7 +676,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
                             <KeyRound className="size-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>重置密码</TooltipContent>
+                        <TooltipContent>重置账号密码（影响所有身份）</TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -703,7 +698,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
                             <Trash2 className="size-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>删除</TooltipContent>
+                        <TooltipContent>删除账号（影响所有身份）</TooltipContent>
                       </Tooltip>
                       </>}
                     </div>
@@ -905,7 +900,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
 
       {/* 用户详情抽屉 */}
       {!informationOnly && <UserDetailDrawer
-        user={detailUser && employeeMemberships(detailUser, true).length > 0 ? detailUser : null}
+        user={memberType === "EMPLOYEE" && detailUser && employeeMemberships(detailUser, true).length > 0 ? detailUser : null}
         onOpenChange={(o) => !o && setDetailUser(null)}
         onEdit={(u) => {
           setDetailUser(null)
@@ -924,7 +919,7 @@ export function UserDirectory({ memberType, informationOnly = true }: { memberTy
           openReset(u)
         }}
       />}
-      <Dialog open={!!detailUser && (informationOnly || employeeMemberships(detailUser, true).length === 0)} onOpenChange={open => !open && setDetailUser(null)}>
+      <Dialog open={!!detailUser && (informationOnly || memberType !== "EMPLOYEE" || employeeMemberships(detailUser, true).length === 0)} onOpenChange={open => !open && setDetailUser(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>用户信息 · {detailUser?.realName || detailUser?.username}</DialogTitle><DialogDescription>查看{memberType === "EMPLOYEE" ? "员工" : "客户"}的账号资料与所属组织。</DialogDescription></DialogHeader>
           <div className="space-y-3 text-sm"><p>姓名：{detailUser?.realName || "—"}</p><p>用户名：{detailUser?.username}</p><p>邮箱：{detailUser?.email || "—"}</p><p>电话：{detailUser?.phone || "—"}</p><p>所属组织：{detailUser?.memberships.map(member => member.organizationName).join("、") || "—"}</p><p>账号状态：{detailUser?.status === "ENABLED" ? "已启用" : "已禁用"}</p></div>
@@ -1011,11 +1006,11 @@ function MembershipDialog({
   })
 
   React.useEffect(() => {
-    if (!initialized && query.isSuccess && query.data) {
+    if (!initialized && query.isSuccess && !query.isFetching && query.data) {
       setRows(query.data.map((m) => ({ organizationId: m.organizationId, departmentId: m.departmentId, position: m.position ?? "" })))
       setInitialized(true)
     }
-  }, [initialized, query.isSuccess, query.data])
+  }, [initialized, query.isSuccess, query.isFetching, query.data])
 
   const findOrgName = (id: string | null): string => {
     if (!id) return "—"
@@ -1062,7 +1057,7 @@ function MembershipDialog({
           <DialogDescription>仅替换管理范围内的员工组织、部门与岗位。客户和范围外关系保留，已停用员工不会被自动启用；独立启停请使用成员视图。</DialogDescription>
         </DialogHeader>
 
-        {query.isLoading ? (
+        {query.isLoading || !initialized && query.isFetching ? (
           <div className="space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
@@ -1211,11 +1206,11 @@ function RoleAssignDialog({
   })
 
   React.useEffect(() => {
-    if (!initialized && userRolesQuery.isSuccess && userRolesQuery.data) {
+    if (!initialized && userRolesQuery.isSuccess && !userRolesQuery.isFetching && userRolesQuery.data) {
       setChecked(new Set(userRolesQuery.data.map((r) => r.roleId)))
       setInitialized(true)
     }
-  }, [initialized, userRolesQuery.isSuccess, userRolesQuery.data])
+  }, [initialized, userRolesQuery.isSuccess, userRolesQuery.isFetching, userRolesQuery.data])
 
   const ready = initialized && userRolesQuery.isSuccess && rolesQueries.every((query) => query.isSuccess)
   const save = async () => {
@@ -1250,7 +1245,7 @@ function RoleAssignDialog({
           <DialogDescription>仅在用户所属组织范围内分配;角色可用菜单由该组织授权范围决定</DialogDescription>
         </DialogHeader>
 
-        {userRolesQuery.isLoading ? (
+        {userRolesQuery.isLoading || !initialized && userRolesQuery.isFetching ? (
           <div className="space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />

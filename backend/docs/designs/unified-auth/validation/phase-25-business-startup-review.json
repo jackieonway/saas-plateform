@@ -1,0 +1,81 @@
+{
+  "contractVersion": "unified-auth-phase25-business-startup-independent-review/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T12:21:23.7323328Z",
+  "reviewer": "/root/runtime_matrix_plan",
+  "status": "PASS",
+  "findings": [],
+  "reviewedFiles": {
+    "saas-stores/backend/src/lib.rs": "642f37066738e2afa1f9263f2a5d2e558a1123fba280b468a9a0f760f693cc0b",
+    "saas-stores/backend/src/migrations.rs": "8fd9a46c2e8e4a406873e53296cd993bd2ccab2626fa30a348ef8cc4565f5e18",
+    "saas-stores/backend/src/migration_cli.rs": "a78367def93aac3cbe42ede18c2e397ad321cf55c8bef6d5b86fc6713ccbe66e",
+    "saas-stores/backend/src/imported_database.rs": "6c3442155cc7fbb918fb2312a6eebd575a26ed565ced0aba799279052bbf5000",
+    "saas-stores/backend/migrations/0001_stores.sql": "10a77286392debc5049f17e28f722763b493f8148ad972e40b35983910dd6d26",
+    "saas-work-orders/backend/src/lib.rs": "fd7cd3b7cbfc5b4f92d50040d62c874c3e68b73d8bbbf842d660714a6cfdd26a",
+    "saas-work-orders/backend/src/migrations.rs": "f2c2ea8573dad8978d2ca693c5844850f6d26bfb8a8cb2ef7ae5bfba59187a59",
+    "saas-work-orders/backend/src/migration_cli.rs": "c9152658e98a97d3576132e30e362fc43e9436464ca27f22f477f9dba4081de1",
+    "saas-work-orders/backend/src/imported.rs": "426c00f02cd2dbe454e10c51d53adc8c36da38ec7d5e441934b830b12a67c8e9",
+    "saas-work-orders/backend/migrations/0001_work_orders.sql": "91d5e3c0d2255524fcaadbe5661fc641974ac6046b11b2d2d2f86335a28c074a",
+    "saas-stores/backend/README.md": "852ddb631e4f966429240654fa672338b05334457bab152d06678e7d4c62c365",
+    "saas-stores/backend/docs/development.md": "970bad2ca60376e31f7c17cfde291e1a37df8fc83e8ea6dfdd9bd54dd4fd86e4",
+    "saas-stores/backend/docs/deployment.md": "617e51b481ab79f8aae71fbea2df3c74c11acd2ac37aa2d7dfc3b458725683a2",
+    "saas-work-orders/backend/README.md": "afdf0a1434f50ea61a280d6ad0b8378cc2cbe76d197c63957e9659441f04291e",
+    "saas-work-orders/backend/docs/development.md": "014ab7b81229554a06ccde1981922c9f4e2ab343ad0c95333d6ab563b061f80e",
+    "saas-work-orders/backend/docs/deployment.md": "569ec7027588a27cd22ec7bf0e4391f6c98d04deb7beff40587d637c1e4bbe8d"
+  },
+  "reviewScope": "Default API startup verification-only fix in stores/orders and six current docs. No new dynamic execution by reviewer.",
+  "verifiedProperties": [
+    "normal stores run calls existing canonical migrations::verify",
+    "normal work-orders run calls existing canonical verify_database and reports AlreadyCurrent",
+    "offline initialize_database and dedicated migration CLIs still perform canonical initialization",
+    "normal startup preserves exact version/success/checksum validation and live schema fingerprint checks",
+    "work-orders verifies required immutable triggers, UUID constraints and required table columns",
+    "existing imported receipt paths remain read-only and still end in same canonical verify_connection; no added bypass",
+    "ordinary failed verification closes pool before listener binding",
+    "six current README/deployment/development documents describe explicit offline owner initialization before restricted runtime",
+    "six reviewed documentation files contain no unresolved relative Markdown links"
+  ],
+  "pendingDynamicEvidence": [],
+  "limitations": [
+    "Reviewer checked actual PostgreSQL/native HTTP evidence and every recorded compile input against current source. This is not full candidate HTTPS acceptance.",
+    "Existing imported receipt feature was not introduced or expanded by this fix; review confirms it does not bypass canonical history checks."
+  ],
+  "resourcesCreated": 0,
+  "dynamicEvidence": [
+    {
+      "cleanup": {
+        "databases": 0,
+        "roles": 0,
+        "failures": [],
+        "runtimePrivateFilesCreated": 0,
+        "logsRetained": false,
+        "sharedPostgresRetained": true
+      },
+      "historyAndSchemaUnchanged": true,
+      "sha256": "7b7b1bb3b011aa9c51a7ba8be7b79cfb55cc384ebe19bca831e44413323523a2",
+      "actualRestrictedLoginVerified": true,
+      "inputCount": 31,
+      "checks": 6,
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-readonly-startup-stores-r2.json",
+      "result": "PASS"
+    },
+    {
+      "cleanup": {
+        "databases": 0,
+        "roles": 0,
+        "failures": [],
+        "runtimePrivateFilesCreated": 0,
+        "logsRetained": false,
+        "sharedPostgresRetained": true
+      },
+      "historyAndSchemaUnchanged": true,
+      "sha256": "d20cdbf67831b1ca4d218aae048d4ffd9978fd15ff0025a2ecc110437cb3a415",
+      "actualRestrictedLoginVerified": true,
+      "inputCount": 37,
+      "checks": 6,
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-readonly-startup-orders-r1.json",
+      "result": "PASS"
+    }
+  ],
+  "currentSourceInputMismatches": []
+}

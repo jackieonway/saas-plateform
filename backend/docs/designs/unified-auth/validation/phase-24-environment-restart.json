@@ -1,0 +1,41 @@
+{
+  "status": "ENVIRONMENT_REBUILT",
+  "observedAtUtc": "2026-10-29T07:36:52Z",
+  "observation": "WSL uptime was 10.45 seconds and the entire tmpfs task directory was absent. No shutdown/terminate action was issued by this task. The restart trigger is not established.",
+  "oldEnvironment": {
+    "taskDirectory": "/tmp/rust-saas-unified-auth-20261028",
+    "clusterSystemIdentifier": "7701881991704683791",
+    "state": "TMPFS_AND_PROCESSES_LOST_ON_WSL_RESTART",
+    "cleanupClaim": "NOT_TARGETED_OWNER_CLEANUP",
+    "rawLogsAndSnapshotsAvailable": false
+  },
+  "newEnvironment": {
+    "taskDirectory": "/tmp/rust-saas-unified-auth-20261028",
+    "clusterSystemIdentifier": "7701992637128815755",
+    "postgresPort": 55494,
+    "owner": "jackie",
+    "hostSupervisorProcessId": 61268,
+    "hostSupervisorStart": "2026-10-29T15:44:53.2029435+08:00",
+    "hostSupervisorRecord": "C:/Users/MECHREVO/AppData/Local/Temp/rust-saas-unified-auth-20261029-host-66442c8519764180b1c9677ea0f977d7/supervisor.json",
+    "binding": "root-owned phase23-cluster-binding.json freshly initialized against actual pg_control_system",
+    "persistentCache": "/home/jackie/.cache/rust-saas-unified-auth-20261029",
+    "cacheOwnerMarkerVerified": true,
+    "postgres5432Changed": false,
+    "hbaChanged": false
+  },
+  "docker": {
+    "context": "default",
+    "containersCreated": 0,
+    "containersReused": 0,
+    "imagesBytes": 0,
+    "containersBytes": 0,
+    "volumesBytes": 0,
+    "buildCacheBytes": 0
+  },
+  "preservedFormalEvidence": {
+    "phase-24-identity-components.json": "455f7c897b8e32ab4d34c44d52bf2e2939e1776496cb5f85d05c6c208395af5f",
+    "phase-24-consumer-components.json": "f810efbd00dc20237e2596a5b397758bbe0adfbc15e87b726b4f11ef421f5895",
+    "phase-24-platform-r2-checkpoint.json": "172790c1cb61f2287ff6e121d5623d0966136a54902d7074846b88f7d4118116"
+  },
+  "nextRequired": "Freeze current source after all fixes. Rebuild and verify against the new cluster fingerprint. Prior successes retain their original environment and layer; failures are not reclassified as pass."
+}

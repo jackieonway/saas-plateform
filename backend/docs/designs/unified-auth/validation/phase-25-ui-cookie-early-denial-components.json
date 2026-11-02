@@ -1,0 +1,45 @@
+{
+  "contractVersion": "unified-auth-phase25-cookie-policy-early-denial-components/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T12:46:44.4705532Z",
+  "result": "PASS",
+  "evidenceLayer": "ACTUAL_CHROMIUM_AND_LOCAL_HTTP_FIXTURE",
+  "scope": "Current browser-only harness repair and real local HTTP policy regressions. Current SaaS HTTPS rerun remains required.",
+  "sourceSha256": {
+    "phase25-ui-browser.mjs": "0850490bae6b7d24016cf73426b4197a7669f7daadb0998d225e1a98d2260d84",
+    "phase25-cookie-policy.mjs": "f9ac04f11c342ebaf2c9fc9ad7b089d551b174a2b241c0cb49a1f4eb1821e33b",
+    "phase25-cookie-policy.test.mjs": "29082651eb617b4662227b286a1df7ec860e6ba3e641a69fe9340f786bb9b01e"
+  },
+  "actualFailurePreserved": {
+    "failedGroup": "CHROMIUM_BLOCK_ALL_COOKIES_FAILS_CLOSED_WITH_BOUNDED_LOGIN",
+    "actualEndpointObservation": "GET /oauth/interaction/:id 403 before any preauth/login request",
+    "result": "FAILED",
+    "sha256": "c5ad9c28f8aac18c67899c9a607cdf510193bd69f573bce075388cab0f3d5258",
+    "passedGroups": 8,
+    "failureCode": "PHASE25_UI_BROWSER_TIMEOUT",
+    "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-ui-current-r3.json"
+  },
+  "cause": "BLOCK_ALL correctly rejects the canonical flow binding cookie. The test incorrectly waited for a login form that cannot be shown after that rejection.",
+  "repair": [
+    "Require actual interaction GET 403 and visible stable error with no login form",
+    "Use the same real blocked browser to fetch preauth and attempt login; require 200/403 and anonymous SSO/BFF401",
+    "Keep actual UserPreferences cookie rejection, no stored/sent cookies, bounded navigation, and strict TLS behavior",
+    "Persist fixed stages and origin/path-class/screen/visibility/count diagnostics without query strings or secret text",
+    "Preserve policy-context cleanup verification on failed probes"
+  ],
+  "tests": {
+    "skipped": 0,
+    "failed": 0,
+    "testsRun": 2,
+    "passed": 2,
+    "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.test.mjs",
+    "negativeAssertion": "When the real component server permits the interaction and shows login form, the probe rejects PHASE25_UI_BLOCKED_COOKIE_FLOW_GATE_NOT_REJECTED rather than accepting a later CSRF denial"
+  },
+  "cleanup": {
+    "localHttpListenersClosed": true,
+    "cookieProfilesRemoved": true,
+    "databasesUsed": 0,
+    "containersCreated": 0
+  },
+  "actualCurrentSaasHttpsRerunExecuted": false
+}

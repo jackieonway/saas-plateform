@@ -288,7 +288,7 @@ fn decode(response: Response, issuer: &str, client: Uuid) -> Result<AccountProof
             grant_id: canonical_id(&wire.source.grant_id)?,
             global_session_id: canonical_id(&wire.source.global_session_id)?,
             user_id: canonical_id(&wire.source.user_id)?,
-            account_version: generation(&wire.source.account_version, 0)?,
+            account_version: generation(&wire.source.account_version, 1)?,
             client_policy_version: generation(&wire.source.client_policy_version, 1)?,
             auth_time: wire.source.auth_time,
             expires_at: wire.source.expires_at,

@@ -1,0 +1,61 @@
+{
+  "contractVersion": "unified-auth-phase25-real-host-context/1",
+  "result": "FAIL",
+  "startedAtUtc": "2026-10-29T12:51:34.503Z",
+  "sourceSnapshot": "phase25-tools-r6",
+  "checks": [
+    {
+      "caseId": "PREFLIGHT",
+      "status": "PASS"
+    },
+    {
+      "caseId": "CURRENT_HOST_QIANKUN_AND_SAME_COOKIE_TABS",
+      "status": "PASS",
+      "scenarioIds": [
+        "P25-C13-S06"
+      ],
+      "actualFrozenHostAndMicro": true,
+      "actualNativeBusinessApi": true,
+      "sameCookieTwoPages": true,
+      "actualSameOriginWebsocket": true
+    }
+  ],
+  "observedEndpoints": {
+    "/auth/session:200": 3,
+    "/auth/context-token:200": 1,
+    "/api/apps/session-token:201": 1,
+    "/work-orders-api/tickets:201": 1
+  },
+  "responseInterception": false,
+  "injectedSdk": false,
+  "forgedBroadcastMessages": false,
+  "tlsErrorsIgnored": false,
+  "rawCarriersPersisted": false,
+  "cleanup": {
+    "contextsClosed": true,
+    "browserClosed": true,
+    "failures": 0
+  },
+  "fixtureCleanup": {
+    "fixtureRowsRemoved": true,
+    "remaining": {
+      "members": 0,
+      "roles": 0,
+      "userRoles": 0,
+      "roleMenus": 0,
+      "dataGrants": 0,
+      "organizationApplications": 0,
+      "organizationMenus": 0
+    },
+    "existingRowsOverwritten": false,
+    "noOwnedTransactionLinksLeftUntouched": false,
+    "privateManifestRemoved": true,
+    "securityAndBusinessFactsRetainedUntilOwnedDatabaseCleanup": true
+  },
+  "snapshotSha256": "c795b314a63ad9ed0200ead36eeb790112862e7b5fdf939ded964cf1e813b2e0",
+  "fixtureScope": "One new employee membership and work-orders role/menu/data grants in the pre-existing second organization",
+  "currentClusterAndSourceVerified": true,
+  "failedStep": "REAL_HOST_ROUTE_DELIVERS_LIFECYCLE_UPDATE",
+  "failureCode": "PHASE25_CONTEXT_BROWSER_TIMEOUT",
+  "finishedAtUtc": "2026-10-29T12:52:29.765Z"
+}

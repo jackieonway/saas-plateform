@@ -1,0 +1,19 @@
+{
+  "contractVersion": "unified-auth-phase25-native-log-cleanup-correction/1",
+  "recordedAtUtc": "2026-10-29T12:15:12.050681+00:00",
+  "scope": "Correct earlier r1/r2 cleanup claims: core supervisors, 4 DB and 13 role cleanup passed, but this exact business native log was outside their cleanup inventory. Historical evidence is retained unchanged.",
+  "status": "LIMITED_LEGACY_EVIDENCE",
+  "existingNativeLog": {
+    "name": "phase25-business-stores.log",
+    "bytes": 163,
+    "sha256": "a14f31cba34ca2284f89eb40b9319ce11267a2cd5fe94ccb1d11e30f06ba387d",
+    "service": "stores",
+    "safeAppFailureCode": "PHASE25_APP_DATABASE_BASELINE_VERIFICATION"
+  },
+  "runtimeLeasePresent": false,
+  "protectedBusinessEnvironmentPresent": false,
+  "canaryScanComplete": false,
+  "canaryScanLimitation": "Original business environment and secrets have already been removed. No complete retrospective secret-leak scan is possible; no zero-leak conclusion is claimed.",
+  "rawLogPersistedInFormalReport": false,
+  "cleanupAuthorization": "Root explicitly authorized only TASK/phase25-business-{stores,orders,notification}.log after ownership and process checks. Pending deletion is recorded separately after the repaired stop path executes."
+}

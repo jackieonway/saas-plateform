@@ -15,6 +15,25 @@ const ISSUER: &str = "https://auth.saas.test";
 const CREATE_ROLES: &str = include_str!("../ops/identity-deployment/create-roles.sql");
 const PROVISION: &str = include_str!("../ops/identity-deployment/provision.sql");
 const VERIFY: &str = include_str!("../ops/identity-deployment/verify.sql");
+mod phase13;
+mod phase14;
+mod phase15;
+mod phase15_http;
+mod phase20;
+
+pub(crate) async fn canonical_employee_source(
+    pool: &PgPool,
+    user: Uuid,
+) -> Result<(Uuid, Uuid, Uuid, i64, DateTime<Utc>)> {
+    let source = phase13::console_source(pool, user).await?;
+    Ok((
+        source.client,
+        source.grant,
+        source.sid,
+        source.auth_time,
+        source.expires,
+    ))
+}
 
 fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
@@ -52,23 +71,47 @@ struct Database {
 }
 impl Database {
     async fn create() -> Result<Self> {
-        let url = std::env::var("IDENTITY_PHASE12_TEST_DATABASE_URL")
-            .map_err(|_| anyhow!("explicit IDENTITY_PHASE12_TEST_DATABASE_URL is required"))?;
+        Self::create_with_namespace(
+            "IDENTITY_PHASE12_TEST_DATABASE_URL",
+            "identity_phase12_",
+            "id12_",
+        )
+        .await
+    }
+    async fn create_phase02() -> Result<Self> {
+        Self::create_with_namespace(
+            "IDENTITY_PHASE02_TEST_DATABASE_URL",
+            "identity_phase02_",
+            "id02_",
+        )
+        .await
+    }
+    async fn create_with_namespace(
+        database_url_variable: &str,
+        database_prefix: &str,
+        role_prefix: &str,
+    ) -> Result<Self> {
+        let url = std::env::var(database_url_variable)
+            .map_err(|_| anyhow!("explicit isolated database administration URL is required"))?;
         let options = PgConnectOptions::from_str(&url)
-            .map_err(|_| anyhow!("invalid Phase12 administration configuration"))?;
+            .map_err(|_| anyhow!("invalid isolated administration configuration"))?;
         ensure!(
             options.get_database() == Some("postgres"),
-            "Phase12 administration must explicitly select postgres"
+            "isolated administration must explicitly select postgres"
         );
         let admin = PgPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(Duration::from_secs(10))
             .connect_with(options.clone())
             .await
-            .map_err(|_| anyhow!("Phase12 administration connection failed"))?;
+            .map_err(|_| anyhow!("isolated PostgreSQL administration connection failed"))?;
         let deployment = uuid7::new_uuid();
-        let name = format!("identity_phase12_{}", deployment.simple());
-        let prefix = format!("id12_{}", &deployment.simple().to_string()[..20]);
+        let simple = deployment.simple().to_string();
+        let name = format!("{database_prefix}{simple}");
+        // UUIDv7 timestamps and a monotonic random prefix may be identical for
+        // concurrent fixtures. Keep the random tail in role names as well.
+        let prefix = format!("{role_prefix}{}", &simple[12..]);
+        eprintln!("identity_test_resource database={name} role_prefix={prefix}");
         sqlx::query(&format!("CREATE DATABASE \"{name}\""))
             .execute(&admin)
             .await?;
@@ -83,7 +126,7 @@ impl Database {
                 let _ = sqlx::query(&format!("DROP DATABASE \"{name}\" WITH(FORCE)"))
                     .execute(&admin)
                     .await;
-                return Err(anyhow!("Phase12 owned database connection failed"));
+                return Err(anyhow!("task-owned isolated database connection failed"));
             }
         };
         let db = Self {
@@ -114,7 +157,7 @@ impl Database {
         format!("{}_{}", self.prefix, suffix)
     }
     async fn provision(&mut self) -> Result<()> {
-        sqlx::query("INSERT INTO oidc_provider_settings(singleton,issuer,created_at) VALUES(true,$1,clock_timestamp())").bind(ISSUER).execute(&self.pool).await?;
+        sqlx::query("INSERT INTO auth_provider_settings(singleton,issuer,created_at) VALUES(true,$1,clock_timestamp())").bind(ISSUER).execute(&self.pool).await?;
         sqlx::query(&format!(
             "COMMENT ON DATABASE \"{}\" IS {}",
             self.name,
@@ -188,19 +231,24 @@ impl Database {
             .ok_or_else(|| anyhow!("platform runtime not provisioned"))
     }
     async fn finish(mut self, result: Result<()>) -> Result<()> {
+        let phase12_namespace =
+            self.name.starts_with("identity_phase12_") && self.prefix.starts_with("id12_");
+        let phase02_namespace =
+            self.name.starts_with("identity_phase02_") && self.prefix.starts_with("id02_");
+        let phase15_http_namespace =
+            self.name.starts_with("identity_phase15_http_") && self.prefix.starts_with("id15h_");
         ensure!(
-            self.name.starts_with("identity_phase12_")
+            (phase12_namespace || phase02_namespace || phase15_http_namespace)
                 && self.name.len() <= 63
                 && self
                     .name
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || b == b'_')
-                && self.prefix.starts_with("id12_")
                 && self
                     .prefix
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || b == b'_'),
-            "refusing cleanup outside Phase12-owned database/roles"
+            "refusing cleanup outside an explicitly task-owned database/role namespace"
         );
         if let Some(pool) = self.identity.take() {
             pool.close().await;
@@ -231,10 +279,13 @@ impl Database {
                 .is_ok();
         }
         self.admin.close().await;
-        eprintln!("identity_phase12_cleanup database={} assertions_ok={} database_removed={} roles_removed={roles_removed} pool_closed={closed}",self.name,result.is_ok(),removed.is_ok());
+        eprintln!("identity_test_cleanup database={} assertions_ok={} database_removed={} roles_removed={roles_removed} pool_closed={closed}",self.name,result.is_ok(),removed.is_ok());
         result?;
         removed?;
-        ensure!(closed && roles_removed, "Phase12 owned cleanup incomplete");
+        ensure!(
+            closed && roles_removed,
+            "task-owned database/role cleanup incomplete"
+        );
         Ok(())
     }
 }
@@ -249,6 +300,297 @@ async fn denied(pool: &PgPool, sql: &str, label: &str) -> Result<()> {
             "{label}: forbidden operation unexpectedly succeeded"
         )),
     }
+}
+
+async fn constraint_rejected(pool: &PgPool, sql: &str, code: &str, label: &str) -> Result<()> {
+    match sqlx::raw_sql(sql).execute(pool).await {
+        Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some(code) => Ok(()),
+        Err(_) => Err(anyhow!(
+            "{label}: rejected for an unexpected PostgreSQL error"
+        )),
+        Ok(_) => Err(anyhow!("{label}: invalid write unexpectedly succeeded")),
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires explicit isolated IDENTITY_PHASE02_TEST_DATABASE_URL"]
+async fn phase02_auth_model_constraints_and_runtime_boundary() -> Result<()> {
+    let mut db = Database::create_phase02().await?;
+    let result = async {
+        let checksum: Vec<u8> =
+            sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version=1")
+                .fetch_one(&db.pool)
+                .await?;
+        let history_before: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
+            .fetch_one(&db.pool)
+            .await?;
+        sqlx::migrate!("./migrations").run(&db.pool).await?;
+        let checksum_after: Vec<u8> =
+            sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version=1")
+                .fetch_one(&db.pool)
+                .await?;
+        let history_after: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
+            .fetch_one(&db.pool)
+            .await?;
+        ensure!(checksum == checksum_after && history_before == 1 && history_after == 1,
+            "rechecking canonical version 1 changed migration history");
+
+        let fixture = Fixture::create(&db.pool).await?;
+        let fresh_user = uuid7::new_uuid();
+        let fresh_generation: i64 = sqlx::query_scalar("INSERT INTO users(id,username,password_hash) VALUES($1,$2,'owned-canonical-schema-placeholder') RETURNING session_version")
+            .bind(fresh_user).bind(format!("phase02-default-{}",fresh_user.simple())).fetch_one(&db.pool).await?;
+        ensure!(fresh_generation==1,"fresh canonical account must begin at generation 1");
+        constraint_rejected(&db.pool,&format!("UPDATE users SET session_version=0 WHERE id='{fresh_user}'"),"23514","canonical account generation cannot be zero").await?;
+        let application = uuid7::new_uuid();
+        let partner = uuid7::new_uuid();
+        let resource = uuid7::new_uuid();
+        let scope = uuid7::new_uuid();
+        let client = uuid7::new_uuid();
+        let public_client = uuid7::new_uuid();
+        let credential = uuid7::new_uuid();
+        let group = uuid7::new_uuid();
+        let consent = uuid7::new_uuid();
+        let sso_session = uuid7::new_uuid();
+        let sector = uuid7::new_uuid();
+        let subject_link = uuid7::new_uuid();
+        let request = uuid7::new_uuid();
+        let code = uuid7::new_uuid();
+        let grant = uuid7::new_uuid();
+        let access = uuid7::new_uuid();
+        let family = uuid7::new_uuid();
+        let refresh = uuid7::new_uuid();
+        let projection_service = uuid7::new_uuid();
+        let auth_admin_service = uuid7::new_uuid();
+
+        sqlx::query("INSERT INTO identity_service_clients(id,secret_hash,purpose,status,created_at) VALUES($1,repeat('a',64),'APPLICATION_PROJECTION','ENABLED',clock_timestamp()),($2,repeat('b',64),'AUTH_ADMIN','ENABLED',clock_timestamp())")
+            .bind(projection_service).bind(auth_admin_service).execute(&db.pool).await?;
+        let service_purposes: i64 = sqlx::query_scalar("SELECT count(*) FROM identity_service_clients WHERE purpose IN ('APPLICATION_PROJECTION','AUTH_ADMIN') AND status='ENABLED'")
+            .fetch_one(&db.pool).await?;
+        ensure!(service_purposes == 2, "current canonical schema rejected a dedicated projection/admin purpose");
+
+        sqlx::query("INSERT INTO auth_applications(application_id,partner_id,ownership,status,display_name,purpose,approved_scopes,projection_version) VALUES($1,$2,'THIRD_PARTY','APPROVED','Phase 2 fixture','Account-only test',ARRAY['openid','profile'],1)")
+            .bind(application).bind(partner).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_resources(id,resource_key,audience,status,version) VALUES($1,'phase2-profile','https://resource.example.test/profile','ACTIVE',1)")
+            .bind(resource).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_scopes(id,resource_id,scope_name,description,status,version) VALUES($1,$2,'profile:read','Read account profile','ACTIVE',1)")
+            .bind(scope).bind(resource).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_clients(id,client_id,display_name,application_id,environment,client_type,runtime_kind,subject_mode,context_mode,allowed_member_types,grant_types,token_endpoint_auth_method,redirect_uris,post_logout_redirect_uris,status) VALUES($1,'phase2-account-client','Phase 2 account client',$2,'test','CONFIDENTIAL','WEB_BFF','USER','ACCOUNT_ONLY',ARRAY[]::text[],ARRAY['authorization_code','refresh_token']::text[],'client_secret_basic',ARRAY['https://client.example.test/callback'],ARRAY[]::text[],'ENABLED')")
+            .bind(client).bind(application).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_clients(id,client_id,display_name,application_id,environment,client_type,runtime_kind,subject_mode,context_mode,allowed_member_types,grant_types,token_endpoint_auth_method,redirect_uris,post_logout_redirect_uris,status) VALUES($1,'phase2-public-client','Phase 2 public client',$2,'test','PUBLIC','SPA','USER','ACCOUNT_ONLY',ARRAY[]::text[],ARRAY['authorization_code']::text[],'none',ARRAY['https://public.example.test/callback'],ARRAY[]::text[],'ENABLED')")
+            .bind(public_client).bind(application).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_client_credentials(id,client_id,credential_version,secret_digest) VALUES($1,$2,1,$3)")
+            .bind(credential).bind(client).bind("a".repeat(64)).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_client_permissions(client_id,resource_id,scope_id) VALUES($1,$2,$3)")
+            .bind(client).bind(resource).bind(scope).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_consent_groups(id,application_id,environment,display_name,purpose,subject_mode,context_mode,status) VALUES($1,$2,'test','Phase 2 clients','Account sign-in','USER','ACCOUNT_ONLY','ACTIVE')")
+            .bind(group).bind(application).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_consent_group_clients(group_id,client_id,application_id,environment,subject_mode,context_mode) VALUES($1,$2,$3,'test','USER','ACCOUNT_ONLY')")
+            .bind(group).bind(client).bind(application).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_consents(id,user_id,group_id,status,generation,version,authorized_at) VALUES($1,$2,$3,'ACTIVE',1,1,clock_timestamp())")
+            .bind(consent).bind(fixture.user).bind(group).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_consent_scopes(consent_id,resource_id,scope_id) VALUES($1,$2,$3)")
+            .bind(consent).bind(resource).bind(scope).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO sso_sessions(id,user_id,token_hash,csrf_hash,account_version,authenticated_at,expires_at) VALUES($1,$2,$3,$4,3,clock_timestamp(),clock_timestamp()+interval '1 hour')")
+            .bind(sso_session).bind(fixture.user).bind(hash::sha256_hex("phase02-session-token")).bind(hash::sha256_hex("phase02-session-csrf")).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_subject_sectors(id,application_id,environment,status) VALUES($1,$2,'test','ACTIVE')")
+            .bind(sector).bind(application).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_subject_links(id,user_id,sector_id,subject) VALUES($1,$2,$3,$4)")
+            .bind(subject_link).bind(fixture.user).bind(sector).bind("sub_phase2_opaque_fixture_0001").execute(&db.pool).await?;
+        let state_value = "phase02-state-value-1234567890";
+        let nonce_value = "phase02-nonce-value-1234567890";
+        sqlx::query("INSERT INTO auth_authorization_requests(id,client_id,user_id,source_session_id,account_version,auth_time,client_policy_version,application_projection_version,redirect_uri,state_digest,state_value,nonce_digest,nonce_value,code_challenge,code_challenge_method,scope_ids,browser_digest,csrf_digest,force_login,force_consent,max_age_seconds,prior_session_id,status,expires_at) VALUES($1,$2,$3,$4,3,clock_timestamp(),1,1,'https://client.example.test/callback',$5,$6,$7,$8,$9,'S256',ARRAY[$10]::uuid[],$11,$12,false,false,NULL,NULL,'AUTHORIZED',clock_timestamp()+interval '5 minutes')")
+            .bind(request).bind(client).bind(fixture.user).bind(sso_session).bind(hash::sha256_hex(state_value)).bind(state_value).bind(hash::sha256_hex(nonce_value)).bind(nonce_value).bind("d".repeat(43)).bind(scope).bind(hash::sha256_hex("browser-binding")).bind(hash::sha256_hex("csrf-binding")).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_authorization_codes(id,request_id,client_id,user_id,consent_id,consent_generation,consent_group_version,code_digest,expires_at) VALUES($1,$2,$3,$4,$5,1,1,$6,clock_timestamp()+interval '60 seconds')")
+            .bind(code).bind(request).bind(client).bind(fixture.user).bind(consent).bind("e".repeat(64)).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_grants(id,client_id,subject_mode,user_id,consent_id,consent_generation,consent_group_version,source_session_id,context_mode,account_version,client_policy_version,application_projection_version,scope_ids,audiences,auth_time,expires_at) VALUES($1,$2,'USER',$3,$4,1,1,$5,'ACCOUNT_ONLY',3,1,1,ARRAY[$6]::uuid[],ARRAY['https://resource.example.test/profile']::text[],clock_timestamp(),clock_timestamp()+interval '1 hour')")
+            .bind(grant).bind(client).bind(fixture.user).bind(consent).bind(sso_session).bind(scope).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_grant_scopes(grant_id,resource_id,scope_id) VALUES($1,$2,$3)")
+            .bind(grant).bind(resource).bind(scope).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_access_tokens(id,grant_id,token_digest,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '5 minutes')")
+            .bind(access).bind(grant).bind("f".repeat(64)).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_access_token_scopes(token_id,resource_id,scope_id) VALUES($1,$2,$3)")
+            .bind(access).bind(resource).bind(scope).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_refresh_families(id,grant_id,absolute_expires_at,idle_expires_at) VALUES($1,$2,clock_timestamp()+interval '7 days',clock_timestamp()+interval '24 hours')")
+            .bind(family).bind(grant).execute(&db.pool).await?;
+        sqlx::query("INSERT INTO auth_refresh_tokens(id,family_id,token_digest,generation,expires_at) VALUES($1,$2,$3,1,clock_timestamp()+interval '24 hours')")
+            .bind(refresh).bind(family).bind("1".repeat(64)).execute(&db.pool).await?;
+
+        db.provision().await?;
+        let runtime: (String, String, String) = sqlx::query_as(
+            "SELECT current_user::text, a.client_id, c.secret_digest FROM auth_client_credentials c JOIN auth_clients a ON a.id=c.client_id WHERE c.id=$1",
+        )
+        .bind(credential)
+        .fetch_one(db.identity()?)
+        .await?;
+        ensure!(runtime.0 == db.role("identity_runtime") && runtime.1 == "phase2-account-client" && runtime.2 == "a".repeat(64),
+            "identity LOGIN runtime cannot use its own unified credential model");
+        denied(db.platform()?, "SELECT secret_digest FROM auth_client_credentials", "platform secret projection read").await?;
+        denied(db.platform()?, "UPDATE auth_clients SET status='DISABLED'", "platform identity client write").await?;
+        denied(db.identity()?, "SELECT * FROM memberships", "identity membership read").await?;
+        denied(db.identity()?, "SELECT * FROM roles", "identity business role read").await?;
+        denied(db.identity()?, "CREATE TABLE public.phase02_runtime_escape(id int)", "identity runtime DDL").await?;
+        denied(db.platform()?, "CREATE TABLE public.phase02_platform_escape(id int)", "platform runtime DDL").await?;
+
+        constraint_rejected(&db.pool,
+            &format!("INSERT INTO auth_resources(id,resource_key,audience,status,version) VALUES('{}','phase2-profile','https://duplicate.example.test','ACTIVE',1)",uuid7::new_uuid()),
+            "23505","resource key uniqueness").await?;
+        constraint_rejected(&db.pool,
+            &format!("UPDATE auth_clients SET version=0 WHERE id='{}'",client),
+            "23514","client optimistic version lower bound").await?;
+        constraint_rejected(&db.pool,
+            &format!("INSERT INTO auth_client_credentials(id,client_id,credential_version,secret_digest) VALUES('{}','{}',1,'{}')",uuid7::new_uuid(),public_client,"9".repeat(64)),
+            "23503","public client secret credential reference").await?;
+        constraint_rejected(&db.pool,
+            &format!("INSERT INTO auth_client_permissions(client_id,resource_id,scope_id) VALUES('{}','{}','{}')",client,uuid7::new_uuid(),scope),
+            "23503","resource-qualified scope reference").await?;
+        constraint_rejected(&db.pool,
+            &format!("INSERT INTO auth_consents(id,user_id,group_id,status,generation,version,authorized_at) VALUES('{}','{}','{}','ACTIVE',1,1,clock_timestamp())",uuid7::new_uuid(),fixture.user,group),
+            "23505","one consent generation row per account and group").await?;
+        constraint_rejected(&db.pool,
+            &format!("INSERT INTO auth_subject_links(id,user_id,sector_id,subject) VALUES('{}','{}','{}','sub_phase2_opaque_fixture_0002')",uuid7::new_uuid(),uuid7::new_uuid(),sector),
+            "23503","subject link account reference").await?;
+        db.verify().await?;
+        Ok(())
+    }
+    .await;
+    db.finish(result).await
+}
+
+#[tokio::test]
+#[ignore = "requires explicit isolated IDENTITY_PHASE02_TEST_DATABASE_URL"]
+async fn phase11_machine_grants_require_a_persisted_client_credential_version() -> Result<()> {
+    let db = Database::create_phase02().await?;
+    let result = async {
+        let application = uuid7::new_uuid();
+        let resource = uuid7::new_uuid();
+        let scope = uuid7::new_uuid();
+        let client = uuid7::new_uuid();
+        let credential = uuid7::new_uuid();
+        let grant = uuid7::new_uuid();
+        let audience = "https://api.example.test/machine";
+        sqlx::query(
+            "INSERT INTO public.auth_applications(application_id,ownership,status,display_name,purpose,approved_scopes,projection_version,projected_at) \
+             VALUES($1,'FIRST_PARTY','APPROVED','Machine test app','Approved service access',ARRAY['orders.read'],1,clock_timestamp())",
+        )
+        .bind(application)
+        .execute(&db.pool)
+        .await?;
+        sqlx::query(
+            "INSERT INTO public.auth_resources(id,resource_key,audience,status,version) \
+             VALUES($1,'orders',$2,'ACTIVE',1)",
+        )
+        .bind(resource)
+        .bind(audience)
+        .execute(&db.pool)
+        .await?;
+        sqlx::query(
+            "INSERT INTO public.auth_scopes(id,resource_id,scope_name,status) \
+             VALUES($1,$2,'orders.read','ACTIVE')",
+        )
+        .bind(scope)
+        .bind(resource)
+        .execute(&db.pool)
+        .await?;
+        sqlx::query(
+            "INSERT INTO public.auth_clients(id,client_id,display_name,application_id,environment,client_type, \
+             runtime_kind,subject_mode,context_mode,allowed_member_types,grant_types,token_endpoint_auth_method, \
+             redirect_uris,post_logout_redirect_uris,status,version,policy_version) \
+             VALUES($1,'phase11-schema-machine','Phase 11 machine',$2,'test','CONFIDENTIAL','SERVICE','MACHINE','NONE', \
+             ARRAY[]::text[],ARRAY['client_credentials']::text[],'client_secret_basic',ARRAY[]::text[],ARRAY[]::text[], \
+             'ENABLED',1,1)",
+        )
+        .bind(client)
+        .bind(application)
+        .execute(&db.pool)
+        .await?;
+        sqlx::query(
+            "INSERT INTO public.auth_client_credentials(id,client_id,client_type,credential_version,secret_digest) \
+             VALUES($1,$2,'CONFIDENTIAL',1,$3)",
+        )
+        .bind(credential)
+        .bind(client)
+        .bind("a".repeat(64))
+        .execute(&db.pool)
+        .await?;
+        sqlx::query(
+            "INSERT INTO public.auth_client_permissions(client_id,resource_id,scope_id) VALUES($1,$2,$3)",
+        )
+        .bind(client)
+        .bind(resource)
+        .bind(scope)
+        .execute(&db.pool)
+        .await?;
+        sqlx::query(
+            "INSERT INTO public.auth_grants(id,client_id,subject_mode,user_id,consent_id,consent_generation, \
+             consent_group_version,source_session_id,context_mode,context_ref,account_version,client_policy_version, \
+             application_projection_version,credential_version,scope_ids,audiences,auth_time,expires_at) \
+             VALUES($1,$2,'MACHINE',NULL,NULL,NULL,NULL,NULL,'NONE',NULL,NULL,1,1,1,ARRAY[$3]::uuid[], \
+             ARRAY[$4]::text[],NULL,clock_timestamp()+interval '5 minutes')",
+        )
+        .bind(grant)
+        .bind(client)
+        .bind(scope)
+        .bind(audience)
+        .execute(&db.pool)
+        .await?;
+        sqlx::query(
+            "INSERT INTO public.auth_grant_scopes(grant_id,resource_id,scope_id) VALUES($1,$2,$3)",
+        )
+        .bind(grant)
+        .bind(resource)
+        .bind(scope)
+        .execute(&db.pool)
+        .await?;
+        let stored: (String, Option<Uuid>, Option<Uuid>, String, Option<i64>) = sqlx::query_as(
+            "SELECT subject_mode,user_id,consent_id,context_mode,credential_version \
+             FROM public.auth_grants WHERE id=$1",
+        )
+        .bind(grant)
+        .fetch_one(&db.pool)
+        .await?;
+        ensure!(
+            stored == ("MACHINE".to_owned(), None, None, "NONE".to_owned(), Some(1)),
+            "canonical MACHINE grant stored a user context or lost its credential version"
+        );
+
+        let missing_version = sqlx::query(
+            "INSERT INTO public.auth_grants(id,client_id,subject_mode,user_id,consent_id,consent_generation, \
+             consent_group_version,source_session_id,context_mode,context_ref,account_version,client_policy_version, \
+             application_projection_version,credential_version,scope_ids,audiences,auth_time,expires_at) \
+             VALUES($1,$2,'MACHINE',NULL,NULL,NULL,NULL,NULL,'NONE',NULL,NULL,1,1,NULL,ARRAY[$3]::uuid[], \
+             ARRAY[$4]::text[],NULL,clock_timestamp()+interval '5 minutes')",
+        )
+        .bind(uuid7::new_uuid())
+        .bind(client)
+        .bind(scope)
+        .bind(audience)
+        .execute(&db.pool)
+        .await;
+        ensure!(
+            matches!(missing_version, Err(sqlx::Error::Database(ref error)) if error.code().as_deref() == Some("23514")),
+            "canonical schema accepted a MACHINE grant without credential_version"
+        );
+        let unknown_version = sqlx::query(
+            "INSERT INTO public.auth_grants(id,client_id,subject_mode,user_id,consent_id,consent_generation, \
+             consent_group_version,source_session_id,context_mode,context_ref,account_version,client_policy_version, \
+             application_projection_version,credential_version,scope_ids,audiences,auth_time,expires_at) \
+             VALUES($1,$2,'MACHINE',NULL,NULL,NULL,NULL,NULL,'NONE',NULL,NULL,1,1,99,ARRAY[$3]::uuid[], \
+             ARRAY[$4]::text[],NULL,clock_timestamp()+interval '5 minutes')",
+        )
+        .bind(uuid7::new_uuid())
+        .bind(client)
+        .bind(scope)
+        .bind(audience)
+        .execute(&db.pool)
+        .await;
+        ensure!(
+            matches!(unknown_version, Err(sqlx::Error::Database(ref error)) if error.code().as_deref() == Some("23503")),
+            "canonical schema accepted a MACHINE grant bound to an unregistered credential version"
+        );
+        Ok::<(), anyhow::Error>(())
+    }
+    .await;
+    db.finish(result).await
 }
 
 async fn assert_definer_owner_privileges(
@@ -348,9 +690,9 @@ async fn intent_lock_wait_expiry(
     let service = uuid7::new_uuid();
     let digest = "c".repeat(64);
     let (table, expiry, query) = if admin_intent {
-        let expiry:DateTime<Utc>=sqlx::query_scalar("INSERT INTO platform_oidc_command_intents(id,actor_user_id,tenant_id,organization_id,session_id,service_client_id,request_digest,method,path,accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,'POST','/internal/identity/oidc/clients',clock_timestamp()-interval '59 seconds') RETURNING accepted_at+interval '60 seconds'")
+        let expiry:DateTime<Utc>=sqlx::query_scalar("INSERT INTO platform_auth_command_intents(id,actor_user_id,tenant_id,organization_id,session_id,service_client_id,request_digest,method,path,management_permission,accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,'POST','/internal/identity/auth/clients','system:oauth:register',clock_timestamp()-interval '59 seconds') RETURNING accepted_at+interval '60 seconds'")
             .bind(operation).bind(fixture.user).bind(fixture.tenant).bind(fixture.org).bind(fixture.sessions[0]).bind(service).bind(&digest).fetch_one(db.platform()?).await?;
-        ("platform_oidc_command_intents",expiry,format!("SELECT public.identity_oidc_command_intent_active('{operation}','{service}','{digest}','POST','/internal/identity/oidc/clients')"))
+        ("platform_auth_command_intents",expiry,format!("SELECT public.identity_auth_command_intent_active('{operation}','{service}','{digest}','POST','/internal/identity/auth/clients')"))
     } else {
         let expiry:DateTime<Utc>=sqlx::query_scalar("INSERT INTO platform_account_command_intents(id,target_user_id,actor_user_id,actor_tenant_id,actor_organization_id,actor_session_id,expected_account_version,canonical_digest,command_kind,expires_at,state,followup,created_at) VALUES($1,$2,$2,$3,$4,$5,3,$6,'REVOKE_ALL',clock_timestamp()+interval '1 second','PENDING_SECRET','{}',clock_timestamp()) RETURNING expires_at")
             .bind(operation).bind(fixture.user).bind(fixture.tenant).bind(fixture.org).bind(fixture.sessions[0]).bind(&digest).fetch_one(db.platform()?).await?;
@@ -422,7 +764,6 @@ struct Fixture {
     org: Uuid,
     member: Uuid,
     sessions: Vec<Uuid>,
-    tokens: Vec<Uuid>,
 }
 impl Fixture {
     async fn create(pool: &PgPool) -> Result<Self> {
@@ -439,30 +780,20 @@ impl Fixture {
         sqlx::query("INSERT INTO organizations(id,tenant_id,name) VALUES($1,$2,'Owned phase12 organization')").bind(org).bind(tenant).execute(pool).await?;
         sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,identity_version) VALUES($1,$2,$3,'EMPLOYEE',5)").bind(member).bind(user).bind(org).execute(pool).await?;
         let mut sessions = Vec::new();
-        let mut tokens = Vec::new();
-        for kind in ["access", "refresh"] {
+        for _ in 0..2 {
             let sid = uuid7::new_uuid();
-            let token = uuid7::new_uuid();
-            sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) VALUES($1,$2,$3,$4,clock_timestamp()+interval '1 hour',3,$5,'EMPLOYEE',5,'urn:saas:legacy-platform','platform-console-legacy',1)")
+            sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) VALUES($1,$2,$3,$4,clock_timestamp()+interval '1 hour',3,$5,'EMPLOYEE',5,'https://unbound-source.example.invalid','019d0000-0000-7000-8000-00000000ffff',1)")
                 .bind(sid).bind(user).bind(tenant).bind(org).bind(member).execute(pool).await?;
             sqlx::query("INSERT INTO platform_session_refresh_tokens(id,session_id,token_hash,session_version,expires_at) VALUES($1,$2,$3,3,clock_timestamp()+interval '30 minutes')")
                 .bind(uuid7::new_uuid()).bind(sid).bind(hash::sha256_hex(&sid.to_string())).execute(pool).await?;
-            sqlx::query("INSERT INTO oauth_tokens(id,token_hash,token_type,user_id,client_id,expires_at) VALUES($1,$2,$3,$4,'platform-console-legacy',clock_timestamp()+interval '20 minutes')")
-                .bind(token).bind(hash::sha256_hex(&token.to_string())).bind(kind).bind(user).execute(pool).await?;
             sessions.push(sid);
-            tokens.push(token);
         }
-        sqlx::query("INSERT INTO oauth_authorization_codes(id,code_hash,client_id,user_id,redirect_uri,expires_at) VALUES($1,$2,'platform-console-legacy',$3,'https://phase12.example.invalid/callback',clock_timestamp()+interval '5 minutes')")
-            .bind(uuid7::new_uuid()).bind(hash::sha256_hex(&user.to_string())).bind(user).execute(pool).await?;
-        sqlx::query("INSERT INTO oauth_device_codes(id,device_code_hash,user_code,client_id,user_id,status,expires_at) VALUES($1,$2,'OWNED12','platform-console-legacy',$3,'PENDING',clock_timestamp()+interval '5 minutes')")
-            .bind(uuid7::new_uuid()).bind(hash::sha256_hex(&member.to_string())).bind(user).execute(pool).await?;
         Ok(Self {
             user,
             tenant,
             org,
             member,
             sessions,
-            tokens,
         })
     }
 }
@@ -484,18 +815,18 @@ async fn phase12_real_roles_enforce_mixed_user_columns_and_no_ddl_owner_escape()
         for (sql,label) in [
             ("SELECT password_hash FROM users","platform PHC select"),("SELECT * FROM users","platform whole-row credential read"),
             ("UPDATE users SET password_hash='forged'","platform PHC update"),("UPDATE users SET session_version=session_version+1","platform account generation write"),
-            ("UPDATE users SET real_name='forged'","platform profile write"),("SELECT * FROM oidc_clients","platform private OIDC read"),
-            ("UPDATE oidc_clients SET status='DISABLED'","platform private OIDC write"),
-            ("SELECT * FROM oidc_context_clients","platform raw context capability read"),("SELECT * FROM oidc_context_interactions","platform raw context interaction read"),
-            ("SELECT * FROM oidc_consents","platform private saved approval read"),("UPDATE oidc_consents SET revoked_at=clock_timestamp()","platform saved approval revocation"),
-            ("INSERT INTO identity_service_clients(id,secret_hash,purpose,status,created_at) VALUES('019a174e-0000-7000-8000-000000000099',repeat('a',64),'OIDC_ADMIN','ENABLED',clock_timestamp())","platform internal caller forgery")
+            ("UPDATE users SET real_name='forged'","platform profile write"),("SELECT * FROM auth_clients","platform private client read"),
+            ("UPDATE auth_clients SET status='DISABLED'","platform private client write"),
+            ("SELECT * FROM auth_context_interactions","platform raw canonical context interaction read"),
+            ("SELECT * FROM auth_consents","platform private saved approval read"),("UPDATE auth_consents SET revoked_at=clock_timestamp()","platform saved approval revocation"),
+            ("INSERT INTO identity_service_clients(id,secret_hash,purpose,status,created_at) VALUES('019a174e-0000-7000-8000-000000000099',repeat('a',64),'AUTH_ADMIN','ENABLED',clock_timestamp())","platform internal caller forgery")
         ] {denied(platform,sql,label).await?;}
         for (sql,label) in [
             ("SELECT is_super_admin FROM users","identity platform flag read"),("UPDATE users SET is_super_admin=true","identity platform flag write"),
             ("UPDATE users SET id=id","identity stable-subject update"),("DELETE FROM users","identity cascading account delete"),("TRUNCATE users CASCADE","identity cascading truncate"),
             ("SELECT * FROM memberships","identity membership read"),("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1","identity membership write"),
             ("SELECT * FROM roles","identity role read"),("DELETE FROM user_roles","identity role delete"),
-            ("UPDATE identity_service_clients SET purpose='OIDC_ADMIN'","runtime service-purpose rewrite"),
+            ("UPDATE identity_service_clients SET purpose='KEY_ADMIN'","runtime service-purpose rewrite"),
             ("SELECT * FROM context_selection_services","identity platform selection services read"),
             ("SELECT * FROM context_selection_registrations","identity platform RP mapping read"),
             ("SELECT * FROM context_selections","identity platform selected member read"),
@@ -523,14 +854,11 @@ async fn phase12_auth_generation_bridge_revokes_only_credentials_and_records_act
     let result=async {
         let fixture=Fixture::create(&db.pool).await?;db.provision().await?;
         sqlx::query("UPDATE users SET status='DISABLED' WHERE id=$1").bind(fixture.user).execute(db.identity()?).await?;
-        let fact:(i64,i64,i64)=sqlx::query_as("SELECT account_version,platform_session_count,oauth_token_count FROM identity_account_revocation_facts WHERE user_id=$1").bind(fixture.user).fetch_one(db.identity()?).await?;
-        ensure!(fact==(4,2,2),"cohost bridge double-counted, lost or overwrote actual generation revocations");
+        let fact:(i64,i64)=sqlx::query_as("SELECT account_version,platform_session_count FROM identity_account_revocation_facts WHERE user_id=$1").bind(fixture.user).fetch_one(db.identity()?).await?;
+        ensure!(fact==(4,2),"cohost bridge double-counted, lost or overwrote actual generation revocations");
         let retired:bool=sqlx::query_scalar("SELECT (SELECT bool_and(revoked_at IS NOT NULL) FROM platform_sessions WHERE id=ANY($1)) \
-            AND (SELECT bool_and(revoked) FROM oauth_tokens WHERE id=ANY($2)) \
-            AND (SELECT bool_and(consumed_at IS NOT NULL) FROM platform_session_refresh_tokens) \
-            AND (SELECT bool_and(consumed) FROM oauth_authorization_codes) \
-            AND (SELECT bool_and(status='EXPIRED') FROM oauth_device_codes)")
-            .bind(&fixture.sessions).bind(&fixture.tokens).fetch_one(db.platform()?).await?;
+            AND (SELECT bool_and(consumed_at IS NOT NULL) FROM platform_session_refresh_tokens)")
+            .bind(&fixture.sessions).fetch_one(db.platform()?).await?;
         ensure!(retired,"bridge did not atomically retire every existing platform credential kind");
         let member:(String,i64)=sqlx::query_as("SELECT status,identity_version FROM memberships WHERE id=$1").bind(fixture.member).fetch_one(db.platform()?).await?;
         ensure!(member==("ENABLED".into(),5),"account bridge changed a platform membership");
@@ -538,8 +866,8 @@ async fn phase12_auth_generation_bridge_revokes_only_credentials_and_records_act
         denied(db.identity()?,"UPDATE identity_account_revocation_facts SET platform_session_count=999","identity cannot forge the bridge fact").await?;
         denied(db.platform()?,"SELECT * FROM identity_account_revocation_facts","platform does not read private auth command facts").await?;
         sqlx::query("UPDATE users SET session_version=session_version+1 WHERE id=$1").bind(fixture.user).execute(db.identity()?).await?;
-        let next:(i64,i64)=sqlx::query_as("SELECT platform_session_count,oauth_token_count FROM identity_account_revocation_facts WHERE user_id=$1 AND account_version=5").bind(fixture.user).fetch_one(db.identity()?).await?;
-        ensure!(next==(0,0),"new empty generation reused another command's old counts");
+        let next:i64=sqlx::query_scalar("SELECT platform_session_count FROM identity_account_revocation_facts WHERE user_id=$1 AND account_version=5").bind(fixture.user).fetch_one(db.identity()?).await?;
+        ensure!(next==0,"new empty generation reused another command's old counts");
         Ok(())
     }.await;
     db.finish(result).await
@@ -553,6 +881,7 @@ async fn phase12_narrow_projections_and_command_fences_hold_exact_original_bindi
     let result=async {
         let f=Fixture::create(&db.pool).await?;
         bind_sso_fixture(&db.pool, &f).await?;
+        grant_command_administration_fixture(&db.pool, &f).await?;
         db.provision().await?;
         let identity=db.identity()?;let platform=db.platform()?;
         for table in ["public.platform_sessions","public.memberships"] {
@@ -569,31 +898,94 @@ async fn phase12_narrow_projections_and_command_fences_hold_exact_original_bindi
         let blocked=sqlx::query("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1 WHERE id=$1").bind(f.member).execute(&mut *revoke).await;
         ensure!(matches!(blocked,Err(sqlx::Error::Database(ref error)) if error.code().as_deref()==Some("55P03")),"member revocation was not fenced until identity command commit");
         revoke.rollback().await?;command.rollback().await?;
-        sqlx::query("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1 WHERE id=$1").bind(f.member).execute(platform).await?;
-        let active:bool=sqlx::query_scalar("SELECT platform_password_context_active($1,$2,$3,$4,3)")
-            .bind(f.user).bind(f.sessions[0]).bind(f.tenant).bind(f.org).fetch_one(identity).await?;
-        ensure!(!active,"retired original member was repaired by a current account");
         denied(identity,"SELECT * FROM platform_sessions","fence gives no raw platform table read").await?;
         denied(platform,&format!("SELECT platform_password_context_active('{}','{}','{}','{}',3)",f.user,f.sessions[0],f.tenant,f.org),"personal fence signature only identity EXEC").await?;
         let operation=uuid7::new_uuid();let service=uuid7::new_uuid();let digest="a".repeat(64);
-        sqlx::query("INSERT INTO platform_oidc_command_intents(id,actor_user_id,tenant_id,organization_id,session_id,service_client_id,request_digest,method,path,accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,'POST','/internal/identity/oidc/clients',clock_timestamp())")
+        sqlx::query("INSERT INTO platform_auth_command_intents(id,actor_user_id,tenant_id,organization_id,session_id,service_client_id,request_digest,method,path,management_permission,accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,'POST','/internal/identity/auth/clients','system:oauth:register',clock_timestamp())")
             .bind(operation).bind(f.user).bind(f.tenant).bind(f.org).bind(f.sessions[0]).bind(service).bind(&digest).execute(platform).await?;
         for (service_ref,digest_ref,expected) in [(service,digest.as_str(),true),(uuid7::new_uuid(),digest.as_str(),false),(service,"wrong",false)] {
-            let accepted:bool=sqlx::query_scalar("SELECT identity_oidc_command_intent_active($1,$2,$3,'POST','/internal/identity/oidc/clients')")
+            let accepted:bool=sqlx::query_scalar("SELECT identity_auth_command_intent_active($1,$2,$3,'POST','/internal/identity/auth/clients')")
                 .bind(operation).bind(service_ref).bind(digest_ref).fetch_one(identity).await?;
-            ensure!(accepted==expected,"OIDC admin acceptance crossed its original service/digest tuple");
+            ensure!(accepted==expected,"AUTH admin acceptance crossed its original service/digest tuple");
         }
-        denied(identity,"SELECT * FROM platform_oidc_command_intents","identity raw admin intent read").await?;
-        denied(platform,"UPDATE platform_oidc_command_intents SET request_digest=repeat('b',64)","immutable runtime admin acceptance").await?;
-        sqlx::query("UPDATE platform_oidc_command_intents SET accepted_at=clock_timestamp()-interval '61 seconds' WHERE id=$1").bind(operation).execute(&db.pool).await?;
-        let expired:bool=sqlx::query_scalar("SELECT identity_oidc_command_intent_active($1,$2,$3,'POST','/internal/identity/oidc/clients')")
+        denied(identity,"SELECT * FROM platform_auth_command_intents","identity raw admin intent read").await?;
+        denied(platform,"UPDATE platform_auth_command_intents SET request_digest=repeat('b',64)","immutable runtime admin acceptance").await?;
+        sqlx::query("UPDATE platform_auth_command_intents SET accepted_at=clock_timestamp()-interval '61 seconds' WHERE id=$1").bind(operation).execute(&db.pool).await?;
+        let expired:bool=sqlx::query_scalar("SELECT identity_auth_command_intent_active($1,$2,$3,'POST','/internal/identity/auth/clients')")
             .bind(operation).bind(service).bind(digest).fetch_one(identity).await?;
         ensure!(!expired,"expired new admin command acceptance remained valid");
         intent_lock_wait_expiry(&db,&f,false).await?;
         intent_lock_wait_expiry(&db,&f,true).await?;
+        let retired_operation=uuid7::new_uuid();
+        sqlx::query("INSERT INTO platform_auth_command_intents(id,actor_user_id,tenant_id,organization_id,session_id,service_client_id,request_digest,method,path,management_permission,accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,'POST','/internal/identity/auth/clients','system:oauth:register',clock_timestamp())")
+            .bind(retired_operation).bind(f.user).bind(f.tenant).bind(f.org).bind(f.sessions[0]).bind(service).bind("d".repeat(64)).execute(platform).await?;
+        let fresh_operation:bool=sqlx::query_scalar("SELECT identity_auth_command_intent_active($1,$2,$3,'POST','/internal/identity/auth/clients')")
+            .bind(retired_operation).bind(service).bind("d".repeat(64)).fetch_one(identity).await?;
+        ensure!(fresh_operation,"original operation did not start with a live administrative actor");
+        sqlx::query("UPDATE memberships SET status='DISABLED',identity_version=identity_version+1 WHERE id=$1").bind(f.member).execute(platform).await?;
+        let active:bool=sqlx::query_scalar("SELECT platform_password_context_active($1,$2,$3,$4,3)")
+            .bind(f.user).bind(f.sessions[0]).bind(f.tenant).bind(f.org).fetch_one(identity).await?;
+        ensure!(!active,"retired original member was repaired by a current account");
+        for restore in [false,true] {
+            if restore {
+                sqlx::query("UPDATE memberships SET status='ENABLED',identity_version=identity_version+1 WHERE id=$1").bind(f.member).execute(platform).await?;
+            }
+            let accepted:bool=sqlx::query_scalar("SELECT identity_auth_command_intent_active($1,$2,$3,'POST','/internal/identity/auth/clients')")
+                .bind(retired_operation).bind(service).bind("d".repeat(64)).fetch_one(identity).await?;
+            ensure!(!accepted,"member restoration revived the original administrative operation");
+            let active:bool=sqlx::query_scalar("SELECT platform_password_context_active($1,$2,$3,$4,3)")
+                .bind(f.user).bind(f.sessions[0]).bind(f.tenant).bind(f.org).fetch_one(identity).await?;
+            ensure!(!active,"member restoration repaired the retired original session");
+        }
         Ok(())
     }.await;
     db.finish(result).await
+}
+
+// Owner-provisioned facts for the component-level administrative fence test.
+// This is not a TOTP login test: canonical HTTPS suites exercise that ceremony.
+async fn grant_command_administration_fixture(pool: &PgPool, fixture: &Fixture) -> Result<()> {
+    let application = uuid7::new_uuid();
+    let menu = uuid7::new_uuid();
+    sqlx::query("UPDATE tenants SET is_platform=true WHERE id=$1")
+        .bind(fixture.tenant)
+        .execute(pool)
+        .await?;
+    sqlx::query("UPDATE users SET is_super_admin=true WHERE id=$1")
+        .bind(fixture.user)
+        .execute(pool)
+        .await?;
+    sqlx::query("INSERT INTO applications(id,name,code,status,allowed_member_types) VALUES($1,'Owned command gate','phase12-command-gate','ENABLED',ARRAY['EMPLOYEE'])")
+        .bind(application).execute(pool).await?;
+    sqlx::query("INSERT INTO menus(id,application_id,type,title,permission) VALUES($1,$2,'BUTTON','Owned client registration','system:oauth:register')")
+        .bind(menu).bind(application).execute(pool).await?;
+    sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2)")
+        .bind(fixture.tenant)
+        .bind(application)
+        .execute(pool)
+        .await?;
+    sqlx::query(
+        "INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2)",
+    )
+    .bind(fixture.org)
+    .bind(application)
+    .execute(pool)
+    .await?;
+    sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)")
+        .bind(fixture.tenant)
+        .bind(menu)
+        .execute(pool)
+        .await?;
+    sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)")
+        .bind(fixture.org)
+        .bind(menu)
+        .execute(pool)
+        .await?;
+    sqlx::query("INSERT INTO auth_totp_factors(user_id,secret_ciphertext) VALUES($1,decode(repeat('ab',32),'hex'))")
+        .bind(fixture.user).execute(pool).await?;
+    sqlx::query("UPDATE sso_sessions SET mfa_method='totp',mfa_verified_at=clock_timestamp() WHERE id=(SELECT b.global_session_id FROM bff_sessions b WHERE b.selected_session_id=$1)")
+        .bind(fixture.sessions[0]).execute(pool).await?;
+    Ok(())
 }
 
 struct OidcSource {
@@ -605,33 +997,16 @@ struct OidcSource {
     expires: DateTime<Utc>,
 }
 async fn oidc_source(pool: &PgPool, user: Uuid, customer: bool) -> Result<OidcSource> {
-    let client = uuid7::new_uuid();
-    let sid = uuid7::new_uuid();
-    let grant = uuid7::new_uuid();
-    let digest = hash::sha256_hex(&uuid7::new_uuid().to_string());
-    sqlx::query("INSERT INTO oidc_clients(id,name,purpose,secret_hash,allowed_member_types,redirect_uris,status,access_policy_version,created_at,updated_at) VALUES($1,'Owned phase12 RP',$2,$3,$4,ARRAY['https://phase12.example.invalid/callback'],'ENABLED',1,clock_timestamp(),clock_timestamp())")
-        .bind(client).bind(if customer{"CUSTOMER_PORTAL"}else{"PLATFORM_CONSOLE"})
-        .bind(hash::sha256_hex(&client.to_string())).bind(if customer{vec!["CUSTOMER"]}else{vec!["EMPLOYEE"]}).execute(pool).await?;
-    sqlx::query("INSERT INTO sso_sessions(id,user_id,token_hash,csrf_hash,account_version,authenticated_at,expires_at) VALUES($1,$2,$3,$4,3,clock_timestamp(),clock_timestamp()+interval '1 hour')")
-        .bind(sid).bind(user).bind(hash::sha256_hex(&sid.to_string())).bind(hash::sha256_hex(&format!("csrf-{sid}"))).execute(pool).await?;
-    sqlx::query("INSERT INTO oidc_grants(id,client_id,client_policy_version,session_id,user_id,account_version,scope,nonce,auth_time,created_at,expires_at) VALUES($1,$2,1,$3,$4,3,ARRAY['openid','profile'],'owned',date_trunc('second',clock_timestamp()),clock_timestamp(),clock_timestamp()+interval '30 minutes')")
-        .bind(grant).bind(client).bind(sid).bind(user).execute(pool).await?;
-    sqlx::query("INSERT INTO oidc_access_tokens(id,grant_id,token_hash,created_at,expires_at) VALUES($1,$2,$3,clock_timestamp(),clock_timestamp()+interval '5 minutes')")
-        .bind(uuid7::new_uuid()).bind(grant).bind(&digest).execute(pool).await?;
-    let (auth_time,expires):(i64,DateTime<Utc>)=sqlx::query_as("SELECT floor(extract(epoch FROM g.auth_time))::bigint,LEAST(t.expires_at,g.expires_at,s.expires_at) FROM oidc_access_tokens t JOIN oidc_grants g ON g.id=t.grant_id JOIN sso_sessions s ON s.id=g.session_id WHERE g.id=$1")
-        .bind(grant).fetch_one(pool).await?;
-    Ok(OidcSource {
-        client,
-        grant,
-        sid,
-        digest,
-        auth_time,
-        expires,
-    })
+    if !customer {
+        return phase13::console_source(pool, user).await;
+    }
+    sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,identity_version) SELECT $1,$2,m.organization_id,'CUSTOMER',5 FROM memberships m WHERE m.user_id=$2 AND m.member_type='EMPLOYEE' ORDER BY m.id LIMIT 1 ON CONFLICT(user_id,organization_id,member_type) DO NOTHING")
+        .bind(uuid7::new_uuid()).bind(user).execute(pool).await?;
+    phase13::user_source(pool, user, "CUSTOMER").await
 }
 
-// Permission/fence fixtures use real SSO source rows; historical password-mode
-// sessions are no longer valid positive inputs after migration 0021.
+// Permission/fence fixtures attach the original canonical SSO source. Unbound
+// internal sessions are intentionally invalid until this explicit binding.
 async fn bind_sso_fixture(pool: &PgPool, fixture: &Fixture) -> Result<()> {
     let source = oidc_source(pool, fixture.user, false).await?;
     let browser = uuid7::new_uuid();
@@ -639,7 +1014,7 @@ async fn bind_sso_fixture(pool: &PgPool, fixture: &Fixture) -> Result<()> {
     let hash = hash::sha256_hex(&bff.to_string());
     sqlx::query("INSERT INTO console_browsers(id,token_hash,generation,current_session_id,created_at,expires_at) VALUES($1,$2,1,$3,clock_timestamp(),clock_timestamp()+interval '1 hour')")
         .bind(browser).bind(&hash).bind(bff).execute(pool).await?;
-    sqlx::query("INSERT INTO bff_sessions(id,browser_id,token_hash,csrf_hash,user_id,account_version,global_session_id,oidc_client_id,oidc_grant_id,oidc_client_policy_version,issuer,auth_time,nonce_hash,access_ciphertext,refresh_ciphertext,access_expires_at,version,selected_session_id,created_at,expires_at) VALUES($1,$2,$3,$3,$4,3,$5,$6,$7,1,$8,$9,$3,'owned-fixture-only','owned-fixture-only',$10,1,$11,clock_timestamp(),clock_timestamp()+interval '30 minutes')")
+    sqlx::query("INSERT INTO bff_sessions(id,browser_id,token_hash,csrf_hash,user_id,account_version,global_session_id,oidc_client_id,oidc_grant_id,oidc_client_policy_version,issuer,auth_time,nonce_hash,access_ciphertext,refresh_ciphertext,access_expires_at,version,selected_session_id,created_at,expires_at,oidc_public_sid,oidc_public_sub) VALUES($1,$2,$3,$3,$4,3,$5,$6,$7,1,$8,$9,$3,'owned-fixture-only','owned-fixture-only',$10,1,$11,clock_timestamp(),clock_timestamp()+interval '30 minutes',$3,'owned-pairwise-'||$4::text)")
         .bind(bff).bind(browser).bind(&hash).bind(fixture.user).bind(source.sid).bind(source.client)
         .bind(source.grant).bind(ISSUER).bind(source.auth_time).bind(source.expires).bind(fixture.sessions[0])
         .execute(pool).await?;
@@ -676,34 +1051,41 @@ async fn phase12_auth_owned_bool_projections_preserve_rp_type_and_lock_without_r
         let customer=oidc_source(&db.pool,f.user,true).await?;
         db.provision().await?;
         let platform=db.platform()?;let identity=db.identity()?;
-        assert_definer_owner_privileges(platform,"public.bff_oidc_proof_active(uuid,uuid,uuid,bigint,uuid,bigint,text)",&db.role("identity_owner"),"public.oidc_grants").await?;
-        let console_active:bool=sqlx::query_scalar("SELECT bff_oidc_proof_active($1,$2,$3,3,$4,1,$5)")
+        assert_definer_owner_privileges(platform,"public.bff_auth_proof_active(uuid,uuid,uuid,bigint,uuid,bigint,text)",&db.role("identity_owner"),"public.auth_grants").await?;
+        let console_active:bool=sqlx::query_scalar("SELECT bff_auth_proof_active($1,$2,$3,3,$4,1,$5)")
             .bind(f.user).bind(console.sid).bind(console.grant).bind(console.client).bind(ISSUER).fetch_one(platform).await
             .context("platform runtime invoking authentication-owner BFF account projection")?;
         ensure!(console_active,"auth-owned console projection failed without raw auth SELECT");
         ensure!(customer_projection(platform,f.user,&customer).await?,"auth-owned original access projection failed without raw auth SELECT");
         ensure!(!customer_projection(platform,f.user,&console).await?,"employee RP became a customer source");
-        let wrong_console:bool=sqlx::query_scalar("SELECT bff_oidc_proof_active($1,$2,$3,3,$4,1,$5)")
+        let wrong_console:bool=sqlx::query_scalar("SELECT bff_auth_proof_active($1,$2,$3,3,$4,1,$5)")
             .bind(f.user).bind(customer.sid).bind(customer.grant).bind(customer.client).bind(ISSUER).fetch_one(platform).await?;
         ensure!(!wrong_console,"customer RP became a console source");
         let wrapper:bool=sqlx::query_scalar("SELECT platform_source_active($1,$2,1,'EMPLOYEE')").bind(ISSUER).bind(console.client.to_string()).fetch_one(platform).await?;
         ensure!(wrapper,"platform wrapper did not delegate to the auth-only projection");
         let mut lock=platform.begin().await?;
         for (client,expected) in [(console.client.to_string(),true),(console.client.to_string().to_uppercase(),false),(customer.client.to_string(),false)] {
-            let found:bool=sqlx::query_scalar("SELECT identity_lock_oidc_source($1,$2)").bind(client).bind(ISSUER).fetch_one(&mut *lock).await?;
+            let found:bool=sqlx::query_scalar("SELECT identity_lock_auth_source($1,$2)").bind(client).bind(ISSUER).fetch_one(&mut *lock).await?;
             ensure!(found==expected,"source lock accepted a noncanonical or wrong-purpose RP");
         }
-        let mut policy=identity.begin().await?;
-        sqlx::query("SET LOCAL lock_timeout='100ms'").execute(&mut *policy).await?;
-        let blocked=sqlx::query("UPDATE oidc_clients SET status='DISABLED',access_policy_version=access_policy_version+1 WHERE id=$1").bind(console.client).execute(&mut *policy).await;
-        ensure!(matches!(blocked,Err(sqlx::Error::Database(ref error)) if error.code().as_deref()==Some("55P03")),"narrow source lock did not survive until platform commit");
-        policy.rollback().await?;lock.rollback().await?;
-        sqlx::query("UPDATE oidc_clients SET status='DISABLED',access_policy_version=access_policy_version+1 WHERE id=$1").bind(console.client).execute(identity).await?;
-        let retired:bool=sqlx::query_scalar("SELECT bff_oidc_proof_active($1,$2,$3,3,$4,1,$5)")
+        for policy_change in [
+            "UPDATE auth_applications SET projection_version=projection_version+1 WHERE application_id=(SELECT application_id FROM auth_clients WHERE id=$1)",
+            "UPDATE auth_clients SET status='DISABLED',policy_version=policy_version+1 WHERE id=$1",
+            "UPDATE auth_consent_groups SET version=version+1 WHERE id=(SELECT group_id FROM auth_consent_group_clients WHERE client_id=$1)",
+        ] {
+            let mut policy=identity.begin().await?;
+            sqlx::query("SET LOCAL lock_timeout='100ms'").execute(&mut *policy).await?;
+            let blocked=sqlx::query(policy_change).bind(console.client).execute(&mut *policy).await;
+            ensure!(matches!(blocked,Err(sqlx::Error::Database(ref error)) if error.code().as_deref()==Some("55P03")),"narrow original app/client/group source lock did not survive until platform commit");
+            policy.rollback().await?;
+        }
+        lock.rollback().await?;
+        sqlx::query("UPDATE auth_clients SET status='DISABLED',policy_version=policy_version+1 WHERE id=$1").bind(console.client).execute(identity).await?;
+        let retired:bool=sqlx::query_scalar("SELECT bff_auth_proof_active($1,$2,$3,3,$4,1,$5)")
             .bind(f.user).bind(console.sid).bind(console.grant).bind(console.client).bind(ISSUER).fetch_one(platform).await?;
         ensure!(!retired&&customer_projection(platform,f.user,&customer).await?,"console policy retirement crossed RP identity");
-        denied(platform,"SELECT secret_hash FROM oidc_clients","projection cannot reveal client secret hashes").await?;
-        denied(identity,&format!("SELECT identity_lock_oidc_source('{}','{ISSUER}')",console.client),"identity does not get the platform-only source lock signature").await?;
+        denied(platform,"SELECT secret_digest FROM auth_client_credentials","projection cannot reveal client secret hashes").await?;
+        denied(identity,&format!("SELECT identity_lock_auth_source('{}','{ISSUER}')",console.client),"identity does not get the platform-only source lock signature").await?;
         db.verify().await?;
         Ok(())
     }.await;

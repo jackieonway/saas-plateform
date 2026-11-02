@@ -1,0 +1,74 @@
+{
+  "phase": 15,
+  "status": "COMPLETED_PROPOSED_LEDGER_ACCEPTANCE",
+  "snapshot": "phase19-resource-r1",
+  "snapshotSha256": "605ac9ef8aba39fbeed7037287380559bab9a0c075bbc61a49362f71fc1d87f3",
+  "platform": {
+    "internalJwt": {
+      "passed": 2
+    },
+    "appBinding": {
+      "passed": 2
+    },
+    "retiredCustomerRoutes": {
+      "passed": 1
+    },
+    "realLoginRoleMatrix": {
+      "passed": 3
+    },
+    "contextHttpPg": {
+      "passed": 1
+    },
+    "customerRegistryAndTransactions": {
+      "passed": 9,
+      "legacySourceFixture": true
+    },
+    "directoryExtension": "PASS",
+    "resourceAndDirectoryHttpPg": {
+      "passed": 1,
+      "durationSeconds": 2.36,
+      "environment": "WSL Linux",
+      "protocolFixture": true,
+      "realIdentityHttps": false,
+      "pendingSelectionRejected": true,
+      "canonicalUserMembersAndStoreDirectory": true,
+      "machineDirectoryRejected": true,
+      "serviceVersionChangedDuringSecondProofRejected": true,
+      "targetMemberShrunkDuringSecondProofRejected": true,
+      "knownRevokedCapabilityNoFallback": true,
+      "userAndMachineBusinessDeadlinesBounded": true
+    },
+    "focusedUnits": {
+      "passed": 9,
+      "failed": 0
+    },
+    "checkAllTargets": "PASS",
+    "clippyAllTargetsWarningsDenied": "PASS",
+    "fmtAll": "PASS"
+  },
+  "identity": {
+    "ordinaryUnitsPassed": 55,
+    "ordinaryUnitsIgnored": 30,
+    "resourceProofPgHttpPassed": 1,
+    "customerProofPgPassed": 1,
+    "check": "PASS",
+    "clippyWarningsDenied": "PASS",
+    "fmt": "PASS"
+  },
+  "cleanup": {
+    "ownedDatabasesRemoved": true,
+    "ownedRolesRemoved": true,
+    "ownedPoolsClosed": true,
+    "dockerContainersCreated": 0,
+    "dockerContainersReused": 0,
+    "sharedPgAndLinuxCacheOwner": "root task",
+    "windowsVirtualDiskCompacted": false
+  },
+  "acceptanceCriteria": [
+    "PASS",
+    "PASS",
+    "PASS",
+    "PASS"
+  ],
+  "remainingPhase15Items": []
+}

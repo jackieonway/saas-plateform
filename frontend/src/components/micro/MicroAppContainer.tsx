@@ -35,7 +35,7 @@ import { useTheme } from "@/components/theme-provider"
 import { api, ApiError } from "@/lib/api"
 import { microRouteAccess } from "@/lib/micro-route-permissions"
 import { normalizedRoutePath } from "@/lib/route-permissions"
-import type { OAuthSessionTokenResp } from "@/api/types"
+import type { AppCapabilityTokenResp } from "@/api/types"
 import { MicroContextRuntime, MicroLifecycleSession, isMicroRuntimeFault, microPropsSignature, microPropsDelivery, requiresMicroRemount,
   trustedMicroRuntimeDomain } from "./runtime"
 import type { MicroContextSnapshot, MicroRuntimeFault } from "./runtime"
@@ -331,7 +331,7 @@ function MicroMountZone({ entryInfo: discovery }: { entryInfo: ApplicationEntryI
             current.contextKey !== contextKey || current.contextEpoch !== contextEpoch) {
           throw new DOMException("登录上下文已变化", "AbortError")
         }
-        return api.post<OAuthSessionTokenResp>("/api/oauth/session-token",
+        return api.post<AppCapabilityTokenResp>("/api/apps/session-token",
           { appCode }, { signal, suppress401: true, sessionFence })
       },
       context: async (token, signal) => {

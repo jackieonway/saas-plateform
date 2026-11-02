@@ -25,8 +25,6 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::routes;
 use crate::state::AppState;
-use crate::util::hash;
-use crate::util::jwt::{self, Claims};
 
 mod database_upgrade;
 mod managed_gate;
@@ -226,57 +224,7 @@ async fn successful_call(
 }
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<String> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id = $1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    // Historical migration fixtures create their credentials against the real
-    // pre-binding schema. The current-schema branch captures proof only when
-    // this new fixture credential is issued; it never repairs an existing row.
-    let bound_schema: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='platform_sessions' AND column_name='account_version')",
-    ).fetch_one(pool).await?;
-    let sso_schema: bool =
-        sqlx::query_scalar("SELECT to_regclass('public.bff_sessions') IS NOT NULL")
-            .fetch_one(pool)
-            .await?;
-    let statement = if bound_schema {
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,now() + interval '1 hour',$4,u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$3 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$1 RETURNING id"
-    } else {
-        "INSERT INTO platform_sessions(user_id,tenant_id,organization_id,expires_at,id) VALUES($1,$2,$3,now()+interval '1 hour',$4) RETURNING id"
-    };
-    let sid: Uuid = if sso_schema {
-        crate::sso_test_fixture::session(pool, user, tenant, org).await?
-    } else {
-        sqlx::query_scalar(statement)
-            .bind(user)
-            .bind(tenant)
-            .bind(org)
-            .bind(crate::util::uuid7::new_uuid())
-            .fetch_one(pool)
-            .await?
-    };
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(sid.to_string()),
-            ver: Some(version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        JWT_SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, JWT_SECRET).await
 }
 
 async fn tenant(pool: &PgPool, code: &str, platform: bool) -> Result<(Uuid, Uuid)> {
@@ -347,22 +295,6 @@ async fn grant_application(pool: &PgPool, tenant: Uuid, org: Uuid, app: Uuid) ->
     )
     .bind(org)
     .bind(app)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
-async fn oauth_client(pool: &PgPool, app: Uuid, client_id: &str) -> Result<()> {
-    sqlx::query(
-        "INSERT INTO oauth_clients \
-         (client_id, client_secret_hash, client_name, client_type, subject_mode, allowed_member_types, grant_types, scopes, \
-          access_token_validity, refresh_token_validity, application_id,id) \
-         VALUES ($1, $2, $1, 'CONFIDENTIAL', 'MACHINE', ARRAY[]::text[], 'client_credentials', 'profile', 7200, 604800, $3,$4)",
-    )
-    .bind(client_id)
-    .bind(hash::sha256_hex("isolated-release-client-secret-only"))
-    .bind(app)
-    .bind(crate::util::uuid7::new_uuid())
     .execute(pool)
     .await?;
     Ok(())
@@ -622,7 +554,7 @@ impl Harness {
         let (status, body) = call(
             &self.app,
             Method::POST,
-            "/api/oauth/session-token",
+            "/api/apps/session-token",
             token,
             Some(json!({"appCode":code})),
         )
@@ -1860,7 +1792,7 @@ async fn release_activation_and_rollback_preserve_identity_and_authorization() -
             &format!("/api/auth/menus?applicationId={}", h.no_role_app), &h.a, None).await?;
         ensure!(no_role_menus["menus"].as_array().is_some_and(Vec::is_empty),
             "the profile fixture unexpectedly has role authorization for the no-role application");
-        oauth_client(&database.pool, h.main_app, "release-lifecycle-client").await?;
+
         let app_token = h.app_token(&h.a, "release-app").await?;
         let initial_context = successful_call(&h.app, Method::GET, "/api/apps/release-app/context", &app_token, None).await?;
         check_context_application(&initial_context, h.main_app, "TRUSTED", None, None,
@@ -1990,8 +1922,7 @@ async fn release_qiankun_defaults_and_reconfiguration_preserve_authorization() -
                 && created["basePath"] == "/micro/release-api-created",
             "new applications did not default to qiankun"
         );
-        oauth_client(&database.pool, h.main_app, "release-trust-client").await?;
-        oauth_client(&database.pool, h.other_app, "release-other-trust-client").await?;
+
         let original_token = h.app_token(&h.a, "release-app").await?;
         let unrelated_token = h.app_token(&h.b, "release-other").await?;
         let initial_context = successful_call(

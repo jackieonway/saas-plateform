@@ -1,0 +1,89 @@
+{
+  "contractVersion": "unified-auth-phase25-registry-diagnostic-independent-review/1",
+  "recordedAtUtc": "2026-10-29T13:23:42.600499+00:00",
+  "reviewer": "/root/candidate_audit",
+  "result": "NO_P1_P2_FINDINGS",
+  "evidenceLayer": "READ_ONLY_SOURCE_REVIEW_AND_CONTROLLED_HELPER_EXECUTION",
+  "sourceSha256": {
+    "saas-plateform/backend/src/oidc/remote_admin.rs": "bf187c7d9060f0969b83044ed905007017fa0f8a477da111eeb4e43b3c83d7ca",
+    "saas-plateform/backend/src/oidc/remote_admin_tests.rs": "e1036785346990b789a67b3dba546571d7609509d2bbbd09d9e0d15f00de896c",
+    "saas-plateform/backend/src/oidc/remote_admin_pg_tests.rs": "17d6b5d3d058a8ecec88e03bb483a6d6b2a5b0eee51087c9401ba464b1007dea",
+    "saas-plateform/backend/docs/identity-and-access.md": "fa30e7d7583ee53c76e2d7aecdd082013df964c477bf2dbbad2c2e564776e10a",
+    "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs": "0f7e2739d1b8ecf15b194758ffc92701768c6694c172c1b9375813315b07d7d0"
+  },
+  "baseline": {
+    "label": "phase25-apps-r3",
+    "sha256": "a078317efaaa94abeb8cf2d96c37077dee5d5eb438f64351e837f75982dbbe49",
+    "productionDelta": "Only public_client_identifier helper addition and auth_client_projection public clientId equality replacement; no other production source delta in remote_admin.rs."
+  },
+  "clientIdentifierReview": [
+    "Public clientId accepts nonempty 1..100 Unicode characters with no control characters, preserving UUID defaults, independent RP/MACHINE values, Unicode and surrounding spaces.",
+    "Internal record.id still requires UUIDv7, and detail/update record.id stays bound to the internal route UUID.",
+    "Credential and consent-group operation clientId fields retain their distinct internal UUID meaning and validation.",
+    "Exact response-field policy, secret exclusion, whole-page malformed-row rejection and fine permission checks remain in the unchanged production paths.",
+    "Unit regression covers valid public identifiers, non-string/empty/overlong/control negatives and malformed/mismatched internal identifiers.",
+    "PG regression exercises real canonical rows and production PlatformBoundary/decoder through an explicitly injected metadata transport, including VIEW withdrawal before dispatch and no read mutation intent. This is component evidence, not actual identity HTTP/browser evidence."
+  ],
+  "registryHelperChecks": {
+    "result": "PASS",
+    "checks": 23,
+    "method": "Extracted the exact registryObservation function from the bound source and evaluated it with node:vm; no module execution or external services.",
+    "groups": {
+      "fixedPlatformErrorAndUnknownOperationCodes": 10,
+      "arbitraryOrNonstringErrorCodeRejection": 6,
+      "recordCountsAndNoIdentifierNameOrSecretOutput": 1,
+      "invalidPaginationRedaction": 1,
+      "primitiveAndMissingBodyShapes": 5
+    },
+    "outputs": "Only fixed error-code allowlist, bounded numeric pagination/counts, fixed body kind and distinct-public-ID count. No raw response text or identifiers are copied."
+  },
+  "historicalFailure": {
+    "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-management-current-r4.json",
+    "sha256": "234b169329e9ac134bfbd4341bf29a52595430dd793f0a40dacec81ea83b04fb",
+    "verifiedSha256": true,
+    "result": "FAILED",
+    "actualHttpStatus": 503,
+    "modifiedByReviewer": false
+  },
+  "limitations": [
+    "Rust/PG actual test and Clippy commands are owned and separately reported by runtime_matrix_plan; this review did not rerun them.",
+    "New diagnostic helper was not executed during historical r4; diagnosis-time source hashes must not be read as r4 runner inputs.",
+    "No new SaaS HTTPS or all-group PASS is claimed. A fresh full apps candidate and tools-equivalent source run remain required."
+  ],
+  "resources": {
+    "createdContainers": 0,
+    "reusedContainers": 0,
+    "databases": 0,
+    "applicationServices": 0,
+    "browserProcesses": 0,
+    "temporaryFiles": 0
+  },
+  "filesModifiedByReviewer": [
+    "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-registry-diagnostic-independent-review.json"
+  ],
+  "finalReviewAtUtc": "2026-10-29T13:26:31.732690+00:00",
+  "ownerFinalEvidence": {
+    "newRegressions": {
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-client-id-regression-r2.json",
+      "sha256": "7fa4e1e2fbb16f29e9c5b3e532578dd6f5bb088851dbd4b4eaedfcb4c1f9bcda",
+      "actualTestsPassed": 2,
+      "sourceInputsVerifiedCurrent": 198,
+      "sourceMismatches": [],
+      "remainingDedicatedDatabases": 0,
+      "reviewerReranTests": false
+    },
+    "existingUnitAndClippy": {
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-client-id-followup-checks.json",
+      "sha256": "6b223b55b726a233568a7fa17018d26460e724e3acb9fb16d6a9ff2e4db01c03",
+      "actualRemoteAdminUnitTestsPassed": 20,
+      "strictClippy": "PASS",
+      "reviewerReranCommands": false
+    },
+    "diagnosis": {
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-management-registry-r4-diagnosis.json",
+      "sha256": "cc042d688c85ea15f3f84abb99065764ee96cabf42b857063a88c017d28e834c",
+      "historicalR4FailKept": true,
+      "diagnosisTimeVsActualRuntimeExplicit": true
+    }
+  }
+}

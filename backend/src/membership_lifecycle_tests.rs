@@ -18,7 +18,6 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::state::AppState;
 use crate::util::{jwt, uuid7::new_uuid};
 
 const SECRET: &str = "identity-phase01-isolated-fixture-only";
@@ -135,9 +134,11 @@ fn settings(lifecycle: bool, customer: bool, dual: bool) -> Result<Config> {
 }
 
 fn app(pool: &PgPool, lifecycle: bool, customer: bool, dual: bool) -> Result<Router> {
-    let state = AppState::new(pool.clone(), Arc::new(settings(lifecycle, customer, dual)?));
+    let state = crate::sso_test_fixture::state(
+        pool.clone(),
+        Arc::new(settings(lifecycle, customer, dual)?),
+    );
     Ok(crate::routes::api_router()
-        .nest("/oauth", crate::routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::observability::observe,
@@ -283,38 +284,39 @@ async fn organization(
 }
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<(String, Uuid)> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
+    let employee: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id=$2 AND member_type='EMPLOYEE')")
+        .bind(user).bind(org).fetch_one(pool).await?;
+    if employee {
+        let token = crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await?;
+        let id = jwt::verify(&token, SECRET)?
+            .sid
+            .ok_or_else(|| anyhow!("fixture omitted session"))?
+            .parse()?;
+        return Ok((token, id));
+    }
+    let id =
+        crate::sso_test_fixture::session_for_member(pool, user, tenant, org, "CUSTOMER").await?;
+    let version = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
         .bind(user)
         .fetch_one(pool)
         .await?;
-    let id = new_uuid();
-    let membership: Option<(Uuid,String,i64)> = sqlx::query_as(
-        "SELECT id,member_type,identity_version FROM memberships WHERE user_id=$1 AND organization_id=$2 AND member_type='EMPLOYEE'"
-    ).bind(user).bind(org).fetch_optional(pool).await?;
-    if let Some((membership_id, member_type, identity_version)) = membership {
-        sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) SELECT $1,$2,$3,$4,now()+interval '1 hour',$5,$6,$7,$8,'urn:saas:legacy-platform',client_id,access_policy_version FROM oauth_clients WHERE client_id='platform-console-legacy'")
-            .bind(id).bind(user).bind(tenant).bind(org).bind(version).bind(membership_id).bind(member_type).bind(identity_version).execute(pool).await?;
-    } else {
-        // Intentional old unbound fixture for the customer legacy rejection case.
-        sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at) VALUES($1,$2,$3,$4,now()+interval '1 hour')")
-            .bind(id).bind(user).bind(tenant).bind(org).execute(pool).await?;
-    }
     let now = chrono::Utc::now().timestamp();
-    let token = jwt::sign(
+    let token = jwt::sign_internal(
         &jwt::Claims {
             sub: user.to_string(),
-            typ: "session".into(),
+            typ: "platform_session".into(),
             tenant: Some(tenant.to_string()),
             org: Some(org.to_string()),
             cid: None,
             scope: None,
             sid: Some(id.to_string()),
             ver: Some(version),
-            aud: None,
+            aud: Some(jwt::PLATFORM_API_AUDIENCE.into()),
             jti: None,
             iat: now,
             exp: now + 3600,
         },
+        jwt::InternalUse::PlatformSession,
         SECRET,
     )?;
     Ok((token, id))
@@ -441,9 +443,7 @@ impl Harness {
             "memberships",
             "platform_sessions",
             "platform_session_refresh_tokens",
-            "oauth_tokens",
-            "oauth_authorization_codes",
-            "oauth_device_codes",
+            "platform_app_capabilities",
             "membership_data_grants",
             "user_roles",
             "audit_logs",
@@ -590,13 +590,13 @@ async fn database_contract(h: &Harness) -> Result<()> {
     .fetch_all(&h.pool)
     .await?;
     ensure!(
-        constraints
+        !constraints
             .iter()
             .any(|name| name == "memberships_user_id_organization_id_key")
             && constraints
                 .iter()
                 .any(|name| name == "memberships_user_organization_type_key"),
-        "expansion did not retain both membership unique constraints"
+        "canonical membership uniqueness must bind user, organization and member type"
     );
     let subject = user(&h.pool, "identity-db-contract", false).await?;
     let employee = member(&h.pool, subject, h.root, "EMPLOYEE").await?;
@@ -621,6 +621,11 @@ async fn database_contract(h: &Harness) -> Result<()> {
         "23514",
     )
     .await?;
+    let customer = member(&h.pool, subject, h.root, "CUSTOMER").await?;
+    ensure!(
+        customer != employee,
+        "canonical dual identities must have distinct member records"
+    );
     db_reject(&h.pool, &format!("INSERT INTO memberships(id,user_id,organization_id,member_type) VALUES('{}','{subject}','{}','CUSTOMER')", new_uuid(), h.root), "23505").await?;
     for (table, key, value) in [
         ("applications", "allowed_member_types", "ARRAY[]::text[]"),
@@ -643,43 +648,27 @@ async fn database_contract(h: &Harness) -> Result<()> {
         )
         .await?;
     }
-    let client = new_uuid();
-    sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name) VALUES($1,'identity-user','Identity user')")
-        .bind(client).execute(&h.pool).await?;
-    let defaults: (String,Vec<String>,i64) = sqlx::query_as("SELECT subject_mode,allowed_member_types,access_policy_version FROM oauth_clients WHERE id=$1")
-        .bind(client).fetch_one(&h.pool).await?;
-    ensure!(
-        defaults == ("USER".into(), vec!["EMPLOYEE".into()], 1),
-        "ordinary client defaults widened identity admission"
-    );
+    let client: Uuid = sqlx::query_scalar("SELECT id FROM auth_clients ORDER BY id LIMIT 1")
+        .fetch_one(&h.pool)
+        .await?;
     for change in [
         "subject_mode='UNKNOWN'",
+        "context_mode='NONE'",
         "allowed_member_types=ARRAY[]::text[]",
         "allowed_member_types=ARRAY['ALIEN']::text[]",
-        "access_policy_version=0",
+        "policy_version=0",
         "subject_mode='MACHINE'",
-        "grant_types='client_credentials'",
-        "grant_types=E'\\tclient_credentials\\n'",
-        "subject_mode='LEGACY_MIXED',grant_types='client_credentials,authorization_code'",
     ] {
         db_reject(
             &h.pool,
-            &format!("UPDATE oauth_clients SET {change} WHERE id='{client}'"),
+            &format!("UPDATE auth_clients SET {change} WHERE id='{client}'"),
             "23514",
         )
         .await?;
     }
-    let mixed = new_uuid();
-    db_reject(&h.pool, &format!("INSERT INTO oauth_clients(id,client_id,client_name,subject_mode,grant_types) VALUES('{mixed}','identity-mixed','Forbidden mixed','LEGACY_MIXED','client_credentials,authorization_code')"), "23514").await?;
-    sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,subject_mode,grant_types,allowed_member_types) VALUES($1,'identity-machine','Machine fixture','MACHINE','client_credentials',ARRAY[]::text[])")
-        .bind(new_uuid()).execute(&h.pool).await?;
-    let normalized: Vec<String> = sqlx::query_scalar("SELECT oauth_client_grant_set(string_to_array(E'\\tclient_credentials\\n, ,client_credentials',','))")
-        .fetch_one(&h.pool).await?;
-    ensure!(
-        normalized == vec!["client_credentials"],
-        "SQL grant normalization differs from runtime CSV trimming"
+    eprintln!(
+        "identity_phase01 database_constraints=PASS canonical_three_part_membership_key=PASS"
     );
-    eprintln!("identity_phase01 database_constraints=PASS expansion_dual_constraints=PASS");
     Ok(())
 }
 
@@ -788,7 +777,7 @@ async fn membership_reason_contract(h: &Harness) -> Result<()> {
     Ok(())
 }
 
-async fn expansion_api_contract(h: &Harness) -> Result<()> {
+async fn canonical_api_contract(h: &Harness) -> Result<()> {
     let target = user(&h.pool, "identity-api-target", false).await?;
     let disabled = app(&h.pool, false, false, false)?;
     let request = json!({"userId":target,"organizationId":h.root,"memberType":"EMPLOYEE"});
@@ -940,10 +929,11 @@ async fn expansion_api_contract(h: &Harness) -> Result<()> {
             "a lifecycle mutation bypassed the default disabled gate"
         );
     }
-    let blocked = h.create_member(target, h.root, "CUSTOMER").await?;
+    let second_identity = h.create_member(target, h.root, "CUSTOMER").await?;
     ensure!(
-        blocked.status == StatusCode::CONFLICT,
-        "extension schema accepted a second identity"
+        successful(&second_identity)? != employee
+            && second_identity.body["memberType"] == "CUSTOMER",
+        "canonical schema must admit a distinct customer member when both creation gates are open"
     );
     let default_second = call(&customer_off,&h.admin,Method::POST,&format!("/api/memberships/{employee}/second-identity"),json!({"memberType":"CUSTOMER","expectedIdentityVersion":1,"accountBindingConfirmed":true,"bindingSource":"owned"})).await?;
     ensure!(
@@ -1049,13 +1039,7 @@ async fn expansion_api_contract(h: &Harness) -> Result<()> {
 }
 
 async fn target_schema_contract(h: &Harness) -> Result<()> {
-    // This contraction exists ONLY inside the owned, disposable test database.
-    // The shipping migration intentionally keeps the old unique constraint.
-    sqlx::query(
-        "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
-    )
-    .execute(&h.pool)
-    .await?;
+    // The canonical fresh-install schema already admits both identity types.
     let subject = user(&h.pool, "identity-dual-subject", false).await?;
     let employee = successful(&h.create_member(subject, h.child, "EMPLOYEE").await?)?;
     let second_path = format!("/api/memberships/{employee}/second-identity");
@@ -1310,146 +1294,33 @@ async fn target_schema_contract(h: &Harness) -> Result<()> {
     Ok(())
 }
 
-async fn legacy_password_grant(
-    h: &Harness,
-    username: &str,
-    password: &str,
-) -> Result<(StatusCode, Value)> {
-    let request = Request::builder().method(Method::POST).uri("/oauth/token")
-        .header(header::CONTENT_TYPE,"application/x-www-form-urlencoded")
-        .header("x-request-id",new_uuid().to_string())
-        .extension(ConnectInfo("192.0.2.31:30031".parse::<SocketAddr>()?))
-        .body(Body::from(format!("grant_type=password&client_id=identity-legacy-issuance&client_secret=owned-phase01-client&username={username}&password={password}")))?;
-    let response = tokio::time::timeout(Duration::from_secs(25), h.app.clone().oneshot(request))
-        .await
-        .map_err(|_| anyhow!("legacy password issuance fixture timed out"))??;
-    let status = response.status();
-    let bytes = to_bytes(response.into_body(), 1024 * 1024).await?;
-    Ok((status, serde_json::from_slice(&bytes)?))
-}
-
-async fn legacy_customer_issuance_guard(h: &Harness) -> Result<()> {
-    const PASSWORD: &str = "Owned-identity-phase01-password-123!";
-    const USERNAME: &str = "identity-legacy-issuance-subject";
-    let subject = user(&h.pool, USERNAME, false).await?;
-    let password_hash =
-        tokio::task::spawn_blocking(|| crate::util::password::hash_password(PASSWORD)).await??;
-    sqlx::query("UPDATE users SET password_hash=$2 WHERE id=$1")
-        .bind(subject)
-        .bind(password_hash)
-        .execute(&h.pool)
-        .await?;
+// Customer relationships cannot supply the employee source required by the
+// platform. The positive branch is a canonical SSO-derived internal session.
+async fn customer_employee_source_isolation(h: &Harness) -> Result<()> {
+    let subject = user(&h.pool, "identity-source-isolation-subject", false).await?;
     member(&h.pool, subject, h.root, "CUSTOMER").await?;
-    sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_secret_hash,grant_types) VALUES($1,'identity-legacy-issuance','Legacy guard fixture',$2,'password')")
-        .bind(new_uuid()).bind(crate::util::hash::sha256_hex("owned-phase01-client"))
-        .execute(&h.pool).await?;
-    let customer_login = h
-        .call(
-            Method::POST,
-            "/api/auth/login",
-            json!({"username":USERNAME,"password":PASSWORD}),
+    let (customer, _) = session(&h.pool, subject, h.tenant, h.root).await?;
+    ensure!(
+        call(
+            &h.app,
+            &customer,
+            Method::GET,
+            "/api/memberships",
+            Value::Null
         )
-        .await?;
-    ensure!(
-        customer_login.status == StatusCode::FORBIDDEN,
-        "customer-only account acquired an old employee login ticket"
-    );
-    let now = chrono::Utc::now().timestamp();
-    let account_version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(subject)
-        .fetch_one(&h.pool)
-        .await?;
-    // An already proven account is still insufficient for a platform employee context.
-    let ticket = jwt::sign(
-        &jwt::Claims {
-            sub: subject.to_string(),
-            typ: "credential".into(),
-            tenant: None,
-            org: None,
-            cid: None,
-            scope: None,
-            sid: None,
-            ver: Some(account_version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 300,
-        },
-        SECRET,
-    )?;
-    let context = call(
-        &h.app,
-        &ticket,
-        Method::POST,
-        "/api/auth/context",
-        json!({"organizationId":h.root}),
-    )
-    .await?;
-    ensure!(
-        context.status == StatusCode::UNAUTHORIZED,
-        "customer-only account acquired an old unbound employee context"
-    );
-    let (old_session, _) = session(&h.pool, subject, h.tenant, h.root).await?;
-    let live = call(
-        &h.app,
-        &old_session,
-        Method::GET,
-        "/api/memberships",
-        Value::Null,
-    )
-    .await?;
-    ensure!(
-        live.status == StatusCode::UNAUTHORIZED,
-        "unbound old session treated a customer relationship as employee proof"
-    );
-    let denied = legacy_password_grant(h, USERNAME, PASSWORD).await?;
-    ensure!(
-        denied.0 == StatusCode::BAD_REQUEST && denied.1["error"] == "invalid_grant",
-        "customer-only account acquired an old user OAuth token"
-    );
-    let issued: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_tokens WHERE user_id=$1")
-        .bind(subject)
-        .fetch_one(&h.pool)
-        .await?;
-    ensure!(
-        issued == 0,
-        "denied customer OAuth grant persisted credentials"
+        .await?
+        .status
+            == StatusCode::UNAUTHORIZED,
+        "customer relationship supplied employee authority"
     );
     let employee = successful(&h.create_member(subject, h.root, "EMPLOYEE").await?)?;
-    let employee_login = h
-        .call(
-            Method::POST,
-            "/api/auth/login",
-            json!({"username":USERNAME,"password":PASSWORD}),
-        )
-        .await?;
+    let (token, sid) = session(&h.pool, subject, h.tenant, h.root).await?;
     ensure!(
-        employee_login.status == StatusCode::OK,
-        "valid employee beside a customer could not use legacy login"
-    );
-    let ticket = employee_login.body["ticket"]
-        .as_str()
-        .ok_or_else(|| anyhow!("employee login omitted its ticket"))?;
-    let employee_context = call(
-        &h.app,
-        ticket,
-        Method::POST,
-        "/api/auth/context",
-        json!({"organizationId":h.root}),
-    )
-    .await?;
-    ensure!(
-        employee_context.status == StatusCode::OK,
-        "valid employee beside a customer could not select an employee context"
-    );
-    let granted = legacy_password_grant(h, USERNAME, PASSWORD).await?;
-    ensure!(
-        granted.0 == StatusCode::OK,
-        "valid employee beside a customer could not obtain its legacy user OAuth grant"
-    );
-    ensure!(
-        granted.1["access_token"].is_string(),
-        "employee OAuth response lacks access_token"
+        sqlx::query_scalar::<_, bool>("SELECT platform_session_active($1)")
+            .bind(sid)
+            .fetch_one(&h.pool)
+            .await?,
+        "canonical employee source fixture is not active"
     );
     let disabled = h
         .call(
@@ -1459,12 +1330,20 @@ async fn legacy_customer_issuance_guard(h: &Harness) -> Result<()> {
         )
         .await?;
     successful(&disabled)?;
-    let denied = legacy_password_grant(h, USERNAME, PASSWORD).await?;
     ensure!(
-        denied.0 == StatusCode::BAD_REQUEST && denied.1["error"] == "invalid_grant",
-        "disabled employee was replaced by customer as old OAuth eligibility proof"
+        !sqlx::query_scalar::<_, bool>("SELECT platform_session_active($1)")
+            .bind(sid)
+            .fetch_one(&h.pool)
+            .await?,
+        "disabled employee source remained active"
     );
-    eprintln!("identity_phase01 legacy_customer_login_context_oauth_rejected=PASS employee_positive_and_disable=PASS");
+    ensure!(
+        call(&h.app, &token, Method::GET, "/api/memberships", Value::Null)
+            .await?
+            .status
+            == StatusCode::UNAUTHORIZED,
+        "customer relationship replaced a disabled employee source"
+    );
     Ok(())
 }
 
@@ -1476,9 +1355,9 @@ async fn membership_lifecycle_phase01_contract_matrix() -> Result<()> {
         let harness = Harness::create(&database.pool).await?;
         database_contract(&harness).await?;
         membership_reason_contract(&harness).await?;
-        expansion_api_contract(&harness).await?;
+        canonical_api_contract(&harness).await?;
         target_schema_contract(&harness).await?;
-        legacy_customer_issuance_guard(&harness).await?;
+        customer_employee_source_isolation(&harness).await?;
         Ok(())
     }
     .await;
@@ -1490,7 +1369,7 @@ async fn membership_lifecycle_phase01_contract_matrix() -> Result<()> {
 async fn membership_lifecycle_phase01_fresh_install_seed_v7() -> Result<()> {
     let database = Database::create(i64::MAX).await?;
     let result = async {
-        let initial_credentials: i64 = sqlx::query_scalar("SELECT (SELECT count(*) FROM platform_sessions)+(SELECT count(*) FROM oauth_tokens)+(SELECT count(*) FROM oauth_authorization_codes)+(SELECT count(*) FROM oauth_device_codes)")
+        let initial_credentials: i64 = sqlx::query_scalar("SELECT (SELECT count(*) FROM platform_sessions)+(SELECT count(*) FROM platform_app_capabilities)+(SELECT count(*) FROM auth_grants)+(SELECT count(*) FROM auth_authorization_codes)")
             .fetch_one(&database.pool).await?;
         ensure!(initial_credentials == 0,"fresh schema contains issued credentials");
         crate::seed::run(&database.pool).await?;
@@ -1502,7 +1381,7 @@ async fn membership_lifecycle_phase01_fresh_install_seed_v7() -> Result<()> {
         ensure!(before == seed_identity_snapshot(&database.pool).await?,"restarted seed changed IDs, grants or other persisted fixture state");
         let unsafe_members: i64 = sqlx::query_scalar("SELECT count(*) FROM memberships WHERE member_type<>'EMPLOYEE' OR status<>'ENABLED' OR identity_version<>1")
             .fetch_one(&database.pool).await?;
-        let unsafe_policies: i64 = sqlx::query_scalar("SELECT (SELECT count(*) FROM applications WHERE allowed_member_types<>ARRAY['EMPLOYEE']::text[]) + (SELECT count(*) FROM oauth_clients WHERE (subject_mode='MACHINE' AND cardinality(allowed_member_types)<>0) OR (subject_mode<>'MACHINE' AND allowed_member_types<>ARRAY['EMPLOYEE']::text[]))")
+        let unsafe_policies: i64 = sqlx::query_scalar("SELECT count(*) FROM applications WHERE allowed_member_types<>ARRAY['EMPLOYEE']::text[]")
             .fetch_one(&database.pool).await?;
         ensure!(unsafe_members == 0 && unsafe_policies == 0,"seed widened customer or client admission");
         db_reject(&database.pool,&format!("INSERT INTO users(id,username,password_hash) VALUES('{}','admin','fixture')",new_uuid()),"23505").await?;

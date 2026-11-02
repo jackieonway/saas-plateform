@@ -25,7 +25,7 @@ docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=32m -p 127.0.0.1:
 | `/micro/:appCode/*` | 合法 HTML 导航回退到宿主 `index.html` | 宿主 React Router 与 qiankun |
 | `/sub-apps/*` | 固定返回 404 | 网关的已登记版本静态路由 |
 | `/micro-proxy/*` | 固定返回 404 | 网关转发至 Rust URL 资源代理 |
-| `/api/*`、`/oauth/*`、业务 API、`/socket.io` | 不提供服务，不回退 HTML | 网关及对应后端 |
+| `/api/*`、`/auth/*`、业务 API、`/socket.io` | 不提供服务，不回退 HTML | 网关及对应后端 |
 
 `nginx.conf` 只对明确的宿主导航路径、GET/HEAD 方法和允许 HTML 的 Accept 开启 SPA fallback，缺失脚本、样式或 API 不会伪装成成功页面。宿主的 `/micro/*` 导航与 `/micro-proxy/*` 资源代理必须分别配置，不能将后者回退至 React 页面。
 

@@ -47,7 +47,7 @@ for (const [label, response] of [
 
 test('only known same-origin console navigation survives authentication', () => {
   const f = fixture(async () => { throw new Error('navigation helper must not fetch credentials') })
-  for (const path of ['/', '/dashboard', '/system/users?status=ENABLED', '/micro/work-orders/tickets', '/device?user_code=owned']) {
+  for (const path of ['/', '/dashboard', '/system/users?status=ENABLED', '/micro/work-orders/tickets']) {
     assert.equal(f.safePlatformReturn(path), path)
   }
   for (const path of [null, '', 'https://unregistered.invalid', '//unregistered.invalid', '/\\unregistered.invalid',

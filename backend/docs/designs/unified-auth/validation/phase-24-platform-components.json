@@ -1,0 +1,3233 @@
+{
+  "snapshot": "phase24-final-r1",
+  "snapshotSha256": "5f191160608a118298727e3027304f05cf710e88ea403a853a063c696b029df0",
+  "manifestSha256": "b0dc585752cc6ed9affd18643f812c05f35f56d0fe92c1f70419cfc90879afd8",
+  "platformInputCount": 366,
+  "platformInputSetSha256": "67e3602249d0145b0c6e9d56d1b762ceb181ce855dbbd51d714d34219affe554",
+  "platformInputs": {
+    "saas-plateform/backend/Cargo.lock": "09495e0bec534932cbbe06cac7a70bccfa1a18fe327659f5ab277b759be7afeb",
+    "saas-plateform/backend/Cargo.toml": "0b9945bcb21d36431283508d91688661ea41b296dbf0a8cca3cf37cd5387f7a8",
+    "saas-plateform/backend/assets/prepare-region-seed.py": "5a5af3476d27abb8da076e6a95ccd08ef4df9d85e279f2012144fad69cea0994",
+    "saas-plateform/backend/assets/regions-2023.copy.gz": "7c94ec7cbfd22fe15d91771ecc32f3d2a55c350654d425b97c669d404f0e0e60",
+    "saas-plateform/backend/build.rs": "1228cdbdb6eacb3aa578929dafa42240f1b5c1baddad855a059db0615f9d64bf",
+    "saas-plateform/backend/crates/deployment-contract/Cargo.lock": "14b06795cbfa01882410a79f0905f38357ee69dddd2a9dd88bea212260ac542a",
+    "saas-plateform/backend/crates/deployment-contract/Cargo.toml": "8fe4ca5a122a5617d33985099632807f9749772673b79e77d254f89ed3b591f4",
+    "saas-plateform/backend/crates/deployment-contract/src/lib.rs": "67692dac6fcf221d47b2e2cd6cbc0d8dce09b7a1b6490eceb78c6ec4174c2c23",
+    "saas-plateform/backend/crates/deployment-contract/src/zip.rs": "03d9fce635df704fe7a973d413ffaf3258a689c8f71e392d55aa96b101bafd55",
+    "saas-plateform/backend/crates/operational-telemetry/Cargo.lock": "2e3b612bc2ba42434b7ddbc32446442657356364a6083b951a3c5f16ae4cdf9a",
+    "saas-plateform/backend/crates/operational-telemetry/Cargo.toml": "9f3b14ff00778e84b66b085ba9aa1b56f97b742f68c6c5a00ef15cf9722b5818",
+    "saas-plateform/backend/crates/operational-telemetry/src/lib.rs": "ae4fa26581d616e9301a5ed167dcea1a56c50a224e29a6c068a4248b7ec3900c",
+    "saas-plateform/backend/migrations/0001_init.sql": "626862ee41b929a623bb68e6acfcfdd51f01869987bceb437bedee116ddc825b",
+    "saas-plateform/backend/ops/identity-deployment/create-roles.sql": "5389a1c2187aba441f8ce7b936950112369293818b0e7f2c5f84be7ec6681259",
+    "saas-plateform/backend/ops/identity-deployment/provision.sql": "076583529fae41f0de8a98d2126731201b4eed4ab302559c812f3803e83a0980",
+    "saas-plateform/backend/ops/identity-deployment/verify.sql": "72dc5aff2efc8b7d82b501437ea064dbe8bb45288a5deb96582eb9a254b73f1e",
+    "saas-plateform/backend/ops/identity-recovery/README.md": "e7b2b43e03f82b958a2f3967c9a91d256e7f01e4a150918c2f04373174661261",
+    "saas-plateform/backend/ops/identity-recovery/core.py": "f9bd3aae8417bb9316f5ff36e1af2a5f95034725d44287e0025e5710f3fe7005",
+    "saas-plateform/backend/ops/identity-recovery/inventory.py": "1079362a3707550bec5160f70e1dea4fa0c7f12b7df82dfe1f35f31ef3e768db",
+    "saas-plateform/backend/ops/identity-recovery/negative_probe.py": "05f6ed1f5c69cf50b3a9f41009b2d5f69e41684e321111a4172af2d0e2d3582d",
+    "saas-plateform/backend/ops/identity-recovery/reconcile.py": "e5a6aa4df3804dc82bede2344be2dcb70910e7de2f8256082e56b8e742e4cc31",
+    "saas-plateform/backend/ops/identity-recovery/recovery.py": "99b4a108b9b1c013d31a04db7d26a440581d078c3a3710fe0aed3f431b3e42b5",
+    "saas-plateform/backend/ops/identity-recovery/test_core.py": "64b9d4b103287d21e7c6e7247c72c998369676c9e315fe4de27cd930a5fe1667",
+    "saas-plateform/backend/ops/identity-recovery/test_inventory.py": "c935c6b59348433d9e1776dab6d573903b4b3f733061756d63ff6df6cb733537",
+    "saas-plateform/backend/ops/identity-recovery/test_negative_probe.py": "38ed3a09f6796925b8fee7acfae83fff7715605387e41124a2b5be4c7b2e0c77",
+    "saas-plateform/backend/ops/identity-recovery/test_reconcile.py": "0505ed9a643c24bee47ce13bd75937b986362a013912d03897662c41208ff3e5",
+    "saas-plateform/backend/ops/identity-recovery/test_witness.py": "99dd0427f5957ba54b29807fa46c9ad39c934e380ac5defa2c6de3176760fd92",
+    "saas-plateform/backend/ops/identity-recovery/witness.py": "5f96fc2402ec88bcdb5f41ca7e876691b87ed5846887c21a5bdc07f527e3e90d",
+    "saas-plateform/backend/ops/recovery/src/bundle.rs": "28f0bba224f4ecb7e8d217e4c70ddc25022952571b12addae481fdd22dea9540",
+    "saas-plateform/backend/ops/recovery/src/config.rs": "abddcf9bf22d52118ebcd9f9f1a387b11f1229b64c9f65aa8da0c4d6dd8c9a04",
+    "saas-plateform/backend/ops/recovery/src/lib.rs": "2b1999dc86768222549737614551a1b31ca5264d2661e6cf03e236ce554570b6",
+    "saas-plateform/backend/ops/recovery/src/main.rs": "efe25d1d8ec2372319053431a794fe19b4944bae16c8b23eeee6782be2c89c72",
+    "saas-plateform/backend/ops/recovery/src/native.rs": "2403457b87f536ebdd96d396cf321df82d32b0059ca6755de35a6d4790fee845",
+    "saas-plateform/backend/ops/recovery/src/schema.rs": "36e72467a5fe7c875d9e85688f2a2ae2072d20e58eaa7eb81202279d350a7cb9",
+    "saas-plateform/backend/ops/recovery/src/uuid_inventory/catalog.rs": "de9d1a6aff681e8afe06dbe8bd770029b9f5493a9b69d5c36aae9ee137e7db46",
+    "saas-plateform/backend/ops/recovery/src/uuid_inventory/mod.rs": "d7768af26dfc7c55827aec26d4fac69e264b18e5de6f279c3a0c5ace3cd8e8ec",
+    "saas-plateform/backend/ops/recovery/src/workflow.rs": "dbc02359e7067746f24038997d4dfd5705105bf5fa88e9601961bed852602588",
+    "saas-plateform/backend/rust-toolchain.toml": "174a086284d57e79557b62bc627e96257893375dfd37239e3c3e830ce2629b95",
+    "saas-plateform/backend/src/app_authorization/store.rs": "a6da2ac345831278a95fe846a16a70b6d887d17a0a7800d0c7623d35abeabf73",
+    "saas-plateform/backend/src/app_authorization.rs": "a6dda5c8901bc456c828e62ab7507530bb57cd477733a2c923adf2b09220b95f",
+    "saas-plateform/backend/src/app_capabilities.rs": "876ac42803e85014a5560ba27de0b43c3e57898d3289ade32adb260f02abca71",
+    "saas-plateform/backend/src/app_organizations/store.rs": "1eb25aac862af7aca335ace7f3170c6f114f4f8e98ac6dd193dac6a4ce175b17",
+    "saas-plateform/backend/src/app_organizations.rs": "96b28e7662815622b91788e3cb80e2c683df9c94a212c54fc75c9ded19fee5a1",
+    "saas-plateform/backend/src/app_organizations_tests.rs": "fdadf78a4ffa27da2fbbb6f229667002ea2077c66281d6a4d4c85aa77b533938",
+    "saas-plateform/backend/src/app_token.rs": "1fe6f397aa22bc828011f472512ee20c33ea0799322a9ea2c6aad17a3d43973d",
+    "saas-plateform/backend/src/application_entries.rs": "05a90b94b1571b874c41e048c31d132155bad5c8de08cf9b35f9cfa3a60edf65",
+    "saas-plateform/backend/src/artifact_distribution/config.rs": "5a6f3da9fa9a81febbc18bd2a96735602e400059a07a2ee6e29bc3e2e77f1e0e",
+    "saas-plateform/backend/src/artifact_distribution/gates.rs": "b9976bd09cf49a3ee50da23712072cadfe609e0d9b8756af8c101051474bce72",
+    "saas-plateform/backend/src/artifact_distribution/mod.rs": "0d06fad4af7d8a840ad85b32d81e2e77efbeb59ff2d5e7289f23a112667ccbd3",
+    "saas-plateform/backend/src/artifact_distribution/routes.rs": "764cbb7ab28aec2062d188d7cd04f6495c3ab4c11e082938ee18ac33dfc2b474",
+    "saas-plateform/backend/src/artifact_distribution/transport.rs": "4f3ee971d5ece6a2beabd24ba87149c848048a02b45853f979215620d4935887",
+    "saas-plateform/backend/src/artifact_distribution/worker.rs": "99db1f2c494dad322649a64ec69f7f99d0120b0389b477e1b3a4a058bfa2db8f",
+    "saas-plateform/backend/src/auth_review/mod.rs": "bded8fb617330fe1f8e7b957fd60246017098663f7f54ae6fc561716738a6b28",
+    "saas-plateform/backend/src/auth_review/policy.rs": "24d67bfb3ba33da5245131c4c335065ce96d532a99ae27380a812e26ee5319da",
+    "saas-plateform/backend/src/auth_review/routes.rs": "ffced40f8df71022f1e0966a4831fd1a0e92e3abcd86eca7168e4fdb9c9d232b",
+    "saas-plateform/backend/src/auth_review/service.rs": "23d478420f5c0c426246629b9432304790eb439886640f3b3a24396abdc229ac",
+    "saas-plateform/backend/src/auth_review/store.rs": "ca99145163cac68eb3b3f09a7d5ceae0edec4f47a6a8ee6c5c423a5c87798900",
+    "saas-plateform/backend/src/auth_review/tests.rs": "945edea9ba1c1c9e4d49109cd27c169d3109c053d1b05842c39fdde4e38dd1b4",
+    "saas-plateform/backend/src/authentication/commands.rs": "3f71acbd88cedaa5b51b0345a84530bea60f945addb91007b0d583103d4a11d1",
+    "saas-plateform/backend/src/authentication/mod.rs": "1307ae95b6e39c1777ba42069598d90014b01225ee2326a756d443a1fc0d96ef",
+    "saas-plateform/backend/src/authentication/postgres.rs": "70c7f55916883f455c935931cae2412f6631827184318a5ee3049c9e6af005b4",
+    "saas-plateform/backend/src/authentication/remote.rs": "34ccb3c405f1611d655c8b09cfbc116855de39eeb74183ca1e8ad8cc39db3be5",
+    "saas-plateform/backend/src/authentication_boundary_tests.rs": "38343dcffd02f6ce39076f4ce293fe7cbf459b032aecd81d797f373690ca4f00",
+    "saas-plateform/backend/src/authorization.rs": "392ab69cacfeb71e7b7e6f8e86f53d2abea863b10b19b6f38fd141257f8f0238",
+    "saas-plateform/backend/src/authorization_isolation_tests.rs": "1c8fe865effffbd93e38ebf8a425cb158c907ec8f9b120d709868a0d49963b8c",
+    "saas-plateform/backend/src/authorization_policy.rs": "431a966f0cf2317b63eba5e23ba2ec82d5685ec90e9bf0d249dce3a9b2dd46ec",
+    "saas-plateform/backend/src/bff/backchannel.rs": "cf86b0f755beef4e797767e01a25096ea0398550d78bcd037689f8ff29cf2953",
+    "saas-plateform/backend/src/bff/context.rs": "39725dde6399511c9c1922e2e722e2ee61062879bf24799559cd51195127b758",
+    "saas-plateform/backend/src/bff/crypto.rs": "5af5285dc7d9c2a35e881c0f851bc3c8622895e1dbfa8fb90e3893e9cac178ed",
+    "saas-plateform/backend/src/bff/mod.rs": "d4af9b493f69a9697adcba280b129dc41ce0715156ddff69bb4464c262e62e82",
+    "saas-plateform/backend/src/bff/protocol.rs": "2cedd3d653ef040cf8ef22cbd0b7b17493b4504feab73e0e2015a2e160c6a5f9",
+    "saas-plateform/backend/src/bff/routes.rs": "8eed9b4699a091282f5ff3a486943b673e086c09822be4dada1130c24081eb21",
+    "saas-plateform/backend/src/bff/store.rs": "404f89fcf9feb7f5210668d1f0fcea3afef8072d7f467051b7557a2719aaf929",
+    "saas-plateform/backend/src/bff/transport.rs": "9e398dbe993ea7e75259b6051ebc5a27c63024d458a19aacbb7283ab7ff312d6",
+    "saas-plateform/backend/src/bff_tests/canonical.rs": "7368c6d5ba8de2d99f5573367b878d90580b6a27733c3025c1901c7a856c47aa",
+    "saas-plateform/backend/src/bff_tests.rs": "628eb5d36544d9e3d3ae73fb008e559042192617b7210dfdb986c0ce70b23eb3",
+    "saas-plateform/backend/src/bin/platform-migrate.rs": "bd3caf76992a5c929adad1e3155376eb6c58741269c438b67510c36716a61fcd",
+    "saas-plateform/backend/src/bootstrap.rs": "e4d136e1d56c5dfc085745d1fab9aab3dd1502bb3ba786e4d6a6f0ddea807613",
+    "saas-plateform/backend/src/client_ip.rs": "22bad224f62558f40a111003b161c5cb4c9d829b17a2d654035f24634baea3e2",
+    "saas-plateform/backend/src/confidential_clients.rs": "570bdf89424ab36aa437d96931cf4c1423040e196c18b2092910e6ea65a670e4",
+    "saas-plateform/backend/src/config.rs": "a4f7e84a5db48326660f6512ae532f67b54d371bfacbc807e8968b33569991a4",
+    "saas-plateform/backend/src/context_selection.rs": "ac8c634cd2ba9462d29f8e0c1572229522509ef80fe0e86254210bea054bc6a3",
+    "saas-plateform/backend/src/context_selection_http/authority.rs": "25fd2d8f10770f6ec6cfd756dd55e64f4ae5c75dd510025387d1b03f928c5f1a",
+    "saas-plateform/backend/src/context_selection_http/consumption.rs": "a7c8cb4eecdba96cb49d5647f703441680083f627ef72ebb3d44130ebeb95a2c",
+    "saas-plateform/backend/src/context_selection_http/mod.rs": "b39be4fdeda6ac4361b2b2f1f4eda954eeecbcf3e579a3378040f243e17880f2",
+    "saas-plateform/backend/src/context_selection_http/store.rs": "bea7789a18424d199771d5da78a57e938e1717a5b04fb08a6f4cbb308b9665e1",
+    "saas-plateform/backend/src/context_selection_http/tests.rs": "59fa7fe4cfb2e0a08890022004564185207bf2aab943e3bf959999dbde2edb8c",
+    "saas-plateform/backend/src/context_selection_store.rs": "79b0713e2d50738d11eee65b7634be3efef196ffafc2b81fa0e65ce014f8f240",
+    "saas-plateform/backend/src/credential_binding.rs": "5a7517de478609edcd72bcfd1453c29acdc04367ff50bbee5e391fbca222c2d4",
+    "saas-plateform/backend/src/customer_portal/authority.rs": "a5c594d3db440193462d7d43de48d86454b0c438c97a6983f06985bbde2be84c",
+    "saas-plateform/backend/src/customer_portal/mod.rs": "e71dfc4e41a39d0698e07cb6ad92f5d1e0574cfe6ccae09f513e93dd38599196",
+    "saas-plateform/backend/src/customer_portal/remote_authority.rs": "f4fba70ce2051fe540bf0d25da80212d6ca2c1658c2023b27dc6a799535311c0",
+    "saas-plateform/backend/src/customer_portal/remote_authority_tests.rs": "707a7fcbdccf10add840e2e29596418e34602b81efda10914d523160cb7953fc",
+    "saas-plateform/backend/src/customer_portal/selection.rs": "67aa9a79ef6f511efd3a5e69b39a1f6a43646068ca6d59b966572173b9258490",
+    "saas-plateform/backend/src/customer_portal/store.rs": "1685b779cb3bd4abb214d89b7290390d8f7db1a6b865ac2e3ec449180efb6fdf",
+    "saas-plateform/backend/src/customer_portal_tests/selection/lock_regression.rs": "85f4e3fefc8395f655ffbb3429c57c12e0ff630261fec9046f8f00312e8ca276",
+    "saas-plateform/backend/src/customer_portal_tests/selection.rs": "24607fac41de18fe56374c253b47efacd0ee484904ef8cdd8fe28e72d1e3608a",
+    "saas-plateform/backend/src/customer_portal_tests.rs": "6f155730f685b6c82270ed2a4d11988f9453b991e44e96c04d1355e0861b4df5",
+    "saas-plateform/backend/src/data_grant_discovery_tests.rs": "bc68a6339b6b8a69eadabb64d83fe965f2114ea77baaf9c71bd491c8a3910c33",
+    "saas-plateform/backend/src/data_grant_tests.rs": "a24d4396555fb97044721d7b5c3384c348b35d4c8f9e08869a9625813128f882",
+    "saas-plateform/backend/src/data_grants/discovery.rs": "6a0d3e00c6545092a587e5c0b56264f19d03cee8d4e59abfc18a6ace1a94164d",
+    "saas-plateform/backend/src/data_grants/policy.rs": "4b6c0fe0c15f67777fcdc697a517c931f6246b1bbe4d3c1577ab71108107d01d",
+    "saas-plateform/backend/src/data_grants/store.rs": "f751fd48de81eb6745c65721b218722d4d566b8faf4b74d1dc07a4f1c380f8a1",
+    "saas-plateform/backend/src/data_grants.rs": "dceb99385edea872ee69d9153328cb223ed1cc2c49de949a6d67d6e18d872961",
+    "saas-plateform/backend/src/database/imported.rs": "aa1cac66e6458d937c360786bc6427f7bf5d7f3360f9da4ac5750f8024cf31e0",
+    "saas-plateform/backend/src/database/migrate_only.rs": "396adb361b2a35923763d6e63610a6b5586e609e5d46b3ee7d928ce1b9f1885a",
+    "saas-plateform/backend/src/database/schema_material.sql": "204b5d744b099f2eda02fa363f5c54d3379da75753ae4673474017e6fb51ade2",
+    "saas-plateform/backend/src/database.rs": "2ac3711cc661bdeb5ac8d6dcf3d9f7bb775f1a8ed7af1175c97cf1ec2fd0677c",
+    "saas-plateform/backend/src/directory_authorization.rs": "cec4fbf7b4d456a620554f0efb7f9baacc08e287c913f55f4f829823793818b5",
+    "saas-plateform/backend/src/employee_isolation_tests.rs": "80c235a911d18a210e1f66ae48d868052cddfc39149603b0a1f965cf5605a982",
+    "saas-plateform/backend/src/entity_creation_tests.rs": "d1e3f87261406478ff8f966097451076d6cc2701c543a06f028803986e743459",
+    "saas-plateform/backend/src/error.rs": "2314ad86253cf20cb55c39c831ec0b37cfea1527b8fe560257e8809d1f18fc7b",
+    "saas-plateform/backend/src/extractors.rs": "0627d698258876a56a748e431707c743d5f5a52ee8b41aebb88fa15d2f2e75ed",
+    "saas-plateform/backend/src/identity_binding_tests.rs": "8e94c861cac5d6b04db77981300548c7fe8f16bc9a64416756a90214b1d3ac45",
+    "saas-plateform/backend/src/identity_deployment_tests/phase13.rs": "cf1a7350b767c777c69965596cd4c94a6a8b0f6d3a5c1df266f29e6bcb52643e",
+    "saas-plateform/backend/src/identity_deployment_tests/phase14.rs": "7b06a8ba419be7ffc813d496402f08b750fa2938e367d5fcfabc0b6a8e7baa1a",
+    "saas-plateform/backend/src/identity_deployment_tests/phase15.rs": "5a2ffee416cebdb25431805925ed2146023299a435ae1bf7db0f71252beafadc",
+    "saas-plateform/backend/src/identity_deployment_tests/phase15_http/recipient_inbox.rs": "d8600dc8623123197b3b2d2c9103c84968bce2530f7a18511b3df62b03650635",
+    "saas-plateform/backend/src/identity_deployment_tests/phase15_http.rs": "3a907c6001765186a12d8a1709243dfee90a764d85156dfb29871dfb6300323a",
+    "saas-plateform/backend/src/identity_deployment_tests/phase20.rs": "a9b897ba1b7163438ad8ce23abb5ffd6bdb49291786a6d062eb08c79f9d0afc2",
+    "saas-plateform/backend/src/identity_deployment_tests.rs": "8ed4d0183e652052576c7802fd88837fdbb6426aead9bbf4afb70a4ea7044215",
+    "saas-plateform/backend/src/identity_policy.rs": "a4f7309c38ce50e73ac8aabe12f6feaf84d41b65a0b48b4266250bcdbb05acda",
+    "saas-plateform/backend/src/identity_ui_tests.rs": "765be0bf965d6bd6102ea2772fea0b2dba6405e8469415cd5f6a9d41ad49551d",
+    "saas-plateform/backend/src/lib.rs": "d2f89be02f5388cc7f09b9285fa4070c158c54bf76bd724ec339708a505f4a40",
+    "saas-plateform/backend/src/login_limits.rs": "55fd9242fefdccfbb9a7efbbcbcf5467a4449000012d1b25d5e5acb402448348",
+    "saas-plateform/backend/src/main.rs": "6f4749e4b0849b871a7dea5b56055864d555e1aefcb1d0d92ba9e1a75f0bcb0f",
+    "saas-plateform/backend/src/managed_deployments/config.rs": "2a90ec9ced3836ddba81a481865b80f349ed304f1cc9c9b961f4c70139e48942",
+    "saas-plateform/backend/src/managed_deployments/mod.rs": "25759fb445d198da58e7196d62de94facf1db4e792771565cacbfd128f1c2bbb",
+    "saas-plateform/backend/src/managed_deployments/routes.rs": "caaf728e7e66b9dc983f4480ce7db29ce3dd9a8cea6d202f64f5e12b98e7ac77",
+    "saas-plateform/backend/src/managed_deployments/worker.rs": "1dc0a0ff0a7ec632be32785695fa1053b49982d97b3d1b2837055efdbe0d748f",
+    "saas-plateform/backend/src/management_audit_tests.rs": "643cd70202e1ef54c41f469353d97a2500ea669200169168dac6019775773dd1",
+    "saas-plateform/backend/src/membership_lifecycle/mod.rs": "f87afe79f838362ac100798a2b5c0b3b1062bb33f3ef1e321411eb8c58c680cf",
+    "saas-plateform/backend/src/membership_lifecycle/routes.rs": "5affb54fd26dd02800e2e5016d3dfd9e3ac691dc3620346478c598ea8f311884",
+    "saas-plateform/backend/src/membership_lifecycle/service.rs": "d69760a2f9166d27ad58ae993bf0f07c556d1c86d266830ed7b04a552063c435",
+    "saas-plateform/backend/src/membership_lifecycle_tests.rs": "9f2bd5c8aaafcb8d973bacf8be1f81c2f10c1b21d39bb0cc64c9f03d25a885a7",
+    "saas-plateform/backend/src/micro_proxy/http_fixture.mjs": "9cca3673ae6d23b910071d37778651290f0041ee0d7ed92eb9fc022e94628352",
+    "saas-plateform/backend/src/micro_proxy/tests.rs": "3a9ebbdf045c085e4b7fad579b0b920e7b1c052b2fd725537c3c9935de4ed340",
+    "saas-plateform/backend/src/micro_proxy.rs": "1c2046b852786bbc90a449f0cd98f9a03e3941fed8a9b91fc2bcbfa69d9eda72",
+    "saas-plateform/backend/src/notification_context.rs": "651079f0025ba2d62bffe0c2335043a2365c82be063112801d58faa6e7d0722e",
+    "saas-plateform/backend/src/notification_identity_tests.rs": "4d68a59123c1b45fb724bb91fe042069f96db9f926534bd5c2f2a9b23e741659",
+    "saas-plateform/backend/src/notification_tests.rs": "a8a7fa3fa16d4db719913528c473ff05157828b0c9f38b18d74fdf0ad59bcef7",
+    "saas-plateform/backend/src/notifications.rs": "d1bd387b5069e04cb617f58dd79a58fcaac490d91d290a1d2b2ea483b7f15f8f",
+    "saas-plateform/backend/src/observability.rs": "07977ffb2feeddcfd63e9a3a8b67a4e8fc55ac2f60999325ba9a22d78c5a2407",
+    "saas-plateform/backend/src/oidc/mod.rs": "49e103a9408d42131003623626ec76a3eae44392696dab1b1389af126429eb07",
+    "saas-plateform/backend/src/oidc/remote_admin.rs": "75879c39c23dfb0cf11206ab0d4b599405ac5e788395ce78a6843edc9bde930f",
+    "saas-plateform/backend/src/oidc/remote_admin_pg_tests.rs": "105f9cac6d2eb0f0cfd40f2583be1e0996dd5f1490a3f0f71503d1c61a335fb8",
+    "saas-plateform/backend/src/oidc/remote_admin_tests.rs": "fd8db53578ede97cf1e74d7b4677903bc5229f34f5cfef7037745d9e3649240f",
+    "saas-plateform/backend/src/organization_subtree_reporting_tests.rs": "8c383df0460bfbc17e411641ef1d3918b4a309e5975c061d7a7b2dd1cc4889ab",
+    "saas-plateform/backend/src/organization_subtree_user_role_tests.rs": "a56f96e7c82e795fb5124204461fbfd9abfcb38db0cde4f4b38c39a52c7a1c47",
+    "saas-plateform/backend/src/paging.rs": "5acc427bf5ef81ec180995bd589263682373b319f5893e6fdd3d69bb94abc445",
+    "saas-plateform/backend/src/platform_accounts.rs": "1371205b6f31af85b894342d1454f78937e4fb7f4864e063a9db9a4a3cd39431",
+    "saas-plateform/backend/src/platform_admin_cli_tests.rs": "ca61f4c8da74b17e65cf6e0d7648c3c5c6f1507f6ff11eabaeb1191bde78afd9",
+    "saas-plateform/backend/src/platform_session_refresh_tests.rs": "51c0f420498c62e79e935a7fede590aa0792efc4346285249daa3f22c07e0beb",
+    "saas-plateform/backend/src/platform_settings.rs": "899881c6894d13b29957827f1da73752a8702ed9a29f7f3d38a26e227a3ac69f",
+    "saas-plateform/backend/src/platform_settings_tests.rs": "dcd4d849a4f654172f1b8529dbef91aadb27b444a066e4b33019c766e2408aa2",
+    "saas-plateform/backend/src/production_security_tests.rs": "f25fbc4b1bd0d2e20b325aadc02b327d50d1b433e04232b28ee2a42e66d7dc83",
+    "saas-plateform/backend/src/protocol_retirement_tests.rs": "ebc7450af20a7c15862a977c213687d59add21f79e4046d27624091e575ebf59",
+    "saas-plateform/backend/src/public_contract.rs": "082aae25785550ebed9461cb108c70bb6d671122ed63af6134677f6c2ba51fd8",
+    "saas-plateform/backend/src/public_contract_tests.rs": "6dc2ec3509d8e3f1ad1c4bd10e7a9dca4de6ea209a22378658657a4429bbad3b",
+    "saas-plateform/backend/src/region_seed.rs": "01124efd7d7592942b9de7168feef5001d2e4006f4910c09aca74f8a5cbb9e3a",
+    "saas-plateform/backend/src/region_selection.rs": "340724ba2d37944491ab65a1b3db857468736db68315ac2f1cd4bf710d7a17c3",
+    "saas-plateform/backend/src/release_archive_maintenance.rs": "4458b4f39aa8cb36b8723e5309c6a3c72e7eea9cbf84a8493fbe547791fd3370",
+    "saas-plateform/backend/src/release_archives/installation/tests.rs": "81bbb60e2d7b42ec5121230b36d5ff1cf7aad8b85a64b28c58b75f5ae3a38f5a",
+    "saas-plateform/backend/src/release_archives/installation.rs": "b70f466b7b42620717242e814c8ccc07bde205b7305c33577b67044ffa43a15e",
+    "saas-plateform/backend/src/release_archives.rs": "d630fe3f276c746ed0ee8a7d0ffee0dfc453d2fa753d4a9fca39457070202358",
+    "saas-plateform/backend/src/release_operations.rs": "224b01adefa0649f82490055634954584ea8f573bfd9e394d8b796198f376407",
+    "saas-plateform/backend/src/release_tests/database_upgrade.rs": "08722cc954d65de621b130a81451353a2a8c4caff121ebb0139c1fed77a92810",
+    "saas-plateform/backend/src/release_tests/fixtures/phase31/applications.phase30.ts": "5e729854cb91568f3b13dbc6db22f2a93b814958735a42291e5c62a5fdfe9cc8",
+    "saas-plateform/backend/src/release_tests/fixtures/phase31/old-host-provenance.json": "32ca363ed66530a2be7929fc0cf29f59c5e8e8c74f9eb51afd16cd5cb622a7e5",
+    "saas-plateform/backend/src/release_tests/fixtures/phase31/old-host.mjs": "9e8de1a6b63e45064476cf98afee523ba0e97802d48659efbe466562fd5e2b92",
+    "saas-plateform/backend/src/release_tests/fixtures/phase31/transport.mjs": "bb2eacd09956f7d09f0441fb726067cc137706c2a3f49fe125f721c9ed24d225",
+    "saas-plateform/backend/src/release_tests/managed_gate.rs": "4d08de976da6f2c4d52fb16c2ef98899015c0346dc19388418b447a440180c8a",
+    "saas-plateform/backend/src/release_tests/node_fixture.rs": "80440f32875bed38113dd95e3a601782a0d01fb4447cbef0d686b5379e50e16f",
+    "saas-plateform/backend/src/release_tests/phase31.rs": "c9e9c9781c56f5a43b03e5ce172a538b5f2a015781e16a72c02ca5c1a00f483b",
+    "saas-plateform/backend/src/release_tests/qiankun_only.rs": "1a328b394d4812c6017ca0a57e07eadda4ca948e49912c1b5aa6b96faa672ae6",
+    "saas-plateform/backend/src/release_tests/url_entries.rs": "d3009abe9d621eb209512658cc024b0cd7fce2ceac7c9dc2150d7884c0fa9e61",
+    "saas-plateform/backend/src/release_tests/zip_registration.rs": "3a7dc15512e821731b327bb825bef423799a2b76240941c6ca3867fc4410fe98",
+    "saas-plateform/backend/src/release_tests.rs": "8dfdcd816e97e8cbf2792d0f3e802e58cf27336244156c11f00db184d79edeb4",
+    "saas-plateform/backend/src/releases.rs": "750a94ffa7dc3c06a81dce1cbcb18873a1bbfbc03b22b3baeedc5b80aa3b526d",
+    "saas-plateform/backend/src/resource_authority.rs": "7d2034430f0e8e8529757a2fd6213156faf009a245593f8d848aa0138253db23",
+    "saas-plateform/backend/src/retention.rs": "c2bb791d3c111de6cf507e5ee6bad0f6b7d611ca3eca64c772de72d56b5b24b8",
+    "saas-plateform/backend/src/routes/admission_policy.rs": "5210d67858f896807e3399187b6fb43ba11b623426cde4a90e8db9bfe2f870d0",
+    "saas-plateform/backend/src/routes/admission_policy_tests.rs": "18456646e4f5a7cc22564d91df4f8bee03f675fd71226cf661a36fcc660e721b",
+    "saas-plateform/backend/src/routes/app_authorize.rs": "54ac8732c83b2e26176bc1809c24090156ef7a8cf07fb0b2500012dd589c8bd4",
+    "saas-plateform/backend/src/routes/app_context.rs": "7248915514b72f113169c1aa7d9e80f931c44b5c1b06865fbf05d6df67509adc",
+    "saas-plateform/backend/src/routes/app_members.rs": "ad6dc3128d9bcafc4e63faaf8102873d87ec6ef0da909ea6840a074a48f52633",
+    "saas-plateform/backend/src/routes/app_organizations.rs": "eb2ecb3e2cae4225b2a09f33c71458b2df5026973f579845229df980a8be1d12",
+    "saas-plateform/backend/src/routes/application_releases.rs": "e6e2e9bb7dcd6d023709a518bfecf8269868ae7557680e42b128bf2968d018ec",
+    "saas-plateform/backend/src/routes/application_setup.rs": "50b53aace3fccefd8651e890e691de48ba20777192dbcff2c4c27e195a73c0de",
+    "saas-plateform/backend/src/routes/application_setup_tests.rs": "b7b3ca09c5fdae4bdb33f8f385a9823e6fa594f1daaccdd1010b005fc4987967",
+    "saas-plateform/backend/src/routes/applications.rs": "dab21bacf17e4c076609b2cc6ae75964ed6427201f04c1f60903c896de368167",
+    "saas-plateform/backend/src/routes/audit.rs": "e354fbbed9a4ebcd713dbe3bcb499910cb2ef062e94d58b59afcc51e1a538c1e",
+    "saas-plateform/backend/src/routes/auth.rs": "ddb64adf87af78a2cec2df59a1fbe6d27c9714e4972af714c7cf25746ec0c389",
+    "saas-plateform/backend/src/routes/contact.rs": "6061920454a20f75f023a4888ac554f42a0a0238e2811668b65caf2b0005da79",
+    "saas-plateform/backend/src/routes/data_grants.rs": "d1f83dd3d5846106ec03a2d00e26cc657ed03408909dfd9a335eddbfff0fdbe5",
+    "saas-plateform/backend/src/routes/department_organization_tests.rs": "251921eefcdae4e2f31719e6c691b3b04c3832e762bb3dc186199de8ec347de7",
+    "saas-plateform/backend/src/routes/departments.rs": "1ba46369c15b56fa9f27086e5def2c222b94d5cb345ab1ec129c879d9b64e000",
+    "saas-plateform/backend/src/routes/external.rs": "cc8fb1de35b6b1c4302e09b8df7bc1e8d3386996eca91ada4200224c59e2d0a2",
+    "saas-plateform/backend/src/routes/maps.rs": "4bc686b61683c635cbb5e57d6fc58c60e3c1ca46b82cd778c5836ed0e4bb59b5",
+    "saas-plateform/backend/src/routes/menus.rs": "a741b3d30241cf926d1e2dcc9867f9b16f31fa429030fea584e55d698765a14d",
+    "saas-plateform/backend/src/routes/mod.rs": "0f0f57dc8ead808001ea01695256bfd0f268c7e779eedcc2b3624569aaa35cf9",
+    "saas-plateform/backend/src/routes/monitor.rs": "70dff8c2bc06b024a64080a4995324fa7a9bf619485e2d83b0b2b94b34c54634",
+    "saas-plateform/backend/src/routes/notifications.rs": "a164a04b76b7855d2574071d3d23b1bedaa9be79b53124129dd15baa6682cd4a",
+    "saas-plateform/backend/src/routes/onboarding.rs": "eef9baac8be87f00c72a296d0cd18fbf501ac118b0fdc485336645b13f397675",
+    "saas-plateform/backend/src/routes/organizations.rs": "2fca2a11a8c13bc73c81fe23e9c38cb0dc89f5fe1fbfe319c72eb36a27226c53",
+    "saas-plateform/backend/src/routes/platform_settings.rs": "b1d55689965dc1dd6409cc00a58e7a515fc91f288eba8684b0fd032ca6ed046f",
+    "saas-plateform/backend/src/routes/regions.rs": "792ae1bfafb9d9b982ed742f5b971e5694d7243a626c836b69abbe8b1b7d7a7c",
+    "saas-plateform/backend/src/routes/resource_directories.rs": "06b1a858a0b2c629d56583e2d30a6e12fee423c525cb3f3666a4112d1dfe3626",
+    "saas-plateform/backend/src/routes/retention.rs": "39da086f358a2f27fd7e4d327b412409ecb7fe7308b5f0c6d90cb2471d86196d",
+    "saas-plateform/backend/src/routes/roles.rs": "82265601b91a9451f308d94a1f73779bdddb7f0bfc04cb5aa88386f2a82226fb",
+    "saas-plateform/backend/src/routes/search.rs": "efef63eed1d032512d7a9c184d40a1935bd992764de4ebb2d1a935051d3e7c22",
+    "saas-plateform/backend/src/routes/tenants.rs": "cbf31e25b305146126ad3c784de92794ca8cd22f6753d4eab4afe47e6011d049",
+    "saas-plateform/backend/src/routes/users/remote.rs": "fcd82ac82e46e686ea0d2649dd1fa203eb84f2753f3c31d8b1af6d5c5db3d2f3",
+    "saas-plateform/backend/src/routes/users.rs": "f36755a866198853e4100443b495155cf957d2fdbce8694de12558a430e08c92",
+    "saas-plateform/backend/src/scope_tests.rs": "76ead70cce986d00fe4234b21856ca55a7c8480f91808f124e9d4f526f26786c",
+    "saas-plateform/backend/src/seed.rs": "4c88aa35ebbecbda9172c85c818fce43fe770366db73eb8e835d58209d607740",
+    "saas-plateform/backend/src/session.rs": "491a89a8fcf05b6ea70d86f2f38079debf0215fb43b234cdca56e91b9e60c7cc",
+    "saas-plateform/backend/src/snapshot.rs": "a627eab80f9d3c871df9777b72aacd7bcaff9847751311ef8aec5362bab7ddaa",
+    "saas-plateform/backend/src/sso/mod.rs": "89a38dc9bb0e7bb70cbbd2c8d70be4c55841acda86e7d869a12ec6fd9cb122aa",
+    "saas-plateform/backend/src/sso_only_tests.rs": "9dc81abb41a45f3328c06233521046c69be3c4fd19bab4038dfa942e85553e10",
+    "saas-plateform/backend/src/sso_session_tests.rs": "71a5dcc7d451d7385bbdfaf874285b8d96ab7456d8468672c85c184c11d93dc5",
+    "saas-plateform/backend/src/sso_test_fixture.rs": "647fe83a3957c0a6352f113d5f1ca46bc603bd25c355db04de32900afc36a9ba",
+    "saas-plateform/backend/src/state.rs": "e07cd1f05e4f95eb28d9b2b324e3d836a6166e15b4b779c7808fc48e57f9e1ae",
+    "saas-plateform/backend/src/static_files.rs": "0da1fb8e9466fc7f644234b976c7512a455fcd59f7479ecb75d053bd7fc9ab74",
+    "saas-plateform/backend/src/util/audit.rs": "3cd9e5ba0b5011f26f4bb33702c97803c052e5563021ab30bf33b421a67c6fff",
+    "saas-plateform/backend/src/util/hash.rs": "3d6ccba7e5f1f9f75dc00f838cc06a12eb87ad4a2abb97146487493699a39178",
+    "saas-plateform/backend/src/util/jwt.rs": "c4c3fa43413fbafa4b4a5cc48636f979c851386572830ddacea38b68571df9fe",
+    "saas-plateform/backend/src/util/mod.rs": "4b574f0d70bfd09f6207906bc314f41ad662c8b837115d270463a85e648b8405",
+    "saas-plateform/backend/src/util/password.rs": "2f8adc03ead9656f563089972b5da6ee174f052b3e6f11350b4d10c15cec2b75",
+    "saas-plateform/backend/src/util/tree.rs": "527217887d152cee1b3fc1b1d83125f032dcba9172a0aac9b6efecf39dfe8a52",
+    "saas-plateform/backend/src/util/uuid7.rs": "a1101fdba0c4952f756cf7b4b685a181769bbe86d715e7527da15744411f9fb0",
+    "saas-plateform/backend/static/identity/identity.css": "58d020adfae91c87adfcf55e425676c3001a55e7398c745bb4146665e32deb20",
+    "saas-plateform/backend/static/identity/identity.js": "1fb92e35d8e83de64d1fe312ab63bc0f13cde5510c2adeb4de58b3ceb4cac197",
+    "saas-plateform/backend/static/identity/login.html": "e643fd4402c710cedaf83c75acf3d1d73612c2f87e292a9b03f5f5e7b0f361b5",
+    "saas-plateform/backend/tests/authorization_policy.rs": "0e6d4bbb1e07064ed5fd9af8afc301f2cf2bc0bc7a190b721f9a935e6614034f",
+    "saas-plateform/backend/tests/context_selection.rs": "129441c9b193114cf0c2014666888f6ea1392ddf72ca1f28738b3e8ed4611bbf",
+    "saas-plateform/backend/tests/context_selection_database.rs": "3954ce32b6ff9681b75261e680f3ae0c152cb8a2df4cdbe2586f3b4190c4673b",
+    "saas-plateform/backend/tests/fixtures/micro-app-protocol/SOURCE.json": "9ba8f2ef8cd8b1db916fb29f8e9302028a36d5813d2c0c8a8d28f965c99fd448",
+    "saas-plateform/backend/tests/fixtures/micro-app-protocol/artifact-manifest.json": "02fe52794596edf08e8220c60aff3640a1401f0416ebec71ca0d37b154c40b47",
+    "saas-plateform/backend/tests/fixtures/micro-app-protocol/protocol.rs": "082aae25785550ebed9461cb108c70bb6d671122ed63af6134677f6c2ba51fd8",
+    "saas-plateform/backend/tests/fixtures/micro-app-protocol/public-wire.json": "42996e0b397b1b4cd852e06fd8038413f53698d24e0d1c176133a56df75b0dc4",
+    "saas-plateform/backend/tests/fixtures/micro-app-protocol/release.json": "d77b41651969f5d475cd2904b9b38d8507bfc0fa8547ee525cbef20a7cda8431",
+    "saas-plateform/backend/tests/fixtures/micro-app-protocol/schema.json": "51d0e9a49701e3aa85dae1c3d1b83fe80f33a5b9c79f281b5ae14988cbb87dae",
+    "saas-plateform/backend/tests/migration_command.rs": "a1b4b178e976ca401638f94fc61e77dc08570063a09cfa58892ee83e0e0d3c09",
+    "saas-plateform/backend/tests/nginx-render-policy.mjs": "2473380570de84b39ea68f70e213732489859677d073a148e9e64228d0d44eda",
+    "saas-plateform/backend/tests/phase24_empty_database.py": "1d2686f01c71d7ce50cd53801fca1809a3465bc3118cc25b7d652799a2626603",
+    "saas-plateform/backend/tests/phase24_schema_contract.py": "12efe4195ea5069b9a112f97003bac9a284c9749d6607581f1ec32c22df93f3f",
+    "saas-plateform/backend/tests/retention.rs": "5f7ccd9b88609b786cfdb9b2f0e38fcac99af88138edf7a8018c5ed13f026f7f",
+    "saas-plateform/backend/tests/unified-auth-https/README.md": "3eb8802515d462012cbb488c33499f9aedf29f50e2b942748d6de825ef31cf2e",
+    "saas-plateform/backend/tests/unified-auth-https/browser.mjs": "a009106765ddd698e0691802675ee74fb9c5bf9e1487e9621140d8cc92323ec2",
+    "saas-plateform/backend/tests/unified-auth-https/collector.py": "6aa93d6e8ed5e2344f612ab2f01be6eb1c8a9035bb2cab601f5ce40679d12305",
+    "saas-plateform/backend/tests/unified-auth-https/connect-proxy.mjs": "7c025aa830a9b5217ba675e9fc99b357b089395677ac8ce48e943c0bae0a49ed",
+    "saas-plateform/backend/tests/unified-auth-https/customer-browser.mjs": "a4455369ab6a85a2a8a0d820ee5a6d1caf67cbfdcb4dcf6e31cbcee69b81c985",
+    "saas-plateform/backend/tests/unified-auth-https/environment.sh": "0389d77585ea079d05d13ada75c64e1b728b9621e6c9ed5e4a95712fa0ef1b19",
+    "saas-plateform/backend/tests/unified-auth-https/gateway.py": "34b3438e595f6fac36245119649de51c1178ff4201ba685618505b94438a30c6",
+    "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs": "4ce41eaa92055bc9158542a5e9c1fae2512207d4dcdafbc3d82eeca44e358422",
+    "saas-plateform/backend/tests/unified-auth-https/phase20-browser.mjs": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+    "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+    "saas-plateform/backend/tests/unified-auth-https/phase21-fixture.py": "a04c29130e9929ab69d4c107a10548b1cdaa3c2e6fa913d59bc5344bfb392865",
+    "saas-plateform/backend/tests/unified-auth-https/phase21-gateway.py": "2be3cfe391b9841ba92a52ad768d051348746c024b25d62f0567c1e83ea8218c",
+    "saas-plateform/backend/tests/unified-auth-https/phase21-protocol.mjs": "fe2a6648257a949c5202c35875ed95aa3f7c168aefdd1f4802e7e543b0e163a5",
+    "saas-plateform/backend/tests/unified-auth-https/phase21-run-rp.py": "a68a7c02f1478b5faaaa1eebdb16d80ef343b969e5111801ee72c3dea12c039d",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-alerts.mjs": "a54e7431091acd0735664046045562958c2af2fa0ef441d7b02fcfa98b513131",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-cleanup-selftest.py": "f6119f16db2196b523b5014a52e973018aae356048d64725aab6e80dcefc36ed",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-fixture.py": "319697a6f62773e10cf998fa8dbd10e328cb8fc10522d1b473126c29046c259f",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-gateway.py": "7fcd40df08a06391f45fdce17a16ab676930fa1b57936e407e4eb8626799f9ef",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-input-contract.md": "4ef621a2979f52b0e53b35f84684036b51de2d56c1a8ac7227a5104a72b4290b",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-load.mjs": "fdba966fa8a27f3347de07c18a31b54e5932505f825be6c4800da4d5e28e8ac4",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-run.py": "61e17c84d4580f4525f0c8b65ea03c7b2585ed1d8622cbd0b37a25facdcc41fa",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-browser.mjs": "dc16ebda485bce1bcbb0ea8a66ed576f99cf535a382e9b0e3c5498e105fe0f8c",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-carrier-window.mjs": "7f37a022ab90e76cf1f972104e8b6311a5b291965c72b856a56433fd348fc011",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-carrier-window.test.mjs": "fa69d1e37274f36024f01d31b97f3fbd557db4b1bea5393d2b74388b84d4103e",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-collector-selftest.py": "626dd42ba087d70d0ba31b5d45e6337eb666a12bd3bb9c60394b3c9131a985e4",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-db-auth-probe/Cargo.lock": "00feaece2eca69d5944092c9eb60e93970f6762a23b520be3d69a0b83f3a72eb",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-db-auth-probe/Cargo.toml": "6f7b2f143cdd632ef021653f5bf318fa1686f16cb7ef2ce791915a7428f0e18c",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-db-auth-probe/README.md": "31cc0c2b4735d8fbb6677ea00224a2d0fb1bdc2798a86ae2db4abccb0ef6ee7a",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-db-auth-probe/src/main.rs": "e068ef3a71b7a9d866de6554aea91236e634780b8550b153a96f7b0b55864b26",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-db-auth-probe/src/private.rs": "cf6bf852feb89ae6f3ff83788e630721475d9023d6de2cb4d09bb5afdd15f1c0",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-dual-identity-cases.mjs": "cb8b0b728faf1adca6a336130b491ddcfce248c7db064c24428d4367a1ad6e02",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-dual-identity-cases.test.mjs": "2bb43441d98fba2a1f2579fdfb553d5e667d57a5e4f9646bbe18f305f425117e",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-environment.py": "27dba998c2f087b480d4d565fa87cc055d4642836f8fe07dee622190f74fb75f",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-execute.ps1": "b2dcb6f1bd7f47e11c6a9429d14e7df3d9c049fd7bc0f8b556e40a8f1c86f13f",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-file-negative-evidence.mjs": "8edc8529589d530f9e61922e061f8b77c7d143ec9f8593bd251bd755efdf82c6",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-file-negative-evidence.test.mjs": "9834e9b11abbe6a7f059e337b54ce892105a0ff5f4bcea63adb215990efdf830",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-fixture-selftest.py": "6e3e9d1291592253c69ed925319d8676093f4a640f42a5757ecca784156078a2",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-fixture.py": "42b03e6c4e8dc12df0d8d53dc9185961b3aa6bdc1a27c3d3eb2a91904de3df80",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-gateway.py": "ddb51b95817d6dd96b3e13a7439a8f173ca0480196ef664de45ff33c5177e4bb",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-hba.py": "bdd769f64e990e0b75eda35fef5250a1c15a686c4334ddfe7b784e5d179218dd",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-identity-driver.mjs": "cd808bd45e2fd256ea91303eff9b04195865623e75c896bf75cf2a6c7fee3015",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-identity-driver.test.mjs": "466e94049909bdb9c20124bed2e2fd0e0a782576661c3a1d2d2be5a5c0f2c343",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-invariant-cases.py": "675e9340e51a680cf015d87022915b03294b6c790330eb99bf5421f5acb01d7a",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-invitation-cases.mjs": "e3ed667a91447f35d37ccdf4df03c53184bd5b4a6349afd856e994458977c72f",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-key-cases.mjs": "e183ca4469642163b5743fc4297ec9b90a9fd4d633e024237ff4aeca99df879d",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-policy-cases.mjs": "adf73ae9235ffe87882565f09cfee912c9e982e51bde53757badb3d37a54fbec",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-protocol-diagnostics.mjs": "4b9755c1c6108dc6ada97f362fe986e0447001474f52366c500f7d8608beec89",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-protocol-diagnostics.test.mjs": "66cdb94f1e6698854ef44d326b70696db1a1806acb44097f0742bc59c009dcfc",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-protocol.mjs": "ad84dd67dda418c4eb42bdb01827fc3d1ca70fd57f6fdfea9a75ba250b50c9d4",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-cycle.py": "ce5d93dc5d5647484f6f10d1684ce285312ee098fe9ad78b527995cc025e41ae",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-files.py": "44a5db1022ccbb69aac16b2f9e09b8a01bbb6445e6363f5a3c3f29645bdaf11f",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-key-cases.mjs": "4a4c8dbb2536747d82521809be6432a6719a327787b9a784f411e1d6723d8d46",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-key-cases.test.mjs": "385bc78b9d94d2f840a0042ca1891f5c3ac4652c63dfe25f284d25ac54cf16f7",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-probe.py": "7905e26d121f2e7f517574a056ed9ec06911880548847ddf7d6cf30a7bb0f90f",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-run-rp.py": "ef883a146f358ad863f149f249921281f453915b36c23658c51b8d450fb45fe4",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-scram-cases.py": "49dfd091f7b800f749867dedc12bc29272b14c671228c36fd0e089fbbce6bc2b",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-scram-proxy.py": "f35f817a7e546c5df6c68b0c8222f87895b14ca92016d73d032d4c2527afa5bf",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-service-access-cases.mjs": "5480803fa6c55cf51aee49d283fdff57e79e462afdac621552d2b6839e288464",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-service-access-cases.test.mjs": "20c5a8c3fbe0e24dffbbff521a3610510518a43dd1466c68443dec6942911dc2",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-service-context-cases.mjs": "aba0ae08c8675c197c07dcaeab8b6b309fa464097f0d3f5afe10483099422d44",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-service-context-cases.test.mjs": "0310ba628372d3310a1c4c810ec0f14aa00a7cb901052e73520cb19f89896988",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-service-get-cases.mjs": "bd90114f79696d7a0db8d0a80a3f0980d3b4c12455898f7d47279f0d36a76dae",
+    "saas-plateform/backend/tests/unified-auth-https/phase23-service-get-cases.test.mjs": "7d14735bc9ba975982f1150b3fbcdc2bbb670a77d5275b03de7e5744bb031928",
+    "saas-plateform/backend/tests/unified-auth-https/phase23_cluster_binding.py": "b1375adf83d0c2d805b8085ace14cdc6ab74fe43865c16fce0962fa664c98a6a",
+    "saas-plateform/backend/tests/unified-auth-https/postgres.sh": "d8fbb566f51327a20413b655b8f19f9f6e6d34711690ff271fca40b94b605903",
+    "saas-plateform/backend/tests/unified-auth-https/prepare.py": "c338c2fc7c41373b1110a360cdbe4dd5564c559ccaae93085f6b4f837a204cbb",
+    "saas-plateform/backend/tests/unified-auth-https/run-service.py": "f5923d8790a52637e075df6ca5b22f16d7ccd62bd51d0d790b4c3bccecedbadb",
+    "saas-plateform/backend/tests/unified-auth-https/snapshot-build.py": "49d5489fa7fbc29596995075ed143f46d097fd79a4837e773739296370bcf4a7",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_cluster_binding.py": "cb761d5c4ec56e4987206f2ef2e500b15db6377997e09e5998228d2735df95ea",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_environment_instances.py": "96b5826a96ac7bd2806d37b4ef213049d23b9210d4229e53e8665dae03e74479",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_environment_logs.py": "b136a54ccda9467f26375fa12e0507b46d6c3970a6689245bac70ca4b94b1424",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_environment_preparation.py": "5f7b359b4b7805e52af3d72cc0a017df67c582c23a684f3b7f7c64a1ee341fbe",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_environment_processes.py": "4feb88c35750247a39698174017c5de34a9029b68b79a83ad60b0d240beaccca",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_gateway_instances.py": "ac8ba4f1d3e42bd3b542c6aadb44ae9753c89fda051b4e1781b9c69d0066363e",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_hba.py": "7583893d659626fb4a2fd831ed400189a4368a8db53b4ba0e2cec7c2b11ef9e6",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_invariant_cases.py": "653135f16b91138ab666fd41dc709471ef5c64e025773f3c4ed7f02ab69bbab2",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_recovery_cycle.py": "c741ffaa59b7c64e2625e8d5b617f371118f61d3fdbffdad21b9e1bfaaefcf67",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_recovery_files.py": "76f85c655d63419dde060741d27c0c2342486b79a4fb11f7f50b5dcc424f87eb",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_recovery_probe.py": "8d7a94732aee9bb508a881681c83063d5b7e58fba556354573bfaf86b296b70e",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_scram_launch.py": "179a2f02fceae4e244070917a7be1c6d8cad07f2072efca2947c4b9f079763eb",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_select_tools.py": "77e628dc1f538013ad0545fa54a5a0e4472b3fdaca9f324b8a79554e5e4c2a7e",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_service_instances.py": "bd01d1a82c05ab4b5381b3b5399bb1a349f4d2e15bda282ddf1d0b5000a51daf",
+    "saas-plateform/backend/tests/unified-auth-https/test_prepare_frozen_source.py": "1657654901d9cad1d33d8cdf3e384074e7f2d8bc853907e4442d29cd45129ba8",
+    "saas-plateform/backend/tests/unified-auth-https/test_prepare_migration_environment.py": "f66c731ef6895c775d498a070f82982078854583293aa74a9cd34c1117afedb5",
+    "saas-plateform/backend/tests/unified-auth-https/test_prepare_psql_environment.py": "4b4aea1f80d58ac871df8d767fb27a39eaedc68f804e55c22d2966870335294d",
+    "saas-plateform/backend/tools/platform-admin/Cargo.lock": "53901520e0db622a56db348db319e30b62a88d9cba0c592738453d70294f03e1",
+    "saas-plateform/backend/tools/platform-admin/Cargo.toml": "50a46b860e6874d96d4ed650e43cc1d6debaf19cf3d857c20f08c01e557a6fd1",
+    "saas-plateform/backend/tools/platform-admin/manifests/access-policy.manifest.example.json": "c47dc5f2bf92866f3233a3725b249b1e93d7ca37867fab4d87d6994ae9dc5e54",
+    "saas-plateform/backend/tools/platform-admin/manifests/artifact.manifest.example.json": "a07863147bba4b52b5031c9404fd04bf795db0f8334a1332bc7ff001400562f9",
+    "saas-plateform/backend/tools/platform-admin/manifests/bootstrap.manifest.json": "018b52195a5b5c4c00435eacec57b526ca256330ac6ba1dfcf5b28b14fb2e2d1",
+    "saas-plateform/backend/tools/platform-admin/manifests/grants.manifest.example.json": "d281fa3a0cc107eb51e33e56fda0c8f2b101c9c6c89a76db15dde89bda6d2e63",
+    "saas-plateform/backend/tools/platform-admin/manifests/stores-bootstrap.manifest.json": "302a66c9da59f34cc10a4cc0355c23320aa2e2ba9eb6709b43f0381c0de5f5a0",
+    "saas-plateform/backend/tools/platform-admin/manifests/stores-grants.manifest.example.json": "1785464a90bb6af5c990509106182fd12469c0dcb4758b2f685162ef77deedcd",
+    "saas-plateform/backend/tools/platform-admin/schemas/access-policy.schema.json": "fc16dc246c246e21842a361d2788bc03f213c266947dc35d94f980b302a3c2d3",
+    "saas-plateform/backend/tools/platform-admin/schemas/artifact.schema.json": "57c06928248f8f4231b77c52e90c442d89b62bfcb4f28a6f4e84d1d8a0f0d605",
+    "saas-plateform/backend/tools/platform-admin/schemas/bootstrap.schema.json": "b1aabf28ef4776d735edaca81b6ee35289ed05a6f9d3ad299d76dc99ed0426fd",
+    "saas-plateform/backend/tools/platform-admin/schemas/grants.schema.json": "271ec0c1bada333fa6fe69a5b2d9f1551f2f8b4c869f7b2da11f4e4902401545",
+    "saas-plateform/backend/tools/platform-admin/schemas/release.schema.json": "c6f66fb9af1f47a33b4b011c8dd1023e954f14a9ffd53e9bc7c3cd5e277b145d",
+    "saas-plateform/backend/tools/platform-admin/schemas/stores-bootstrap.schema.json": "307f45d10069ea72ea01b35730395e926d8c54c088974c59fb311f14964d71b8",
+    "saas-plateform/backend/tools/platform-admin/schemas/stores-grants.schema.json": "2c40a5b3b13772cc358e72e07e759997499061eca57aa0915401360c7fb888ee",
+    "saas-plateform/backend/tools/platform-admin/src/access_policy.rs": "c0a9ec0ff7816da417596bd98b5c126662d71a74d950c921509179a34ed8035e",
+    "saas-plateform/backend/tools/platform-admin/src/artifact.rs": "d1eff086b2e742be531003b482b5e856bff2b6729bb12e8cb84aa711c8a54a3c",
+    "saas-plateform/backend/tools/platform-admin/src/bootstrap.rs": "ea2f0117186742666fe33280d350d00c0fade52c39abeb525ac738236ad2d27c",
+    "saas-plateform/backend/tools/platform-admin/src/contract.rs": "304324c2d0488b4e708f6d0ebc6fdd96614066d5b640b62f8628101efa0a49c7",
+    "saas-plateform/backend/tools/platform-admin/src/error.rs": "1bcd56dbb6d7ec49a1c559c214f89333dfcb1f1ce73b81c8851448bf8c1173bc",
+    "saas-plateform/backend/tools/platform-admin/src/grants/tests.rs": "9142e040963e264af5f523530102b7e4a9e393d3dce021407cd2d497996cd8a8",
+    "saas-plateform/backend/tools/platform-admin/src/grants.rs": "3f71d6ba6b1b193cf7a66ed5addd53e390ce2c3cbe0ff6f3f64dc5fe94467c55",
+    "saas-plateform/backend/tools/platform-admin/src/http.rs": "115588fc9041741d4bb95f04a887e176825ba590e42b02bcded2a86a02449147",
+    "saas-plateform/backend/tools/platform-admin/src/lib.rs": "de1fd05ebb3b4bee2802a9312c93a802997af1f2d32bd6281614fdfc8ace3b52",
+    "saas-plateform/backend/tools/platform-admin/src/main.rs": "c4ae0ce2bf796b7e0a5d7f191789cb0c26c689ca391d63cb31cda27352ab4365",
+    "saas-plateform/backend/tools/platform-admin/src/options.rs": "a8ab26e536195c6928e88acbd330806230ec2c3cab008b5d549956ef2dbe93b3",
+    "saas-plateform/backend/tools/platform-admin/src/release.rs": "20099c3869d22969c2b0c9bc669954b7f16df32bc96e24e9e9e2c19614a04e7d",
+    "saas-plateform/backend/tools/platform-admin/src/retention.rs": "012d43532542f19656fbfa5007232a2f229f94e57f8e22ab4ed774854c8f929e",
+    "saas-plateform/backend/tools/platform-admin/tests/access_policies.rs": "119a5f7dbfbe83c0d473b5b35a9e65a19be13f3c2e0152e1ee489fc6b6d0f05b",
+    "saas-plateform/backend/tools/platform-admin/tests/artifacts.rs": "c5608084c5f4fe10525e064b8d92527fd63b04f687d4b5e1385afe69e9a4fdbb",
+    "saas-plateform/backend/tools/platform-admin/tests/retention.rs": "aaddcdcce2f8bcef173fa9b25cb69c19deb6a3472922ff7bb82e015f1a22827d",
+    "saas-plateform/backend/tools/platform-admin/tests/safety.rs": "1e437d44ea8224a5baebfea45ad72e178bbc57f427e80fd0b0a6afe5945638e8"
+  },
+  "user": "jackie",
+  "clusterId": "7701992637128815755",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "status": "FAIL",
+  "validationLevel": "Current compiled components, real owned PostgreSQL, private CA-validating TLS fixtures, and actual notification subprocess; not the final browser/issuer release matrix.",
+  "buildExitCode": 0,
+  "buildLogSha256": "61156cd5c106e6d2ae290a0f70788186ec8d20ab1bd8f5825e8ea50d1df71c54",
+  "nodeVersion": "24.22.1",
+  "cliSha256": "551be58cd6cbba2092acce745fdf9c1d4f020fb51d0d8483ad6c9569520f1e11",
+  "notificationSha256": "6307a5579c5dcc06510cfd1b8f3f36431505365edf617af1d27943538e6faf6c",
+  "binaries": [
+    {
+      "target": "platform-migrate",
+      "kind": [
+        "bin"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/platform_migrate-92f144a64c59ff26",
+      "sha256": "baad219958990bcb3cfa216e2e00a24e34cd12bdbadafcd39d4d17eecd5c92c5"
+    },
+    {
+      "target": "saas_platform_backend",
+      "kind": [
+        "lib"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/saas_platform_backend-98876e5517aacf82",
+      "sha256": "eb4f5b3009dc57f8ac5e1bfcf8b98136520b7c058b2f1e61dd526525f1c3ce0f"
+    },
+    {
+      "target": "authorization_policy",
+      "kind": [
+        "test"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/authorization_policy-07cc5ffdded50abd",
+      "sha256": "e3cca30a0da0c94c8b72a2365032909df8d2cc57bad9d6966a4096e26d7dbb86"
+    },
+    {
+      "target": "context_selection",
+      "kind": [
+        "test"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/context_selection-4ee856a23b7ba397",
+      "sha256": "809af6b82cb1d9af0d87ff4058a5fa6d7c563fb1c80b321445f2a0b1bceb0583"
+    },
+    {
+      "target": "context_selection_database",
+      "kind": [
+        "test"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/context_selection_database-436228e60b64e28f",
+      "sha256": "74230c82da99d17ddad8b9703b1991faa11aa8e20cdb9b2d35d8859f7a0a72db"
+    },
+    {
+      "target": "migration_command",
+      "kind": [
+        "test"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/migration_command-620acd3df5ea9a1a",
+      "sha256": "e689b9b8ba222f185c45c2be079a6ecc9e24c8259d8bd4f762a7698ed4662c6b"
+    },
+    {
+      "target": "retention",
+      "kind": [
+        "test"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/retention-4dcba83c720a45fe",
+      "sha256": "9cf8ceb3f7494968c410d7cdf8cfbd5b2400b54ec186d01fd34590a517ec22a3"
+    },
+    {
+      "target": "saas-platform-backend",
+      "kind": [
+        "bin"
+      ],
+      "path": "/tmp/rust-saas-unified-auth-20261028/target-linux/debug/deps/saas_platform_backend-19e0190612c1169f",
+      "sha256": "94c3e6b80730c2e7bfff605c87f85760227cc5d5580c8090a649c3b887b6d143"
+    }
+  ],
+  "runs": [
+    {
+      "target": "platform-migrate",
+      "kind": [
+        "bin"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.003,
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": "0",
+          "failed": "0",
+          "ignored": "0",
+          "measured": "0",
+          "filtered": "0"
+        }
+      ],
+      "failedCases": [],
+      "rawLogSha256": "df166913f47ff1f04202cae9b31df67ed272d692d99a0023a8117dc3029100dd",
+      "binaryUnchanged": true,
+      "timeout": false
+    },
+    {
+      "target": "saas_platform_backend",
+      "kind": [
+        "lib"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.011,
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": "8",
+          "failed": "0",
+          "ignored": "0",
+          "measured": "0",
+          "filtered": "0"
+        }
+      ],
+      "failedCases": [],
+      "rawLogSha256": "194615b68ae4b282ebe878bd49176acadab5f4d43da4ff20bf677f855538cfe2",
+      "binaryUnchanged": true,
+      "timeout": false
+    },
+    {
+      "target": "authorization_policy",
+      "kind": [
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.015,
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": "4",
+          "failed": "0",
+          "ignored": "0",
+          "measured": "0",
+          "filtered": "0"
+        }
+      ],
+      "failedCases": [],
+      "rawLogSha256": "61b2ea8f4c4e8758bcd144078709ec947e826f10974cc887ef7236f56360c0c7",
+      "binaryUnchanged": true,
+      "timeout": false
+    },
+    {
+      "target": "context_selection",
+      "kind": [
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.017,
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": "9",
+          "failed": "0",
+          "ignored": "0",
+          "measured": "0",
+          "filtered": "0"
+        }
+      ],
+      "failedCases": [],
+      "rawLogSha256": "04118ebaf17632fea22579dfc7dd9c87d6b5340eca146cec15f41068e30c4aa9",
+      "binaryUnchanged": true,
+      "timeout": false
+    },
+    {
+      "target": "context_selection_database",
+      "kind": [
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.69,
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": "1",
+          "failed": "0",
+          "ignored": "0",
+          "measured": "0",
+          "filtered": "0"
+        }
+      ],
+      "failedCases": [],
+      "rawLogSha256": "80c4f0a7d254a7db45e8eff86deaadb750db6a4ee65952e6c0f025a096fafb10",
+      "binaryUnchanged": true,
+      "timeout": false
+    },
+    {
+      "target": "migration_command",
+      "kind": [
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.326,
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": "7",
+          "failed": "0",
+          "ignored": "0",
+          "measured": "0",
+          "filtered": "0"
+        }
+      ],
+      "failedCases": [],
+      "rawLogSha256": "530b26e88b5eb43ffe1e9036faff45093f66816e5fe6cf320989e1961c0069e7",
+      "binaryUnchanged": true,
+      "timeout": false
+    },
+    {
+      "target": "retention",
+      "kind": [
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.013,
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": "2",
+          "failed": "0",
+          "ignored": "0",
+          "measured": "0",
+          "filtered": "0"
+        }
+      ],
+      "failedCases": [],
+      "rawLogSha256": "6ad91765b7ad8be0de7410651864d456ee8f7faabd68af7c22449e2f3f6f9a52",
+      "binaryUnchanged": true,
+      "timeout": false
+    },
+    {
+      "target": "saas-platform-backend",
+      "kind": [
+        "bin"
+      ],
+      "exitCode": 101,
+      "durationSeconds": 784.501,
+      "summaries": [],
+      "failedCases": [
+        "authentication_boundary_tests::canonical_account_administration_failure_keeps_original_transactions",
+        "authentication_boundary_tests::canonical_account_reset_preserves_members_and_revokes_exact_subject",
+        "authentication_boundary_tests::canonical_account_status_does_not_restore_old_member_sessions",
+        "bff_tests::canonical::canonical_late_logout_cannot_erase_new_account_cookie",
+        "management_audit_tests::user_security_password_and_platform_settings_mutations_are_audited_atomically",
+        "release_tests::database_upgrade::uuid_v7_target_enforces_versions_variants_and_application_generated_ids",
+        "routes::departments::organization_tests::department_organization_choices"
+      ],
+      "rawLogSha256": "2262e9db23c66f0391abc853757b8cfae81d8431ff6d4f5fbec224e1677cb209",
+      "binaryUnchanged": true,
+      "timeout": false
+    }
+  ],
+  "caseResults": [
+    {
+      "case": "database::imported::tests::an_exact_receipt_and_unprivileged_service_identity_are_all_required",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "database::imported::tests::imported_contract_requires_canonical_batch_and_exact_target_url",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "database::imported::tests::schema_material_is_the_import_contract_without_business_scans",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "database::migrate_only::tests::decoded_startup_fields_cannot_redirect_the_database_or_inject_parameters",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "database::migrate_only::tests::import_preparation_cannot_select_seed_or_fall_through_to_server",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "database::migrate_only::tests::migration_connection_requires_one_explicit_target_and_keeps_diagnostics_private",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "database::tests::only_fresh_sso_uuid7_baseline_is_embedded",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "database::tests::quotes_database_identifier",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas_platform_backend"
+    },
+    {
+      "case": "client_and_token_bindings_are_both_required",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "authorization_policy"
+    },
+    {
+      "case": "fresh_revision_rebuilds_stale_snapshot_and_bounds_churn",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "authorization_policy"
+    },
+    {
+      "case": "member_grants_never_expand_a_separate_ceiling_or_self_owner",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "authorization_policy"
+    },
+    {
+      "case": "paging_has_stable_defaults_and_capped_checked_offsets",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "authorization_policy"
+    },
+    {
+      "case": "code_extension_is_versioned_and_only_carries_a_canonical_opaque_credential",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "confirmation_rejects_another_account_and_customer_for_employee_rp",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "every_original_binding_is_required_at_consumption",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "original_deadlines_cap_credential_lifetime_and_are_not_repaired",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "recovery_does_not_extend_deadline_or_accept_another_operation",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "rejects_noncanonical_identity_and_numeric_or_repaired_versions",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "replay_and_deadline_boundary_cannot_issue_another_context",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "validates_issuer_callback_generations_and_original_auth_time",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "wire_rejects_unknown_and_mixed_intent_fields",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "context_selection"
+    },
+    {
+      "case": "real_postgres_selection_is_single_use_and_transactional",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "context_selection_database"
+    },
+    {
+      "case": "decoded_nul_cannot_bypass_the_explicit_database_boundary",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "migration_command"
+    },
+    {
+      "case": "imported_non_unicode_handoff_fails_without_panicking_or_using_defaults",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "migration_command"
+    },
+    {
+      "case": "imported_startup_requires_the_complete_explicit_handoff_before_connecting",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "migration_command"
+    },
+    {
+      "case": "migration_never_loads_dotenv_or_app_env_file",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "migration_command"
+    },
+    {
+      "case": "migration_rejects_ambient_libpq_settings_without_revealing_values",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "migration_command"
+    },
+    {
+      "case": "migration_seed_import_conflict_and_bad_arguments_fail_before_configuration",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "migration_command"
+    },
+    {
+      "case": "normal_server_rejects_import_before_runtime_configuration_or_database_access",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "migration_command"
+    },
+    {
+      "case": "active_previous_pending_shared_and_external_never_become_review_candidates",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "retention"
+    },
+    {
+      "case": "age_and_latest_are_a_union_and_parameters_cannot_shorten_candidates",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "retention"
+    },
+    {
+      "case": "app_organizations::tests::invalid_directory_boundaries_fail_closed",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "app_organizations::tests::self_known_metadata_stays_in_the_grant_and_hard_ceiling_without_owner_claims",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "app_organizations::tests::self_never_widens_to_descendants_and_missing_ceiling_is_current_only",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "app_organizations_tests::store_directory_is_purpose_bound_tenant_bounded_and_fresh_after_revocation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "app_token::tests::invalid_claim_ids_are_inactive_before_any_database_lookup",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "app_token::tests::stored_binding_requires_original_sid_version_scope_and_deadline",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "application_entries::tests::proxy_entry_keeps_query_and_changes_identity_on_reconfiguration",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "artifact_distribution::gates::tests::normalized_aliases_keep_historical_ownership",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::policy::tests::manifests_reject_unreviewed_scopes_and_callback_ownership_changes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_assignment_is_explicit_and_original_source_revocation_fences_writes",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_configured_production_requires_distinct_bound_publishers",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_manifest_rejections_leave_no_request_or_receipt",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_missing_and_stale_mfa_facts_block_writes_but_allow_bootstrap",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_permission_revocation_blocks_new_writes_and_replays",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_production_default_and_missing_binding_remain_closed",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_submit_review_self_denial_and_durable_operations",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "auth_review::tests::phase19_canonical_sync_receipt_preserves_pending_and_original_snapshot",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication::commands::tests::intent_rejects_nested_secret_fields_and_accepts_safe_change_metadata",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication::remote::tests::digest_is_keyed_canonical_and_covers_nested_password_and_operation",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication::remote::tests::receipt_requires_exact_operation_target_digest_and_canonical_versions",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication_boundary_tests::canonical_account_administration_failure_keeps_original_transactions",
+      "result": "FAILED",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication_boundary_tests::canonical_account_reset_preserves_members_and_revokes_exact_subject",
+      "result": "FAILED",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication_boundary_tests::canonical_account_status_does_not_restore_old_member_sessions",
+      "result": "FAILED",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication_boundary_tests::canonical_platform_routes_do_not_consume_local_password_authentication",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authentication_boundary_tests::phase07_real_account_use_case_accepts_a_non_postgres_transaction_capability",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authorization_isolation_tests::authorization_isolation_platform_root_and_child_require_direct_org_grants",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "authorization_isolation_tests::authorization_isolation_respects_selected_tenant_and_revocation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff::protocol::tests::private_account_proof_keeps_opaque_subject_separate_from_internal_account",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff::protocol::tests::private_account_proof_rejects_wrong_audience_purpose_versions_and_deadlines",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff::transport::tests::account_proof_and_context_interaction_use_only_the_private_identity_origin",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_backchannel_before_callback_persists_fence_without_revoking_new_source",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_backchannel_original_deadline_rolls_back_after_source_lock_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_cookie_reload_recovers_only_original_unknown_logout",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_cross_instance_refresh_single_winner_and_lost_reply_never_replays",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_late_logout_cannot_erase_new_account_cookie",
+      "result": "FAILED",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_post_network_account_lock_rechecks_original_source",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_refreshed_id_token_cannot_graft_a_new_public_sid",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_short_id_and_online_access_deadlines_cannot_commit_after_lock_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::canonical::canonical_step_up_requires_primary_and_keeps_new_browser_bound_flow",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::logout_rejects_signed_duplicate_claims_and_untrusted_header_extensions",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bff_tests::logout_signature_domain_and_original_short_claims_are_strict",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "bootstrap::cors_requires_the_configured_host_origin_for_every_api",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "client_ip::tests::direct_socket_identity_ignores_all_self_reported_headers",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "client_ip::tests::handlers_and_audits_receive_only_canonical_identity",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "client_ip::tests::malformed_ambiguous_or_oversized_chain_falls_back_to_socket",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "client_ip::tests::multi_hop_chain_stops_before_client_injected_prefix",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "client_ip::tests::non_text_forwarding_headers_cannot_choose_an_identity",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "client_ip::tests::trusted_proxy_uses_controlled_chain_before_real_ip",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::application_production_cannot_be_bypassed_and_password_pair_validates",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::authorization_and_database_budgets_are_bounded",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::context_selection_source_credentials_require_a_separate_remote_pair",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::customer_profile_registration_requires_a_canonical_rfc_v7_pair",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::data_grant_policy_defaults_to_empty_and_explicit_json_is_strict",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::data_grant_policy_loads_typed_explicit_capabilities_and_boundaries_once",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::fresh_identity_writes_need_no_historical_rollout_receipt",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::identity_writes_are_explicit_and_customer_requires_lifecycle",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::imported_startup_is_explicit_and_rejects_seed_or_connection_conflicts",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::login_and_password_budgets_are_bounded_and_allow_zero_waiters",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::phase11_customer_portal_requires_explicit_source_and_profile_registration",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::phase12_remote_identity_is_explicit_and_fails_closed_without_its_ca",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::phase12_service_registrations_require_canonical_v7_ids",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::phase12_service_secrets_reject_ambiguous_or_unissued_values",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::production_defaults_are_explicit_and_safe",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::production_rejects_bad_config_without_echoing_values",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "config::tests::sso_configuration_is_required_and_retired_switches_are_rejected",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "context_selection_http::tests::real_platform_selection_http_is_member_and_application_scoped",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal::remote_authority::tests::phase12_customer_authority_accepts_only_exact_access_customer_rp_proofs",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal::remote_authority::tests::phase12_customer_authority_checks_inputs_before_http_and_never_caches_proofs",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal::remote_authority::tests::phase12_customer_authority_configuration_rejects_url_redirection_and_noncanonical_material",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal::remote_authority::tests::phase12_customer_authority_distinguishes_invalid_source_from_dependency_failure",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal::remote_authority::tests::phase12_customer_authority_saturation_and_authority_errors_fail_closed_without_retries",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal::remote_authority::tests::tls::phase12_customer_authority_real_tls_validates_ca_hostname_redirects_and_response_limits",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal::tests::phase11_portal_request_contract_rejects_credential_substitution_and_ambiguous_selection",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::phase11_customer_portal_expiry_and_grant_revocation_never_repair_old_source",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::phase11_customer_portal_fails_closed_on_authority_database_and_post_read_revocation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::phase11_customer_portal_final_projection_rejects_source_revoked_after_online_proof",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::phase11_customer_portal_member_revocation_is_exact_and_global_source_revocation_is_shared",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::phase11_customer_portal_rechecks_client_app_scope_and_source_policy",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::phase11_customer_portal_rejects_wrong_member_org_generation_source_and_token_kind",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::phase11_customer_portal_selects_exact_customer_and_returns_only_self_profile",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::selection::centralized_customer_consumption_recovery_and_switch_are_exact",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "customer_portal_tests::selection::lock_regression::customer_consume_and_recovery_allow_independent_identity_account_share_fence",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_discovery_tests::options_require_independent_read_and_never_leak_outside_or_inactive_targets",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_discovery_tests::options_strict_queries_literal_search_and_authorized_sql_pagination_are_truthful",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_discovery_tests::options_write_hints_and_live_revocations_preserve_independent_permissions_and_seed_menu",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_tests::competing_versions_serialize_and_lock_wait_rechecks_current_authority",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_tests::grant_audit_raise_and_silent_skip_roll_back_complete_differential",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_tests::independent_permissions_platform_root_and_read_scope_are_enforced",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_tests::malformed_differentials_and_stale_sessions_are_rejected_without_effects",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_tests::next_business_context_and_member_request_see_http_grant_changes",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_tests::preview_differential_uuid_preservation_noop_and_conflict_are_observable",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grant_tests::target_membership_application_capability_and_policy_boundaries_are_checked",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::discovery::tests::search_bounds_preserve_literal_unicode_and_use_a_safe_maximum_offset",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::application_capability_and_boundary_limits_accept_maximum_and_reject_one_more",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::canonical_serialization_ignores_set_order_without_expanding_authority",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::duplicate_identities_pairs_scopes_and_boundaries_are_rejected",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::identifiers_and_scope_labels_are_exact_and_bounded",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::member_lookup_declarations_are_strict_unique_and_bound_to_capabilities",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::member_lookup_defaults_preserve_existing_policy_and_capability_wire",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::member_lookup_limits_and_canonical_order_do_not_invent_scope_hierarchy",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::organization_lookups_are_independent_strict_and_bound_to_registered_store_purposes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::policy::tests::strict_schema_rejects_unknown_missing_and_ill_typed_fields_without_echoing_input",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::tests::effective_scope_uses_the_target_boundary_even_for_a_platform_actor",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "data_grants::tests::response_budget_counts_json_encoding_and_accepts_the_exact_limit",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "directory_authorization::tests::private_directory_token_bounds_reject_ambiguous_input",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_bidirectional_roles_and_data_grants",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_bulk_preserves_other_identities_and_role_support",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_bulk_self_departure_preserves_customer_and_rechecks_after_credential_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_customer_actor_and_directory_targets",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_fresh_identity_precedes_cached_administrator_flag",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_permanent_delete_and_replace_keep_supported_roles",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_publisher_rechecked_after_late_foreign_key_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_role_parent_locked_before_replacing_children",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "employee_isolation_tests::employee_isolation_phase03_scope_rechecked_after_real_account_lock_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::contacts_initialize_administrators_with_sso_permissions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::creation_without_administrator_preserves_grants_and_supports_later_assignment",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::entity_types_persist_update_and_reject_invalid_values_without_provisioning_users",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::explicit_administrator_initialization_is_idempotent_and_preserves_accounts",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::fresh_development_bootstrap_requires_explicit_admin_and_never_installs_demo_data",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::initial_schema_entity_types_default_and_enforce_database_constraints",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::menu_hierarchy_moves_preserve_application_and_acyclicity",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::platform_control_plane_cannot_be_deleted_disabled_or_expired",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::region_mutations_serialize_with_catalog_deletion",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "entity_creation_tests::shared_contact_identifiers_preserve_accounts_and_sso_tenant_isolation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "error::tests::unavailable_authority_is_not_reported_as_an_authentication_failure",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_binding_tests::identity_binding_canonical_account_and_source_versions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_binding_tests::identity_binding_canonical_application_capability_isolation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_binding_tests::identity_binding_canonical_authority_outage_does_not_execute_business",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_binding_tests::identity_binding_canonical_exact_member_revocation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase02_auth_model_constraints_and_runtime_boundary",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase11_machine_grants_require_a_persisted_client_credential_version",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase12_auth_generation_bridge_revokes_only_credentials_and_records_actual_counts",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase12_auth_owned_bool_projections_preserve_rp_type_and_lock_without_raw_auth_grants",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase12_narrow_projections_and_command_fences_hold_exact_original_bindings",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase12_real_roles_enforce_mixed_user_columns_and_no_ddl_owner_escape",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase13::phase13_canonical_employee_source_rejects_all_original_authority_changes",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase13::phase13_real_identity_source_service_lock_fences_revocation_without_runtime_update",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase13::phase13_real_platform_role_authenticates_context_http_without_reading_identity_credentials",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase13::phase13_source_http_uses_registered_registry_without_legacy_fallback",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase14::phase14_customer_source_retains_exact_token_grant_session_and_deadline",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase15::phase15_consumed_context_sources_survive_expiry_and_cannot_be_repaired",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase15::phase15_real_roles_keep_internal_capabilities_source_bound_and_nonreviving",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase15::phase15_resource_service_and_machine_scope_generations_are_monotonic",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase15_http::phase15_resource_http_enforces_private_service_user_and_machine_boundaries",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase15_http::phase18_notification_http_retains_original_source_and_recipient_authority",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase20::phase20_owner_fact_fence_samples_expiry_after_a_confirmed_row_lock_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase20::phase20_real_roles_accept_only_owner_verified_new_account_activation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_deployment_tests::phase20::phase20_real_roles_preserve_original_rp_sources_and_atomic_delivery_facts",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_policy::tests::admission_set_has_one_canonical_order_without_duplicates",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_policy::tests::empty_member_set_never_means_unrestricted_user_admission",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_policy::tests::unknown_wire_values_are_rejected",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_ui_tests::phase05_capabilities_reflect_server_gates_and_customer_console_access_stays_closed",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_ui_tests::sso_profile_returns_only_employee_choices_and_preserves_all_memberships",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "identity_ui_tests::user_directory_member_type_filter_binds_type_and_organization_to_the_same_relationship",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::clock_forward_and_rollback_do_not_reset_live_budget_or_panic",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::concurrent_source_admission_consumes_exactly_one_shared_budget",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::extreme_forward_clock_never_overflows_or_expires_new_windows_immediately",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::inactive_entries_expire_and_reclaim_both_indexes_in_bounded_batches",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::random_username_and_source_flood_stays_inside_shared_hard_capacity",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::saturation_denies_new_identity_without_resetting_existing_budget",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::successful_proof_clears_account_but_keeps_source_admission_budget",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "login_limits::tests::zero_budgets_and_oversized_identities_fail_closed_without_allocating_entries",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "managed_deployments::tests::gateway_path_aliases_share_the_managed_identity",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "managed_deployments::tests::version_directory_and_files_share_the_managed_resource_identity",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "managed_deployments::worker::tests::exhausted_or_invalid_jobs_are_terminal_rejections_without_mutating_the_lease",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "managed_deployments::worker::tests::last_allowed_claim_has_a_fenced_nonce_and_preserves_work_identity",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::application_and_menu_cascades_keep_snapshots_and_atomic_audit",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::membership_and_user_role_replacements_rollback_sessions_and_grants_together",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::notification_publication_audit_failure_rolls_back_delivery_and_retry_is_idempotent",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::region_catalog_mutations_rollback_when_audit_is_rejected",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::release_preflight_registration_and_pointer_audits_keep_existing_transaction_boundaries",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::roles_and_grant_collections_rollback_when_audit_is_rejected",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::tenant_organization_authorizations_initialization_and_cascades_are_atomic",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "management_audit_tests::user_security_password_and_platform_settings_mutations_are_audited_atomically",
+      "result": "FAILED",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "membership_lifecycle_tests::membership_lifecycle_phase01_authority_rechecked_after_lock_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "membership_lifecycle_tests::membership_lifecycle_phase01_contract_matrix",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "membership_lifecycle_tests::membership_lifecycle_phase01_fresh_install_seed_v7",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::actual_http_static_transport_has_no_credentials_and_preserves_mime_head_and_404",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::directory_mapping_keeps_entry_and_asset_queries_and_rejects_escapes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::execution_queries_are_removed_without_reencoding_business_queries",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::outer_platform_cors_keeps_anonymous_opaque_static_access_and_missing_proxy_stays_404",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::redirects_are_revalidated_and_cannot_escape_the_registered_directory_or_origin",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::resource_body_limit_accepts_exact_size_and_rejects_declared_and_chunked_overflow",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::source_rate_and_concurrency_are_bounded",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::tests::strips_execution_metadata_without_reencoding_upstream_query",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "micro_proxy::uuid_tests::invalid_or_noncanonical_revision_is_rejected_before_database_lookup",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_account_revocation_and_authority_failure_fail_closed",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_actual_platform_and_external_socketio_keep_receipt_identity",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_employee_audiences_deduplicate_and_emit_bound_hints",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_inbox_mutations_and_legacy_archive_never_cross_identity",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_local_departure_and_replacement_preserve_other_receipts",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_mutation_waits_recheck_member_and_account_before_commit",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_preferences_are_exact_member_generation_and_keep_wire_shape",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_identity_tests::notification_identity_phase04_public_payload_and_internal_context_proofs_are_separate",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::app_members_authorization_and_next_request_revocation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::app_members_registered_pair_is_not_a_ticket_special_case",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::app_members_require_explicit_same_application_assignment_declarations",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::app_members_scopes_minimal_dto_and_recipient_validity",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_application_authorization_and_four_scopes",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_idempotency_namespaces_concurrency_and_transaction_failures",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_input_limits_and_context_constraints_fail_before_partial_publish",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_seed_does_not_create_new_unowned_messages",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_socket_context_validates_live_session_and_delivery_visibility",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_system_call_sites_preserve_context_and_domain_transactions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_tenant_grants_obey_selected_organization_subtree",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notification_tests::notification_unowned_rows_and_context_inbox_boundaries",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notifications::tests::immutable_recipient_proofs_fail_closed_when_missing_corrupt_or_incomplete",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notifications::tests::notification_text_rejects_nul_but_preserves_multiline_content",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "notifications::tests::publication_request_cannot_supply_immutable_recipient_authority",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase05_browser_operation_intent_is_idempotent_and_absence_cannot_race_late_accept",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase05_operation_lookup_rejects_another_active_session_before_remote_configuration",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase07_canonical_group_command_intents_survive_unknown_reply_without_new_operation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase12_remote_admin_pg_ack_commits_and_suppressed_audit_is_an_error",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase12_remote_admin_pg_suppressed_intent_or_accept_audit_rolls_back_without_dispatch",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase19_disable_role_uses_actual_private_owner_and_rejects_hidden_scope_changes",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase19_remote_admin_requires_fine_permission_current_totp_and_production_factor",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::pg_tests::phase19_review_only_role_can_read_sync_metadata_without_general_view_and_requires_recent_totp",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase03_projection_payload_is_strict_versioned_and_contains_no_business_authority",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase04_auth_admin_transport_uses_only_basic_and_bound_operation_headers",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase04_auth_client_proxy_rejects_extra_authority_fields",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase04_auth_client_responses_are_bounded_and_keep_one_time_secret_out_of_lists",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase04_auth_client_targets_use_their_own_receipt_and_service_route",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase05_browser_operation_handle_is_preserved_and_rejects_ambiguous_headers",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase07_consent_group_admin_port_is_fixed_typed_and_recoverable",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_budget_exhaustion_never_dispatches_and_query_rejected_before_auth",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_digest_uses_raw_body_full_path_and_canonical_keys",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_fixed_targets_reject_url_and_dot_segment_normalization",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_only_expired_intent_and_locked_receipt_absence_is_not_applied",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_outgoing_request_contains_only_its_service_credential",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_requires_accept_commit_and_ack_commit_before_success",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_response_contract_rejects_private_fields_and_maps_errors_safely",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase12_remote_admin_unknown_network_or_ack_result_preserves_original_operation",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase19_disable_only_authority_cannot_hide_metadata_callback_or_scope_changes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase19_internal_sync_metadata_read_uses_only_its_fixed_sensitive_write_permission",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase19_review_and_invitation_targets_keep_receipt_contracts_and_metadata_separate",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "oidc::remote_admin::tests::phase19_review_success_requires_reconciliation_and_failure_preserves_original_operation",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "organization_subtree_reporting_tests::organization_subtree_reporting_in_ordinary_tenant",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "organization_subtree_reporting_tests::organization_subtree_reporting_in_platform_tenant",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "organization_subtree_user_role_tests::organization_subtree_user_role_platform_child",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "organization_subtree_user_role_tests::organization_subtree_user_role_regular_tenant",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_admin_cli_tests::real_cli_platform_round_trip",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_session_refresh_tests::password_grants_and_public_platform_refresh_are_rejected_without_database_access",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings::tests::logo_accepts_safe_paths_and_http_urls",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings::tests::logo_rejects_active_schemes_authorities_and_encoded_path_escapes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings::tests::text_limits_count_characters_and_reject_blank_required_or_controls",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings::tests::theme_color_normalizes_safe_hex_and_rejects_css_input",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings::tests::update_applies_all_field_bounds_before_persistence",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings::tests::update_rejects_tenant_code_override_and_incomplete_payloads",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings_tests::branding_persists_and_renamed_tenant_refreshes_existing_profiles",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings_tests::initial_schema_creates_generic_branding_and_preserves_settings_on_restart",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings_tests::settings_require_platform_permission_and_reject_partial_invalid_updates",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "platform_settings_tests::theme_color_is_public_normalized_persisted_and_legacy_updates_preserve_it",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "production_security_tests::existing_demonstration_database_is_refused_without_rewriting_accounts_or_grants",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "production_security_tests::production_bootstrap_is_minimal_explicit_and_idempotent",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "production_security_tests::production_password_writes_reject_unsafe_values_without_mutation_and_revoke_sessions_on_success",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "production_security_tests::production_stock_user_credentials_are_rejected_without_mutation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "protocol_retirement_tests::retired_protocol_and_registry_routes_stay_absent_for_every_deployment_mode",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_bounded_readers_return_only_fixed_credential_free_errors",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_independent_consumer_roundtrips_actual_context_and_props",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_invalid_or_over_limit_organization_scopes_fail_closed",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_missing_null_and_bounded_organization_scopes_stay_distinct",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_notification_publish_targets_limits_and_unknown_fields_are_checked",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_notification_wire_keeps_public_ack_and_publication_ownership_coherent",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_only_accepts_qiankun_metadata_and_current_sdk",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_props_require_safe_epoch_ceiling_and_unchanged_application_boundary",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_rejects_old_uuid_epochs_in_nested_identity_fields",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_sources_and_pinned_rust_are_exact",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "public_contract_tests::public_contract_unknown_versions_fail_without_disclosing_payloads",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::ambiguous_committee_aliases_are_rejected",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::autonomous_names_and_directly_administered_counties_resolve",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::cities_without_counties_use_their_direct_townships",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::county_addresses_infer_only_their_unique_catalog_parent",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::district_names_only_match_under_the_resolved_parent",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::exact_names_take_precedence_and_ambiguous_short_names_are_rejected",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::municipalities_resolve_the_catalog_group_and_district",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::partial_and_conflicting_group_addresses_do_not_guess",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "region_selection::tests::streets_and_communities_resolve_only_beneath_selected_parents",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archive_maintenance::tests::deletion_requires_an_explicit_root_and_apply_flag",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archive_maintenance::tests::malformed_maintenance_never_falls_through_to_server_start",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archive_maintenance::tests::normal_startup_and_explicit_dry_run_are_distinct",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::canonical_digest_and_resources_ignore_archive_order_format_and_wrapper",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::concurrent_same_digest_install_is_idempotent_and_different_digests_never_mix",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::cross_filesystem_move_fails_closed_without_copying",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::failure_after_atomic_install_keeps_complete_final_for_reconciliation",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::identities_are_validated_without_creating_external_paths",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::legacy_adoption_requires_exact_actual_bytes_and_never_trusts_release_json",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::maintenance_requires_no_active_writer_and_retains_unknown_stages_and_final",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::partial_write_error_never_exposes_a_version_and_cleans_only_the_owned_stage",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::primitive_no_replace_preserves_existing_complete_empty_and_file_targets",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::process_interruption_leaves_only_owned_private_stage",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::rejects_reserved_metadata_case_aliases_and_windows_path_aliases",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::symlinks_are_neither_overwritten_followed_nor_cleaned_as_owned_staging",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::installation::tests::tar_extension_metadata_is_bounded_before_internal_longname_or_pax_allocation",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::tests::rejects_traversal_and_missing_entry",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::tests::rejects_unsafe_archive_paths",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_archives::tests::zip_and_tar_gz_prepare_the_same_version_and_reject_different_bytes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::database_upgrade::canonical_initialization_has_no_bundled_microapps_and_restarts_cleanly",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::database_upgrade::changed_or_historical_migration_history_is_rejected_without_repair",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::database_upgrade::uuid_v7_target_enforces_versions_variants_and_application_generated_ids",
+      "result": "FAILED",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::managed_gate::failed_deployment_retry_cannot_reopen_a_cleanup_fence",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::managed_gate::managed_version_files_cannot_bypass_historical_readiness_or_cleanup",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::phase31::current_baseline_reexecution_preserves_rows_and_rejects_checksum_drift",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::phase31::phase31_preview_preserves_database_zip_and_online_urls",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::qiankun_only::qiankun_only_apis_require_explicit_reconfiguration_and_archive_esm_releases",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::qiankun_only::qiankun_only_unifies_builtin_metadata_and_ignores_archived_builtin_release",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_activation_and_rollback_preserve_identity_and_authorization",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_archive_upload_registers_files_and_preserves_version_bytes",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_database_enforces_context_and_immutable_definition",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_fixture_real_ipv6_http",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_html_runtime_checks_native_modules_and_frame_headers",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_preflight_checks_entry_resources_health_and_redirects",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_qiankun_defaults_and_reconfiguration_preserve_authorization",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_registration_and_platform_scope",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::release_trusted_cross_origin_preflight_requires_gateway_cors",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::url_entries::url_entries_qiankun_trusted_html_upload_keeps_immutable_versions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::url_entries::url_entries_recheck_revoked_management_permission_after_lock_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::url_entries::url_entries_release_activation_and_rollback_clear_override_atomically",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::url_entries::url_entries_resolve_environment_and_revision_consistently",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::url_entries::url_entries_roll_back_when_audit_insert_is_rejected",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::zip_registration::zip_concurrent_same_version_has_one_registration_and_conflicting_digest_cannot_win",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::zip_registration::zip_database_rejection_retains_orphan_and_other_environment_references",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::zip_registration::zip_legacy_adoption_requires_matching_immutable_release_definition",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::zip_registration::zip_retry_after_lost_response_and_cross_format_promotion_reuses_artifact",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::zip_registration::zip_storage_and_activation_recheck_real_files_even_when_http_keeps_returning_valid_content",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "release_tests::zip_registration::zip_unknown_commit_and_post_commit_lookup_failure_preserve_registered_artifact",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "releases::tests::html_parser_discovers_real_references_and_rejects_base_changes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "releases::tests::versions_are_directory_segments_and_origins_are_exact",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "resource_authority::tests::canonical_user_proof_rejects_wrong_authority_scope_resource_mode_and_generations",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "resource_authority::tests::machine_wire_contract_contains_no_person_even_null_fields",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::admission_policy::tests::policies_canonicalize_identity_sets_without_empty_wildcards",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::admission_policy::tests::policy_edits_require_a_current_positive_version",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::admission_policy::tests::reasons_and_policy_wire_values_are_validated",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::admission_policy_tests::admission_policy_api_contracts_and_versions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::admission_policy_tests::admission_policy_audit_atomicity_and_concurrent_conflicts",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::app_members::tests::assignment_scopes_intersect_a_separate_ceiling_and_self_stays_current",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::app_members::tests::member_search_rejects_nul_and_preserves_literal_pattern_characters",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::application_setup::tests::application_setup_audit_failure_rolls_back_every_authorization_layer",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::application_setup::tests::application_setup_locks_actor_before_target_role",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::application_setup::tests::application_setup_organization_options_are_minimal_and_filter_inactive_subtrees",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::application_setup::tests::application_setup_preserves_grants_and_reports_real_environment_and_access",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::application_setup::tests::application_setup_rechecks_permission_and_session_after_user_lock_wait",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::application_setup::tests::application_setup_rejects_cross_scope_disabled_targets_and_missing_permissions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::applications::tests::all_application_configs_only_accept_html_trusted",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::applications::tests::executable_entry_rejects_browser_normalization_and_credentials",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::audit::tests::csv_exports_neutralize_formulas_in_user_controlled_labels",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::audit::tests::csv_exports_preserve_plain_text_and_escape_delimiters",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::auth::tests::login_history_bounds_extreme_pages_without_overflow",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::auth::tests::login_history_preserves_defaults_and_its_fifty_row_cap",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::departments::organization_tests::department_organization_choices",
+      "result": "FAILED",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::maps::tests::tile_path_and_client_ip_are_bounded",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::maps::tests::upstream_body_accepts_the_limit_and_rejects_known_oversize",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::maps::tests::upstream_byte_budget_stops_before_retaining_an_oversized_chunk",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::menus::tests::menu_parent_update_distinguishes_omission_null_and_empty",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::onboarding::recovery_contract_tests::changed_contact_cannot_consume_an_original_initialization_intent",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::onboarding::recovery_contract_tests::recovery_rejects_noncanonical_or_non_v7_entity_ids",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::onboarding::recovery_contract_tests::stored_receipt_must_match_the_exact_operation_target_and_digest",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::organizations::location_contract_tests::durable_organization_create_retains_parent_scope_and_contact",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::organizations::location_contract_tests::organization_creation_accepts_legacy_and_five_level_locations",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::organizations::location_contract_tests::organization_local_region_updates_distinguish_omission_from_clear",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::organizations::location_contract_tests::organization_types_follow_the_contract",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::resource_directories::tests::private_directory_disallows_query_credentials",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::search::tests::search_treats_sql_wildcards_and_escape_characters_as_literal_text",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::tenants::coordinate_tests::coordinates_require_a_valid_pair",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::tenants::coordinate_tests::durable_tenant_create_retains_full_business_input_without_credentials",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::tenants::coordinate_tests::platform_tenant_code_is_reserved_and_fixed",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::tenants::coordinate_tests::tenant_creation_accepts_legacy_and_five_level_locations",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::tenants::coordinate_tests::tenant_local_region_updates_distinguish_omission_from_clear",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::tenants::coordinate_tests::tenant_types_and_root_types_follow_the_contract",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::users::remote::tests::account_command_acknowledgements_reject_trigger_suppressed_writes",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::users::remote::tests::delayed_account_followup_does_not_revoke_new_generation_and_is_idempotent",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::users::remote::tests::delayed_retirement_only_removes_accepted_membership_ids_and_versions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "routes::users::tests::legacy_membership_request_cannot_smuggle_identity_or_status_changes",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "scope_tests::application_token_audience_and_revocation",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "scope_tests::platform_session_lifecycle",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "scope_tests::tenant_management_scope_matrix",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "session::uuid_tests::active_user_rejects_legacy_identity_before_database_lookup",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "sso_only_tests::console_configuration_is_always_sso_and_password_routes_are_absent",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "sso_only_tests::migration_retires_password_clients_and_unbound_console_sessions",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "sso_session_tests::canonical_account_generation_invalidates_all_own_contexts_but_preserves_other_accounts",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "sso_session_tests::canonical_member_departure_preserves_sibling_context_customer_identity_and_global_sources",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "sso_session_tests::canonical_personal_session_listing_and_revocation_are_exactly_owner_scoped",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "sso_session_tests::canonical_unavailable_source_is_503_without_changing_local_session_or_cookie",
+      "result": "ok",
+      "originallyIgnored": true,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "sso_session_tests::platform_has_no_password_sso_or_second_oauth_authority_even_without_a_database",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "static_files::tests::host_navigation_uses_spa_and_missing_assets_remain_404",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::jwt::tests::internal_authorities_reject_cross_use_issuer_audience_and_unbound_claims",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::jwt::tests::strict_expiration_and_signature",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::admission_bounds_running_and_waiting_jobs_before_copying_inputs",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::asynchronous_argon2_preserves_legacy_hash_and_default_cost",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::cancelling_a_running_request_keeps_both_permits_until_work_exits",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::execution_timeout_keeps_both_permits_until_work_exits",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::overload_preserves_http_429_and_retry_after_contract",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::oversized_password_is_rejected_before_admission_with_utf8_byte_boundary",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::production_writes_reject_demo_and_short_passwords_with_development_compatibility",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::password::tests::queued_deadline_does_not_block_the_tokio_worker_or_leak_admission",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::tree::tests::preserves_input_order_for_roots_and_children",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::tree::tests::retains_each_node_of_a_cycle_exactly_once",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::tree::tests::roots_orphans_and_self_references_without_duplicates",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::uuid7::tests::concurrent_generated_ids_are_distinct_rfc_v7",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::uuid7::tests::inputs_reject_nil_other_versions_and_variants",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    },
+    {
+      "case": "util::uuid7::tests::query_and_serde_inputs_do_not_turn_invalid_filters_into_none",
+      "result": "ok",
+      "originallyIgnored": false,
+      "target": "saas-platform-backend"
+    }
+  ],
+  "startedUtc": "2026-10-29T08:04:43.812086+00:00",
+  "temporaryResources": {
+    "privateDirectory": "/home/jackie/.cache/rust-saas-unified-auth-20261029/phase24-platform-final-r1-validation-private",
+    "runtimeTmpDirectory": "/home/jackie/.cache/rust-saas-unified-auth-20261029/phase24-platform-final-r1-validation-private/tmp",
+    "cleanupOwner": "root"
+  },
+  "newDatabasesComparedWithBefore": [],
+  "newRolesComparedWithBefore": [],
+  "frozenMismatchAfterTests": [],
+  "runtimeTmpRemainingFiles": [],
+  "finishedUtc": "2026-10-29T08:17:52.934770+00:00",
+  "totals": {
+    "passed": 424,
+    "failed": 7,
+    "originallyIgnoredExecuted": 191
+  }
+}

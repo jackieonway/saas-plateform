@@ -34,7 +34,10 @@ pub(crate) async fn authenticate_consumer(
     for secret in [
         state.config.context_source_service_client_secret.as_deref(),
         state.config.identity_service_client_secret.as_deref(),
-        state.config.identity_admin_service_client_secret.as_deref(),
+        state
+            .config
+            .identity_key_admin_service_client_secret
+            .as_deref(),
         state
             .config
             .customer_authority_service_client_secret

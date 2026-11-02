@@ -1,0 +1,4737 @@
+{
+  "schemaVersion": "unified-auth-phase25-matrix/1",
+  "phase": 25,
+  "documentRole": "ACCEPTANCE_PREPARATION_AND_RESULT_SLOTS",
+  "preparedAtUtc": "2026-10-29T10:13:26.010317+00:00",
+  "overallResult": "PENDING",
+  "phaseCompletionClaimed": false,
+  "runtimeExecutedByThisDocument": false,
+  "sourceBaseline": "Current working-tree files at preparation time, individually hashed; not an executable release freeze. Recheck after any source change.",
+  "architecture": {
+    "path": "saas-plateform/backend/docs/designs/unified-oauth-oidc-sso-architecture.md",
+    "section": 18,
+    "sha256": "2330ebbdb19eabc0bb28b96b9e1952e1ae5c9b0d89463a4d6a083d5a7dce6191"
+  },
+  "ledger": {
+    "path": "saas-plateform/backend/docs/designs/unified-oauth-oidc-sso-task-ledger.md",
+    "currentPhaseAtPreparation": 25,
+    "statusAtPreparation": "IN_PROGRESS"
+  },
+  "evidencePolicy": [
+    "PENDING means no Phase25 execution evidence attached.",
+    "CURRENT_INPUT_EVIDENCE is component input-equivalence only; all runtime results remain PENDING.",
+    "UNIT / ROUTER / SMALL_SCHEMA_PG / CANONICAL_PG / LOGIN ACL / actual HTTPS / browser / standard client are separate layers.",
+    "Related source mapping is not a claim that every assertion exists; remainingAction identifies extensions.",
+    "PASS needs immutable current input/binary/config manifests, exact selector, command, observations, limits and cleanup; no raw secrets.",
+    "SKIP or missing assertion remains a named gate; roll-up may not hide it."
+  ],
+  "repositoryObservations": [
+    {
+      "repository": "saas-identity",
+      "head": "7025a0a39cff5577bc3aabf239aaae8df529714e",
+      "trackedDirtyEntries": 42,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    },
+    {
+      "repository": "saas-plateform",
+      "head": "34105757b040165daa5477bf6afff9637f617466",
+      "trackedDirtyEntries": 223,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    },
+    {
+      "repository": "saas-customer-portal",
+      "head": "648e71e082929605c67e4e9f7e19fc9ecdbd89d4",
+      "trackedDirtyEntries": 16,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    },
+    {
+      "repository": "saas-stores",
+      "head": "01ea4eb30801e89429b4a4f1469cc0792f17b1f9",
+      "trackedDirtyEntries": 23,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    },
+    {
+      "repository": "saas-work-orders",
+      "head": "f0c87d7aea301dddb38ac4a3435431660b8b7632",
+      "trackedDirtyEntries": 25,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    },
+    {
+      "repository": "saas-notification",
+      "head": "6a16d74be2e079892d2528f68058c9556ffc3b37",
+      "trackedDirtyEntries": 2,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    },
+    {
+      "repository": "saas-micro-app-sdk",
+      "head": "155f5cc04f98509f5eee3e092f716d4d8f5013d8",
+      "trackedDirtyEntries": 1,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    },
+    {
+      "repository": "saas-examples",
+      "head": "f22ee4f0fe601b94a0f38783d3a76ef113ee47b0",
+      "trackedDirtyEntries": 68,
+      "note": "HEAD plus dirty count is not a source freeze; parent must bind complete runtime inputs and binary hashes."
+    }
+  ],
+  "priorEvidence": [
+    {
+      "id": "E24IDENTITY",
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-24-identity-final.json",
+      "reportSha256": "1c5334a2dcf74b2ce553f7e1fa7443bb55325dda93e76a28d19d287ad2c95ca9",
+      "classification": "CURRENT_INPUT_EVIDENCE",
+      "recordedInputField": "scope.compileInputs",
+      "recordedInputCount": 100,
+      "currentMatchingCount": 100,
+      "mismatches": [],
+      "scope": "141 lib + 1 main: 86 ordinary, 24 small-schema PG, 31 canonical PG. Exact evidence layers retained.",
+      "phase25RuntimePassCredit": false
+    },
+    {
+      "id": "E24PLATFORM",
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-24-platform-final.json",
+      "reportSha256": "54a65552380f363f3fe13b49b1aa81aee6457530467e7a9494b93e6307184383",
+      "classification": "PRIOR_COMPONENT_EVIDENCE_REQUIRES_INPUT_REVIEW",
+      "recordedInputField": "platformInputs",
+      "recordedInputCount": 390,
+      "currentMatchingCount": 382,
+      "mismatches": [
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/README.md",
+          "recordedSha256": "3eb8802515d462012cbb488c33499f9aedf29f50e2b942748d6de825ef31cf2e",
+          "currentSha256": "66b2e512dd3d0b281f1a01490127ab837b17708b965fda41382b556fb6f722a9"
+        },
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/phase22-run.py",
+          "recordedSha256": "61e17c84d4580f4525f0c8b65ea03c7b2585ed1d8622cbd0b37a25facdcc41fa",
+          "currentSha256": "c580685c1e2eee8de0e61ca6c13758179f9f57dcf862aa631ffb1a717093504e"
+        },
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/phase23-browser.mjs",
+          "recordedSha256": "dc16ebda485bce1bcbb0ea8a66ed576f99cf535a382e9b0e3c5498e105fe0f8c",
+          "currentSha256": "e466d0d1e45c3a1b10340a2f45f29da0e3d9f1203de635658a5d53e33d91ff90"
+        },
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/phase23-environment.py",
+          "recordedSha256": "27dba998c2f087b480d4d565fa87cc055d4642836f8fe07dee622190f74fb75f",
+          "currentSha256": "70098141a045e8d92411035cb250a48643ce5641f0b80c17e7ee1952164a0ca9"
+        },
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/phase23-execute.ps1",
+          "recordedSha256": "b2dcb6f1bd7f47e11c6a9429d14e7df3d9c049fd7bc0f8b556e40a8f1c86f13f",
+          "currentSha256": "b0de564972b38fa2b7d7b32a449e1ed1d2270227539ec6cbc115dd84aa39bcef"
+        },
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/phase23-run-rp.py",
+          "recordedSha256": "ef883a146f358ad863f149f249921281f453915b36c23658c51b8d450fb45fe4",
+          "currentSha256": "3a02da4f3b7aa077dbceb6cd1f141a049e1c0e1e10aaf0312335fc55acb037ad"
+        },
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/phase23-scram-cases.py",
+          "recordedSha256": "49dfd091f7b800f749867dedc12bc29272b14c671228c36fd0e089fbbce6bc2b",
+          "currentSha256": "ab8b6e6f1cdea6588865f77e1b00caa26065b29a6f0d75c426685f555a17464a"
+        },
+        {
+          "path": "saas-plateform/backend/tests/unified-auth-https/snapshot-build.py",
+          "recordedSha256": "01da6f003853f7969143536e3e480be8806e4facbe53de77413465e746c92e13",
+          "currentSha256": "448e3318c182442cfc4b766162cf8527ec3a189081991b876725e96e9d3bce8c"
+        }
+      ],
+      "scope": "432 unique cases through 382 unchanged input-equivalent and 50 current affected cases. Historical 424 PASS / 7 FAIL retained, not rewritten as one 432 PASS run.",
+      "phase25RuntimePassCredit": false
+    },
+    {
+      "id": "E24CONSUMERS",
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-24-consumer-components.json",
+      "reportSha256": "492b295de6a0d58c066a827773f2cbe85b6a821a5a6dd7c614ab5cdab8f6afa0",
+      "classification": "PRIOR_COMPONENT_EVIDENCE_REQUIRES_INPUT_REVIEW",
+      "recordedInputField": "sourceSha256",
+      "recordedInputCount": 1086,
+      "currentMatchingCount": 1078,
+      "mismatches": [
+        {
+          "path": "saas-plateform/backend/docs/application-authorization-contract.md",
+          "recordedSha256": "59028059b96218a8103659879aa0204fc575ea880bbbc7efdbd2b20790c4a152",
+          "currentSha256": "fafe85e4b966ed5f22b7190a1e032fe52eeff07374f91f28f153d3ced85d44fe"
+        },
+        {
+          "path": "saas-plateform/backend/docs/deployment.md",
+          "recordedSha256": "e41b156d86c30001b2d50d0d47ee1884976487a9fe5a8f9c71bb92287c036852",
+          "currentSha256": "e5cd4901a4a268a32bcdab1cdcdef406ae8cbcb6f05646c97db55ec8fa6af6f5"
+        },
+        {
+          "path": "saas-plateform/backend/docs/examples/host-nginx.conf.example",
+          "recordedSha256": "c924d8066e4deb1d00c2a819cd6de7f36999555c19f383e9c9f1b8f1ff6abe61",
+          "currentSha256": "02d0c45db2ca2dce1e9d3f4e1bc81d383e4d830827c23e28757c189035a0f11c"
+        },
+        {
+          "path": "saas-plateform/backend/docs/existing-nginx.md",
+          "recordedSha256": "2a66c27ffc1cf6d6e73944f868d1d0c7fecff632d175b96ea09f4bf058ceb0ee",
+          "currentSha256": "aeb4aaea4ba9a4f68bcb1a4aa2a5935a6e35ab321af899d9e11710aceae33630"
+        },
+        {
+          "path": "saas-plateform/backend/nginx/policy.mjs",
+          "recordedSha256": "3cfdbdbd91677595e81a248d47fc85323ecda30dbd82531d0807a4cc578cb8e8",
+          "currentSha256": "cf8d8365b8e9bf2195fffe089d085235e5a170ba2eff3e21895978a662660441"
+        },
+        {
+          "path": "saas-plateform/backend/nginx/README.md",
+          "recordedSha256": "58a78ef8fa19b4ab458e517f4727870e1b17515199c41129362890b262f21320",
+          "currentSha256": "f2f654be66800311b4278ba6f6c2efb242ae8e329584c75a834ca02b0663dbcb"
+        },
+        {
+          "path": "saas-plateform/backend/tests/nginx-render-policy.mjs",
+          "recordedSha256": "66b6043e7ff0e45716afaecd943b73135ad0aa4db278ee86e205c126432f2bf2",
+          "currentSha256": "8b4a65e82531fab8968b8479ededd00289f82ad6f36820e610ab962aebc15392"
+        },
+        {
+          "path": "saas-plateform/frontend/tests/unified-clients-browser.mjs",
+          "recordedSha256": "a78e801c65288ac703c3da7c9de375df95f915e2cd2de2579c8cc5e92686c439",
+          "currentSha256": "b5773b42647149afc81e53e944fb609d485fe5858cfa5a2be0e31f7b012a5aa6"
+        }
+      ],
+      "scope": "Partial explicit source manifest; frontend/stores/work-orders/RP/CLI/Nginx component scopes retain original limitations. Not all early runs had full pre-run manifests.",
+      "phase25RuntimePassCredit": false
+    },
+    {
+      "id": "E24EMPTY",
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-24-empty-database-final.json",
+      "reportSha256": "a2b06a69e33e87491cd35683fb5f4352beae5e835c828bd9033f838b1f4a7c6e",
+      "classification": "DEPENDENCY_EVIDENCE_ONLY",
+      "scope": "103 real empty-PG canonical migrate/provision/verify checks and actual LOGIN-role ACL; no Phase25 service/browser credit.",
+      "phase25RuntimePassCredit": false
+    },
+    {
+      "id": "E24RECOVERY",
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-24-recovery-retirement.json",
+      "reportSha256": "e8b5d59768093cea0004ca0438a507d3150c65dfda4490a3b7ddc4a3d63b748a",
+      "classification": "DEPENDENCY_EVIDENCE_ONLY",
+      "scope": "Old generic restore fails before I/O; component gate, not actual restore.",
+      "phase25RuntimePassCredit": false
+    },
+    {
+      "id": "E24INPUTAUDIT",
+      "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-24-platform-final-input-audit.json",
+      "reportSha256": "8a0246ccdbc5e9023895068c2ab959af6d51832c26437318db3f7f253f921f8b",
+      "classification": "DEPENDENCY_EVIDENCE_ONLY",
+      "scope": "Historical independent input audit; this matrix independently checks relevant manifests again.",
+      "phase25RuntimePassCredit": false
+    }
+  ],
+  "sourceRefs": {
+    "I04": {
+      "path": "saas-identity/src/util/auth_admin_tests.rs",
+      "sha256": "66f3713f37d00eeb16de65288ec01e1d56eb17509f3e6a890530a683fb7b91cf",
+      "line": 9,
+      "selector": "async fn phase04_unified_client_api_enforces_policy_paging_and_credential_lifecycle",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I07GROUP": {
+      "path": "saas-identity/src/util/auth_admin_tests.rs",
+      "sha256": "66f3713f37d00eeb16de65288ec01e1d56eb17509f3e6a890530a683fb7b91cf",
+      "line": 526,
+      "selector": "async fn phase07_consent_groups_require_explicit_context_bound_membership",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I06": {
+      "path": "saas-identity/src/util/audit_tests/auth_subjects.rs",
+      "sha256": "fe600ff4ec7f3f26e459b06cf3278fc3364e9b3243e00e06fd877f07148033ce",
+      "line": 126,
+      "selector": "async fn phase06_pairwise_subjects_are_sector_scoped_stable_and_retired_with_accounts",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I07CONSENT": {
+      "path": "saas-identity/src/util/audit_tests/auth_consents.rs",
+      "sha256": "f25bc10451dacdf0796acd1e58c87eb51e4a72e1726586fa98ac715150cd94ef",
+      "line": 219,
+      "selector": "async fn phase07_consent_coverage_expansion_and_group_isolation_use_canonical_authority",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "Function name does not change the hand-written schema evidence layer.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I07DELETE": {
+      "path": "saas-identity/src/util/audit_tests/auth_consents.rs",
+      "sha256": "f25bc10451dacdf0796acd1e58c87eb51e4a72e1726586fa98ac715150cd94ef",
+      "line": 318,
+      "selector": "async fn phase07_revoke_delete_reauthorize_and_logout_keep_generation_fences",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "Function name does not change the hand-written schema evidence layer.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I08": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 1338,
+      "selector": "async fn phase08_authorization_code_pkce_consent_pairwise_id_token_and_userinfo_use_one_registry",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I09": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 3167,
+      "selector": "async fn phase09_resource_access_is_audience_scope_bound_and_revocation_is_token_local",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I10": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 2724,
+      "selector": "async fn phase10_refresh_rotation_reuse_concurrency_limits_and_offline_source_are_enforced",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I10REPLAY": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 2605,
+      "selector": "async fn phase10_scope_shrink_cannot_mask_consumed_refresh_replay",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I11": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 2240,
+      "selector": "async fn phase11_client_credentials_are_machine_bound_to_active_registered_permissions",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I11AGE": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 2184,
+      "selector": "async fn phase11_credential_age_caps_authentication_machine_grants_and_introspection",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I12CALLBACK": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 2546,
+      "selector": "async fn phase12_invalid_client_context_never_redirects_to_unregistered_callback",
+      "layer": "SMALL_SCHEMA_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I12": {
+      "path": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+      "sha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+      "line": 1826,
+      "selector": "async fn phase12_unified_context_selection_is_source_bound_recoverable_and_one_time",
+      "layer": "SMALL_SCHEMA_PG_MOCK_PORT",
+      "scopeNote": "UnifiedSelectionFixture implements a mock SelectionPort.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I19": {
+      "path": "saas-identity/src/auth_review/tests.rs",
+      "sha256": "f0780715c6c630304403fc0e5f2bd0e05ccc0318a9f63d0cf92f16efb3772ff7",
+      "line": 407,
+      "selector": "async fn phase19_third_party_client_registration_and_runtime_require_current_environment_admission",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "Router and actual canonical schema; not HTTPS.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "ICLAIMS": {
+      "path": "saas-identity/src/oidc/subjects.rs",
+      "sha256": "1695bd5397155a790da44b4922602749ad765566565984a59e613bc8644da5da",
+      "line": 296,
+      "selector": "fn id_token_and_userinfo_share_only_consented_profile_claims",
+      "layer": "UNIT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "IPKCE": {
+      "path": "saas-identity/src/oidc/oauth.rs",
+      "sha256": "555d3e3b5a04aa43f2b19ea25c4aa40dd74408530a7e803dc9af579bc6580b81",
+      "line": 4066,
+      "selector": "fn pkce_uses_the_rfc7636_s256_transform",
+      "layer": "UNIT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "IRETIRED": {
+      "path": "saas-identity/src/oidc/protocol.rs",
+      "sha256": "a9d9f4c00c3253182a45fe6d9e559b4a93603ee6e74d67e119d491019b063133",
+      "line": 255,
+      "selector": "async fn retired_protocol_and_registry_routes_are_absent",
+      "layer": "ROUTER_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "ICALLBACK": {
+      "path": "saas-identity/src/oidc/protocol.rs",
+      "sha256": "a9d9f4c00c3253182a45fe6d9e559b4a93603ee6e74d67e119d491019b063133",
+      "line": 362,
+      "selector": "fn callbacks_keep_exact_registered_url_and_bind_issuer",
+      "layer": "UNIT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "ILOGOUT": {
+      "path": "saas-identity/src/oidc/oauth/logout/tests.rs",
+      "sha256": "f15495e6432cfd891082fe67bc99a6c229f05c46fb4e64694e5fa2ab0e850569",
+      "line": 54,
+      "selector": "async fn current_app_and_global_preserve_consent_and_original_operation",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "IDELIVERY": {
+      "path": "saas-identity/src/delivery/worker/tests.rs",
+      "sha256": "8be6a45ffd27bfe2bc6e18ed14efde2733f96c38a2d3c68a25bd0c4b5e923997",
+      "line": 41,
+      "selector": "async fn concurrent_leases_retry_budget_and_stale_completion_are_bounded",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "ISIGNED": {
+      "path": "saas-identity/src/delivery/worker/tests.rs",
+      "sha256": "8be6a45ffd27bfe2bc6e18ed14efde2733f96c38a2d3c68a25bd0c4b5e923997",
+      "line": 84,
+      "selector": "async fn logout_payload_is_signed_for_original_rp_and_target_generation",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I22CODE": {
+      "path": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+      "sha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+      "line": 261,
+      "selector": "async fn independent_nodes_redeem_one_actual_authorization_code_once",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "Independent nodes here are independent AppState values in one process, not actual service processes.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I22REFRESH": {
+      "path": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+      "sha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+      "line": 293,
+      "selector": "async fn independent_nodes_refresh_race_detects_reuse_without_crossing_sources",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "Independent nodes here are independent AppState values in one process, not actual service processes.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I22POOL": {
+      "path": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+      "sha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+      "line": 370,
+      "selector": "async fn saturated_and_closed_pools_return_503_without_clearing_legal_sources",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "Independent nodes here are independent AppState values in one process, not actual service processes.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I22LOCK": {
+      "path": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+      "sha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+      "line": 463,
+      "selector": "async fn actual_client_table_lock_failure_is_503_and_preserves_original_tokens",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "Independent nodes here are independent AppState values in one process, not actual service processes.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "I22RATE": {
+      "path": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+      "sha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+      "line": 521,
+      "selector": "async fn client_budget_cannot_be_reset_by_rotating_socket_sources",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "Independent nodes here are independent AppState values in one process, not actual service processes.",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "IQUEUE": {
+      "path": "saas-identity/src/admission/tests.rs",
+      "sha256": "9aed53786c01473fd91183e49c97fd52645c4701e6e3f9acdf6f962e5bcebc20",
+      "line": 123,
+      "selector": "async fn full_request_budget_and_oversized_body_do_not_reach_authority",
+      "layer": "ROUTER_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "INET": {
+      "path": "saas-identity/src/network/tests.rs",
+      "sha256": "6634cdf8b805804f01c24366a58bd0f06782936051e667604e60480ef2da7c79",
+      "line": 43,
+      "selector": "async fn slow_http_body_times_out_before_authority_and_releases_admission",
+      "layer": "TCP_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "IREDACT": {
+      "path": "saas-identity/src/observability/tests.rs",
+      "sha256": "9a8ef3a6e0329963dc837312225cb044b1af801abfbab4e3e06b6988c091fc03",
+      "line": 315,
+      "selector": "async fn request_bodies_headers_and_queries_never_enter_metrics_or_password_logs",
+      "layer": "UNIT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "IKEY": {
+      "path": "saas-identity/src/oidc/keys/lifecycle_tests.rs",
+      "sha256": "1ec5fbab1001452401dcd1505a25e15a3bd9ccae611bc6757473a3684c2e4af7",
+      "line": 53,
+      "selector": "async fn phase23_keys_publish_activate_replay_terminal_and_emergency_boundaries",
+      "layer": "CANONICAL_PG_LOGIN",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "IKEYPERM": {
+      "path": "saas-identity/src/oidc/keys/lifecycle_tests.rs",
+      "sha256": "1ec5fbab1001452401dcd1505a25e15a3bd9ccae611bc6757473a3684c2e4af7",
+      "line": 160,
+      "selector": "async fn phase23_keys_permissions_intent_and_failed_audit_receipt_are_atomic",
+      "layer": "CANONICAL_PG_LOGIN",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    "PRETIRED": {
+      "path": "saas-plateform/backend/src/protocol_retirement_tests.rs",
+      "sha256": "ebc7450af20a7c15862a977c213687d59add21f79e4046d27624091e575ebf59",
+      "line": 10,
+      "selector": "async fn retired_protocol_and_registry_routes_stay_absent_for_every_deployment_mode",
+      "layer": "ROUTER_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PBASE": {
+      "path": "saas-plateform/backend/src/identity_deployment_tests.rs",
+      "sha256": "e749c63a4d00d290aec2664241eaa2d6b3fed97043274a2ff11dd53e6e1b7f79",
+      "line": 317,
+      "selector": "async fn phase02_auth_model_constraints_and_runtime_boundary",
+      "layer": "CANONICAL_PG_LOGIN",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PMACHINE": {
+      "path": "saas-plateform/backend/src/identity_deployment_tests.rs",
+      "sha256": "e749c63a4d00d290aec2664241eaa2d6b3fed97043274a2ff11dd53e6e1b7f79",
+      "line": 461,
+      "selector": "async fn phase11_machine_grants_require_a_persisted_client_credential_version",
+      "layer": "CANONICAL_PG_LOGIN",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PCONTEXT": {
+      "path": "saas-plateform/backend/src/context_selection_http/tests.rs",
+      "sha256": "59fa7fe4cfb2e0a08890022004564185207bf2aab943e3bf959999dbde2edb8c",
+      "line": 416,
+      "selector": "async fn real_platform_selection_http_is_member_and_application_scoped",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PSELECT": {
+      "path": "saas-plateform/backend/src/customer_portal_tests/selection.rs",
+      "sha256": "24607fac41de18fe56374c253b47efacd0ee484904ef8cdd8fe28e72d1e3608a",
+      "line": 169,
+      "selector": "async fn centralized_customer_consumption_recovery_and_switch_are_exact",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PREFRESH": {
+      "path": "saas-plateform/backend/src/bff_tests/canonical.rs",
+      "sha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+      "line": 839,
+      "selector": "async fn canonical_cross_instance_refresh_single_winner_and_lost_reply_never_replays",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "Explicit upstream credential/proof fixture, not identity interoperability.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PLOCK": {
+      "path": "saas-plateform/backend/src/bff_tests/canonical.rs",
+      "sha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+      "line": 868,
+      "selector": "async fn canonical_post_network_account_lock_rechecks_original_source",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "Explicit upstream credential/proof fixture, not identity interoperability.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PDEADLINE": {
+      "path": "saas-plateform/backend/src/bff_tests/canonical.rs",
+      "sha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+      "line": 886,
+      "selector": "async fn canonical_short_id_and_online_access_deadlines_cannot_commit_after_lock_wait",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "Explicit upstream credential/proof fixture, not identity interoperability.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PLOGOUT": {
+      "path": "saas-plateform/backend/src/bff_tests/canonical.rs",
+      "sha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+      "line": 999,
+      "selector": "async fn canonical_cookie_reload_recovers_only_original_unknown_logout",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "Explicit upstream credential/proof fixture, not identity interoperability.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PLATE": {
+      "path": "saas-plateform/backend/src/bff_tests/canonical.rs",
+      "sha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+      "line": 1035,
+      "selector": "async fn canonical_late_logout_cannot_erase_new_account_cookie",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "Explicit upstream credential/proof fixture, not identity interoperability.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PBACK": {
+      "path": "saas-plateform/backend/src/bff_tests/canonical.rs",
+      "sha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+      "line": 1120,
+      "selector": "async fn canonical_backchannel_before_callback_persists_fence_without_revoking_new_source",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "Explicit upstream credential/proof fixture, not identity interoperability.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PRESOURCE": {
+      "path": "saas-plateform/backend/src/identity_deployment_tests/phase15_http.rs",
+      "sha256": "3a907c6001765186a12d8a1709243dfee90a764d85156dfb29871dfb6300323a",
+      "line": 165,
+      "selector": "async fn phase15_resource_http_enforces_private_service_user_and_machine_boundaries",
+      "layer": "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+      "scopeNote": "Remote proof responder is a bounded fixture.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PCAP": {
+      "path": "saas-plateform/backend/src/identity_deployment_tests/phase15.rs",
+      "sha256": "5a2ffee416cebdb25431805925ed2146023299a435ae1bf7db0f71252beafadc",
+      "line": 50,
+      "selector": "async fn phase15_real_roles_keep_internal_capabilities_source_bound_and_nonreviving",
+      "layer": "CANONICAL_PG_LOGIN",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PBIND": {
+      "path": "saas-plateform/backend/src/identity_binding_tests.rs",
+      "sha256": "8e94c861cac5d6b04db77981300548c7fe8f16bc9a64416756a90214b1d3ac45",
+      "line": 392,
+      "selector": "async fn identity_binding_canonical_exact_member_revocation",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PAPP": {
+      "path": "saas-plateform/backend/src/identity_binding_tests.rs",
+      "sha256": "8e94c861cac5d6b04db77981300548c7fe8f16bc9a64416756a90214b1d3ac45",
+      "line": 472,
+      "selector": "async fn identity_binding_canonical_application_capability_isolation",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "POUTAGE": {
+      "path": "saas-plateform/backend/src/identity_binding_tests.rs",
+      "sha256": "8e94c861cac5d6b04db77981300548c7fe8f16bc9a64416756a90214b1d3ac45",
+      "line": 502,
+      "selector": "async fn identity_binding_canonical_authority_outage_does_not_execute_business",
+      "layer": "CANONICAL_PG_MOCK_PORT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PREVIEW": {
+      "path": "saas-plateform/backend/src/auth_review/tests.rs",
+      "sha256": "945edea9ba1c1c9e4d49109cd27c169d3109c053d1b05842c39fdde4e38dd1b4",
+      "line": 360,
+      "selector": "async fn phase19_canonical_submit_review_self_denial_and_durable_operations",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "MFA facts are fixture rows, not human login.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PPERMS": {
+      "path": "saas-plateform/backend/src/auth_review/tests.rs",
+      "sha256": "945edea9ba1c1c9e4d49109cd27c169d3109c053d1b05842c39fdde4e38dd1b4",
+      "line": 508,
+      "selector": "async fn phase19_canonical_permission_revocation_blocks_new_writes_and_replays",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "MFA facts are fixture rows, not human login.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PMFA": {
+      "path": "saas-plateform/backend/src/auth_review/tests.rs",
+      "sha256": "945edea9ba1c1c9e4d49109cd27c169d3109c053d1b05842c39fdde4e38dd1b4",
+      "line": 481,
+      "selector": "async fn phase19_canonical_missing_and_stale_mfa_facts_block_writes_but_allow_bootstrap",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "MFA facts are fixture rows, not human login.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PVERSION": {
+      "path": "saas-plateform/backend/src/routes/admission_policy_tests.rs",
+      "sha256": "18456646e4f5a7cc22564d91df4f8bee03f675fd71226cf661a36fcc660e721b",
+      "line": 670,
+      "selector": "async fn admission_policy_audit_atomicity_and_concurrent_conflicts",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "PAUDIT": {
+      "path": "saas-plateform/backend/src/management_audit_tests.rs",
+      "sha256": "f112e99deb8f4d6d3f05499463abe549344ab63a7d8e36fb82252aa08e22e8da",
+      "line": 922,
+      "selector": "async fn application_and_menu_cascades_keep_snapshots_and_atomic_audit",
+      "layer": "CANONICAL_PG",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "UCONTEXT": {
+      "path": "saas-identity/tests/context-selection-ui.mjs",
+      "sha256": "a675c1e29474a5cbbaa24686b1cfc9f59cc119d78fbfab25db10a364a2143c89",
+      "line": 33,
+      "selector": "async function test(name,fixture,run",
+      "layer": "BROWSER_HTTP_FIXTURE",
+      "scopeNote": "Loopback HTTP server supplies interactions; not real service HTTPS.",
+      "candidateCaseSelectors": [
+        {
+          "name": "sso-login-alias-uses-canonical-interactions",
+          "line": 42
+        },
+        {
+          "name": "restart-follows-canonical-login-path",
+          "line": 43
+        },
+        {
+          "name": "single-tenant-skips-tenant-step",
+          "line": 44
+        },
+        {
+          "name": "single-organization-enters-after-first-consent",
+          "line": 48
+        },
+        {
+          "name": "remembered-single-identity-needs-no-clicks",
+          "line": 49
+        },
+        {
+          "name": "remembered-approval-survives-reload-search-does-not-auto-select",
+          "line": 50
+        },
+        {
+          "name": "tenant-with-one-organization-enters-directly",
+          "line": 51
+        },
+        {
+          "name": "multiple-tenants-and-organizations-require-choice",
+          "line": 52
+        },
+        {
+          "name": "no-members-never-auto-approves",
+          "line": 53
+        },
+        {
+          "name": "customer-and-hostile-names-render-as-text",
+          "line": 54
+        },
+        {
+          "name": "mobile-single-tenant-multiple-organizations",
+          "line": 55
+        },
+        {
+          "name": "application-manager-confirmation-and-revoked-history",
+          "line": 56
+        },
+        {
+          "name": "revoked-record-delete-cancel-confirm-empty-state",
+          "line": 57
+        }
+      ]
+    },
+    "UCLIENT": {
+      "path": "saas-plateform/frontend/tests/unified-clients-browser.mjs",
+      "sha256": "b5773b42647149afc81e53e944fb609d485fe5858cfa5a2be0e31f7b012a5aa6",
+      "line": 83,
+      "selector": "const scenarios = [], screenshots = []",
+      "layer": "BROWSER_ROUTE_FIXTURE",
+      "scopeNote": "Browser routes are intercepted.",
+      "candidateCaseSelectors": [
+        {
+          "name": "desktop URL filters and server pagination restore",
+          "line": 304
+        },
+        {
+          "name": "390px editor contains keyboard focus and restores its opener on Escape",
+          "line": 329
+        },
+        {
+          "name": "390px editor fits viewport and creates a valid machine client",
+          "line": 349
+        },
+        {
+          "name": "390px consent group management versions members and warns about reconfirmation",
+          "line": 384
+        },
+        {
+          "name": "390px back-channel registration preserves its owner binding on retirement",
+          "line": 417
+        },
+        {
+          "name": "failed refresh retains the last successful directory",
+          "line": 444
+        },
+        {
+          "name": "same-frame duplicate submits issue only one versioned write",
+          "line": 452
+        },
+        {
+          "name": "409 version conflict requires an explicit latest-version reload",
+          "line": 464
+        }
+      ]
+    },
+    "UUPDATE": {
+      "path": "saas-plateform/frontend/tests/micro-context-updates.mjs",
+      "sha256": "d6ece660572e73315cbad0415773b76039171b71d6529e93d1d2a2d1380806ba",
+      "line": 86,
+      "selector": "test('authorization, membership, complete entry tuple and deadline changes still cancel the prior snapshot'",
+      "layer": "UNIT_JS",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "UNOTIFY": {
+      "path": "saas-plateform/frontend/tests/notification-context.mjs",
+      "sha256": "76706d10e68ac35f381a952580e95c206625737cdb500d3faeb1ec772d1d3ed0",
+      "line": 66,
+      "selector": "test('old HTTP body and old HTTP errors cannot cross into a new organization when transport ignores AbortSignal'",
+      "layer": "UNIT_JS",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "UMICRO": {
+      "path": "saas-plateform/frontend/tests/micro-runtime-faults.mjs",
+      "sha256": "8ba70bef56b1fca2cabdcbc55c493435d5bed83ee4c858aec27a82e72ebb87fb",
+      "line": 62,
+      "selector": "test('a never completing mount reaches its deadline and cancels authorization instead of hanging'",
+      "layer": "UNIT_JS",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "UTABS": {
+      "path": "saas-plateform/frontend/tests/bff-integration.mjs",
+      "sha256": "66d17f21264580013de20f86c36da623f88169ec61a772bdca67e5173d7f5270",
+      "line": 52,
+      "selector": "test('a BFF member switch retires an actual API response even when transport ignores abort'",
+      "layer": "UNIT_JS",
+      "scopeNote": "Related BFF browser coordination component; explicit real two-tab assertion is still required.",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "SFAIL": {
+      "path": "saas-stores/backend/src/authorization/tests.rs",
+      "sha256": "e708cd46dd56078f431fff7b811f83db6820a06ddf3bd481ab97559ed9a49716",
+      "line": 624,
+      "selector": "async fn upstream_status_body_redirect_json_and_capacity_fail_closed",
+      "layer": "HTTP_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "WFAIL": {
+      "path": "saas-work-orders/backend/src/authorization/tests.rs",
+      "sha256": "bdbabb773eb4b17032cc2ef78dbcd3e9792561794dbaa4536da22ca8aeb0c81d",
+      "line": 537,
+      "selector": "async fn upstream_status_body_redirect_json_and_capacity_fail_closed",
+      "layer": "HTTP_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "NOTIFY": {
+      "path": "saas-notification/tests/identity_isolation.rs",
+      "sha256": "a70eeee435ab1688bad9074e8f8c34857bd84674aa5fde586447493ac598b55c",
+      "line": 774,
+      "selector": "async fn dual_identity_delivery_local_revocation_replacement_and_reconnect",
+      "layer": "SMALL_SCHEMA_PG_HTTP_FIXTURE",
+      "scopeNote": "Hand-created notifications projection table and local proof authority fixture; not canonical 0001 or actual identity HTTPS."
+    },
+    "RPOIDC": {
+      "path": "saas-examples/oidc-rp/tests/oidc.test.mjs",
+      "sha256": "716e0c3675e84de848e475eaf89bdb8ad728116183816c8651044ac13444860d",
+      "line": 9,
+      "selector": "test('real HTTPS standard discovery, Basic, S256, signed ID Token and matching opaque UserInfo establish a separate session'",
+      "layer": "STANDARD_CLIENT_TLS_FIXTURE",
+      "scopeNote": "Real openid-client/jose and controlled HTTPS issuer fixture; actual identity runtime is separate.",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "RPFAIL": {
+      "path": "saas-examples/oidc-rp/tests/deployment.test.mjs",
+      "sha256": "ed6a7ab00fd776f1ebc8c8dd90237acf37de1a2fa73e35d60385ccc5fb65f0a6",
+      "line": 45,
+      "selector": "test('HTTPS transport rejects missing trust, a different origin, private paths and redirects'",
+      "layer": "STANDARD_CLIENT_TLS_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "RPCAP": {
+      "path": "saas-examples/oidc-rp/tests/capacity.test.mjs",
+      "sha256": "48d9ad4a7b6a3eb32a9222a2587a32e23af3570d15fa420d317ffbe47878a883",
+      "line": 66,
+      "selector": "test('source-full signed logout closes the exact local source without acknowledging or evicting earlier facts'",
+      "layer": "STANDARD_CLIENT_TLS_FIXTURE",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    "RECOVERY": {
+      "path": "saas-plateform/backend/ops/identity-recovery/test_reconcile.py",
+      "sha256": "0505ed9a643c24bee47ce13bd75937b986362a013912d03897662c41208ff3e5",
+      "line": 136,
+      "selector": "def test_canonical_all_old_carriers_are_explicitly_closed",
+      "layer": "PYTHON_COMPONENT",
+      "scopeNote": "SQL plan/component assertions; not actual restore execution.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H13": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/browser.mjs",
+      "sha256": "a009106765ddd698e0691802675ee74fb9c5bf9e1487e9621140d8cc92323ec2",
+      "line": 229,
+      "selector": "step = 'administrator-real-login-single-employee'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H13SWITCH": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/browser.mjs",
+      "sha256": "a009106765ddd698e0691802675ee74fb9c5bf9e1487e9621140d8cc92323ec2",
+      "line": 299,
+      "selector": "step = 'real-central-context-switch'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H13REVOKE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/browser.mjs",
+      "sha256": "a009106765ddd698e0691802675ee74fb9c5bf9e1487e9621140d8cc92323ec2",
+      "line": 330,
+      "selector": "step = 'revoked-source-fails-closed'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H14RECOVER": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/customer-browser.mjs",
+      "sha256": "a4455369ab6a85a2a8a0d820ee5a6d1caf67cbfdcb4dcf6e31cbcee69b81c985",
+      "line": 418,
+      "selector": "step = 'committed-platform-selection-survives-local-save-failure'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H14RETRY": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/customer-browser.mjs",
+      "sha256": "a4455369ab6a85a2a8a0d820ee5a6d1caf67cbfdcb4dcf6e31cbcee69b81c985",
+      "line": 446,
+      "selector": "step = 'same-operation-recovers-same-capability-without-expiry-extension'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H14TYPE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/customer-browser.mjs",
+      "sha256": "a4455369ab6a85a2a8a0d820ee5a6d1caf67cbfdcb4dcf6e31cbcee69b81c985",
+      "line": 508,
+      "selector": "step = 'same-browser-sso-with-independent-console-and-customer-cookies'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H19": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs",
+      "sha256": "4ce41eaa92055bc9158542a5e9c1fae2512207d4dcdafbc3d82eeca44e358422",
+      "line": 374,
+      "selector": "step = 'real-partner-and-application-submission'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H19REGISTRY": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs",
+      "sha256": "4ce41eaa92055bc9158542a5e9c1fae2512207d4dcdafbc3d82eeca44e358422",
+      "line": 369,
+      "selector": "step = 'canonical-registry-pagination-through-real-private-guard'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H19MFA": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs",
+      "sha256": "4ce41eaa92055bc9158542a5e9c1fae2512207d4dcdafbc3d82eeca44e358422",
+      "line": 368,
+      "selector": "step = 'real-applicant-enrollment-and-fresh-primary-totp-new-bff'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H19REVIEW": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs",
+      "sha256": "4ce41eaa92055bc9158542a5e9c1fae2512207d4dcdafbc3d82eeca44e358422",
+      "line": 385,
+      "selector": "step = 'real-independent-test-approval-and-identity-admission'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H19PUBLISH": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs",
+      "sha256": "4ce41eaa92055bc9158542a5e9c1fae2512207d4dcdafbc3d82eeca44e358422",
+      "line": 423,
+      "selector": "step = 'fixture-bound-production-real-review-publish-admission-suspend'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H20APP": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase20-browser.mjs",
+      "sha256": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+      "line": 177,
+      "selector": "step = 'current-app-original-grant-only-with-consent-and-other-rp-preserved'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H20GLOBAL": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase20-browser.mjs",
+      "sha256": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+      "line": 201,
+      "selector": "step = 'global-closes-both-rps-and-sso-with-consent-preserved'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H20SIGN": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase20-browser.mjs",
+      "sha256": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+      "line": 207,
+      "selector": "step = 'signed-receiver-audience-signature-sub-and-replay-denials'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H20RETRY": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase20-browser.mjs",
+      "sha256": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+      "line": 184,
+      "selector": "step='collector-outage-does-not-delay-canonical-revoke-and-recovers-same-operation'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H20DEGRADE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase20-browser.mjs",
+      "sha256": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+      "line": 196,
+      "selector": "step='short-session-contract-is-explicitly-degraded-and-rejects-request-destinations'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H20REDACT": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase20-browser.mjs",
+      "sha256": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+      "line": 249,
+      "selector": "step = 'durable-record-redaction-and-actual-tls'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H21LOGIN": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs",
+      "sha256": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+      "line": 150,
+      "selector": "step = 'no-membership-account-standard-login-id-token-userinfo-and-refresh'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H21DISCOVERY": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs",
+      "sha256": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+      "line": 140,
+      "selector": "step = 'standalone-desktop-mobile-and-exact-discovery'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H21SCOPE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs",
+      "sha256": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+      "line": 171,
+      "selector": "step = 'third-party-offline-and-unapproved-resource-scope-rejected'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H21RESOURCE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs",
+      "sha256": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+      "line": 180,
+      "selector": "step = 'standard-resource-audience-id-token-and-unapproved-business-denied'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H21REVOKE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs",
+      "sha256": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+      "line": 187,
+      "selector": "step = 'standard-rfc7009-revocation-and-refresh-replay'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H21MACHINE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs",
+      "sha256": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+      "line": 192,
+      "selector": "step = 'standard-machine-cli-approved-resource-scope-and-person-separation'",
+      "layer": "HTTPS_STANDARD_CLIENT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H21OFFLINE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase21-browser.mjs",
+      "sha256": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154",
+      "line": 217,
+      "selector": "step = 'approved-offline-absolute-idle-and-natural-sso-expiry'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H22CAP": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs",
+      "sha256": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+      "line": 137,
+      "selector": "stage = 'bounded-successful-code-refresh-introspection-capacity'",
+      "layer": "HTTPS_RUNTIME",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H22DB": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs",
+      "sha256": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+      "line": 193,
+      "selector": "stage = 'canonical-database-outage-and-recovery'",
+      "layer": "HTTPS_RUNTIME",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H22PLATFORM": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs",
+      "sha256": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+      "line": 211,
+      "selector": "stage = 'private-platform-response-timeout-and-recovery'",
+      "layer": "HTTPS_RUNTIME",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H22IDENTITY": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs",
+      "sha256": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+      "line": 236,
+      "selector": "stage = 'identity-unavailable-and-recovery-with-original-cookie'",
+      "layer": "HTTPS_BROWSER",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H22QUEUE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs",
+      "sha256": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+      "line": 255,
+      "selector": "stage = 'password-admission-queue-deadline-and-recovery'",
+      "layer": "HTTPS_RUNTIME",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H22ALERT": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs",
+      "sha256": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+      "line": 129,
+      "selector": "stage = 'independent-local-alert-pipeline'",
+      "layer": "HTTPS_RUNTIME",
+      "scopeNote": "",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H23KEY": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase23-key-cases.mjs",
+      "sha256": "e183ca4469642163b5743fc4297ec9b90a9fd4d633e024237ff4aeca99df879d",
+      "line": 50,
+      "selector": "export async function runKeyCases",
+      "layer": "PORT_DRIVER",
+      "scopeNote": "Requires real phase23-browser ports; unit driver tests alone are not integration evidence.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    "H23RESTORE": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase23-browser.mjs",
+      "sha256": "e466d0d1e45c3a1b10340a2f45f29da0e3d9f1203de635658a5d53e33d91ff90",
+      "line": 591,
+      "selector": "step='OLD_RAW_CARRIERS_REJECTED'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": "Requires full current-owned restore lifecycle, cluster binding, timing and cleanup; recovery profile alone does not run full key lifecycle."
+    },
+    "H23FRESH": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase23-browser.mjs",
+      "sha256": "e466d0d1e45c3a1b10340a2f45f29da0e3d9f1203de635658a5d53e33d91ff90",
+      "line": 635,
+      "selector": "step='FRESH_RECOVERED_BUSINESS'",
+      "layer": "HTTPS_BROWSER_STANDARD_CLIENT",
+      "scopeNote": ""
+    },
+    "H23SERVICES": {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase23-service-access-cases.mjs",
+      "sha256": "5480803fa6c55cf51aee49d283fdff57e79e462afdac621552d2b6839e288464",
+      "line": 43,
+      "selector": "export async function checkServiceAccessControls",
+      "layer": "PORT_DRIVER",
+      "scopeNote": "AUTH service credential controls, not stores/work-orders full business integration.",
+      "currentInputEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    }
+  },
+  "categories": [
+    {
+      "id": "C01",
+      "title": "统一登记",
+      "architectureLine": 529,
+      "scenarioIds": [
+        "P25-C01-S01",
+        "P25-C01-S02",
+        "P25-C01-S03",
+        "P25-C01-S04"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C02",
+      "title": "普通外部登录",
+      "architectureLine": 530,
+      "scenarioIds": [
+        "P25-C02-S01",
+        "P25-C02-S02"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C03",
+      "title": "OIDC一致性",
+      "architectureLine": 531,
+      "scenarioIds": [
+        "P25-C03-S01",
+        "P25-C03-S02",
+        "P25-C03-S03",
+        "P25-C03-S04",
+        "P25-C03-S05",
+        "P25-C03-S06",
+        "P25-C03-S07",
+        "P25-C03-S08",
+        "P25-C03-S09",
+        "P25-C03-S10"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C04",
+      "title": "subject隔离",
+      "architectureLine": 532,
+      "scenarioIds": [
+        "P25-C04-S01",
+        "P25-C04-S02",
+        "P25-C04-S03",
+        "P25-C04-S04"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C05",
+      "title": "code与PKCE",
+      "architectureLine": 533,
+      "scenarioIds": [
+        "P25-C05-S01",
+        "P25-C05-S02",
+        "P25-C05-S03",
+        "P25-C05-S04",
+        "P25-C05-S05",
+        "P25-C05-S06"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C06",
+      "title": "refresh",
+      "architectureLine": 534,
+      "scenarioIds": [
+        "P25-C06-S01",
+        "P25-C06-S02",
+        "P25-C06-S03",
+        "P25-C06-S04",
+        "P25-C06-S05",
+        "P25-C06-S06",
+        "P25-C06-S07",
+        "P25-C06-S08"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C07",
+      "title": "客户端认证",
+      "architectureLine": 535,
+      "scenarioIds": [
+        "P25-C07-S01",
+        "P25-C07-S02",
+        "P25-C07-S03",
+        "P25-C07-S04"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C08",
+      "title": "资源隔离",
+      "architectureLine": 536,
+      "scenarioIds": [
+        "P25-C08-S01",
+        "P25-C08-S02",
+        "P25-C08-S03",
+        "P25-C08-S04",
+        "P25-C08-S05"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C09",
+      "title": "同意",
+      "architectureLine": 537,
+      "scenarioIds": [
+        "P25-C09-S01",
+        "P25-C09-S02",
+        "P25-C09-S03",
+        "P25-C09-S04",
+        "P25-C09-S05"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C10",
+      "title": "撤销与删除",
+      "architectureLine": 538,
+      "scenarioIds": [
+        "P25-C10-S01",
+        "P25-C10-S02",
+        "P25-C10-S03",
+        "P25-C10-S04"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C11",
+      "title": "上下文",
+      "architectureLine": 539,
+      "scenarioIds": [
+        "P25-C11-S01",
+        "P25-C11-S02",
+        "P25-C11-S03",
+        "P25-C11-S04",
+        "P25-C11-S05",
+        "P25-C11-S06",
+        "P25-C11-S07",
+        "P25-C11-S08",
+        "P25-C11-S09"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C12",
+      "title": "业务权限",
+      "architectureLine": 540,
+      "scenarioIds": [
+        "P25-C12-S01",
+        "P25-C12-S02",
+        "P25-C12-S03",
+        "P25-C12-S04",
+        "P25-C12-S05"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C13",
+      "title": "跨库与标签页",
+      "architectureLine": 541,
+      "scenarioIds": [
+        "P25-C13-S01",
+        "P25-C13-S02",
+        "P25-C13-S03",
+        "P25-C13-S04",
+        "P25-C13-S05",
+        "P25-C13-S06",
+        "P25-C13-S07"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C14",
+      "title": "管理安全",
+      "architectureLine": 542,
+      "scenarioIds": [
+        "P25-C14-S01",
+        "P25-C14-S02",
+        "P25-C14-S03",
+        "P25-C14-S04",
+        "P25-C14-S05",
+        "P25-C14-S06",
+        "P25-C14-S07",
+        "P25-C14-S08",
+        "P25-C14-S09"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C15",
+      "title": "登出",
+      "architectureLine": 543,
+      "scenarioIds": [
+        "P25-C15-S01",
+        "P25-C15-S02",
+        "P25-C15-S03",
+        "P25-C15-S04",
+        "P25-C15-S05",
+        "P25-C15-S06",
+        "P25-C15-S07"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C16",
+      "title": "浏览器",
+      "architectureLine": 544,
+      "scenarioIds": [
+        "P25-C16-S01",
+        "P25-C16-S02",
+        "P25-C16-S03",
+        "P25-C16-S04",
+        "P25-C16-S05",
+        "P25-C16-S06",
+        "P25-C16-S07",
+        "P25-C16-S08"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C17",
+      "title": "故障",
+      "architectureLine": 545,
+      "scenarioIds": [
+        "P25-C17-S01",
+        "P25-C17-S02",
+        "P25-C17-S03",
+        "P25-C17-S04",
+        "P25-C17-S05",
+        "P25-C17-S06",
+        "P25-C17-S07",
+        "P25-C17-S08"
+      ],
+      "phase25Result": "PENDING"
+    },
+    {
+      "id": "C18",
+      "title": "运维",
+      "architectureLine": 546,
+      "scenarioIds": [
+        "P25-C18-S01",
+        "P25-C18-S02",
+        "P25-C18-S03",
+        "P25-C18-S04",
+        "P25-C18-S05",
+        "P25-C18-S06"
+      ],
+      "phase25Result": "PENDING"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "P25-C01-S01",
+      "categoryId": "C01",
+      "label": "自有与第三方同表",
+      "requiredObservation": "两种ownership的客户端由同一auth_clients登记、读取与授权处理；无隐藏注册簿",
+      "componentRefIds": [
+        "I04",
+        "I19",
+        "PBASE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_LOGIN",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REGISTRY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "补当前新安装记录及同表只读证据",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C01-S02",
+      "categoryId": "C01",
+      "label": "一应用多客户端",
+      "requiredObservation": "同一application的两个独立client可用，凭据、回调和授权来源仍按client隔离",
+      "componentRefIds": [
+        "I04",
+        "I07GROUP"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REGISTRY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:明确两客户端成功与交叉回调拒绝HTTPS子例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C01-S03",
+      "categoryId": "C01",
+      "label": "TEST与PRODUCTION隔离",
+      "requiredObservation": "另一环境的admission、客户端和scope不能被复用",
+      "componentRefIds": [
+        "I19",
+        "PBASE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_LOGIN"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19PUBLISH"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "任务production绑定不推断真实发布账号",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C01-S04",
+      "categoryId": "C01",
+      "label": "单一公开权威",
+      "requiredObservation": "旧/oidc签发及旧registry全部404，统一/oauth发现与签发为唯一公开入口",
+      "componentRefIds": [
+        "IRETIRED",
+        "PRETIRED"
+      ],
+      "componentLayers": [
+        "ROUTER_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21DISCOVERY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际网关重验旧路由、私有端点拒绝和唯一issuer",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C02-S01",
+      "categoryId": "C02",
+      "label": "无业务成员账号",
+      "requiredObservation": "零业务membership账号使用ACCOUNT_ONLY成功；不强迫选租户/组织",
+      "componentRefIds": [
+        "I08",
+        "I12"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:断言零membership及没有业务context网络调用",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C02-S02",
+      "categoryId": "C02",
+      "label": "仅标准OIDC接入",
+      "requiredObservation": "独立RP仅使用discovery/JWKS/token/userinfo，openid-client与jose完成登录",
+      "componentRefIds": [
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21DISCOVERY",
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "记录实际标准依赖版本和无内部API/DB/SDK调用证据",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    {
+      "id": "P25-C03-S01",
+      "categoryId": "C03",
+      "label": "正确issuer",
+      "requiredObservation": "签名ID Token iss等于准确HTTPS issuer且discovery与回调iss一致",
+      "componentRefIds": [
+        "I08",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "保存脱敏布尔断言与版本，不能保存原token",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S02",
+      "categoryId": "C03",
+      "label": "正确audience",
+      "requiredObservation": "ID Token aud只指向当前公开client；不能采用资源audience",
+      "componentRefIds": [
+        "I08",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:显式声明值比对",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S03",
+      "categoryId": "C03",
+      "label": "不透明subject",
+      "requiredObservation": "ID Token sub非内部UUID且绑定当前app/environment的pairwise映射",
+      "componentRefIds": [
+        "I06",
+        "I08"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "只报告不透明/相等布尔值，不导出可关联sub",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S04",
+      "categoryId": "C03",
+      "label": "正确nonce",
+      "requiredObservation": "ID Token nonce绑定原浏览器授权transaction",
+      "componentRefIds": [
+        "I08",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "记录标准SDK实际校验；不导出nonce",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S05",
+      "categoryId": "C03",
+      "label": "正确auth_time",
+      "requiredObservation": "人员auth_time与实际primary/MFA认证事实一致且符合max_age/step-up约束",
+      "componentRefIds": [
+        "I08",
+        "PMFA"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19MFA",
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:人员auth_time精确比较及旧时间拒绝；MACHINE NULL不替代人员正例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C03-S06",
+      "categoryId": "C03",
+      "label": "UserInfo subject一致",
+      "requiredObservation": "标准SDK核验ID Token与UserInfo sub严格相同",
+      "componentRefIds": [
+        "I08",
+        "ICLAIMS",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE",
+        "UNIT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前实际identity与RP通信重跑",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S07",
+      "categoryId": "C03",
+      "label": "错误client拒绝",
+      "requiredObservation": "另一client不能兑换code、验证ID Token或取UserInfo原身份",
+      "componentRefIds": [
+        "I08"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:不同client负例及无会话提交",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S08",
+      "categoryId": "C03",
+      "label": "错误issuer拒绝",
+      "requiredObservation": "错误回调iss及错误签名issuer均由RP拒绝",
+      "componentRefIds": [
+        "I08",
+        "RPFAIL"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:标准SDK调用实际错误issuer响应，不仅helper存在",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S09",
+      "categoryId": "C03",
+      "label": "错误nonce拒绝",
+      "requiredObservation": "改动nonce的有效签名响应被拒绝且不建立会话",
+      "componentRefIds": [
+        "I08",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际SDK负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C03-S10",
+      "categoryId": "C03",
+      "label": "错误ID Token audience拒绝",
+      "requiredObservation": "有效签名但错误aud的ID Token被独立标准RP拒绝",
+      "componentRefIds": [
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:组件盘点未见直接错audience客户端验证调用，须显式新增",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    {
+      "id": "P25-C04-S01",
+      "categoryId": "C04",
+      "label": "同sector稳定",
+      "requiredObservation": "同应用同环境且经批准sector内同一账号跨客户端稳定",
+      "componentRefIds": [
+        "I06"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:同sector双client实际登录比对",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C04-S02",
+      "categoryId": "C04",
+      "label": "不同合作方隔离",
+      "requiredObservation": "不同app/partner或environment不能获得相同可关联sub",
+      "componentRefIds": [
+        "I06"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:两独立partner及TEST/PRODUCTION比对",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C04-S03",
+      "categoryId": "C04",
+      "label": "更名稳定",
+      "requiredObservation": "更改displayName/username后原subject映射保持",
+      "componentRefIds": [
+        "I06"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:当前新账号经受控管理更名再登录",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C04-S04",
+      "categoryId": "C04",
+      "label": "注销不复用",
+      "requiredObservation": "账号退休后旧subject封存，新账号不继承原subject",
+      "componentRefIds": [
+        "I06",
+        "RECOVERY"
+      ],
+      "componentLayers": [
+        "PYTHON_COMPONENT",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23RESTORE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:任务新账号退休及新建比对，不操作已有账号",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C05-S01",
+      "categoryId": "C05",
+      "label": "错误callback拒绝",
+      "requiredObservation": "未精确登记/交叉client/带额外参数callback不接收成功code",
+      "componentRefIds": [
+        "I08",
+        "ICALLBACK",
+        "I12CALLBACK"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "UNIT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际authorize与token两处redirect_uri负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C05-S02",
+      "categoryId": "C05",
+      "label": "plain拒绝",
+      "requiredObservation": "code_challenge_method=plain被拒绝，不产生可兑换code",
+      "componentRefIds": [
+        "IPKCE"
+      ],
+      "componentLayers": [
+        "UNIT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:现有S256变换单测不等于plain负例，需显式请求",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C05-S03",
+      "categoryId": "C05",
+      "label": "非法challenge拒绝",
+      "requiredObservation": "过短/过长/非法字符或缺少S256 challenge被拒绝",
+      "componentRefIds": [
+        "IPKCE",
+        "I08"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "UNIT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:实际challenge语法负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C05-S04",
+      "categoryId": "C05",
+      "label": "错误verifier拒绝",
+      "requiredObservation": "格式正确但不匹配原challenge的verifier无法兑换",
+      "componentRefIds": [
+        "I08"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际token端点invalid_grant及code状态",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C05-S05",
+      "categoryId": "C05",
+      "label": "code重放拒绝",
+      "requiredObservation": "已消费code第二次兑换被拒绝且不新增grant",
+      "componentRefIds": [
+        "I08",
+        "I22CODE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:标准client或公共token重放子例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C05-S06",
+      "categoryId": "C05",
+      "label": "并发兑换单赢家",
+      "requiredObservation": "两个真实身份进程同时兑换同一code仅一个成功",
+      "componentRefIds": [
+        "I22CODE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23KEY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际双进程并发；同进程AppState不能替代",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C06-S01",
+      "categoryId": "C06",
+      "label": "轮换",
+      "requiredObservation": "每次成功refresh替换原refresh并保持原sub/sid来源",
+      "componentRefIds": [
+        "I10",
+        "PREFRESH",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "记录原/新载体不同布尔值，禁止原值",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C06-S02",
+      "categoryId": "C06",
+      "label": "并发",
+      "requiredObservation": "两个节点争用原refresh只允许规定结果且无双活family",
+      "componentRefIds": [
+        "I22REFRESH",
+        "PREFRESH"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际双进程及BFF并发",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C06-S03",
+      "categoryId": "C06",
+      "label": "reuse撤销family",
+      "requiredObservation": "重用已消费refresh使同family存活后代失效且不越界其他来源",
+      "componentRefIds": [
+        "I10",
+        "I22REFRESH"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21REVOKE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:在线与离线family当前拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C06-S04",
+      "categoryId": "C06",
+      "label": "绝对期限",
+      "requiredObservation": "refresh无法延长原family绝对截止或BFF本地截止",
+      "componentRefIds": [
+        "I10",
+        "PDEADLINE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21OFFLINE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际database时钟及原截止；期限配置标签不能冒充生效值",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C06-S05",
+      "categoryId": "C06",
+      "label": "空闲期限",
+      "requiredObservation": "idle超过已采纳窗口后拒绝，成功操作不突破绝对上限",
+      "componentRefIds": [
+        "I10"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21OFFLINE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前受控fixture真实时间边界",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C06-S06",
+      "categoryId": "C06",
+      "label": "scope收缩",
+      "requiredObservation": "请求或权威scope缩小后新access仅保留交集",
+      "componentRefIds": [
+        "I10",
+        "I10REPLAY"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21SCOPE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:已批准额外scope后实际收缩",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C06-S07",
+      "categoryId": "C06",
+      "label": "禁止scope扩权",
+      "requiredObservation": "refresh添加未获授权resource/scope被拒绝",
+      "componentRefIds": [
+        "I10",
+        "I09"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21SCOPE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际token负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C06-S08",
+      "categoryId": "C06",
+      "label": "在线来源与离线分离",
+      "requiredObservation": "online来源失效即拒绝；明确批准offline按7天绝对合同且可显式撤销",
+      "componentRefIds": [
+        "I10"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21OFFLINE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "自然SSO到期与显式GLOBAL/consent revoke分别验收",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C07-S01",
+      "categoryId": "C07",
+      "label": "公开client无secret",
+      "requiredObservation": "PUBLIC注册/运行不存储、不展示、不发送client secret",
+      "componentRefIds": [
+        "I04",
+        "UCLIENT"
+      ],
+      "componentLayers": [
+        "BROWSER_ROUTE_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REGISTRY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际PUBLIC客户端S256正例和secret字段拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C07-S02",
+      "categoryId": "C07",
+      "label": "机密client错误凭据",
+      "requiredObservation": "错误/缺失Basic凭据拒绝，不能退回PUBLIC或其他client",
+      "componentRefIds": [
+        "I04",
+        "I08",
+        "I11"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN",
+        "H21MACHINE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:人员与MACHINE各一次负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C07-S03",
+      "categoryId": "C07",
+      "label": "凭据轮换",
+      "requiredObservation": "新secret成功、旧secret失效，保留明确版本与边界",
+      "componentRefIds": [
+        "I04",
+        "I11",
+        "I11AGE"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23SERVICES"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:OAuth client secret与service secret轮换分别报告",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C07-S04",
+      "categoryId": "C07",
+      "label": "紧急撤销",
+      "requiredObservation": "emergency revoke使旧credential版本及来源立即失效且不能重启复活",
+      "componentRefIds": [
+        "I04",
+        "I11",
+        "PMACHINE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23RESTORE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际client credential撤销与当前MACHINE请求",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C08-S01",
+      "categoryId": "C08",
+      "label": "ID Token拒绝API",
+      "requiredObservation": "ID Token作为Bearer访问业务API或introspection不会取得访问",
+      "componentRefIds": [
+        "I09",
+        "PRESOURCE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21RESOURCE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际stores/work-orders/resource API，不仅userinfo",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C08-S02",
+      "categoryId": "C08",
+      "label": "错误audience拒绝",
+      "requiredObservation": "一个资源access不能调用另一资源API",
+      "componentRefIds": [
+        "I09",
+        "PRESOURCE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21RESOURCE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:stores和work-orders交叉audience",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C08-S03",
+      "categoryId": "C08",
+      "label": "跨资源scope拒绝",
+      "requiredObservation": "同名scope也必须绑定resource；不能拼接资源权限",
+      "componentRefIds": [
+        "I09",
+        "I11",
+        "PRESOURCE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21RESOURCE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际两资源scope交叉",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C08-S04",
+      "categoryId": "C08",
+      "label": "错误主体拒绝",
+      "requiredObservation": "不符合endpoint主体类型的USER/MACHINE及错误member来源均拒绝",
+      "componentRefIds": [
+        "I11",
+        "PRESOURCE",
+        "PBIND"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "CANONICAL_PG_MOCK_PORT",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21RESOURCE",
+        "H21MACHINE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:资源端不能只在issuer测拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C08-S05",
+      "categoryId": "C08",
+      "label": "机器不冒充人员",
+      "requiredObservation": "MACHINE无人员sub/会员上下文，USER内部能力和客户会话不能由机器取得",
+      "componentRefIds": [
+        "I11",
+        "PMACHINE",
+        "PRESOURCE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21MACHINE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "断言无用户字段及人员endpoint拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C09-S01",
+      "categoryId": "C09",
+      "label": "首次确认",
+      "requiredObservation": "首次申请显示应用/用途/resource/scope且未批准不能签发",
+      "componentRefIds": [
+        "I07CONSENT",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:真实consent页拒绝及批准各一例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C09-S02",
+      "categoryId": "C09",
+      "label": "后续复用",
+      "requiredObservation": "同组版本与权限不变时复用已确认同意",
+      "componentRefIds": [
+        "I07CONSENT",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:第二次登录无再次提示且未扩权",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C09-S03",
+      "categoryId": "C09",
+      "label": "新增scope再确认",
+      "requiredObservation": "scope或group成员版本扩大必须再次提示，旧同意不能自动覆盖",
+      "componentRefIds": [
+        "I07CONSENT",
+        "I07GROUP"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21SCOPE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际管理员变更后浏览器再确认",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C09-S04",
+      "categoryId": "C09",
+      "label": "跨组不继承",
+      "requiredObservation": "同账号在其他group/app/environment必须独立确认",
+      "componentRefIds": [
+        "I07CONSENT",
+        "I06"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际两个group登录",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C09-S05",
+      "categoryId": "C09",
+      "label": "同组受控共享",
+      "requiredObservation": "仅显式同app同environment同责任主体成员共享；新增成员提升group version",
+      "componentRefIds": [
+        "I07GROUP",
+        "I07CONSENT"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REGISTRY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际组成员登记和用户再同意",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C10-S01",
+      "categoryId": "C10",
+      "label": "active不可直接删",
+      "requiredObservation": "活动consent DELETE失败且grant/receipt不变化",
+      "componentRefIds": [
+        "I07DELETE",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21REVOKE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际用户管理API active删除负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C10-S02",
+      "categoryId": "C10",
+      "label": "撤销来源均失效",
+      "requiredObservation": "consent revoke结束相关code/access/refresh/BFF/内部capability且不影响无关组",
+      "componentRefIds": [
+        "I07DELETE",
+        "PCAP"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20APP",
+        "H21REVOKE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:调用consent revoke；CURRENT_APP/RFC7009不能替代组撤销",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C10-S03",
+      "categoryId": "C10",
+      "label": "删除不复活",
+      "requiredObservation": "已撤销记录隐藏后旧token仍拒绝且墓碑/代际保留",
+      "componentRefIds": [
+        "I07DELETE",
+        "UCONTEXT",
+        "RECOVERY"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "PYTHON_COMPONENT",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23RESTORE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际删除后旧载体与恢复均拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C10-S04",
+      "categoryId": "C10",
+      "label": "旧删除与重授权冲突",
+      "requiredObservation": "重新授权后旧expectedVersion DELETE冲突且新授权保留",
+      "componentRefIds": [
+        "I07DELETE"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际并发/旧版本API场景",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C11-S01",
+      "categoryId": "C11",
+      "label": "零候选",
+      "requiredObservation": "PLATFORM_CONTEXT或CUSTOMER_PORTAL零候选不自动批准也不造默认成员",
+      "componentRefIds": [
+        "I12",
+        "PCONTEXT",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "CANONICAL_PG_MOCK_PORT",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13",
+        "H14TYPE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:真实零成员context用途拒绝，区别ACCOUNT_ONLY成功",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C11-S02",
+      "categoryId": "C11",
+      "label": "单租户",
+      "requiredObservation": "一个租户多组织跳过租户步骤且保留组织选择",
+      "componentRefIds": [
+        "I12",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际页面断言无tenant step",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C11-S03",
+      "categoryId": "C11",
+      "label": "多租户",
+      "requiredObservation": "先选租户再选组织，不按搜索或首条自动选择",
+      "componentRefIds": [
+        "I12",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际多tenant fixture与页面",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C11-S04",
+      "categoryId": "C11",
+      "label": "单组织",
+      "requiredObservation": "选定租户只一可用成员时精确自动继续",
+      "componentRefIds": [
+        "I12",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13",
+        "H14TYPE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "重验单项来源与实际member ID布尔绑定",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C11-S05",
+      "categoryId": "C11",
+      "label": "多组织",
+      "requiredObservation": "一个租户多个合法成员需显式选择，会员/类型/代际完整绑定",
+      "componentRefIds": [
+        "I12",
+        "PCONTEXT",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "CANONICAL_PG_MOCK_PORT",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前多候选正例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C11-S06",
+      "categoryId": "C11",
+      "label": "记忆同意单项自动继续",
+      "requiredObservation": "同意充足且恰一合法候选时无需额外确认按钮",
+      "componentRefIds": [
+        "I12",
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:当前二次登录实际无点击观察",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C11-S07",
+      "categoryId": "C11",
+      "label": "搜索不自动选",
+      "requiredObservation": "过滤至一项仍待显式选择，搜索不产生approve请求",
+      "componentRefIds": [
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际HTTPS网络计数与页面断言",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": []
+    },
+    {
+      "id": "P25-C11-S08",
+      "categoryId": "C11",
+      "label": "员工客户隔离",
+      "requiredObservation": "同SSO下两独立BFF/cookie/member用途；反向建立会话失败",
+      "componentRefIds": [
+        "PSELECT",
+        "PRESOURCE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H14TYPE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "纯员工/纯客户负例和双身份账号",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C11-S09",
+      "categoryId": "C11",
+      "label": "ACCOUNT_ONLY无context调用",
+      "requiredObservation": "账号登录与refresh不请求平台候选/selection/result接口",
+      "componentRefIds": [
+        "I12"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:记录目标path计数0而不仅页面没显示",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C12-S01",
+      "categoryId": "C12",
+      "label": "组织收缩",
+      "requiredObservation": "停用/撤销组织授权后旧能力立即拒绝且恢复组织不复活旧能力",
+      "componentRefIds": [
+        "PBIND",
+        "PCAP"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13REVOKE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际资源请求前后验证",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C12-S02",
+      "categoryId": "C12",
+      "label": "成员收缩",
+      "requiredObservation": "成员停用/退休/类型或identity_version变化使准确成员能力失效",
+      "componentRefIds": [
+        "PBIND",
+        "PCAP"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13REVOKE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际stores/work-orders/notification，其他成员保持有效",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C12-S03",
+      "categoryId": "C12",
+      "label": "应用准入收缩",
+      "requiredObservation": "application/tenant/organization admission缩小在原事务内使准确app能力失效",
+      "componentRefIds": [
+        "PAPP",
+        "PVERSION",
+        "PCAP"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_LOGIN",
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19PUBLISH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际应用撤销后资源端即时拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C12-S04",
+      "categoryId": "C12",
+      "label": "scope不越过用户权限",
+      "requiredObservation": "第三方获批scope仍需用户当前业务权限，不能绕过成员/应用上限",
+      "componentRefIds": [
+        "I09",
+        "PRESOURCE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21RESOURCE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:批准scope但无业务权限USER实际访问拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C12-S05",
+      "categoryId": "C12",
+      "label": "恢复授权不恢复旧token",
+      "requiredObservation": "重新启用组织/成员/app后只能新发能力，旧代际保持失效",
+      "componentRefIds": [
+        "PBIND",
+        "PCAP",
+        "RECOVERY"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "CANONICAL_PG_MOCK_PORT",
+        "PYTHON_COMPONENT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23RESTORE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际重新启用后旧/新载体对照",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C13-S01",
+      "categoryId": "C13",
+      "label": "原结果恢复",
+      "requiredObservation": "平台已消费而门户提交失败，重试恢复完全相同capability与截止",
+      "componentRefIds": [
+        "PSELECT"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H14RECOVER",
+        "H14RETRY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "保留平台先提交证据与同一个operation",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C13-S02",
+      "categoryId": "C13",
+      "label": "重试不重复消费",
+      "requiredObservation": "同operation重复result只一次消费/审计，不能生成新来源",
+      "componentRefIds": [
+        "PSELECT",
+        "I12"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "SMALL_SCHEMA_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H14RETRY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际消费审计计数为1",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C13-S03",
+      "categoryId": "C13",
+      "label": "切换冻结",
+      "requiredObservation": "发起组织切换同步冻结旧业务写入/缓存/通知/微应用直到新来源完整",
+      "componentRefIds": [
+        "UUPDATE",
+        "UNOTIFY"
+      ],
+      "componentLayers": [
+        "UNIT_JS"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际资源及UI在切换待定窗口拒绝旧请求",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    {
+      "id": "P25-C13-S04",
+      "categoryId": "C13",
+      "label": "旧请求不能覆盖",
+      "requiredObservation": "忽略AbortSignal的迟到成功/错误无法覆盖新member/version上下文",
+      "componentRefIds": [
+        "UUPDATE",
+        "UNOTIFY",
+        "PLATE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "UNIT_JS"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际HTTPS延迟窗口与两个上下文对照",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C13-S05",
+      "categoryId": "C13",
+      "label": "多标签页同步",
+      "requiredObservation": "同浏览器两个标签页切换或登出后旧标签不能继续业务或覆盖新Cookie",
+      "componentRefIds": [
+        "UTABS",
+        "PLATE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "UNIT_JS"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH",
+        "H20GLOBAL"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:独立browser context不等于两个tabs，需同context双page",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C13-S06",
+      "categoryId": "C13",
+      "label": "微应用同步",
+      "requiredObservation": "当前SDK/宿主收到新完整上下文，旧token/生命周期/调用失效",
+      "componentRefIds": [
+        "UUPDATE",
+        "UMICRO"
+      ],
+      "componentLayers": [
+        "UNIT_JS"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:实际micro app mount/update与stores/work-orders集成",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    {
+      "id": "P25-C13-S07",
+      "categoryId": "C13",
+      "label": "通知同步",
+      "requiredObservation": "切换/成员代际变化取消旧HTTP/socket来源，新连接仅收准确recipient",
+      "componentRefIds": [
+        "UNOTIFY",
+        "NOTIFY"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG_HTTP_FIXTURE",
+        "UNIT_JS"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:实际notification进程/socket与新member proof，不能仅collector",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    {
+      "id": "P25-C14-S01",
+      "categoryId": "C14",
+      "label": "查看权限",
+      "requiredObservation": "VIEW可以读最小登记元数据，不能写/审/轮换",
+      "componentRefIds": [
+        "I04",
+        "PPERMS",
+        "UCLIENT"
+      ],
+      "componentLayers": [
+        "BROWSER_ROUTE_FIXTURE",
+        "CANONICAL_PG",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REGISTRY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际VIEW-only actor负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C14-S02",
+      "categoryId": "C14",
+      "label": "修改权限",
+      "requiredObservation": "REGISTER/SCOPES只允许授权范围写入，不能审核或发布自己申请",
+      "componentRefIds": [
+        "I04",
+        "PREVIEW",
+        "PPERMS"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19",
+        "H19REVIEW"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前申请人与审核人独立",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C14-S03",
+      "categoryId": "C14",
+      "label": "审核发布权限",
+      "requiredObservation": "REVIEW与PUBLISH分离，申请不可自批；生产默认关闭且缺真实binding保持关闭",
+      "componentRefIds": [
+        "PREVIEW",
+        "PPERMS",
+        "I19"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REVIEW",
+        "H19PUBLISH"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "任务fixture绑定不完成Q3真实发布责任",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C14-S04",
+      "categoryId": "C14",
+      "label": "轮换权限",
+      "requiredObservation": "ROTATE与KEY_ADMIN权限独立，无权actor不能改client/signing/service secret",
+      "componentRefIds": [
+        "I04",
+        "IKEYPERM"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23KEY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:三种轮换权限分别拒绝，不能混算",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C14-S05",
+      "categoryId": "C14",
+      "label": "越权拒绝",
+      "requiredObservation": "角色/应用委派撤销后新写与重放均失败，其他app对象不可写",
+      "componentRefIds": [
+        "PPERMS",
+        "PAPP"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19PUBLISH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:跨app与撤权后replay",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C14-S06",
+      "categoryId": "C14",
+      "label": "CSRF拒绝",
+      "requiredObservation": "缺失/错误Origin、CSRF、重复Cookie/参数不触发敏感变更",
+      "componentRefIds": [
+        "RPOIDC",
+        "PMFA"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19",
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:平台、SSO、RP实际负例分别记录",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C14-S07",
+      "categoryId": "C14",
+      "label": "审计失败原子回滚",
+      "requiredObservation": "审计插入拒绝/静默抑制时mutation、receipt和能力撤销均回滚",
+      "componentRefIds": [
+        "PAUDIT",
+        "PVERSION",
+        "IKEYPERM"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_LOGIN"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:仅任务DB窄故障注入且finally移除",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C14-S08",
+      "categoryId": "C14",
+      "label": "幂等",
+      "requiredObservation": "相同operation同输入恢复原结果；不同输入冲突且不重复secret/审批",
+      "componentRefIds": [
+        "PREVIEW",
+        "I04",
+        "PLOGOUT"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_MOCK_PORT",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H14RETRY",
+        "H19REVIEW"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:管理操作丢失响应重试",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C14-S09",
+      "categoryId": "C14",
+      "label": "版本冲突",
+      "requiredObservation": "陈旧expectedVersion不能覆盖新配置、审批或删除事实",
+      "componentRefIds": [
+        "PVERSION",
+        "PREVIEW",
+        "I07DELETE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19PUBLISH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际并发管理版本负例",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C15-S01",
+      "categoryId": "C15",
+      "label": "当前应用范围",
+      "requiredObservation": "CURRENT_APP关闭原grant，保留同账号其他RP/同RP其他grant及consent",
+      "componentRefIds": [
+        "ILOGOUT",
+        "PLOGOUT"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_MOCK_PORT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20APP"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际两个RP及同RP独立设备对照",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C15-S02",
+      "categoryId": "C15",
+      "label": "全局范围",
+      "requiredObservation": "GLOBAL关闭账号全部原SSO与USER grant/离线family，保留consent",
+      "componentRefIds": [
+        "ILOGOUT"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20GLOBAL"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际BFF/标准RP/SSO/离线范围",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C15-S03",
+      "categoryId": "C15",
+      "label": "授权撤销范围",
+      "requiredObservation": "consent revoke关闭准确组全部派生来源，其他组保持",
+      "componentRefIds": [
+        "I07DELETE",
+        "IDELIVERY"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "SMALL_SCHEMA_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20APP"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:单独consent revoke API，不以CURRENT_APP替代",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C15-S04",
+      "categoryId": "C15",
+      "label": "back-channel签名",
+      "requiredObservation": "错误issuer/aud/signature/sub/events拒绝；有效通知只关闭原sid/sub",
+      "componentRefIds": [
+        "ISIGNED",
+        "PBACK",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_MOCK_PORT",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20SIGN"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际worker与接收方都核对",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C15-S05",
+      "categoryId": "C15",
+      "label": "back-channel重放",
+      "requiredObservation": "同jti重放拒绝；未知sid tombstone阻止迟到callback/refresh复活",
+      "componentRefIds": [
+        "PBACK",
+        "RPCAP"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20SIGN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:未知sid与callback在途实际竞态",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C15-S06",
+      "categoryId": "C15",
+      "label": "back-channel重试",
+      "requiredObservation": "接收方不可用不阻塞已提交撤销；有界lease/retry，恢复原operation和预算",
+      "componentRefIds": [
+        "IDELIVERY"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20RETRY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前实际collector中断并恢复",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C15-S07",
+      "categoryId": "C15",
+      "label": "降级时效",
+      "requiredObservation": "无back-channel按本地<=300秒/在线<=60秒合同拒绝，不能宣称即时退出",
+      "componentRefIds": [
+        "IDELIVERY",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20DEGRADE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际最长观测值，不只读取配置标签",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C16-S01",
+      "categoryId": "C16",
+      "label": "桌面",
+      "requiredObservation": "当前身份/宿主/门户/独立RP主流程在桌面Chromium完成无页面错误",
+      "componentRefIds": [
+        "UCONTEXT",
+        "UCLIENT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "BROWSER_ROUTE_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13",
+        "H14TYPE",
+        "H21DISCOVERY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "记录browser版本及受信TLS",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": []
+    },
+    {
+      "id": "P25-C16-S02",
+      "categoryId": "C16",
+      "label": "移动",
+      "requiredObservation": "390x844等窄屏不横向溢出且完成登录/同意/上下文/撤销",
+      "componentRefIds": [
+        "UCONTEXT",
+        "UCLIENT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "BROWSER_ROUTE_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21DISCOVERY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:不能只RP首页截图，完成身份与上下文移动流程",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": []
+    },
+    {
+      "id": "P25-C16-S03",
+      "categoryId": "C16",
+      "label": "键盘",
+      "requiredObservation": "Tab/Shift+Tab/Enter/Escape完成关键流程，Radio与按钮可操作",
+      "componentRefIds": [
+        "UCONTEXT",
+        "UCLIENT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE",
+        "BROWSER_ROUTE_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:实际HTTPS键盘操作断言",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": []
+    },
+    {
+      "id": "P25-C16-S04",
+      "categoryId": "C16",
+      "label": "焦点",
+      "requiredObservation": "对话框打开聚焦、焦点圈定、关闭回触发器；错误后焦点可恢复",
+      "componentRefIds": [
+        "UCLIENT"
+      ],
+      "componentLayers": [
+        "BROWSER_ROUTE_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REGISTRY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:activeElement/焦点循环断言",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": []
+    },
+    {
+      "id": "P25-C16-S05",
+      "categoryId": "C16",
+      "label": "弹窗滚动",
+      "requiredObservation": "长client/consent表单可滚动且操作条可达，正文不超viewport",
+      "componentRefIds": [
+        "UCLIENT"
+      ],
+      "componentLayers": [
+        "BROWSER_ROUTE_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H19REGISTRY"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际长表单与窄屏滚动",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": []
+    },
+    {
+      "id": "P25-C16-S06",
+      "categoryId": "C16",
+      "label": "开放重定向拒绝",
+      "requiredObservation": "returnTo/callback/restart及URL参数不能导航未登记origin/path",
+      "componentRefIds": [
+        "I12CALLBACK",
+        "ICALLBACK",
+        "RPFAIL"
+      ],
+      "componentLayers": [
+        "SMALL_SCHEMA_PG",
+        "STANDARD_CLIENT_TLS_FIXTURE",
+        "UNIT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际浏览器不能只拒绝helper",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C16-S07",
+      "categoryId": "C16",
+      "label": "XSS拒绝",
+      "requiredObservation": "恶意显示名/组织/应用/scope文本不创建可执行DOM；CSP保持",
+      "componentRefIds": [
+        "UCONTEXT"
+      ],
+      "componentLayers": [
+        "BROWSER_HTTP_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13SWITCH"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:任务新实体恶意文本并断言无执行",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": []
+    },
+    {
+      "id": "P25-C16-S08",
+      "categoryId": "C16",
+      "label": "Cookie受限",
+      "requiredObservation": "禁用/拦截Cookie有明确可恢复失败且不URL/本地存储降级泄漏凭据",
+      "componentRefIds": [
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H13",
+        "H21LOGIN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:实际阻断Cookie的context，无无限重定向/静默通过",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS"
+      ]
+    },
+    {
+      "id": "P25-C17-S01",
+      "categoryId": "C17",
+      "label": "身份不可用",
+      "requiredObservation": "identity中断时BFF/资源失败关闭，恢复后按原来源合同处理",
+      "componentRefIds": [
+        "POUTAGE",
+        "SFAIL",
+        "WFAIL"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "HTTP_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22IDENTITY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "不退回旧平台签发/本地密码",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C17-S02",
+      "categoryId": "C17",
+      "label": "平台不可用",
+      "requiredObservation": "私有平台proof超时/拒绝时身份和资源拒绝且恢复不复活旧上下文",
+      "componentRefIds": [
+        "POUTAGE",
+        "SFAIL",
+        "WFAIL"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "HTTP_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22PLATFORM"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前实际进程/有界网络故障",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C17-S03",
+      "categoryId": "C17",
+      "label": "数据库不可用",
+      "requiredObservation": "readiness失败而liveness正确，业务503且恢复不删合法来源",
+      "componentRefIds": [
+        "I22POOL"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22DB"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际独占fixture库连接失败与恢复",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C17-S04",
+      "categoryId": "C17",
+      "label": "连接池满",
+      "requiredObservation": "真实pool耗尽有界503，不能伪造401/撤销合法token或无限排队",
+      "componentRefIds": [
+        "I22POOL",
+        "I22LOCK"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22DB"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:runtime实际pool saturation，不仅DB关闭",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C17-S05",
+      "categoryId": "C17",
+      "label": "队列满",
+      "requiredObservation": "密码/请求/投递队列满有界拒绝，释放后恢复且无无界pending",
+      "componentRefIds": [
+        "IQUEUE",
+        "IDELIVERY"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "ROUTER_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22QUEUE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "记录queue上限与实际拒绝",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C17-S06",
+      "categoryId": "C17",
+      "label": "超时",
+      "requiredObservation": "socket/slow body/upstream deadline按合同结束，旧异步成功不能提交",
+      "componentRefIds": [
+        "INET",
+        "PDEADLINE",
+        "SFAIL",
+        "WFAIL"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "HTTP_FIXTURE",
+        "TCP_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22PLATFORM",
+        "H22QUEUE"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:迟到reply及deadline以后源不可附加",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C17-S07",
+      "categoryId": "C17",
+      "label": "时钟偏移",
+      "requiredObservation": "超出允许skew的ID Token/logout token/deadline拒绝；容许边界正确",
+      "componentRefIds": [
+        "PDEADLINE",
+        "RPOIDC"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_MOCK_PORT",
+        "STANDARD_CLIENT_TLS_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20SIGN"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "GAP:过去/未来边界token及实际validator断言，不改宿主时间",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24CONSUMERS",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C17-S08",
+      "categoryId": "C17",
+      "label": "错误语义与恢复",
+      "requiredObservation": "区分403/409/429/503，正文脱敏且恢复不重耗不确定refresh/code",
+      "componentRefIds": [
+        "I22POOL",
+        "PREFRESH",
+        "PLATE",
+        "IREDACT"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "CANONICAL_PG_MOCK_PORT",
+        "UNIT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22DB",
+        "H22IDENTITY",
+        "H22QUEUE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "逐端点状态/固定错误码与副作用计数",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY",
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C18-S01",
+      "categoryId": "C18",
+      "label": "密钥生命周期",
+      "requiredObservation": "预发布窗口、独立SDK缓存、原期限退役、紧急撤销和无活动signer失败关闭",
+      "componentRefIds": [
+        "IKEY",
+        "IKEYPERM"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23KEY"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际full lifecycle；recovery profile单独不能替代",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C18-S02",
+      "categoryId": "C18",
+      "label": "备份恢复deny事实",
+      "requiredObservation": "新目标restore/reconcile保留撤销/墓碑/代际/receipt/密钥与secret版本，未自然过期旧载体仍拒绝",
+      "componentRefIds": [
+        "RECOVERY"
+      ],
+      "componentLayers": [
+        "PYTHON_COMPONENT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23RESTORE",
+        "H23FRESH"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "实际RPO/RTO及carrier剩余期；stores/work-orders恢复不由身份工具自动覆盖",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    },
+    {
+      "id": "P25-C18-S03",
+      "categoryId": "C18",
+      "label": "容量",
+      "requiredObservation": "实际成功CODE/REFRESH/INTROSPECTION负载报告速率、p95/错误/CPU/内存/队列；候选目标与生产承诺分开",
+      "componentRefIds": [
+        "I22POOL"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22CAP"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前冻结版本实测，Q9生产容量/值班仍硬门禁",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C18-S04",
+      "categoryId": "C18",
+      "label": "限流与告警",
+      "requiredObservation": "client/account/source预算生效，socket轮换不重置；终止故障告警实际送达并确认",
+      "componentRefIds": [
+        "I22RATE",
+        "IQUEUE"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG",
+        "ROUTER_FIXTURE"
+      ],
+      "runtimeCandidateRefIds": [
+        "H22QUEUE",
+        "H22ALERT"
+      ],
+      "runtimeCoverage": "EXPLICIT_EXTENSION_REQUIRED",
+      "remainingAction": "EXTEND:实际429/Retry-After与独立alert sink",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C18-S05",
+      "categoryId": "C18",
+      "label": "日志脱敏",
+      "requiredObservation": "密码/secret/token/cookie/verifier/PHC/private keys在服务/网关/报告为0泄漏",
+      "componentRefIds": [
+        "IREDACT"
+      ],
+      "componentLayers": [
+        "UNIT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H20REDACT"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "当前全服务canary扫描；仅保存计数和输入hash",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24IDENTITY"
+      ]
+    },
+    {
+      "id": "P25-C18-S06",
+      "categoryId": "C18",
+      "label": "完整归属清理",
+      "requiredObservation": "删除本轮DB/roles/进程/日志/private files/临时网络镜像缓存；共享保留项精确列明",
+      "componentRefIds": [
+        "PBASE",
+        "RECOVERY"
+      ],
+      "componentLayers": [
+        "CANONICAL_PG_LOGIN",
+        "PYTHON_COMPONENT"
+      ],
+      "runtimeCandidateRefIds": [
+        "H23RESTORE"
+      ],
+      "runtimeCoverage": "EXISTING_RUNNER_REQUIRES_CURRENT_EXECUTION",
+      "remainingAction": "本轮owner报告、docker前后df与精确归属审计；Docker预算0，不声称VHDX压缩",
+      "phase25Result": "PENDING",
+      "executedAtUtc": null,
+      "actualEvidence": [],
+      "limitations": [],
+      "componentEvidenceIds": [
+        "E24PLATFORM"
+      ]
+    }
+  ],
+  "preExecutionActions": [
+    {
+      "id": "A01",
+      "kind": "RUNNER_ADAPTATION",
+      "sourceRefs": [
+        {
+          "id": "H20APP",
+          "line": 41
+        },
+        {
+          "id": "H21LOGIN",
+          "line": 22
+        },
+        {
+          "id": "H22CAP",
+          "line": 16
+        }
+      ],
+      "fact": "At mapping time phase20-browser, phase21-browser and phase22-runtime hard-code old cluster 7701548153213487841. Preserve ownership checks; bind the actual current owned manifest/cluster before execution.",
+      "status": "PENDING"
+    },
+    {
+      "id": "A02",
+      "kind": "ARTIFACT_NAMESPACE",
+      "sourceRefs": [
+        "H21LOGIN",
+        "H23RESTORE"
+      ],
+      "fact": "Historical output/snapshot prefixes are restricted to phase-21 / phase-23. Use isolated current-phase wrappers or reviewed explicit current-phase prefixes; never overwrite historical reports.",
+      "status": "PENDING"
+    },
+    {
+      "id": "A03",
+      "kind": "CANONICAL_TEST_COVERAGE",
+      "sourceRefs": [
+        "I08",
+        "I10",
+        "I11",
+        "I12"
+      ],
+      "fact": "Identity protocol regressions use handwritten schema and mocked intent/selection ports. Run current canonical install plus actual HTTPS; do not promote these tests to canonical evidence.",
+      "status": "PENDING"
+    },
+    {
+      "id": "A04",
+      "kind": "NEW_EXPLICIT_ASSERTIONS",
+      "scenarioIds": [
+        "P25-C03-S05",
+        "P25-C03-S10",
+        "P25-C05-S02",
+        "P25-C05-S03",
+        "P25-C13-S05",
+        "P25-C13-S06",
+        "P25-C13-S07",
+        "P25-C16-S03",
+        "P25-C16-S04",
+        "P25-C16-S08",
+        "P25-C17-S07"
+      ],
+      "fact": "Explicit gaps: human auth_time, wrong ID Token audience, plain/malformed PKCE, same-context tabs, actual micro-app/notification synchronization, keyboard/focus/Cookie restrictions, clock skew.",
+      "status": "PENDING"
+    },
+    {
+      "id": "A05",
+      "kind": "FULL_SERVICE_INSTALL",
+      "sourceRefs": [
+        "H23SERVICES",
+        "H23FRESH"
+      ],
+      "fact": "Identity recovery runtime is shared identity/platform + portal + RP. It does not automatically fresh-install or restore stores/work-orders/notification. Bind those schemas/binaries and actual API/socket paths separately. SDK is an artifact, not another app container.",
+      "status": "PENDING"
+    },
+    {
+      "id": "A06",
+      "kind": "CLEANUP",
+      "sourceRefs": [],
+      "fact": "Matrix work created no runtime resource. Environment owner must produce current-phase complete cleanup/disk evidence; shared retained resources need an explicit active owner and future cleanup scope.",
+      "status": "PENDING"
+    }
+  ],
+  "executionBatches": [
+    {
+      "id": "B01",
+      "name": "Freeze and own",
+      "scope": "Complete eight-repository input/config/static/build manifests, binaries, migrations, CA and tool versions; explicit task cluster, DB/role/process/private-file ownership.",
+      "result": "PENDING",
+      "runtimeMutationOwner": "parent only"
+    },
+    {
+      "id": "B02",
+      "name": "Canonical fresh installation",
+      "scope": "Install shared identity/platform, portal, stores and work-orders canonical 0001, notification schema and roles; start actual services plus independent RP and machine CLI; SDK/current examples bind same candidate.",
+      "result": "PENDING",
+      "runtimeMutationOwner": "parent only"
+    },
+    {
+      "id": "B03",
+      "name": "Personnel and registry",
+      "scope": "Run adapted current H13/H14/H19; add explicit registry/OIDC/subject/PKCE/consent/context assertions. Every scenario writes its own result/evidence ID.",
+      "result": "PENDING"
+    },
+    {
+      "id": "B04",
+      "name": "Standard and machine resource integration",
+      "scope": "Run H21 with actual openid-client/jose, stores/work-orders resource paths, approved MACHINE CLI, wrong audience/subject/scope and client secret rotation.",
+      "result": "PENDING"
+    },
+    {
+      "id": "B05",
+      "name": "Browser synchronization and accessibility",
+      "scope": "Same browser context two pages, actual host micro-app SDK and notification socket; narrow screens, keyboard/focus/scroll, redirect/XSS and restricted Cookie.",
+      "result": "PENDING"
+    },
+    {
+      "id": "B06",
+      "name": "Logout, failure and capacity",
+      "scope": "Adapted H20/H22 current runtime; pools/queues/timeouts/skew, original-operation recovery, measured revoke/degraded windows, independent alert sink and canary redaction.",
+      "result": "PENDING"
+    },
+    {
+      "id": "B07",
+      "name": "Keys and recovery",
+      "scope": "Full H23 key lifecycle and restore lifecycle with exact provenance; current binaries or verified input equivalence, unexpired carriers, source/target timing and deny facts. Business-service backup boundaries stay explicit.",
+      "result": "PENDING"
+    },
+    {
+      "id": "B08",
+      "name": "Candidate review and teardown",
+      "scope": "Complete target/config/runbook and Q gates, independent P1/P2 review, audit every result, then remove owned processes/DBs/roles/private files/logs/temporary resources and record disk accounting.",
+      "result": "PENDING"
+    }
+  ],
+  "releaseGates": [
+    {
+      "id": "Q3",
+      "phase26Required": true,
+      "phase25PreparationBlocked": false,
+      "requiredFact": "Actual distinct reviewer/publisher accounts, delegated responsibility, contact and approval records. Fixture actors do not satisfy release binding.",
+      "status": "PENDING_REAL_FACT"
+    },
+    {
+      "id": "Q8",
+      "phase26Required": true,
+      "phase25PreparationBlocked": false,
+      "requiredFact": "Actual operating jurisdiction/contracts and applicability of retention/deletion policy. Defaults are not legal approval.",
+      "status": "PENDING_REAL_FACT"
+    },
+    {
+      "id": "Q9",
+      "phase26Required": true,
+      "phase25PreparationBlocked": false,
+      "requiredFact": "Named ops/on-call responsibility and measured actual-target capacity/SLO/RPO/RTO acceptance. Local fixture results are internal candidate evidence only.",
+      "status": "PENDING_REAL_FACT"
+    },
+    {
+      "id": "Q10",
+      "phase26Required": true,
+      "phase25PreparationBlocked": false,
+      "requiredFact": "User confirmed local host and auth.saas.test / console.saas.test. Verify exact target DB names/owners, protected secret injection, services/ports/CA/callback/resources, switch actions and rollback triggers; obtain corresponding actual-operation authorization.",
+      "status": "PENDING_EXACT_TARGET_AND_OPERATION"
+    }
+  ],
+  "cleanup": {
+    "dockerCreated": 0,
+    "dockerReused": 0,
+    "runtimeDatabaseOperations": 0,
+    "runtimeProcessesStarted": 0,
+    "matrixFilesCreated": 2,
+    "note": "Documentation-only inventory. No Docker context/df command needed or executed by this child. Runtime owner must do those checks. No Windows VHDX reclamation claim."
+  }
+}

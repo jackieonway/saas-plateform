@@ -1,0 +1,75 @@
+{
+  "contractVersion": "unified-auth-phase25-focus-fixture/1",
+  "status": "PASS",
+  "date": "2026-10-29T10:19:26.467Z",
+  "scope": "Real React/Vite unified client page with production session gate and isolated HTTP fixture; no database or live backend claim",
+  "browser": "156.0.8078.4",
+  "scenarios": [
+    {
+      "name": "desktop URL filters and server pagination restore",
+      "status": "PASS"
+    },
+    {
+      "name": "390px editor contains keyboard focus and restores its opener on Escape",
+      "status": "PASS"
+    },
+    {
+      "name": "390px editor fits viewport and creates a valid machine client",
+      "status": "PASS"
+    },
+    {
+      "name": "390px consent group management versions members and warns about reconfirmation",
+      "status": "PASS"
+    },
+    {
+      "name": "390px back-channel registration preserves its owner binding on retirement",
+      "status": "PASS"
+    },
+    {
+      "name": "failed refresh retains the last successful directory",
+      "status": "PASS"
+    },
+    {
+      "name": "same-frame duplicate submits issue only one versioned write",
+      "status": "PASS"
+    },
+    {
+      "name": "409 version conflict requires an explicit latest-version reload",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown credential result recovers the original operation without resubmitting",
+      "status": "PASS"
+    },
+    {
+      "name": "lost HTTP response recovers the original operation without resubmitting",
+      "status": "PASS"
+    },
+    {
+      "name": "lost response then reload restores only the original pending operation",
+      "status": "PASS"
+    },
+    {
+      "name": "different authorized session refuses old credential recovery after reload",
+      "status": "PASS"
+    }
+  ],
+  "fixtureReportSha256": "c7f95862dc05e9eb6327cbfb39f81154bd5a5d5a6829f7d2ed1b5dcc39d7b02e",
+  "sourceSha256": "b157a06f3a9097d1f8c5300f50f76d39d7786f5934302f4882c31d3111c2c223",
+  "testSha256": "b5773b42647149afc81e53e944fb609d485fe5858cfa5a2be0e31f7b012a5aa6",
+  "beforeFailureReport": "phase-25-ui-focus-regression-before.json",
+  "screenshotDigests": {
+    "desktop-client-version-conflict.png": "2891c31cb7cd8719f7e1bdf77ab1defe43cc083e7b7cb273b1d5ad87c00628cb",
+    "desktop-consent-groups.png": "20b02a3ef273ee3fc5530555ae8e0900aa730fd3a10d950bc3ac8894406a59ad",
+    "desktop-first-party-sources.png": "4bfca1ef3d7a73d4cbfea78d2a70e446d6cb7cb56cdc32cc3740acc8aaea680a",
+    "desktop-third-party-directory.png": "aa9dd333c33e7c408f95df88932bda6450f14c8662b4b8b65710b8320e219f9c",
+    "mobile-client-directory.png": "72e944af085923da4f48bd23f0bdf01e4c1a073def45559c1b06814627106238",
+    "mobile-client-editor.png": "ba1fa088e741d6652ae8ffd7d589ff950120528238e45322cce3443b9ea4cc03",
+    "phase20-backchannel-mobile.png": "23b3c030d2108d51a3a71a4eeabbaf688bebfb41e40ba7c8c9dd45160f6ecab6"
+  },
+  "screenshotsContainOnlySyntheticFixtureData": true,
+  "realIssuerBrowserEvidence": false,
+  "processesStoppedByRunnerFinally": true,
+  "dockerCreated": 0,
+  "databaseUsed": false
+}

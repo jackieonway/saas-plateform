@@ -18,7 +18,6 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::state::AppState;
 use crate::util::uuid7::new_uuid;
 
 const SECRET: &str = "owned-phase02-policy-fixture-only";
@@ -193,11 +192,6 @@ fn application_body(code: &str) -> Value {
     json!({"code":code,"name":format!("Owned admission {code}"),"entryType":"HTML","runtimeMode":"TRUSTED"})
 }
 
-fn client_body(name: &str) -> Value {
-    json!({"clientName":name,"clientType":"CONFIDENTIAL","grantTypes":["authorization_code"],
-        "redirectUris":["https://policy.example.test/callback"],"scopes":["profile"],"requirePkce":true})
-}
-
 fn update_body(allowed: Value, version: i64) -> Value {
     json!({"allowedMemberTypes":allowed,"accessPolicyVersion":version,"reason":REASON})
 }
@@ -233,7 +227,7 @@ impl Harness {
             ),
             ("JWT_SECRET".into(), SECRET.into()),
         ]))?;
-        let state = AppState::new(pool.clone(), Arc::new(config));
+        let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
         let password_hash = state.passwords.hash(PASSWORD).await?;
         sqlx::query("INSERT INTO users(id,username,password_hash,is_super_admin) VALUES($1,'owned-policy-manager',$2,true)")
             .bind(actor).bind(password_hash).execute(pool).await?;
@@ -281,42 +275,9 @@ impl Harness {
                 crate::normalize_client_ip,
             ))
             .with_state(state);
-        // Exercise the real login/context flow, so new identity bindings are issued
-        // by the server rather than silently filling a legacy fixture session.
-        let login = call(
-            &app,
-            "",
-            Method::POST,
-            "/api/auth/login",
-            json!({"username":"owned-policy-manager","password":PASSWORD}),
-        )
-        .await?;
-        success(&login)?;
-        let ticket = login.body["ticket"]
-            .as_str()
-            .ok_or_else(|| anyhow!("login lacks ticket"))?;
-        let context = call(
-            &app,
-            ticket,
-            Method::POST,
-            "/api/auth/context",
-            json!({"organizationId":org,"membershipId":membership,"userId":actor}),
-        )
-        .await?;
-        success(&context)?;
-        // Selection identifies the exact relation; its type is server proof,
-        // not an accepted request field in the console context contract.
-        ensure!(
-            context.body["membershipId"] == json!(membership)
-                && context.body["memberType"] == "EMPLOYEE"
-                && context.body["user"]["id"] == json!(actor)
-                && context.body["organization"]["id"] == json!(org),
-            "context proof differs from the selected admission administrator"
-        );
-        let admin = context.body["accessToken"]
-            .as_str()
-            .ok_or_else(|| anyhow!("context lacks accessToken"))?
-            .to_string();
+        // Domain fixture represents a completed canonical SSO exchange; it does
+        // not mount an alternate login/token endpoint inside the platform.
+        let admin = crate::sso_test_fixture::token(pool, actor, tenant, org, SECRET).await?;
         Ok(Self {
             pool: pool.clone(),
             app,
@@ -335,15 +296,6 @@ impl Harness {
             .await?;
         let id = object_id(&reply)?;
         assert_policy(&reply.body, id, json!(["EMPLOYEE"]), None)?;
-        Ok((id, reply.body))
-    }
-
-    async fn create_client(&self, name: &str) -> Result<(Uuid, Value)> {
-        let reply = self
-            .call(Method::POST, "/api/oauth/clients", client_body(name))
-            .await?;
-        let id = object_id(&reply)?;
-        assert_policy(&reply.body, id, json!(["EMPLOYEE"]), Some("USER"))?;
         Ok((id, reply.body))
     }
 
@@ -399,11 +351,7 @@ impl Harness {
 
 async fn policy_contracts(h: &Harness) -> Result<()> {
     let (app_id, application) = h.create_application("policy-contract").await?;
-    let (client_id, client) = h.create_client("Owned policy contract").await?;
-    for (root, id, original, mode) in [
-        ("/api/applications", app_id, application, None),
-        ("/api/oauth/clients", client_id, client, Some("USER")),
-    ] {
+    for (root, id, original, mode) in [("/api/applications", app_id, application, None)] {
         let object_path = format!("{root}/{id}");
         let policy_path = format!("{object_path}/access-policy");
         let version = policy_version(&original)?;
@@ -557,214 +505,14 @@ async fn policy_contracts(h: &Harness) -> Result<()> {
         h.assert_audit(&updated, id, version + 1).await?;
     }
 
-    for (path, mut body) in [
-        ("/api/applications", application_body("policy-null")),
-        (
-            "/api/oauth/clients",
-            client_body("Owned null member policy"),
-        ),
-    ] {
-        body["allowedMemberTypes"] = Value::Null;
-        let rejected = h.call(Method::POST, path, body).await?;
-        ensure!(
-            rejected.status == StatusCode::BAD_REQUEST,
-            "ordinary creation accepted explicit null allowedMemberTypes"
-        );
-    }
-    let mut null_mode = client_body("Owned null subject policy");
-    null_mode["subjectMode"] = Value::Null;
-    let rejected = h
-        .call(Method::POST, "/api/oauth/clients", null_mode)
-        .await?;
+    let mut body = application_body("policy-null");
+    body["allowedMemberTypes"] = Value::Null;
     ensure!(
-        rejected.status == StatusCode::BAD_REQUEST,
-        "client creation accepted explicit null subjectMode"
-    );
-
-    let clients = h
-        .call(Method::GET, "/api/oauth/clients", Value::Null)
-        .await?;
-    success(&clients)?;
-    let reserved = clients
-        .body
-        .as_array()
-        .and_then(|items| {
-            items
-                .iter()
-                .find(|item| item["clientId"] == "platform-console-legacy")
-        })
-        .ok_or_else(|| anyhow!("migration did not register the reserved console client"))?;
-    let reserved_id: Uuid = reserved["id"]
-        .as_str()
-        .ok_or_else(|| anyhow!("reserved console client lacks id"))?
-        .parse()?;
-    let reserved_version = policy_version(reserved)?;
-    let reserved_path = format!("/api/oauth/clients/{reserved_id}");
-    let removed = h.call(Method::DELETE, &reserved_path, Value::Null).await?;
-    ensure!(
-        removed.status == StatusCode::BAD_REQUEST,
-        "reserved console client deletion did not return 400"
-    );
-    ensure!(
-        h.audit_count(removed.request_id).await? == 0,
-        "rejected reserved console deletion committed an audit"
-    );
-    let changed = h
-        .call(
-            Method::PUT,
-            &format!("{reserved_path}/access-policy"),
-            update_body(json!(["CUSTOMER"]), reserved_version),
-        )
-        .await?;
-    ensure!(
-        changed.status == StatusCode::BAD_REQUEST,
-        "reserved console client accepted a customer admission policy"
-    );
-    ensure!(
-        h.audit_count(changed.request_id).await? == 0,
-        "rejected reserved console policy committed an audit"
-    );
-    let retained = h.call(Method::GET, &reserved_path, Value::Null).await?;
-    success(&retained)?;
-    assert_policy(
-        &retained.body,
-        reserved_id,
-        json!(["EMPLOYEE"]),
-        Some("USER"),
-    )?;
-    ensure!(
-        policy_version(&retained.body)? == reserved_version,
-        "rejected reserved console mutations changed its policy version"
-    );
-    for key in [
-        "clientId",
-        "clientType",
-        "grantTypes",
-        "scopes",
-        "redirectUris",
-        "requirePkce",
-        "applicationId",
-    ] {
-        ensure!(
-            retained.body[key] == reserved[key],
-            "reserved console registration changed its {key} after rejected writes"
-        );
-    }
-
-    let mut both = application_body("policy-create");
-    both["allowedMemberTypes"] = json!(["CUSTOMER", "EMPLOYEE", "CUSTOMER"]);
-    let created = h.call(Method::POST, "/api/applications", both).await?;
-    assert_policy(
-        &created.body,
-        object_id(&created)?,
-        json!(["EMPLOYEE", "CUSTOMER"]),
-        None,
-    )?;
-    let mut both = client_body("Owned explicit client policy");
-    both["allowedMemberTypes"] = json!(["CUSTOMER", "EMPLOYEE", "CUSTOMER"]);
-    let created = h.call(Method::POST, "/api/oauth/clients", both).await?;
-    assert_policy(
-        &created.body,
-        object_id(&created)?,
-        json!(["EMPLOYEE", "CUSTOMER"]),
-        Some("USER"),
-    )?;
-
-    for (kind, grants, mode, allowed) in [
-        (
-            "PUBLIC",
-            json!(["client_credentials"]),
-            "MACHINE",
-            json!([]),
-        ),
-        (
-            "CONFIDENTIAL",
-            json!(["authorization_code"]),
-            "MACHINE",
-            json!([]),
-        ),
-        (
-            "CONFIDENTIAL",
-            json!(["client_credentials"]),
-            "MACHINE",
-            json!(["EMPLOYEE"]),
-        ),
-        (
-            "CONFIDENTIAL",
-            json!(["authorization_code"]),
-            "USER",
-            json!([]),
-        ),
-        (
-            "CONFIDENTIAL",
-            json!(["authorization_code", "client_credentials"]),
-            "LEGACY_MIXED",
-            json!(["EMPLOYEE"]),
-        ),
-    ] {
-        let mut body = client_body("Owned invalid subject contract");
-        body["clientType"] = json!(kind);
-        body["grantTypes"] = grants;
-        body["subjectMode"] = json!(mode);
-        body["allowedMemberTypes"] = allowed;
-        let reply = h.call(Method::POST, "/api/oauth/clients", body).await?;
-        ensure!(
-            reply.status == StatusCode::BAD_REQUEST,
-            "invalid new client subject contract returned {}",
-            reply.status
-        );
-    }
-    let mut machine = client_body("Owned machine policy");
-    machine["grantTypes"] = json!(["client_credentials"]);
-    machine["subjectMode"] = json!("MACHINE");
-    machine["allowedMemberTypes"] = json!([]);
-    let machine = h.call(Method::POST, "/api/oauth/clients", machine).await?;
-    let machine_id = object_id(&machine)?;
-    assert_policy(&machine.body, machine_id, json!([]), Some("MACHINE"))?;
-    let machine_path = format!("/api/oauth/clients/{machine_id}/access-policy");
-    let unchanged = h
-        .call(
-            Method::PUT,
-            &machine_path,
-            update_body(json!([]), policy_version(&machine.body)?),
-        )
-        .await?;
-    success(&unchanged)?;
-    ensure!(
-        policy_version(&unchanged.body)? == policy_version(&machine.body)?,
-        "machine no-op changed policy version"
-    );
-    let nonempty = h
-        .call(
-            Method::PUT,
-            &machine_path,
-            update_body(json!(["CUSTOMER"]), policy_version(&machine.body)?),
-        )
-        .await?;
-    ensure!(
-        nonempty.status == StatusCode::BAD_REQUEST,
-        "machine policy accepted human identities"
-    );
-    let current = h
-        .call(
-            Method::GET,
-            &format!("/api/oauth/clients/{client_id}/access-policy"),
-            Value::Null,
-        )
-        .await?;
-    success(&current)?;
-    let mut legacy = update_body(json!(["EMPLOYEE"]), policy_version(&current.body)?);
-    legacy["subjectMode"] = json!("LEGACY_MIXED");
-    let legacy = h
-        .call(
-            Method::PUT,
-            &format!("/api/oauth/clients/{client_id}/access-policy"),
-            legacy,
-        )
-        .await?;
-    ensure!(
-        legacy.status == StatusCode::BAD_REQUEST,
-        "USER client was permitted to enter LEGACY_MIXED"
+        h.call(Method::POST, "/api/applications", body)
+            .await?
+            .status
+            == StatusCode::BAD_REQUEST,
+        "application creation accepted an explicit null admission policy"
     );
     Ok(())
 }
@@ -781,23 +529,13 @@ async fn atomicity_and_concurrency(h: &Harness) -> Result<()> {
          FOR EACH ROW EXECUTE FUNCTION phase02_policy_reject_audit();",
     ).execute(&h.pool).await?;
     let (application, app_body) = h.create_application("policy-atomic").await?;
-    let (client, client_body) = h.create_client("Owned atomic policy client").await?;
-    for (table, root, id, original, mode) in [
-        (
-            "applications",
-            "/api/applications",
-            application,
-            app_body,
-            None,
-        ),
-        (
-            "oauth_clients",
-            "/api/oauth/clients",
-            client,
-            client_body,
-            Some("USER"),
-        ),
-    ] {
+    for (table, root, id, original, mode) in [(
+        "applications",
+        "/api/applications",
+        application,
+        app_body,
+        None,
+    )] {
         let path = format!("{root}/{id}/access-policy");
         let version = policy_version(&original)?;
         for fault in ["raise", "skip"] {

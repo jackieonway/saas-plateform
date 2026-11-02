@@ -1,0 +1,35 @@
+{
+  "contractVersion": "unified-auth-customer-real-https-browser/1",
+  "date": "2026-10-28T04:47:15.986Z",
+  "tlsErrorsIgnored": false,
+  "httpFixtures": false,
+  "sqlBoundarySetup": true,
+  "privateNegativeProbes": true,
+  "checks": [
+    {
+      "name": "owned-database-preflight",
+      "result": "PASS",
+      "realRuntimeLogin": true,
+      "sharedDatabaseConnectionDenied": true
+    }
+  ],
+  "endpoints": {
+    "customer.saas.test/auth/config 200": 3,
+    "customer.saas.test/auth/session 200": 1,
+    "customer.saas.test/auth/login-bootstrap 200": 1,
+    "customer.saas.test/auth/login 200": 1,
+    "auth.saas.test/oauth/authorize 303": 1,
+    "auth.saas.test/oauth/login 200": 1,
+    "auth.saas.test/oauth/interaction/:id 200": 3,
+    "auth.saas.test/api/sso/preauth 200": 1,
+    "auth.saas.test/api/sso/login 200": 1,
+    "customer.saas.test/auth/callback 303": 1,
+    "customer.saas.test/auth/session 503": 2,
+    "customer.saas.test/api/profile 503": 1
+  },
+  "result": "FAILED",
+  "browserVersion": "156.0.8078.4",
+  "failedStep": "verify-real-platform-consumption-commit",
+  "failureCode": "EXACT_FIXTURE_ROW_REQUIRED",
+  "fixtureBoundaryReset": true
+}

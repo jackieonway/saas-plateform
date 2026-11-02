@@ -1,0 +1,27 @@
+{
+  "contractVersion": "unified-auth-phase25-readonly-startup-probe/1",
+  "result": "PASS",
+  "startedAtEpoch": 1793274986.0896535,
+  "evidenceLayer": "ACTUAL_POSTGRESQL_LOGIN_ROLE",
+  "databasePrefix": "p25ddl_",
+  "dedicatedDatabasesCreated": 1,
+  "dedicatedRolesCreated": 2,
+  "dockerContainersCreated": 0,
+  "dockerContainersReused": 0,
+  "formalOrSharedApplicationDatabasesModified": false,
+  "stage": "ENSURE_MIGRATIONS_TABLE",
+  "actualRestrictedLoginVerified": true,
+  "existingHistoryReadStatus": true,
+  "createIfNotExistsExistingHistoryExitCode": 3,
+  "createIfNotExistsExistingHistorySqlstates": [
+    "42501"
+  ],
+  "schemaCreatePermissionRefused": true,
+  "existingHistoryTableRemainsReadable": true,
+  "cleanup": {
+    "databases": 0,
+    "roles": 0,
+    "failures": []
+  },
+  "finishedAtEpoch": 1793274986.4599254
+}

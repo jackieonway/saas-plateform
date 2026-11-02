@@ -1,17 +1,24 @@
 {
   "profile": "pilot",
   "service_file": "/etc/saas/recovery/pg-services.conf",
-  "admin_service": "restore_admin",
   "databases": [
-    { "kind": "platform", "source_service": "platform", "target": "recovery_platform_change_me", "owner": "platform_writer" },
-    { "kind": "work_orders", "source_service": "work_orders", "target": "recovery_work_orders_change_me", "owner": "work_orders_writer" },
-    { "kind": "stores", "source_service": "stores", "target": "recovery_stores_change_me", "owner": "stores_writer" }
+    {
+      "kind": "platform",
+      "source_service": "platform"
+    },
+    {
+      "kind": "work_orders",
+      "source_service": "work_orders"
+    },
+    {
+      "kind": "stores",
+      "source_service": "stores"
+    }
   ],
   "key_file": "/run/saas-recovery-key/master",
   "scratch": "/run/saas-recovery-scratch",
   "local_bundle": "/var/lib/saas-recovery/set.enc",
   "artifact_root": "/var/lib/saas-recovery/materialized-inputs",
-  "restored_artifacts": "/var/lib/saas-recovery/new-artifacts-change-me",
   "remote_url": "https://backup.example.invalid/objects/saas",
   "remote_token_file": "/etc/saas/recovery/object-token",
   "ca_file": "/etc/saas/recovery/private-ca.pem",

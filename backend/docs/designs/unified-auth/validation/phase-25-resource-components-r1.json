@@ -1,0 +1,73 @@
+{
+  "contractVersion": "unified-auth-phase25-resource-components/1",
+  "generatedAtUtc": "2026-10-29T11:33:07.8150795Z",
+  "phase": 25,
+  "result": "PASS",
+  "evidenceLayer": "PURE_COMPONENT_ORCHESTRATION_AND_SQL_PLAN_GUARDS",
+  "actualDatabaseExecuted": false,
+  "actualHttpsExecuted": false,
+  "actualBrowserExecuted": false,
+  "currentCandidateAcceptanceClaimed": false,
+  "sourceSha256": {
+    "phase25-resource-browser.mjs": "0df73e21253bd7e07e441cdeab1704b06fab01b633077d18755d1a50c0b7dca0",
+    "phase25-resource-cases.mjs": "3229f5d574de215b46fb53f4ebe1acea9c08bd2c3cd38e3f64baf483d882c254",
+    "phase25-resource-cases.test.mjs": "bdb74b7942522c3c05ead02257eafb3f76a93c4bd16e72b104f5f0bb27f7fd75",
+    "phase25-resource-control.py": "0e92f415e9941d85680f45b7c727240f622286b3ba79ae42ab39e9cea6011a9e",
+    "test_phase25_resource_control.py": "a6f3ded203e42e23208af9523f4ac12ddfdecef6ff57f38552c4b50ee1989b9a"
+  },
+  "validation": [
+    {
+      "skipped": 0,
+      "scope": "Original-carrier replay before replacement; contraction failures and cleanup are hard failures; no secret carriers in returned facts",
+      "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-resource-cases.test.mjs",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "skipped": 0,
+      "scope": "Exact fixture-grant binding, unknown action/fields/timestamp injection refusal, monotonic re-enable and typed original-row restoration",
+      "command": "python -B -m unittest discover -s saas-plateform/backend/tests/unified-auth-https -p test_phase25_resource_control.py -q",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "command": "node --check phase25-resource-browser.mjs and phase25-resource-cases.mjs",
+      "result": "PASS"
+    }
+  ],
+  "runtimeRequired": "Freeze all new files in the selected phase25-tools snapshot, run resource browser after business browser and before business fixture cleanup or any admin MFA enrollment",
+  "scopeLimits": [
+    "No actual service or DB PASS exists in this component report.",
+    "Approved business MACHINE delegation and canonical business scope contraction are not implemented by this extension.",
+    "Notification subscription contraction, same-context tabs and SDK context switching remain separate cases."
+  ],
+  "resources": {
+    "containersCreated": 0,
+    "processesStarted": 0,
+    "windowsVhdxReclamationClaimed": false,
+    "databasesCreated": 0,
+    "containersReused": 0,
+    "wslRuntimeTouched": false,
+    "temporaryPrivateFilesCreated": 0,
+    "rolesCreated": 0,
+    "cleanup": "No runtime resources created by pure component checks"
+  },
+  "independentReview": {
+    "reviewer": "runtime_matrix_plan",
+    "reviewedAtUtc": "2026-10-29T11:38:39.0044972Z",
+    "mode": "READ_ONLY_SOURCE_REVIEW",
+    "blockingP1P2": 0,
+    "verified": [
+      "Canonical eight-column grant restore and exact employee grant[7] in seven-pair stores fixture",
+      "Current cluster/data_directory/marker and original identity bindings",
+      "Monotonic membership/application generations and no capability resurrection",
+      "Original carrier is rejected before any replacement is minted",
+      "Finally failure cannot be rolled into PASS; secrets only captured pipes"
+    ],
+    "scopeLimits": [
+      "Wrong-resource MACHINE negative is not approved business MACHINE positive.",
+      "Canonical business scope contraction and notification/SDK remain unverified by this suite.",
+      "The shared browser fetch helper relies on the current gateway outer timeout; a later dedicated fault suite needs its own deadline."
+    ]
+  }
+}

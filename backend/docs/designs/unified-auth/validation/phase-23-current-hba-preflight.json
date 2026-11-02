@@ -1,0 +1,15 @@
+{
+  "contractVersion": "phase23-unmodified-hba-preflight/1",
+  "testedAtUtc": "2026-10-29T01:18:28.009625+00:00",
+  "status": "PASS",
+  "clusterId": "7701881991704683791",
+  "hbaSha256": "e6305f548fd8096217d02a8f93b5c50716d58df1d2441b12346dfe57db7027fd",
+  "uid": 1000,
+  "gid": 1000,
+  "mode": "0o600",
+  "rulesInstalled": false,
+  "journalPresent": false,
+  "failureBeforeHbaReadOrMutation": "PHASE23_HBA_DEPLOYMENT_ROLE_BINDING_CHANGED",
+  "sourceEnvironmentRetainedForRetry": true,
+  "claim": "Installation guard rejected before HBA modification; this is not a restore rehearsal"
+}

@@ -236,25 +236,20 @@ fn stale_preview_and_concurrent_change_never_retry_or_upgrade_the_expected_versi
 }
 
 #[test]
-fn machine_save_preserves_empty_semantics_and_no_op_keeps_the_version() {
-    let mut input = desired();
-    input["target"] = json!("client");
-    input["subjectMode"] = json!("MACHINE");
-    input["allowedMemberTypes"] = json!([]);
-    let path = manifest(&input);
-    let mut machine = policy(json!([]), 2);
-    machine["subjectMode"] = json!("MACHINE");
-    let endpoint = "/api/oauth/clients/11111111-1111-7111-8111-111111111111/access-policy";
+fn application_no_op_keeps_the_version() {
+    let path = manifest(&desired());
+    let current = policy(json!(["EMPLOYEE"]), 2);
+    let endpoint = "/api/applications/11111111-1111-7111-8111-111111111111/access-policy";
     let (env, handle) = server(vec![
-        ("GET", endpoint, 200, machine.clone()),
-        ("PUT", endpoint, 200, machine),
+        ("GET", endpoint, 200, current.clone()),
+        ("PUT", endpoint, 200, current),
     ]);
     let result = apply(&path, &env).unwrap();
     assert_eq!(result["changed"], false);
     assert_eq!(result["policy"]["accessPolicyVersion"], 2);
     let bodies = handle.join().unwrap();
-    assert_eq!(bodies[1]["subjectMode"], "MACHINE");
-    assert_eq!(bodies[1]["allowedMemberTypes"], json!([]));
+    assert!(bodies[1].get("subjectMode").is_none());
+    assert_eq!(bodies[1]["allowedMemberTypes"], json!(["EMPLOYEE"]));
     fs::remove_file(path).unwrap();
 }
 
@@ -304,15 +299,13 @@ fn read_is_get_only_and_cannot_apply_or_mix_application_selection() {
             "INVALID_ARGUMENT"
         );
     }
-    let endpoint = "/api/oauth/clients/11111111-1111-7111-8111-111111111111/access-policy";
-    let mut legacy = policy(json!(["EMPLOYEE"]), 2);
-    legacy["subjectMode"] = json!("LEGACY_MIXED");
-    let (env, handle) = server(vec![("GET", endpoint, 200, legacy)]);
+    let endpoint = "/api/applications/11111111-1111-7111-8111-111111111111/access-policy";
+    let (env, handle) = server(vec![("GET", endpoint, 200, policy(json!(["EMPLOYEE"]), 2))]);
     let result = run(
         args(&[
             "access-policy-read",
             "--policy-target",
-            "client",
+            "application",
             "--policy-id",
             ID,
             "--environment",
@@ -323,7 +316,7 @@ fn read_is_get_only_and_cannot_apply_or_mix_application_selection() {
     )
     .unwrap();
     assert_eq!(result["mode"], "READ_ONLY");
-    assert_eq!(result["policy"]["subjectMode"], "LEGACY_MIXED");
+    assert!(result["policy"].get("subjectMode").is_none());
     assert!(!result.to_string().contains("CANARY"));
     assert_eq!(handle.join().unwrap(), vec![Value::Null]);
 }

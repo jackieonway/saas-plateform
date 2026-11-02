@@ -1,0 +1,48 @@
+{
+  "contractVersion": "unified-auth-phase25-ui-acceptance-independent-review/1",
+  "recordedAtUtc": "2026-10-29T13:21:25.702217+00:00",
+  "reviewer": "/root/candidate_audit",
+  "result": "NO_P1_P2_FINDINGS",
+  "evidenceLayer": "READ_ONLY_SOURCE_REVIEW",
+  "sourceSha256": {
+    "saas-plateform/backend/tests/unified-auth-https/phase25-ui-browser.mjs": "018e8684e72142c78dfed9391623a3ff82cbbb62015f760c7d6d9f958f8b0094",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.mjs": "22b3faf8002b1b0b8eafd9061142ca5e5e22772c7e79e64f960b0f3a7aba6589",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.test.mjs": "3992d42ba9a2bf1ff72f3bc59a6acd9c1de1a7869f97ede7abd94faa17a94fe3"
+  },
+  "componentEvidence": {
+    "path": "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-ui-acceptance-components.json",
+    "sha256": "042d923aaa8f08655c7760470c867cdb5b8cb9047b0012ea2dd9c8e6b93b2617",
+    "reportedResult": "PASS",
+    "reportedChecks": {
+      "passed": 3,
+      "skipped": 0,
+      "failed": 0,
+      "total": 3
+    },
+    "reviewerReranChromeFixtures": false
+  },
+  "reviewedBoundaries": [
+    "BLOCK context is awaited closed before editing browser Preferences and reopening the same private profile.",
+    "Preferences must be a regular non-symlink file smaller than 1MiB, protected by the exact OWNER marker and prior cookies=2 setting; recovery explicitly sets cookies=1.",
+    "Temporary profile is generated below canonical os.tmpdir with a fixed prefix; finally rechecks canonical parent, real path, non-symlink and OWNER before recursive deletion. Close failures remain fatal and do not claim profile cleanup.",
+    "Credential fallback observer returns only numeric counts. Supplied private values, URL fields, storage keys/values, page errors and user names are not returned. The private preauth challenge is removed before progress persistence.",
+    "Unexpected pageerror events preserve only fixed current stage and count; zero errors is required both before success and after pending observations at final cleanup.",
+    "Dialog initial activeElement containment is checked before keyboard cycling; recovery uses fresh employee primary login and verifies real SSO/console cookies in the same explicit ALLOW profile."
+  ],
+  "limitations": [
+    "The cited Chromium results use an actual browser with a controlled HTTP fixture; this review did not rerun them.",
+    "The new SaaS HTTPS dialog/pageerror/fallback/recovery assertions still require the next owned source run; r4 actual9PASS is not rewritten.",
+    "PUBLIC no-secret management DOM and long consent subfacts are outside these three file changes."
+  ],
+  "resources": {
+    "createdContainers": 0,
+    "reusedContainers": 0,
+    "databases": 0,
+    "applicationServices": 0,
+    "browserProcesses": 0,
+    "temporaryProfiles": 0
+  },
+  "filesModifiedByReviewer": [
+    "saas-plateform/backend/docs/designs/unified-auth/validation/phase-25-ui-acceptance-independent-review.json"
+  ]
+}

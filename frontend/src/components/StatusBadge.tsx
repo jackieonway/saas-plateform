@@ -13,6 +13,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 const STATUS_LABEL: Record<string, string> = {
   ENABLED: "启用",
   DISABLED: "停用",
+  RETIRED: "已退役",
   PENDING: "等待中",
   APPROVED: "已批准",
   DENIED: "已拒绝",

@@ -147,7 +147,7 @@ async function fixture(pathname, options = {}) {
       state.menuReplies.push({ appId: id, session, org, status, menuPaths: menus.map(node => node.path) })
       return fulfill(route, status === 200 ? { menus } : { message: '无关应用菜单暂不可用' }, status)
     }
-    if (url.pathname === '/api/oauth/session-token') {
+    if (url.pathname === '/api/apps/session-token') {
       const application = state.profile.applications.find(app => app.code === request.postDataJSON()?.appCode)
       return fulfill(route, { accessToken: 'phase9-application-' + (application?.code || ''), tokenType: 'Bearer', expiresIn: 60, audience: application?.code })
     }
@@ -171,7 +171,7 @@ async function fixture(pathname, options = {}) {
     if (url.pathname === '/api/notifications/socket-context') return fulfill(route, { userId: user.id, tenantId: state.profile.tenant.id,
       organizationId: state.profile.organization.id, sessionVersion: 0 })
     if (['/api/notifications', '/api/auth/login-history'].includes(url.pathname)) return fulfill(route, { records: [], total: 0, page: 1, size: 10 })
-    if (url.pathname === '/api/auth/my-sessions') return fulfill(route, { sessions: [], summary: { active: 0, revoked: 0 } })
+    if (url.pathname === '/api/auth/my-sessions') return fulfill(route, { platformSessions: [] })
     if (url.pathname === '/api/search') return fulfill(route, { users: [], tenants: [], organizations: [], roles: [] })
     return fulfill(route, { message: 'Unconfigured business request ' + url.pathname }, 403)
   })

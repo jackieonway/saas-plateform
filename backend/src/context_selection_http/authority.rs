@@ -14,6 +14,14 @@ pub(crate) struct Client {
     pub purpose: String,
     pub allowed_member_types: Vec<String>,
     pub redirect_uri: String,
+    #[serde(default)]
+    pub client_registry: Option<String>,
+    #[serde(default)]
+    pub subject_mode: Option<String>,
+    #[serde(default)]
+    pub context_mode: Option<String>,
+    #[serde(default)]
+    pub application_id: Option<Id>,
 }
 
 #[derive(Clone, PartialEq, Deserialize)]
@@ -36,6 +44,10 @@ impl SourceProof {
             || self.source.auth_time > Utc::now()
             || self.source_expires_at <= Utc::now()
             || self.interaction_expires_at <= Utc::now()
+            || self.client.client_registry.as_deref() != Some("AUTH")
+            || self.client.subject_mode.as_deref() != Some("USER")
+            || self.client.context_mode.as_deref() != Some("PLATFORM_CONTEXT")
+            || self.client.application_id.is_none()
         {
             return Err(AppError::unauthorized("原选择交互来源无效"));
         }
@@ -56,20 +68,19 @@ pub(crate) trait SourcePort: Send + Sync {
 }
 
 struct Remote {
+    pool: sqlx::PgPool,
     client: Option<reqwest::Client>,
-    endpoint: Option<String>,
+    origin: Option<String>,
     service_id: Option<String>,
     secret: Option<String>,
     issuer: Option<String>,
 }
 
-pub(crate) fn configured(config: &Config) -> Arc<dyn SourcePort> {
+pub(crate) fn configured(config: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourcePort> {
     Arc::new(Remote {
+        pool: pool.clone(),
         client: config.identity_http_client.clone(),
-        endpoint: config
-            .identity_service_url
-            .as_ref()
-            .map(|s| format!("{s}/internal/identity/context-selection/source")),
+        origin: config.identity_service_url.clone(),
         service_id: config.context_source_service_client_id.clone(),
         secret: config.context_source_service_client_secret.clone(),
         issuer: config.oidc_issuer.clone(),
@@ -85,7 +96,17 @@ impl SourcePort for Remote {
     ) -> SourceFuture<'a> {
         Box::pin(async move {
             let client = self.client.as_ref().ok_or(AppError::Unavailable)?;
-            let endpoint = self.endpoint.as_ref().ok_or(AppError::Unavailable)?;
+            let origin = self.origin.as_ref().ok_or(AppError::Unavailable)?;
+            let registry: String = sqlx::query_scalar(
+                "SELECT client_registry FROM context_selection_registrations WHERE client_id=$1 AND enabled",
+            ).bind(expected_client.uuid()).fetch_optional(&self.pool).await
+                .map_err(|_| AppError::Unavailable)?
+                .ok_or_else(|| AppError::unauthorized("选择客户端未登记"))?;
+            let path = match registry.as_str() {
+                "AUTH" => "/internal/identity/auth/context-selection/source",
+                _ => return Err(AppError::Unavailable),
+            };
+            let endpoint = format!("{origin}{path}");
             let id = self.service_id.as_ref().ok_or(AppError::Unavailable)?;
             let secret = self.secret.as_ref().ok_or(AppError::Unavailable)?;
             let issuer = self.issuer.as_ref().ok_or(AppError::Unavailable)?;
@@ -134,6 +155,9 @@ impl SourcePort for Remote {
             let proof: SourceProof =
                 serde_json::from_slice(&bytes).map_err(|_| AppError::Unavailable)?;
             proof.validate(issuer, expected_client)?;
+            if proof.client.client_registry.as_deref() != Some(registry.as_str()) {
+                return Err(AppError::unauthorized("原选择交互客户端登记来源不匹配"));
+            }
             Ok(proof)
         })
     }

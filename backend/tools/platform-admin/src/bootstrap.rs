@@ -13,7 +13,6 @@ use std::collections::{BTreeMap, BTreeSet};
 struct Definition {
     schema_version: String,
     application: Application,
-    oauth_client: OAuthClient,
     menus: Vec<Menu>,
     grants: Vec<Value>,
 }
@@ -31,20 +30,6 @@ struct Application {
     description: String,
     sort_order: i64,
     status: String,
-    allowed_member_types: Vec<String>,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct OAuthClient {
-    client_name: String,
-    client_type: String,
-    grant_types: Vec<String>,
-    scopes: Vec<String>,
-    redirect_uris: Vec<String>,
-    access_token_validity: i64,
-    refresh_token_validity: i64,
-    provisioning: String,
-    subject_mode: String,
     allowed_member_types: Vec<String>,
 }
 #[derive(Deserialize, serde::Serialize)]
@@ -81,7 +66,6 @@ pub(crate) fn definition(known: KnownApp) -> Result<(), SafeError> {
 }
 fn validate_definition(value: &Definition, known: KnownApp) -> Result<(), SafeError> {
     let app = &value.application;
-    let client = &value.oauth_client;
     if value.schema_version != "1.0"
         || app.code != known.code()
         || app.runtime_mode != "TRUSTED"
@@ -93,16 +77,6 @@ fn validate_definition(value: &Definition, known: KnownApp) -> Result<(), SafeEr
         || app.allowed_member_types != ["EMPLOYEE"]
         || !value.grants.is_empty()
         || value.menus.len() != known.menus().len()
-        || client.client_name != known.client_name()
-        || client.client_type != "CONFIDENTIAL"
-        || client.grant_types != ["client_credentials"]
-        || client.scopes != ["openid"]
-        || !client.redirect_uris.is_empty()
-        || client.access_token_validity != 300
-        || client.refresh_token_validity != 300
-        || client.provisioning.is_empty()
-        || client.subject_mode != "MACHINE"
-        || !client.allowed_member_types.is_empty()
     {
         return Err(SafeError::new("INVALID_BOOTSTRAP_MANIFEST"));
     }
@@ -164,82 +138,6 @@ pub(crate) fn find_app(
         None if expected.is_some() => Err(SafeError::new("APPLICATION_NOT_FOUND")),
         None => Ok(None),
     }
-}
-fn verify_client(row: &Value, app_id: Option<&str>, known: KnownApp) -> Result<(), SafeError> {
-    uuid_field(row, "id", "CLIENT_CONFLICT")?;
-    if row["clientName"] != known.client_name()
-        || row["clientType"] != "CONFIDENTIAL"
-        || row["status"] != "ENABLED"
-        || row["accessTokenValidity"] != 300
-        || row["refreshTokenValidity"] != 300
-        || row["subjectMode"] != "MACHINE"
-        || row["allowedMemberTypes"] != json!([])
-        || !row["accessPolicyVersion"]
-            .as_i64()
-            .is_some_and(|version| version > 0)
-    {
-        return Err(SafeError::new("CLIENT_CONFLICT"));
-    }
-    for (key, desired) in [
-        ("grantTypes", json!(["client_credentials"])),
-        ("scopes", json!(["openid"])),
-        ("redirectUris", json!([])),
-    ] {
-        if row[key] != desired {
-            return Err(SafeError::new("CLIENT_CONFLICT"));
-        }
-    }
-    if !row
-        .get("applicationId")
-        .is_some_and(|value| value.is_null() || value.as_str().is_some_and(is_uuid))
-    {
-        return Err(SafeError::new("CLIENT_CONFLICT"));
-    }
-    if !row["applicationId"].is_null() && row["applicationId"].as_str() != app_id {
-        return Err(SafeError::new("CLIENT_OWNERSHIP_CONFLICT"));
-    }
-    Ok(())
-}
-fn find_client(
-    api: &ManagementApi,
-    env: &BTreeMap<String, String>,
-    app: Option<&Value>,
-    known: KnownApp,
-) -> Result<Value, SafeError> {
-    let client_id = env
-        .get("PLATFORM_CLIENT_ID")
-        .filter(|value| {
-            !value.is_empty()
-                && value.len() <= 128
-                && !value
-                    .chars()
-                    .any(|ch| ch.is_whitespace() || ch.is_control())
-        })
-        .ok_or_else(|| SafeError::new("CLIENT_ID_REQUIRED"))?;
-    let response = api.request("GET", "/api/oauth/clients", None)?;
-    let response = rows(&response)?;
-    let matching: Vec<_> = response
-        .iter()
-        .filter(|row| row["clientId"] == *client_id)
-        .collect();
-    let named: Vec<_> = response
-        .iter()
-        .filter(|row| row["clientName"] == known.client_name())
-        .collect();
-    if matching.len() != 1 || named.len() != 1 || matching[0]["id"] != named[0]["id"] {
-        return Err(SafeError::new("CLIENT_CONFLICT"));
-    }
-    let row = matching[0];
-    let app_id = app.and_then(|app| app["id"].as_str());
-    verify_client(row, app_id, known)?;
-    if app_id.is_some_and(|id| {
-        response
-            .iter()
-            .any(|other| other["id"] != row["id"] && other["applicationId"] == id)
-    }) {
-        return Err(SafeError::new("CLIENT_OWNERSHIP_CONFLICT"));
-    }
-    Ok(row.clone())
 }
 fn flatten(tree: &Value, app_id: &str) -> Result<Vec<Value>, SafeError> {
     fn visit(
@@ -329,18 +227,11 @@ fn existing<'a>(
 }
 struct Inspection {
     app: Option<Value>,
-    client: Value,
     rows: Vec<Value>,
     ids: BTreeMap<String, String>,
 }
-fn inspect_internal(
-    api: &ManagementApi,
-    env: &BTreeMap<String, String>,
-    options: &Options,
-) -> Result<Inspection, SafeError> {
+fn inspect_internal(api: &ManagementApi, options: &Options) -> Result<Inspection, SafeError> {
     let app = find_app(api, options.app_id.as_deref(), options.app())?;
-    // Validate the explicitly selected existing client before creating anything.
-    let client = find_client(api, env, app.as_ref(), options.app())?;
     let menus = if let Some(app) = &app {
         flatten(
             &api.request(
@@ -373,27 +264,18 @@ fn inspect_internal(
     }
     Ok(Inspection {
         app,
-        client,
         rows: menus,
         ids,
     })
 }
-pub(crate) fn inspect(
-    api: &ManagementApi,
-    env: &BTreeMap<String, String>,
-    options: &Options,
-) -> Result<Value, SafeError> {
-    let state = inspect_internal(api, env, options)?;
+pub(crate) fn inspect(api: &ManagementApi, options: &Options) -> Result<Value, SafeError> {
+    let state = inspect_internal(api, options)?;
     Ok(
-        json!({"ok":true,"mode":"READ_ONLY","applicationId":state.app.as_ref().map(|app|app["id"].clone()),"clientRecordId":state.client["id"],"clientAssociated":state.app.as_ref().is_some_and(|app|state.client["applicationId"]==app["id"]),"applicationStatus":state.app.as_ref().map(|app|app["status"].clone()),"menuIds":state.ids,"missingMenus":load(options.app())?.menus.iter().filter(|menu|!state.ids.contains_key(&menu.key)).map(|menu|menu.key.clone()).collect::<Vec<_>>(),"grants":[]}),
+        json!({"ok":true,"mode":"READ_ONLY","applicationId":state.app.as_ref().map(|app|app["id"].clone()),"applicationStatus":state.app.as_ref().map(|app|app["status"].clone()),"menuIds":state.ids,"missingMenus":load(options.app())?.menus.iter().filter(|menu|!state.ids.contains_key(&menu.key)).map(|menu|menu.key.clone()).collect::<Vec<_>>(),"grants":[]}),
     )
 }
-pub(crate) fn apply(
-    api: &ManagementApi,
-    env: &BTreeMap<String, String>,
-    options: &Options,
-) -> Result<Value, SafeError> {
-    let mut state = inspect_internal(api, env, options)?;
+pub(crate) fn apply(api: &ManagementApi, options: &Options) -> Result<Value, SafeError> {
+    let mut state = inspect_internal(api, options)?;
     let desired = load(options.app())?;
     let mut created = Vec::<String>::new();
     let result = (|| {
@@ -410,27 +292,6 @@ pub(crate) fn apply(
             .as_ref()
             .ok_or_else(|| SafeError::new("APPLICATION_NOT_FOUND"))?;
         let app_id = uuid_field(app, "id", "APPLICATION_CONFLICT")?;
-        if state.client["applicationId"].is_null() {
-            state.client = find_client(api, env, Some(app), options.app())?;
-        }
-        if state.client["applicationId"].is_null() {
-            let client = api.request(
-                "PUT",
-                &format!(
-                    "/api/oauth/clients/{}",
-                    uuid_field(&state.client, "id", "CLIENT_CONFLICT")?
-                ),
-                Some(&json!({"applicationId":app_id})),
-            )?;
-            verify_client(&client, Some(app_id), options.app()).map_err(SafeError::uncertain)?;
-            if client["applicationId"] != app_id
-                || client["clientId"].as_str() != env.get("PLATFORM_CLIENT_ID").map(String::as_str)
-            {
-                return Err(SafeError::new("CLIENT_OWNERSHIP_CONFLICT").uncertain());
-            }
-            state.client = client;
-            created.push("clientAssociation".into());
-        }
         for menu in &desired.menus {
             let root = state.ids.get("root").map(String::as_str);
             let id = if let Some(row) = existing(&state.rows, menu, root, options.app())? {
@@ -476,7 +337,7 @@ pub(crate) fn apply(
             state.ids.insert(menu.key.clone(), id);
         }
         Ok(
-            json!({"ok":true,"mode":"APPLIED","command":"bootstrap","applicationId":app_id,"clientRecordId":state.client["id"],"menuIds":state.ids,"created":created,"grants":[],"releaseActivated":false}),
+            json!({"ok":true,"mode":"APPLIED","command":"bootstrap","applicationId":app_id,"menuIds":state.ids,"created":created,"grants":[],"releaseActivated":false}),
         )
     })();
     result.map_err(|error|if created.is_empty(){error}else{error.uncertain().with_completed(json!({"created":created,"applicationId":state.app.as_ref().map(|app|app["id"].clone()),"menuIds":state.ids}))})
@@ -506,9 +367,6 @@ mod tests {
         assert!(validate_definition(&stores, KnownApp::Stores).is_err());
         let mut stores = load(KnownApp::Stores).unwrap();
         stores.menus[report_detail].sort_order -= 1;
-        assert!(validate_definition(&stores, KnownApp::Stores).is_err());
-        let mut stores = load(KnownApp::Stores).unwrap();
-        stores.oauth_client.client_name = "work-orders-client".into();
         assert!(validate_definition(&stores, KnownApp::Stores).is_err());
     }
 
@@ -606,38 +464,13 @@ mod tests {
     }
 
     #[test]
-    fn only_exact_precreated_client_and_application_can_be_bound() {
-        let id = uuid(1);
-        let mut client = json!({"id":uuid(2),"clientName":"stores-client","clientType":"CONFIDENTIAL","status":"ENABLED",
-            "accessTokenValidity":300,"refreshTokenValidity":300,"grantTypes":["client_credentials"],"scopes":["openid"],"redirectUris":[],"applicationId":null,"clientSecret":"NEVER_PROJECTED","subjectMode":"MACHINE","allowedMemberTypes":[],"accessPolicyVersion":1});
-        verify_client(&client, Some(&id), KnownApp::Stores).unwrap();
-        assert!(verify_client(&client, Some(&id), KnownApp::WorkOrders).is_err());
-        client["applicationId"] = json!(uuid(3));
-        assert_eq!(
-            verify_client(&client, Some(&id), KnownApp::Stores)
-                .unwrap_err()
-                .category(),
-            "CLIENT_OWNERSHIP_CONFLICT"
-        );
-        client["applicationId"] = Value::Null;
-        client["clientType"] = json!("PUBLIC");
-        assert!(verify_client(&client, Some(&id), KnownApp::Stores).is_err());
-        let app = json!({"id":id,"code":"work-orders","runtimeMode":"TRUSTED","entryType":"HTML","basePath":"/micro/work-orders","status":"ENABLED","allowedMemberTypes":["EMPLOYEE"],"accessPolicyVersion":1});
-        assert!(verify_app(&app, None, KnownApp::Stores).is_err());
-    }
-
-    #[test]
-    fn bootstrap_refuses_customer_apps_or_user_clients_without_rewriting_their_policy() {
+    fn bootstrap_refuses_customer_apps_without_rewriting_their_policy() {
         for known in [KnownApp::WorkOrders, KnownApp::Stores] {
             let mut definition = load(known).unwrap();
             definition
                 .application
                 .allowed_member_types
                 .push("CUSTOMER".into());
-            assert!(validate_definition(&definition, known).is_err());
-            let mut definition = load(known).unwrap();
-            definition.oauth_client.subject_mode = "USER".into();
-            definition.oauth_client.allowed_member_types = vec!["EMPLOYEE".into()];
             assert!(validate_definition(&definition, known).is_err());
             let mut app = json!({"id":uuid(1),"code":known.code(),"runtimeMode":"TRUSTED","entryType":"HTML","basePath":known.base_path(),"status":"ENABLED","allowedMemberTypes":["EMPLOYEE","CUSTOMER"],"accessPolicyVersion":2});
             assert!(verify_app(&app, None, known).is_err());

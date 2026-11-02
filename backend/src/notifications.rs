@@ -60,7 +60,8 @@ struct MemberProof {
     identity_version: i64,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Recipient {
     user_id: Uuid,
     organization_id: Uuid,
@@ -224,7 +225,59 @@ fn normalize(body: &mut PublishBody, app_code: &str) -> Result<Value, AppError> 
 async fn publisher_access(
     tx: &mut Transaction<'_, Postgres>,
     actor: &Publisher,
+    private: Option<(
+        &crate::state::AppState,
+        &crate::directory_authorization::PrivateAccess,
+    )>,
 ) -> Result<(String, String, String, String), AppError> {
+    if let Some((_, access)) = private {
+        let checked = access.initial();
+        let binding = &checked.binding;
+        let active: bool =
+            sqlx::query_scalar("SELECT identity_binding_active($1,$2,$3,$4,$5,'EMPLOYEE',$6)")
+                .bind(binding.user_id)
+                .bind(binding.tenant_id)
+                .bind(binding.organization_id)
+                .bind(binding.account_version)
+                .bind(binding.membership_id)
+                .bind(binding.identity_version)
+                .fetch_one(&mut **tx)
+                .await?;
+        if !active || binding.expires_at <= Utc::now() {
+            return Err(AppError::unauthorized("通知发布原成员来源已失效"));
+        }
+        let context = &checked.context;
+        if !context["permissions"]
+            .as_array()
+            .is_some_and(|permissions| permissions.iter().any(|p| p == "notification:publish"))
+        {
+            return Err(AppError::forbidden(
+                "无当前应用 notification:publish 操作权限",
+            ));
+        }
+        let scope = context["dataGrants"]
+            .as_array()
+            .and_then(|grants| {
+                grants.iter().find(|grant| {
+                    grant["resource"] == "notification" && grant["action"] == "publish"
+                })
+            })
+            .and_then(|grant| grant["scope"].as_str())
+            .ok_or_else(|| AppError::forbidden("缺少 notification/publish 独立数据授权"))?;
+        let username = context["user"]["username"]
+            .as_str()
+            .ok_or(AppError::Unavailable)?;
+        let app_name = context["application"]["name"]
+            .as_str()
+            .ok_or(AppError::Unavailable)?;
+        access.expires_at()?;
+        return Ok((
+            username.into(),
+            app_name.into(),
+            binding.audience.clone(),
+            scope.into(),
+        ));
+    }
     if actor
         .token_expires_at
         .is_some_and(|expiry| expiry <= Utc::now())
@@ -247,21 +300,12 @@ async fn publisher_access(
          JOIN organization_applications oa ON oa.organization_id=$3 AND oa.application_id=a.id \
          WHERE u.id=$1 AND u.status='ENABLED' \
            AND ($7::timestamptz IS NULL OR $7>statement_timestamp()) \
-           AND ($6::text IS NULL OR EXISTS(SELECT 1 FROM oauth_tokens tok \
-             JOIN oauth_clients client ON client.client_id=tok.client_id AND client.status='ENABLED' \
-               AND client.client_type='CONFIDENTIAL' AND client.application_id=tok.application_id \
-             WHERE tok.token_hash=$6 AND tok.token_use='app' AND tok.token_type='access' \
-               AND NOT tok.revoked AND tok.expires_at>statement_timestamp() AND tok.user_id=$1 AND tok.tenant_id=$2 \
-               AND tok.organization_id=$3 AND tok.application_id=$4 AND tok.platform_session_id=$5 \
-               AND tok.audience=a.code AND tok.membership_id=s.membership_id \
-               AND tok.member_type='EMPLOYEE' AND tok.identity_version=s.identity_version \
-               AND tok.account_version=s.account_version AND tok.client_policy_version=client.access_policy_version \
-               AND tok.application_policy_version=a.access_policy_version \
-               AND tok.origin_issuer=s.origin_issuer AND tok.origin_client_ref=s.origin_client_ref \
-               AND tok.origin_client_policy_version=s.origin_client_policy_version \
-               AND tok.application_service_client_ref=client.client_id \
-               AND tok.member_type=ANY(a.allowed_member_types) \
-               AND (client.subject_mode='MACHINE' OR tok.member_type=ANY(client.allowed_member_types))))"
+           AND ($6::text IS NULL OR EXISTS(SELECT 1 FROM platform_app_capabilities tok \
+             WHERE tok.token_hash=$6 AND platform_app_capability_active(tok.token_hash) \
+               AND tok.user_id=$1 AND tok.tenant_id=$2 AND tok.organization_id=$3 \
+               AND tok.application_id=$4 AND tok.platform_session_id=$5 \
+               AND tok.membership_id=s.membership_id AND tok.member_type='EMPLOYEE' \
+               AND tok.identity_version=s.identity_version AND tok.account_version=s.account_version))"
     ).bind(actor.user_id).bind(actor.tenant_id).bind(actor.organization_id)
         .bind(actor.application_id).bind(actor.session_id).bind(&actor.token_hash).bind(actor.token_expires_at)
         .fetch_optional(&mut **tx).await?;
@@ -351,25 +395,95 @@ async fn target_scope(
 pub async fn publish(
     pool: &sqlx::PgPool,
     actor: Publisher,
-    mut body: PublishBody,
+    body: PublishBody,
     ip: &str,
     ua: &str,
 ) -> Result<Publication, AppError> {
+    publish_bound(pool, actor, body, ip, ua, None, false).await
+}
+
+/// Private service authority is retained as such; no synthetic platform session
+/// or replacement bearer is ever created for an external USER.
+pub(crate) async fn publish_private(
+    state: &crate::state::AppState,
+    access: &crate::directory_authorization::PrivateAccess,
+    mut body: PublishBody,
+    recovery_only: bool,
+    ip: &str,
+    ua: &str,
+) -> Result<Publication, AppError> {
+    let checked = access.initial();
+    normalize(&mut body, &checked.binding.audience)?;
+    body.idempotency_key =
+        hash::sha256_hex(&json!([access.source_digest(), body.idempotency_key]).to_string());
+    // Both online authority checkpoints finish without a publication connection
+    // or foreign-key lock. The final transaction uses a fresh local snapshot.
+    access
+        .revalidate(state, &checked.binding.audience, checked.revision)
+        .await?;
+    let binding = &checked.binding;
+    let actor = Publisher {
+        user_id: binding.user_id,
+        tenant_id: binding.tenant_id,
+        organization_id: binding.organization_id,
+        application_id: binding.application_id,
+        // This field is used only by the internal branch; private authority uses
+        // its authenticated binding and never looks up a platform session by it.
+        session_id: binding.session_id,
+        token_hash: None,
+        token_expires_at: Some(binding.expires_at),
+    };
+    publish_bound(
+        &state.pool,
+        actor,
+        body,
+        ip,
+        ua,
+        Some((state, access)),
+        recovery_only,
+    )
+    .await
+}
+
+async fn publish_bound(
+    pool: &sqlx::PgPool,
+    actor: Publisher,
+    mut body: PublishBody,
+    ip: &str,
+    ua: &str,
+    private: Option<(
+        &crate::state::AppState,
+        &crate::directory_authorization::PrivateAccess,
+    )>,
+    recovery_only: bool,
+) -> Result<Publication, AppError> {
     let mut tx = pool.begin().await?;
-    let (username, app_name, app_code, scope) = publisher_access(&mut tx, &actor).await?;
-    let publisher_member: MemberProof = sqlx::query_as(
-        "SELECT membership_id,member_type,identity_version FROM platform_sessions \
+    let (username, app_name, app_code, scope) = publisher_access(&mut tx, &actor, private).await?;
+    let publisher_member: MemberProof = if let Some((_, access)) = private {
+        let binding = &access.initial().binding;
+        MemberProof {
+            membership_id: binding.membership_id,
+            member_type: binding.member_type.clone(),
+            identity_version: binding.identity_version,
+        }
+    } else {
+        sqlx::query_as(
+            "SELECT membership_id,member_type,identity_version FROM platform_sessions \
          WHERE id=$1 AND user_id=$2 AND tenant_id=$3 AND organization_id=$4 \
          AND member_type='EMPLOYEE' AND platform_session_active(id)",
-    )
-    .bind(actor.session_id)
-    .bind(actor.user_id)
-    .bind(actor.tenant_id)
-    .bind(actor.organization_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(|| AppError::unauthorized("通知发布者成员身份已失效"))?;
-    let normalized = normalize(&mut body, &app_code)?;
+        )
+        .bind(actor.session_id)
+        .bind(actor.user_id)
+        .bind(actor.tenant_id)
+        .bind(actor.organization_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::unauthorized("通知发布者成员身份已失效"))?
+    };
+    let mut normalized = normalize(&mut body, &app_code)?;
+    if let Some((_, access)) = private {
+        normalized["authority"] = json!({"contractVersion":"resource-notification/1", "sourceDigest":access.source_digest()});
+    }
     target_scope(&mut tx, &actor, &body.target, &scope).await?;
     let request_hash = hash::sha256_hex(&normalized.to_string());
     let namespace = json!([
@@ -387,7 +501,7 @@ pub async fn publish(
         .execute(&mut *tx)
         .await?;
     // Recheck after a competing publication finishes waiting for the same namespace.
-    let (_, _, _, current_scope) = publisher_access(&mut tx, &actor).await?;
+    let (_, _, _, current_scope) = publisher_access(&mut tx, &actor, private).await?;
     target_scope(&mut tx, &actor, &body.target, &current_scope).await?;
     let prior: Option<(Uuid, String, i32, i32, DateTime<Utc>)> = sqlx::query_as(
         "SELECT id,request_hash,recipient_count,delivery_count,created_at FROM notification_publications \
@@ -402,8 +516,12 @@ pub async fn publish(
         if prior_hash.trim_end() != request_hash {
             return Err(AppError::conflict("幂等键已用于不同通知内容"));
         }
-        let (_, _, _, final_scope) = publisher_access(&mut tx, &actor).await?;
+        let (_, _, _, final_scope) = publisher_access(&mut tx, &actor, private).await?;
         target_scope(&mut tx, &actor, &body.target, &final_scope).await?;
+        if let Some((state, access)) = private {
+            access.revalidate_local(state).await?;
+            recipients_current(&mut tx, publication_id).await?;
+        }
         tx.commit().await?;
         return Ok(Publication {
             publication_id,
@@ -412,6 +530,9 @@ pub async fn publish(
             created_at,
             duplicate: true,
         });
+    }
+    if recovery_only {
+        return Err(AppError::not_found("原操作未找到已提交的通知发布结果"));
     }
     let (target_user, target_org) = match body.target {
         Target::User {
@@ -453,6 +574,14 @@ pub async fn publish(
         .collect::<HashSet<_>>()
         .len() as i32;
     let delivery_count = deliveries.len() as i32;
+    if private.is_some() {
+        // Inbox rows can be deleted by their recipient. Keep the original
+        // membership proofs in the immutable publication, outside that inbox,
+        // so deletion cannot erase the recovery authorization fence. These
+        // server facts do not change the hash of the caller's original request.
+        normalized["authority"]["recipientProofs"] =
+            serde_json::to_value(&deliveries).map_err(|_| AppError::Unavailable)?;
+    }
     let (publication_id, created_at): (Uuid, DateTime<Utc>) = sqlx::query_as(
         "INSERT INTO notification_publications (tenant_id,publisher_organization_id,application_id, \
          publisher_user_id,publisher_username,application_name,idempotency_key,request_hash,request_body,recipient_count,delivery_count, \
@@ -499,8 +628,12 @@ pub async fn publish(
     // Recipient/publication FKs and audit writes can wait after the earlier
     // advisory barrier. Recheck the publisher after those waits so revocation
     // rolls back the complete publication and its transactional notify hints.
-    let (_, _, _, final_scope) = publisher_access(&mut tx, &actor).await?;
+    let (_, _, _, final_scope) = publisher_access(&mut tx, &actor, private).await?;
     target_scope(&mut tx, &actor, &body.target, &final_scope).await?;
+    if let Some((state, access)) = private {
+        access.revalidate_local(state).await?;
+        recipients_current(&mut tx, publication_id).await?;
+    }
     tx.commit().await?;
     Ok(Publication {
         publication_id,
@@ -509,6 +642,66 @@ pub async fn publish(
         created_at,
         duplicate: false,
     })
+}
+
+async fn recipients_current(
+    tx: &mut Transaction<'_, Postgres>,
+    publication: Uuid,
+) -> Result<(), AppError> {
+    let (tenant, application, count, body): (Uuid, Uuid, i32, Value) = sqlx::query_as(
+        "SELECT tenant_id,application_id,delivery_count,request_body FROM notification_publications WHERE id=$1",
+    )
+    .bind(publication)
+    .fetch_one(&mut **tx)
+    .await?;
+    let original = recipient_proofs(&body, count)?;
+    let invalid: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM jsonb_to_recordset($1::jsonb) AS original(\"userId\" uuid,\"organizationId\" uuid,\"membershipId\" uuid,\"memberType\" text,\"identityVersion\" bigint) WHERE NOT EXISTS(SELECT 1 FROM memberships m JOIN users u ON u.id=m.user_id AND u.status='ENABLED' JOIN organizations o ON o.id=m.organization_id AND o.tenant_id=$2 AND org_chain_active(o.id) AND (org_chain_expires_at(o.id) IS NULL OR org_chain_expires_at(o.id)>clock_timestamp()) JOIN tenants t ON t.id=o.tenant_id AND t.status='ENABLED' AND (t.expires_at IS NULL OR t.expires_at>clock_timestamp()) JOIN applications a ON a.id=$3 AND a.status='ENABLED' AND 'EMPLOYEE'=ANY(a.allowed_member_types) JOIN tenant_applications ta ON ta.tenant_id=t.id AND ta.application_id=a.id JOIN organization_applications oa ON oa.organization_id=o.id AND oa.application_id=a.id WHERE m.id=original.\"membershipId\" AND m.user_id=original.\"userId\" AND m.organization_id=original.\"organizationId\" AND m.member_type=original.\"memberType\" AND m.status='ENABLED' AND m.identity_version=original.\"identityVersion\"))")
+        .bind(sqlx::types::Json(original)).bind(tenant).bind(application).fetch_one(&mut **tx).await?;
+    if invalid {
+        return Err(AppError::forbidden("原通知接收成员或应用范围已失效"));
+    }
+    Ok(())
+}
+
+fn recipient_proofs(body: &Value, count: i32) -> Result<Vec<Recipient>, AppError> {
+    let original: Vec<Recipient> = serde_json::from_value(
+        body.pointer("/authority/recipientProofs")
+            .cloned()
+            .ok_or(AppError::Unavailable)?,
+    )
+    .map_err(|_| AppError::Unavailable)?;
+    if count <= 0
+        || count as usize > DELIVERY_LIMIT
+        || original.len() != count as usize
+        || original.iter().any(|recipient| {
+            ![
+                recipient.user_id,
+                recipient.organization_id,
+                recipient.membership_id,
+            ]
+            .into_iter()
+            .all(crate::util::uuid7::is_uuid_v7)
+                || recipient.member_type != "EMPLOYEE"
+                || recipient.identity_version < 1
+        })
+        || original
+            .iter()
+            .map(|recipient| {
+                (
+                    recipient.user_id,
+                    recipient.organization_id,
+                    recipient.membership_id,
+                )
+            })
+            .collect::<HashSet<_>>()
+            .len()
+            != original.len()
+    {
+        // Missing/corrupt immutable proof is an unknown result, never a 404
+        // that could authorize publication of the request again.
+        return Err(AppError::Unavailable);
+    }
+    Ok(original)
 }
 
 async fn notify_hint(
@@ -602,5 +795,53 @@ mod tests {
                 Err(AppError::BadRequest(_))
             ));
         }
+    }
+
+    #[test]
+    fn immutable_recipient_proofs_fail_closed_when_missing_corrupt_or_incomplete() {
+        let recipient = json!({
+            "userId":crate::util::uuid7::fixture_uuid(1),
+            "organizationId":crate::util::uuid7::fixture_uuid(2),
+            "membershipId":crate::util::uuid7::fixture_uuid(3),
+            "memberType":"EMPLOYEE", "identityVersion":5,
+        });
+        let snapshot = |proofs: Value| json!({"authority":{"recipientProofs":proofs}});
+        let valid = snapshot(json!([recipient]));
+        assert!(recipient_proofs(&valid, 1).is_ok());
+        for (value, count) in [
+            (json!({}), 1),
+            (snapshot(Value::Null), 1),
+            (snapshot(json!([])), 0),
+            (valid.clone(), 2),
+            (valid.clone(), 1001),
+            (snapshot(json!([recipient, recipient])), 2),
+        ] {
+            assert!(matches!(
+                recipient_proofs(&value, count),
+                Err(AppError::Unavailable)
+            ));
+        }
+        for (field, value) in [
+            ("membershipId", json!(Uuid::nil())),
+            ("memberType", json!("CUSTOMER")),
+            ("identityVersion", json!(0)),
+            ("identityVersion", json!("5")),
+            ("unexpected", json!(true)),
+        ] {
+            let mut corrupt = recipient.clone();
+            corrupt[field] = value;
+            assert!(matches!(
+                recipient_proofs(&snapshot(json!([corrupt])), 1),
+                Err(AppError::Unavailable)
+            ));
+        }
+    }
+
+    #[test]
+    fn publication_request_cannot_supply_immutable_recipient_authority() {
+        let request = json!({"idempotencyKey":"owned-proof-injection",
+            "target":{"kind":"TENANT"},"type":"INFO","title":"Notification",
+            "authority":{"recipientProofs":[]}});
+        assert!(serde_json::from_value::<PublishBody>(request).is_err());
     }
 }

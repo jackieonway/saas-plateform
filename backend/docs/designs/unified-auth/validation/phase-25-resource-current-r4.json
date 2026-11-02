@@ -1,0 +1,38 @@
+{
+  "contractVersion": "unified-auth-phase25-real-resources/1",
+  "result": "FAIL",
+  "startedAtUtc": "2026-10-29T12:51:00.515Z",
+  "sourceSnapshot": "phase25-tools-r6",
+  "checks": [],
+  "tlsErrorsIgnored": false,
+  "databaseMutationScope": "Owned fixture employee member, stores status/generation and exact store-read data grant only",
+  "rawCarriersPersisted": false,
+  "observedEndpoints": {
+    "console:/auth/session:200": 2,
+    "console:/auth/context-token:200": 2,
+    "console:/api/apps/session-token:201": 1,
+    "business:/stores-api/stores:503": 1
+  },
+  "policyCleanup": {
+    "memberEnabled": true,
+    "applicationEnabled": true,
+    "memberGeneration": 1,
+    "applicationGeneration": 1,
+    "dataGrantRestored": true,
+    "generationsNeverDecreased": true,
+    "policyRestored": true
+  },
+  "snapshotSha256": "c795b314a63ad9ed0200ead36eeb790112862e7b5fdf939ded964cf1e813b2e0",
+  "currentFixtureGuardVerified": true,
+  "failedStep": "RESOURCE_MATRIX",
+  "failureCode": "PHASE25_RESOURCE_BASELINE_RESOURCE_DENIED",
+  "cleanup": {
+    "contextsClosed": true,
+    "browserClosed": true,
+    "failures": 0
+  },
+  "tlsProtocols": [
+    "TLS 1.3"
+  ],
+  "finishedAtUtc": "2026-10-29T12:51:16.655Z"
+}

@@ -1,0 +1,48 @@
+{
+  "contractVersion": "unified-auth-phase25-client-id-contract-review/1",
+  "status": "CONFIRMED_PRODUCTION_VALIDATOR_DEFECT",
+  "recordedAtUtc": "2026-10-29T13:07:49.831092+00:00",
+  "reviewedCandidate": "phase25-apps-r3",
+  "candidateSha256": "a078317efaaa94abeb8cf2d96c37077dee5d5eb438f64351e837f75982dbbe49",
+  "sourceInputs": {
+    "saas-plateform/backend/migrations/0001_init.sql": "626862ee41b929a623bb68e6acfcfdd51f01869987bceb437bedee116ddc825b",
+    "saas-identity/src/auth_admin.rs": "3364fa3fb68156336f05cd9c866f91bc503f99fc611adc1c47f40cb41857ab21",
+    "saas-identity/src/oidc/protocol.rs": "a9d9f4c00c3253182a45fe6d9e559b4a93603ee6e74d67e119d491019b063133",
+    "saas-identity/src/oidc/oauth.rs": "555d3e3b5a04aa43f2b19ea25c4aa40dd74408530a7e803dc9af579bc6580b81",
+    "saas-plateform/backend/src/oidc/remote_admin.rs": "75879c39c23dfb0cf11206ab0d4b599405ac5e788395ce78a6843edc9bde930f",
+    "saas-plateform/frontend/src/api/types.ts": "158374cc5366b5f58e2c2b3cfab82c7f326382b60ddc979950947db00b528d4e",
+    "saas-plateform/frontend/src/pages/system/oauth/UnifiedClientsPage.tsx": "b157a06f3a9097d1f8c5300f50f76d39d7786f5934302f4882c31d3111c2c223",
+    "saas-plateform/backend/tests/unified-auth-https/phase21-fixture.py": "941d1de3f841b0107db3facb200753e2b99129ecde843001fd656ea27f57caa1"
+  },
+  "facts": [
+    "auth_clients.id is the UUIDv7 internal management key. auth_clients.client_id is independently unique PostgreSQL text with character length 1..100.",
+    "Identity ClientRow.json returns id and clientId from those separate columns. OAuth client lookup uses the public client_id; internal management lookup uses id.",
+    "Current create defaults the public text to id.to_string(), but this is a creation choice, not a projection invariant. Both equal and distinct IDs are valid.",
+    "The standard Phase21 fixture intentionally registers p21-* public identifiers separate from internal UUID keys and has already exchanged real tokens. Rewriting the fixture to UUID would conceal the faulty consumer.",
+    "Frontend already uses record.id for management URLs and group membership operations, while record.clientId is displayed/copied for protocol use.",
+    "Platform record projection incorrectly requires clientId==id, rejecting the valid independent records and making the entire registry page unavailable."
+  ],
+  "minimalFix": {
+    "owner": "runtime_matrix_plan",
+    "file": "saas-plateform/backend/src/oidc/remote_admin.rs",
+    "projectionRule": "clientId must be a nonempty string with <=100 Unicode characters and no Unicode control characters, matching current schema/protocol. Do not add ASCII-only, trim-equality, UUID or inequality assumptions.",
+    "mustRemainStrict": [
+      "record.id stays UUIDv7",
+      "GET/PATCH record.id remains bound to the internal path UUID",
+      "credential/group response clientId remains the internal UUID under those distinct operation contracts",
+      "other exact response fields, secret exclusion, application/source/fine-permission checks unchanged"
+    ]
+  },
+  "regressionRequests": [
+    "Equal default UUID public ID",
+    "Distinct p21-* public ID in list and detail",
+    "Unicode and leading/trailing-space public IDs preserved without normalization",
+    "Reject non-string, empty, 101-character and Unicode-control public IDs",
+    "Reject invalid internal UUID and incorrect detail path binding",
+    "Bounded list still rejects secret/unknown fields"
+  ],
+  "validationBoundary": "Read-only contract/source audit. Production fix, its new PG/unit results and complete apps-r4 rebuild are separate evidence; none is claimed here.",
+  "containersCreated": 0,
+  "databasesCreated": 0,
+  "servicesStarted": 0
+}

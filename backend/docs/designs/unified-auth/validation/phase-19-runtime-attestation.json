@@ -1,0 +1,32 @@
+{
+  "contractVersion": "unified-auth-runtime-attestation/1",
+  "recordedAt": "2026-10-28T06:26:13.937311+00:00",
+  "components": {
+    "identity": {
+      "binarySha256": "fb2ff4e1552825eb5c8701def2b7e2935a7748a1b14032ce0094cbe0875ac0c9",
+      "sourceSnapshotSha256": "9d33d0bde98e3a3a02b2da729b610ce69d828c74cd2b88e2b65cf885a9b2b580",
+      "attestation": "phase-19-identity-update-attestation.json"
+    },
+    "platform": {
+      "binarySha256": "7b533153efa29176de805fd8a83f251615232a803959456fc08e4389a8d24738",
+      "sourceSnapshotSha256": "605ac9ef8aba39fbeed7037287380559bab9a0c075bbc61a49362f71fc1d87f3",
+      "attestation": "phase-19-build-attestation.json"
+    },
+    "portal": {
+      "binarySha256": "b5be9e8f24bf065d1854acd85f2964e31b76bc6584a7d0855ffc15c39f288eb8",
+      "sourceSnapshotSha256": "605ac9ef8aba39fbeed7037287380559bab9a0c075bbc61a49362f71fc1d87f3",
+      "attestation": "phase-19-build-attestation.json"
+    }
+  },
+  "schemaAndPlatformPortalAndFrontendInputsUnchanged": true,
+  "changedFiles": [
+    "saas-identity/src/auth_review/tests.rs",
+    "saas-identity/src/internal.rs",
+    "saas-plateform/backend/tests/unified-auth-https/README.md",
+    "saas-plateform/backend/tests/unified-auth-https/phase19-browser.mjs",
+    "saas-plateform/backend/tests/unified-auth-https/snapshot-build.py"
+  ],
+  "harnessSha256": "4ce41eaa92055bc9158542a5e9c1fae2512207d4dcdafbc3d82eeca44e358422",
+  "tlsVerificationDisabled": false,
+  "databaseRecreatedForIdentityUpdate": false
+}

@@ -1,0 +1,65 @@
+{
+  "contractVersion": "unified-auth-phase22-runtime-attestation/1",
+  "status": "PASS",
+  "snapshotSha256": "03878de6bb331ada97977d67bb82ed0c93f75ea01a20c68a5556df8abd4de1ad",
+  "binaries": {
+    "saas-identity": "7e3bda906d785b35ce8c65261ba3242b5cf0222b4a5276d9dfa13616d65bfe48",
+    "platform-migrate": "cdc8c8e9ee8e5d9c2317a53831a39898b64e0283b3727d4728c409eb2ad8ff1e",
+    "saas-platform-backend": "c4d0a23b96a157be18d680b36f28e801e412286a0eaa981550ddfc46954a2ef7"
+  },
+  "identityBuiltFromFrozenSnapshot": true,
+  "platformBinaryReusedFromPriorVerifiedNativeEnvironment": true,
+  "finalHarnessSeparateFromCompiledSourceSnapshot": true,
+  "capacityAndFaultsUseSeparateOwnedFixtures": true,
+  "faultRuntimeRechecksSameIdentityBinary": true,
+  "sourceSha256": {
+    "saas-identity/src/config.rs": "3cdb6d51aea6fb7f6a9de96bb73f09689194f9a8e88392deb3948d7f9cc7f334",
+    "saas-identity/src/state.rs": "0f1febee70af6d74ffb30695e0805682a2a129a2c3688bae2957a8aa2d7ae3f6",
+    "saas-identity/src/admission.rs": "1fa123c665f2eb105b520f15b7b0203e15de8a99dc6bee1cd7bcc5583bfd2236",
+    "saas-identity/src/network.rs": "4ba73b3478b90187dd75d8b034660deff7ec816968d97b0451857c2196cb64cf",
+    "saas-identity/src/lib.rs": "cd71305109eafa31698f4ab1ac57f546996f336fabddfb207d8348f64170715c",
+    "saas-identity/src/readiness.rs": "f629c98cbd905a43b4bf5449f84c03e08e4c8f1f0fc088dbb6c195d19992874a",
+    "saas-identity/src/main.rs": "7b2cfa74114b26a210b2c424d24d58004f724756b45bf46eb2397bff1f1cbfe5",
+    "saas-identity/src/password.rs": "9be4e314d761562a250afd0515ed8eec3669166c32b4a2b029ee165d9a3fc9d1",
+    "saas-identity/src/util/audit.rs": "a1906c14ea234ec03e37dd79f932e8df1cae201d6c3e686f7bd59a2e139c768d",
+    "saas-identity/src/oidc/oauth.rs": "b7423571ae3d3a6596a7184a652116b0a3b87e184afb73462b871605be1ff4a5",
+    "saas-identity/src/oidc/oauth/logout.rs": "010bb5daa129ef1b08e510f0c85ef15cc8518e9e0fefee4d75f746043b92cb34",
+    "saas-identity/src/observability.rs": "56840a254459a9a8a3c77ad90bbd49dfdcdfa7573f683828327e9c5b0a1e7511",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-run.py": "61e17c84d4580f4525f0c8b65ea03c7b2585ed1d8622cbd0b37a25facdcc41fa",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-load.mjs": "fdba966fa8a27f3347de07c18a31b54e5932505f825be6c4800da4d5e28e8ac4",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-alerts.mjs": "a54e7431091acd0735664046045562958c2af2fa0ef441d7b02fcfa98b513131",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-fixture.py": "c60f5be533c923d6fc029b778869c41de65454d951694953eff4c6b6471dca59",
+    "saas-plateform/backend/tests/unified-auth-https/phase22-gateway.py": "7fcd40df08a06391f45fdce17a16ab676930fa1b57936e407e4eb8626799f9ef"
+  },
+  "evidenceSha256": {
+    "phase-22.md": "016a0d8617d1b86c3b698a8153e68dd1f4ba1040095cde1ed643cee780554e10",
+    "phase-22-runtime.json": "eed3a0fb1a6baa6c542f18e8511d751cd739f6d3625e7e2dbb65fc12fe443bd9",
+    "phase-22-capacity.json": "9cc9af37de563020d119e460b48ce0e17abcaa372dcd114e16b93eef277b5d7e",
+    "phase-22-cleanup.json": "198730dd96f67ad378f3603f4a635e4c7faf2fe1f116c5e7aa16eade4e88be23",
+    "phase-22-build-attestation.json": "327ad0032787c90f8e56ffb423547b718b08a1e48cfa1413d07c572e8238a0b5",
+    "phase-22-independent-state.json": "424e35663c69bd68933cf1c9ab402a487acf8a324a2b050f695c59ca721292b6",
+    "phase-22-harness-selftests.json": "d5a42fa1d87d5852015aa3126daf625b1aa254f52423a202b6b07edc58424253"
+  },
+  "independentFinalCatalog": {
+    "roles": 0,
+    "databases": 0,
+    "activity": 0,
+    "cluster": "7701548153213487841"
+  },
+  "independentPorts": {
+    "wsl23441": false,
+    "windows24445": false,
+    "wsl24444": false,
+    "wsl23443": false,
+    "wsl127002_443": false,
+    "wsl23001": false,
+    "windows443Pid": 5044
+  },
+  "ownedPythonCacheFilesRemoved": 1,
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "productionSlaEstablished": false,
+  "thirtyMinuteSoakClaimed": false,
+  "ledgerEditedByThisAgent": false
+}

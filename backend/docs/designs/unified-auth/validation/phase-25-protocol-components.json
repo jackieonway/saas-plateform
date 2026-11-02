@@ -1,0 +1,71 @@
+{
+  "contractVersion": "unified-auth-phase25-standard-protocol-components/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T11:39:49.3687404Z",
+  "status": "COMPONENT_PASS_REAL_RUNTIME_PENDING",
+  "sourceSha256": {
+    "backend/tests/unified-auth-https/phase25-protocol-browser.mjs": "581e2ae8814328896c44cb1c9f51ea137a32f6baf2716908702c68e0d40f3836",
+    "backend/tests/unified-auth-https/phase25-protocol-driver.mjs": "555646f42d3636c7c9ca93ceaed0477f59dcfd3188b0283aaf574c4b1f17d96a",
+    "backend/tests/unified-auth-https/phase25-protocol-cases.mjs": "184630e610ed524ac645eb735974fbc0597cc022864144cef62c648abe42086a",
+    "backend/tests/unified-auth-https/phase25-protocol-cases.test.mjs": "7b3dcbc97e9fd6da325d3a4dcccae0afd72552d82c634044f2a30bc2e0ed2009"
+  },
+  "validation": {
+    "checks": [
+      "actual SDK signature/claims/auth_time and signed-token incorrect expected issuer/audience",
+      "wrong state/issuer before token request; wrong nonce/verifier/client/redirect rejected",
+      "stale auth_time rejected and inaccurate primary-window fact rejected",
+      "actual refresh rotation/source/scope preservation and original refresh replay rejected",
+      "family nonrevocation fixture is explicitly detected rather than counted PASS",
+      "wrong confidential secret rejected and absent scope-shrink fixture support fails",
+      "explicit bounded authorization mutations preserve state and nonce"
+    ],
+    "passed": 6,
+    "failed": 0,
+    "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-protocol-cases.test.mjs",
+    "standardClient": "openid-client@6.8.8",
+    "testsRun": 6,
+    "evidenceLayer": "STANDARD_SDK_ACTUAL_CA_VALIDATED_HTTPS_ISSUER_FIXTURE",
+    "syntaxResult": "PASS",
+    "skipped": 0,
+    "earlierAttempt": {
+      "cause": "initial test relative path pointed one parent above workspace",
+      "correction": "test resolves independent RP from actual workspace root",
+      "previousSuccessfulResultsRewritten": false,
+      "result": "FAILED_BEFORE_TEST_LOAD"
+    },
+    "jwtLibrary": "jose@6.2.13",
+    "node": "v24.22.1",
+    "syntaxChecks": 4
+  },
+  "expectedNativeDriver": {
+    "callbackCarrierOutput": "private IPC handles and bounded begin URL only",
+    "deploymentInput": "SOURCE current binding and current snapshot; exact task namespace, own files and snapshot hashes checked",
+    "concurrency": "two original child processes under setpriv --pdeathsig TERM; synchronized start; exactly one200 and one400 invalid_grant required",
+    "platform": "Linux",
+    "invocation": "node FROZEN_TOOLS/phase25-protocol-driver.mjs --snapshot phase25-tools-rN",
+    "processesActuallyStartedByComponentReport": 0,
+    "databaseAccess": false
+  },
+  "limitations": [
+    "No current identity/platform deployment was exercised by these six tests. Native service, current DB/HTTPS, dual-process code concurrency and full matrix results remain pending.",
+    "The TLS issuer fixture deliberately implements limited family semantics and no requested scope shrink; checks assert these cannot be silently counted PASS.",
+    "PUBLIC-client and credential rotation/emergency revocation need separately owned clients; this driver does not change fixed fixture clients or signing state.",
+    "Same-sector subject across different clients, different partner/environment, account rename/retirement and refresh absolute/idle expiry are not claimed.",
+    "Scenario IDs in future runtime output only relate evidence to rows; detailed limitations prevent automatic whole-row completion."
+  ],
+  "operations": {
+    "dockerReused": 0,
+    "privateMaterialPersisted": false,
+    "temporaryCertificateFilesRemovedByFixtureTrap": true,
+    "databasesCreated": 0,
+    "nativeServicesStarted": 0,
+    "dockerCreated": 0,
+    "fixturePeersClosedInFinally": true
+  },
+  "independentReviewFix": {
+    "reviewer": "/root/candidate_audit",
+    "implementation": "Both original children are reaped through bounded EOF/TERM/KILL close waits; any failed cleanup overrides operation success; wrapper waits after kill and records actual exit; signal handlers close pipe/browser",
+    "result": "FIXED_SOURCE_AND_SYNTAX_CHECKED_NATIVE_RUNTIME_PENDING",
+    "finding": "After SIGKILL, two-child cleanup lacked observed close; Windows wrapper kill lacked observed exit before result"
+  }
+}

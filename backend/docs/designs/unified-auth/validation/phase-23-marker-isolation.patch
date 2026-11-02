@@ -1,0 +1,142 @@
+--- a/backend/tests/unified-auth-https/phase23-fixture.py
++++ b/backend/tests/unified-auth-https/phase23-fixture.py
+@@ -69,6 +69,27 @@
+         "INSERT INTO user_roles(user_id,role_id,organization_id) VALUES("
+         + q['admin'] + ',' + role + ',' + q['organization'] + ')',
+         "INSERT INTO role_menus(role_id,menu_id) VALUES(" + role + ',' + menu + ')',
++    ]
++
++
++def organization_marker_seed(environment, marker_organization):
++    """Keep the RPO mutation outside every customer context candidate."""
++    scope = environment['ids']
++    if (not isinstance(marker_organization, str) or not re.fullmatch(
++            r'[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', marker_organization)
++            or marker_organization in scope.values()):
++        raise RuntimeError('PHASE23_MARKER_ORGANIZATION_BINDING_INVALID')
++    marker = literal(marker_organization) + '::uuid'
++    tenant = literal(scope['tenant']) + '::uuid'
++    parent = literal(scope['organization']) + '::uuid'
++    return [
++        "INSERT INTO organizations(id,tenant_id,parent_id,name) VALUES("
++        + marker + ',' + tenant + ',' + parent + ",'Owned Phase23 RPO marker')",
++        "DO $marker$ BEGIN IF NOT EXISTS(SELECT 1 FROM organizations marker "
++        f"WHERE marker.id={marker} AND marker.tenant_id={tenant} AND marker.parent_id={parent} "
++        "AND marker.status='ENABLED') OR EXISTS(SELECT 1 FROM memberships "
++        f"WHERE organization_id={marker}) THEN "
++        "RAISE EXCEPTION 'PHASE23_MARKER_ORGANIZATION_NOT_ISOLATED'; END IF; END $marker$",
+     ]
+ 
+ 
+@@ -132,9 +153,10 @@
+     if any(psql(database, 'SELECT count(*) FROM public.' + table) != '0' for table in legacy):
+         raise RuntimeError('PHASE23_LEGACY_STATE_PRESENT')
+     marker_grants = organization_marker_grants(environment)
+-    ids = {'oidcAdminService': new_id(), 'retireMember': new_id()}
++    ids = {'oidcAdminService': new_id(), 'retireMember': new_id(), 'markerOrganization': new_id()}
++    marker_seed = organization_marker_seed(environment, ids['markerOrganization'])
+     admin_secret = secrets.token_hex(32)
+-    statements = [*marker_grants,
++    statements = [*marker_seed, *marker_grants,
+         "INSERT INTO identity_service_clients(id,secret_hash,purpose,status,created_at) VALUES("
+         + literal(ids['oidcAdminService']) + ',' + literal(hashlib.sha256(admin_secret.encode()).hexdigest())
+         + ",'OIDC_ADMIN','ENABLED',clock_timestamp())",
+--- a/backend/tests/unified-auth-https/phase23-browser.mjs
++++ b/backend/tests/unified-auth-https/phase23-browser.mjs
+@@ -444,8 +444,10 @@
+     assert(deadline&&Number.isFinite(Number(deadline.expiresAtMs)),'ORIGINAL_ACCESS_DEADLINE_REQUIRED');
+     oldAccessCarriers.push({key,version,sha256,expiresAtMs:Number(deadline.expiresAtMs)});
+   }
++  const markerOrganization=environment.phase23.ids.markerOrganization;
++  assert(uuid.test(markerOrganization??'')&&!([ids.organization,ids.secondOrganization].includes(markerOrganization)),'PHASE23_MARKER_ORGANIZATION_NOT_ISOLATED');
+   const markerA=`phase23-checkpoint-${newId()}`,markerB=`phase23-post-checkpoint-${newId()}`;
+-  assert.equal((await management({method:'PUT',path:`/api/organizations/${ids.secondOrganization}`,body:{description:markerA}})).status,200,'BUSINESS_MARKER_A_WRITE_FAILED');
++  assert.equal((await management({method:'PUT',path:`/api/organizations/${markerOrganization}`,body:{description:markerA}})).status,200,'BUSINESS_MARKER_A_WRITE_FAILED');
+   const sourceEnvironmentHash=hash(privateText(`${TASK}/phase23-source-environment.json`));
+   // Park every browser page so no background BFF refresh races the offline cut.
+   for(const context of contexts)for(const page of context.pages())await page.goto('about:blank');
+@@ -465,7 +467,7 @@
+   assert.equal((await rpc('userinfo',{key:oldUser.key})).status,200);report.timing.checkpointPauseEndedAt=new Date().toISOString();report.sourceResumedBusinessAfterCheckpoint=true;pass({freshLiveUserAndMachineCarriers:true,sourceReallyResumed:true});
+ 
+   step='POST_CHECKPOINT_DENY';
+-  assert.equal((await management({method:'PUT',path:`/api/organizations/${ids.secondOrganization}`,body:{description:markerB}})).status,200,'BUSINESS_MARKER_B_WRITE_FAILED');
++  assert.equal((await management({method:'PUT',path:`/api/organizations/${markerOrganization}`,body:{description:markerB}})).status,200,'BUSINESS_MARKER_B_WRITE_FAILED');
+   const revokedC=await command({path:'/api/oidc/keys/phase23-c/revoke'});assert.equal(revokedC.status,200);
+   for(const [name,record] of Object.entries(bffBefore)){await record.page.goto(`${name==='employee'?CONSOLE:CUSTOMER}/auth/config`);const client=name==='employee'?ids.client:ids.portalClient;assert.equal((await receiver(record.page,fixtureLogout('phase23-c',client))).status,400,'REVOKED_C_SYSTEM_RP_RECEIVER_ACCEPTED');assert.equal((await receiver(record.page,fixtureLogout('phase23-d',client))).status,200,'VALID_D_SYSTEM_RP_RECEIVER_REJECTED');}
+   const cFacts=await rpc('verify-old-id-session',{key:keys.privateCarriers.c});assert(cFacts.cachedKeySignatureValid&&!cFacts.currentAuthorityJwtValid&&cFacts.currentVerificationCode==='KEY_NOT_CURRENT'&&cFacts.onlineStatus===200,'EMERGENCY_C_THREE_LAYER_SEMANTICS_FAILED');
+@@ -547,7 +549,7 @@
+     }
+   }
+   for(const name of ['admin','employee','customer','standard']){const before=name==='standard'?sourceEnvironment.phase21.accounts.user:sourceEnvironment.accounts[name];const after=account(name);assert.notEqual(before.password,after.password,'PRIMARY_PASSWORD_NOT_ROTATED');const {page}=await contextPage();const begin=await rpc('begin',{profile:'third',prompt:'login'});await page.goto(begin.authorizationUrl,{waitUntil:'domcontentloaded'});await page.locator('#login-form:not([hidden])').waitFor();await page.locator('#username').fill(before.username);await page.locator('#password').fill(before.password);const denied=page.waitForResponse(response=>response.url()===`${AUTH}/api/sso/login`&&response.request().method()==='POST');await page.locator('#login-submit').click();assert.equal((await denied).status(),401,'OLD_PRIMARY_PASSWORD_REVIVED');await page.goto('about:blank');}
+-  const restoredMarker=row('shared',`SELECT description,status FROM organizations WHERE id=${lit(ids.secondOrganization)}::uuid`);assert.equal(restoredMarker.description,markerA,'CHECKPOINT_BUSINESS_MARKER_NOT_RESTORED');assert.notEqual(restoredMarker.description,markerB,'POST_CHECKPOINT_DATA_WRONGFULLY_PRESENT');
++  const restoredMarker=row('shared',`SELECT description,status FROM organizations WHERE id=${lit(markerOrganization)}::uuid`);assert.equal(restoredMarker.description,markerA,'CHECKPOINT_BUSINESS_MARKER_NOT_RESTORED');assert.notEqual(restoredMarker.description,markerB,'POST_CHECKPOINT_DATA_WRONGFULLY_PRESENT');
+   report.businessRpo={sourceMutationVia:'actual authorized platform PUT',restoredObservationVia:'guarded owner SQL',checkpointValueRestored:true,postCheckpointValueLost:true,restoredOrganizationStatus:restoredMarker.status,securityIsolationSeparate:true};pass({originalProtocolProcessRetained:true,exactOriginalCookieBytesResubmitted:true,oldUserAccess:4,oldRefresh:2,oldMachine:1,oldClientSecrets:4,oldPrimaryPasswords:4,oldCode:1,oldBffCookies:2,originalDatabaseAccessDeadlines:true,deadlinesCheckedAfterDenial:true,minimumOldAccessRemainingMs:Math.floor(Math.min(...denialDeadlines)),oldCodeRemainingMs:Math.floor(codeResult.remainingMs)});
+   step='RECOVERED_OLD_INVARIANTS';
+   report.invariants=JSON.parse(wsl(['python3','-B',`${tools}/phase23-invariant-cases.py`,'--config',`${TASK}/phase23-recovery-config.json`,'--source-env',`${TASK}/phase23-source-environment.json`,'--target-env',`${TASK}/phase23-target-environment.json`,'--minimum-sequence',String(report.latestDenySequence),'--output',`${TASK}/phase23-invariants.json`],{timeout:120000}));pass({beforeAnyFreshPositiveLogin:true});
+--- a/backend/tests/unified-auth-https/phase23-fixture-selftest.py
++++ b/backend/tests/unified-auth-https/phase23-fixture-selftest.py
+@@ -274,6 +274,41 @@
+         self.assertNotIn('CREATE OR REPLACE FUNCTION', statement)
+         self.assertNotIn('GRANT ALL', statement)
+ 
++    def test_rpo_marker_is_an_owner_seeded_child_without_any_member(self):
++        trace = exercise()
++        self.assertIsNone(trace['error'])
++        environment = next(row['value'] for row in trace['writes']
++                           if row['path'] == str(TASK / 'https-environment.json'))
++        scope = environment['ids']
++        marker = environment['phase23']['ids']['markerOrganization']
++        self.assertNotIn(marker, scope.values())
++        self.assertNotEqual(marker, scope['organization'])
++        self.assertNotEqual(marker, scope['secondOrganization'])
++        seed = FIXTURE.organization_marker_seed(environment, marker)
++        self.assertIn('INSERT INTO organizations(id,tenant_id,parent_id,name) VALUES('
++                      + FIXTURE.literal(marker) + '::uuid,' + FIXTURE.literal(scope['tenant'])
++                      + '::uuid,' + FIXTURE.literal(scope['organization']) + '::uuid,', seed[0])
++        self.assertIn('PHASE23_MARKER_ORGANIZATION_NOT_ISOLATED', seed[1])
++        self.assertIn('OR EXISTS(SELECT 1 FROM memberships WHERE organization_id='
++                      + FIXTURE.literal(marker) + '::uuid)', seed[1])
++        statement = trace['mutations'][0][1]
++        self.assertTrue(all(fragment in statement for fragment in seed))
++        for fragment in statement.split(';'):
++            if 'INSERT INTO memberships(' in fragment:
++                self.assertNotIn(marker, fragment)
++        self.assertNotIn('INSERT INTO organization_applications', '\n'.join(seed))
++        self.assertNotIn('GRANT ', '\n'.join(seed))
++        self.assertLess(statement.index(seed[0]), statement.index("'system:organization'"))
++
++    def test_rpo_marker_rejects_existing_root_child_and_malformed_identifiers(self):
++        environment = baseline()[1]
++        for value in [environment['ids']['organization'], environment['ids']['secondOrganization'],
++                      environment['ids']['tenant'], None, 'untrusted-identifier', 1]:
++            with self.subTest(marker=value):
++                with self.assertRaisesRegex(RuntimeError,
++                        '^PHASE23_MARKER_ORGANIZATION_BINDING_INVALID$'):
++                    FIXTURE.organization_marker_seed(environment, value)
++
+     def test_organization_marker_missing_or_foreign_identifier_shape_rejects_before_outputs(self):
+         for name in ('tenant', 'organization', 'secondOrganization', 'application', 'admin', 'adminMember'):
+             manifest, environment, signing = baseline()
+--- a/backend/tests/unified-auth-https/phase23-recovery-files.py
++++ b/backend/tests/unified-auth-https/phase23-recovery-files.py
+@@ -167,7 +167,7 @@
+                        "keyRetirementTokenTtlSeconds", "longCarrierTokenTtlSeconds"))
+     need(phase["contractVersion"] == "unified-auth-phase23/1" and phase["rpOrigin"] == RP_ORIGIN,
+          "PHASE23_CONTRACT_INVALID")
+-    core.exact(phase["ids"], ("oidcAdminService", "retireMember"))
++    core.exact(phase["ids"], ("oidcAdminService", "retireMember", "markerOrganization"))
+     for value in phase["ids"].values():
+         uid(value)
+     core.exact(phase["signingKids"], ("a", "b", "c", "d"))
+--- a/backend/tests/unified-auth-https/test_phase23_recovery_files.py
++++ b/backend/tests/unified-auth-https/test_phase23_recovery_files.py
+@@ -109,7 +109,8 @@
+                         "scope": "demo.read", "resource": adapter.RP_ORIGIN + "/demo-resource"},
+             "resource": {"clientId": public["resource"], "secretFile": files["resource"]}}
+         source["phase23"] = {"contractVersion": "unified-auth-phase23/1", "ids": {
+-            "oidcAdminService": oidc_admin, "retireMember": self.object_id()},
++            "oidcAdminService": oidc_admin, "retireMember": self.object_id(),
++            "markerOrganization": self.object_id()},
+             "signingKids": {"a": "owned-https", "b": "phase23-b", "c": "phase23-c", "d": "phase23-d"},
+             "rpOrigin": adapter.RP_ORIGIN, "normalTokenTtlSeconds": 300,
+             "keyRetirementTokenTtlSeconds": 30, "longCarrierTokenTtlSeconds": 600}

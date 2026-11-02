@@ -1,0 +1,103 @@
+{
+  "contractVersion": "identity-phase22-harness-selftests/1",
+  "evidenceType": "HARNESS_SELFTESTS_ONLY",
+  "observedDuringCurrentSession": true,
+  "node": {
+    "runtime": "Node.js 24.22.1 / WSL Linux",
+    "commandFromPlatformProject": "node --test backend/tests/unified-auth-https/phase22-load.mjs backend/tests/unified-auth-https/phase22-alerts.mjs",
+    "load": { "tests": 15, "passed": 15, "failed": 0, "skipped": 0 },
+    "alerts": { "tests": 11, "passed": 11, "failed": 0, "skipped": 0 },
+    "total": { "tests": 26, "passed": 26, "failed": 0, "skipped": 0 },
+    "runnerReportedDurationMs": 447.429964,
+    "regressions": [
+      "Positive-progress early final sleep wakeups complete REFRESH and INTROSPECTION duration in three sleeps",
+      "Cancellation during the final wait exits in two sleeps and closes transport once",
+      "Busy-worker under-delivery stays bounded and reports actual successes instead of requested rate"
+    ],
+    "realLocalCollectorTest": {
+      "temporaryLoopbackListener": true,
+      "metricsWereFaked": true,
+      "lostAcknowledgementDeduplicated": true,
+      "wrongCredentialRejected": true,
+      "listenerConnectionsAndTemporaryFilesClosedInFinally": true
+    }
+  },
+  "cleanupInjection": {
+    "observedTests": 4,
+    "passed": 4,
+    "failed": 0,
+    "originalMethod": "Extract main finally AST; execute with mocked controller, subprocess output and database cleanup against disposable temporary fixture files",
+    "cases": [
+      { "scenario": "success", "injection": "No failure; mocked catalog returns cluster match and zero database/roles", "expectedRunnerResult": "PASS", "result": "PASS" },
+      { "scenario": "control-failure", "injection": "Controller raises TimeoutExpired; later database and private-file cleanup must continue", "expectedRunnerResult": "FAILED", "residualLeaseRetained": true, "result": "PASS" },
+      { "scenario": "database-failure", "injection": "Database cleanup raises; mocked catalog retains one database and six roles", "expectedRunnerResult": "FAILED", "residualManifestRetained": true, "result": "PASS" },
+      { "scenario": "malformed-pid", "injection": "Owned service PID fixture contains invalid JSON; independent cleanup must continue", "expectedRunnerResult": "FAILED", "residualLeaseRetained": true, "result": "PASS" }
+    ],
+    "originalTemporaryFilesystemFixtures": 4,
+    "originalTemporaryFilesystemFixturesRemoved": true,
+    "realProcessesStarted": 0,
+    "realSignalsSent": 0,
+    "databaseConnections": 0,
+    "dockerCommandsExecuted": 0,
+    "persistedReplay": {
+      "file": "backend/tests/unified-auth-https/phase22-cleanup-selftest.py",
+      "commandFromPlatformProject": "python3 backend/tests/unified-auth-https/phase22-cleanup-selftest.py",
+      "filesystem": "IN_MEMORY_ONLY",
+      "syntaxCheck": "PASS",
+      "executionStatus": "PASS",
+      "executionExitCode": 0,
+      "executedAfterCapacityWindow": true,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "source": {
+        "runnerSha256": "61e17c84d4580f4525f0c8b65ea03c7b2585ed1d8622cbd0b37a25facdcc41fa",
+        "finallyAstSha256": "79fb838e5eb0ae601fe262c52c24c060901859b0985c7ebef059d392aeed75a5",
+        "selftestSha256": "f6119f16db2196b523b5014a52e973018aae356048d64725aab6e80dcefc36ed"
+      },
+      "realProcessesStarted": 0,
+      "realSignalsSent": 0,
+      "databaseConnections": 0,
+      "dockerCommandsExecuted": 0,
+      "realFilesystemMutations": 0,
+      "executionHistory": [
+        { "result": "FAILED", "reason": "Initial pure mock did not implement the runner host df observation" },
+        { "result": "PASS", "reason": "Only the selftest df adapter was added; all four memory-only cases then passed against the unchanged runner" }
+      ],
+      "note": "This observed replay supplies an exact source binding in addition to the earlier inline four-case evidence. Failure scenarios pass only when the runner reports FAILED and retains unresolved ownership records."
+    }
+  },
+  "sourceSha256AtArchive": {
+    "backend/tests/unified-auth-https/phase22-load.mjs": "fdba966fa8a27f3347de07c18a31b54e5932505f825be6c4800da4d5e28e8ac4",
+    "backend/tests/unified-auth-https/phase22-alerts.mjs": "a54e7431091acd0735664046045562958c2af2fa0ef441d7b02fcfa98b513131",
+    "backend/tests/unified-auth-https/phase22-run.py": "7e441dece1b023da2d660fd15da409d1cedb2334288a4a337a3ac49e3e5c4f11",
+    "backend/tests/unified-auth-https/phase22-cleanup-selftest.py": "d01e9f1f8950aad3404361b2aca4fb0647b046cf3a39b2003a776ab02931060c"
+  },
+  "runnerFinallyAstSha256AtArchive": "79fb838e5eb0ae601fe262c52c24c060901859b0985c7ebef059d392aeed75a5",
+  "sourceHashBoundary": "Archive hashes identify the original archived sources. The earlier inline cleanup run did not record its source hash. The now-executed persisted replay binds its exact current runner, finally AST and selftest hashes separately above; the verified runner was not modified by this replay.",
+  "capacityReuseReadOnlyReview": {
+    "result": "PASS",
+    "componentFile": "phase-22-capacity.json",
+    "sourceRuntimeFile": "phase-22-runtime-before-cookie-fix.json",
+    "sourceRuntimeSha256Verified": "d57516f0ec584327d86ec17fa1151ac7a4b8f1f2bb57a34323345ffaa9f1a16d",
+    "componentMatchesOriginalCapacityExactly": true,
+    "threeRequestedDurationsCompleted": true,
+    "finalRuntimeCapacityMatchesComponentExactly": true,
+    "runtimeChecksSameIdentityBinarySha256": true,
+    "currentBinaryRehashedByThisReview": false,
+    "separateOwnedFixtureDeclared": true,
+    "newLoadClaimed": false,
+    "note": "The source runtime honestly remains overall FAILED after its completed capacity component. The later fault-only runtime reuses that independently PASS component and verifies the actual Identity binary digest; this review performed no new load."
+  },
+  "evidenceBoundaries": {
+    "actualIdentityFaultTest": false,
+    "actualDatabaseFaultTest": false,
+    "actualPasswordPressureTest": false,
+    "actualCapacityOrSoakTest": false,
+    "actualDockerCleanupTest": false,
+    "actualPosixSignalOrNamespaceCleanupTest": false,
+    "promqlOrAlertmanagerProof": false,
+    "durableOperationalAlertDeliveryProof": false,
+    "slaEstablished": false
+  }
+}

@@ -6,7 +6,13 @@ import { bffSessionCoordinator } from "@/lib/bff-session"
 import type { ContextResp } from "@/api/types"
 
 export class ApiError extends Error {
-  constructor(message: string, public code: string, public status: number, public requestId?: string) {
+  constructor(
+    message: string,
+    public code: string,
+    public status: number,
+    public requestId?: string,
+    public operationId?: string,
+  ) {
     super(message)
     this.name = "ApiError"
   }
@@ -25,6 +31,8 @@ export interface RequestOptions {
   signal?: AbortSignal
   /** Successful response metadata is delivered only after the session fence. */
   onResponse?: (meta: { requestId?: string }) => void
+  /** Stable browser-owned ID for recoverable identity management writes. */
+  operationId?: string
 }
 function redirectToLogin() {
   const { pathname, search } = window.location
@@ -41,7 +49,8 @@ async function renewSession(fence: SessionFence): Promise<string> {
   }
 }
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, rawBody, contentType, bearer, sessionFence, skipAuth, suppress401, signal, onResponse } = options
+  const { method = "GET", body, rawBody, contentType, bearer, sessionFence, skipAuth, suppress401, signal, onResponse, operationId } = options
+  if (operationId !== undefined && (!isUuidV7(operationId) || method === "GET")) throw new ApiError("管理操作标识无效", "INVALID_OPERATION_ID", 400)
   const platform = !skipAuth && (bearer === undefined || sessionFence !== undefined)
   // Capture the caller's view before any await. A queued A mutation must never
   // acquire B's identity merely because a cross-page context operation finishes.
@@ -75,6 +84,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     await checkContext()
     if (sessionRequest) { const state = authStore.getState(); token = state.token; sentFence = { sessionId: state.sessionId, version: state.sessionVersion, contextKey: state.contextKey } }
     const headers: Record<string, string> = { Accept: "application/json" }
+    if (operationId) headers["x-identity-operation"] = operationId
     if (body !== undefined) headers["Content-Type"] = "application/json"
     if (rawBody !== undefined && contentType) headers["Content-Type"] = contentType
     if (token) headers.Authorization = `Bearer ${token}`
@@ -94,23 +104,30 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     await checkContext()
   }
   await checkContext() // Reconcile before reading a body even if events are delayed.
-  const text = await response.text()
+  let text: string
+  try { text = await response.text() }
+  catch (error) {
+    await checkContext()
+    if ((error as Error).name === "AbortError") throw error
+    throw new ApiError("响应读取失败，请检查网络或服务状态", "NETWORK_ERROR", 0)
+  }
   await checkContext()
   let data: unknown
   if (text) { try { data = JSON.parse(text) } catch { data = text } }
   if (!response.ok) {
-    let message = `请求失败 (HTTP ${response.status})`, code = "SERVER_ERROR"
+    let message = `请求失败 (HTTP ${response.status})`, code = "SERVER_ERROR", operationId: string | undefined
     if (data && typeof data === "object" && "message" in data) {
       const value = data as Record<string, unknown>
       if (typeof value.message === "string") message = value.message
       if (typeof value.code === "string") code = value.code
+      if (typeof value.operationId === "string" && isUuidV7(value.operationId)) operationId = value.operationId
     }
     if (response.status === 401 && sessionRequest && !suppress401 && authStore.getState().token === token) {
       if (await authStore.getState().logout(fence)) redirectToLogin()
     }
     const candidate = response.headers.get("x-request-id")
     const requestId = isUuidV7(candidate) ? candidate : undefined
-    throw new ApiError(requestId ? `${message}（请求编号：${requestId}）` : message, code, response.status, requestId)
+    throw new ApiError(requestId ? `${message}（请求编号：${requestId}）` : message, code, response.status, requestId, operationId)
   }
   // A body may have completed after another page changed the logical session.
   // Receipts must obey the same fence as the successful business response.

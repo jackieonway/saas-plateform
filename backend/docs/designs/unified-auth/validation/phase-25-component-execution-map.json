@@ -1,0 +1,1853 @@
+{
+  "contractVersion": "unified-auth-phase25-component-execution-map/1",
+  "phase": 25,
+  "generatedAtUtc": "2026-10-29T12:14:15.373870+00:00",
+  "matrixSha256": "4eb1512cf92285fac95cc8e1fd9baf07e026dd72138e394812a8a960f7d3a7f2",
+  "sourceReferenceExecutionMatches": {
+    "I04": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_admin_tests::phase04_unified_client_api_enforces_policy_paging_and_credential_lifecycle",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/auth_admin_tests.rs",
+        "sourceSha256": "66f3713f37d00eeb16de65288ec01e1d56eb17509f3e6a890530a683fb7b91cf",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I07GROUP": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_admin_tests::phase07_consent_groups_require_explicit_context_bound_membership",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/auth_admin_tests.rs",
+        "sourceSha256": "66f3713f37d00eeb16de65288ec01e1d56eb17509f3e6a890530a683fb7b91cf",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I06": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_subjects::phase06_pairwise_subjects_are_sector_scoped_stable_and_retired_with_accounts",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_subjects.rs",
+        "sourceSha256": "fe600ff4ec7f3f26e459b06cf3278fc3364e9b3243e00e06fd877f07148033ce",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I07CONSENT": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_consents::phase07_consent_coverage_expansion_and_group_isolation_use_canonical_authority",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_consents.rs",
+        "sourceSha256": "f25bc10451dacdf0796acd1e58c87eb51e4a72e1726586fa98ac715150cd94ef",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I07DELETE": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_consents::phase07_revoke_delete_reauthorize_and_logout_keep_generation_fences",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_consents.rs",
+        "sourceSha256": "f25bc10451dacdf0796acd1e58c87eb51e4a72e1726586fa98ac715150cd94ef",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I08": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase08_authorization_code_pkce_consent_pairwise_id_token_and_userinfo_use_one_registry",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I09": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase09_resource_access_is_audience_scope_bound_and_revocation_is_token_local",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I10": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase10_refresh_rotation_reuse_concurrency_limits_and_offline_source_are_enforced",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I10REPLAY": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase10_scope_shrink_cannot_mask_consumed_refresh_replay",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I11": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase11_client_credentials_are_machine_bound_to_active_registered_permissions",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I11AGE": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase11_credential_age_caps_authentication_machine_grants_and_introspection",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I12CALLBACK": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase12_invalid_client_context_never_redirects_to_unregistered_callback",
+        "layer": "SMALL_SCHEMA_PG",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I12": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "util::audit_tests::auth_protocol::phase12_unified_context_selection_is_source_bound_recoverable_and_one_time",
+        "layer": "SMALL_SCHEMA_PG_MOCK_PORT",
+        "sourcePath": "saas-identity/src/util/audit_tests/auth_protocol.rs",
+        "sourceSha256": "7900b666aef558678b9df6424bf197d103aa404cbf684d3c3cc94ddd831214f6",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I19": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "auth_review::tests::phase19_third_party_client_registration_and_runtime_require_current_environment_admission",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/auth_review/tests.rs",
+        "sourceSha256": "f0780715c6c630304403fc0e5f2bd0e05ccc0318a9f63d0cf92f16efb3772ff7",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "ICLAIMS": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::subjects::tests::id_token_and_userinfo_share_only_consented_profile_claims",
+        "layer": "UNIT",
+        "sourcePath": "saas-identity/src/oidc/subjects.rs",
+        "sourceSha256": "1695bd5397155a790da44b4922602749ad765566565984a59e613bc8644da5da",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "IPKCE": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::oauth::tests::pkce_uses_the_rfc7636_s256_transform",
+        "layer": "UNIT",
+        "sourcePath": "saas-identity/src/oidc/oauth.rs",
+        "sourceSha256": "555d3e3b5a04aa43f2b19ea25c4aa40dd74408530a7e803dc9af579bc6580b81",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "IRETIRED": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::protocol::tests::retired_protocol_and_registry_routes_are_absent",
+        "layer": "ROUTER_FIXTURE",
+        "sourcePath": "saas-identity/src/oidc/protocol.rs",
+        "sourceSha256": "a9d9f4c00c3253182a45fe6d9e559b4a93603ee6e74d67e119d491019b063133",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "ICALLBACK": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::protocol::tests::callbacks_keep_exact_registered_url_and_bind_issuer",
+        "layer": "UNIT",
+        "sourcePath": "saas-identity/src/oidc/protocol.rs",
+        "sourceSha256": "a9d9f4c00c3253182a45fe6d9e559b4a93603ee6e74d67e119d491019b063133",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "ILOGOUT": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::oauth::logout::tests::current_app_and_global_preserve_consent_and_original_operation",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/oidc/oauth/logout/tests.rs",
+        "sourceSha256": "f15495e6432cfd891082fe67bc99a6c229f05c46fb4e64694e5fa2ab0e850569",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "IDELIVERY": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "delivery::worker::tests::concurrent_leases_retry_budget_and_stale_completion_are_bounded",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/delivery/worker/tests.rs",
+        "sourceSha256": "8be6a45ffd27bfe2bc6e18ed14efde2733f96c38a2d3c68a25bd0c4b5e923997",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "ISIGNED": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "delivery::worker::tests::logout_payload_is_signed_for_original_rp_and_target_generation",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/delivery/worker/tests.rs",
+        "sourceSha256": "8be6a45ffd27bfe2bc6e18ed14efde2733f96c38a2d3c68a25bd0c4b5e923997",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I22CODE": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::oauth::phase22_tests::independent_nodes_redeem_one_actual_authorization_code_once",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+        "sourceSha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I22REFRESH": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::oauth::phase22_tests::independent_nodes_refresh_race_detects_reuse_without_crossing_sources",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+        "sourceSha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I22POOL": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::oauth::phase22_tests::saturated_and_closed_pools_return_503_without_clearing_legal_sources",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+        "sourceSha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I22LOCK": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::oauth::phase22_tests::actual_client_table_lock_failure_is_503_and_preserves_original_tokens",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+        "sourceSha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "I22RATE": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::oauth::phase22_tests::client_budget_cannot_be_reset_by_rotating_socket_sources",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+        "sourceSha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "IQUEUE": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "admission::tests::full_request_budget_and_oversized_body_do_not_reach_authority",
+        "layer": "ROUTER_FIXTURE",
+        "sourcePath": "saas-identity/src/admission/tests.rs",
+        "sourceSha256": "9aed53786c01473fd91183e49c97fd52645c4701e6e3f9acdf6f962e5bcebc20",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "INET": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "network::tests::slow_http_body_times_out_before_authority_and_releases_admission",
+        "layer": "TCP_FIXTURE",
+        "sourcePath": "saas-identity/src/network/tests.rs",
+        "sourceSha256": "6634cdf8b805804f01c24366a58bd0f06782936051e667604e60480ef2da7c79",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "IREDACT": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "observability::tests::request_bodies_headers_and_queries_never_enter_metrics_or_password_logs",
+        "layer": "UNIT",
+        "sourcePath": "saas-identity/src/observability/tests.rs",
+        "sourceSha256": "9a8ef3a6e0329963dc837312225cb044b1af801abfbab4e3e06b6988c091fc03",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "IKEY": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::keys::lifecycle_tests::phase23_keys_publish_activate_replay_terminal_and_emergency_boundaries",
+        "layer": "CANONICAL_PG_LOGIN",
+        "sourcePath": "saas-identity/src/oidc/keys/lifecycle_tests.rs",
+        "sourceSha256": "1ec5fbab1001452401dcd1505a25e15a3bd9ccae611bc6757473a3684c2e4af7",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "IKEYPERM": [
+      {
+        "evidenceFile": "phase-25-identity-components.json",
+        "evidenceSha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00",
+        "testName": "oidc::keys::lifecycle_tests::phase23_keys_permissions_intent_and_failed_audit_receipt_are_atomic",
+        "layer": "CANONICAL_PG_LOGIN",
+        "sourcePath": "saas-identity/src/oidc/keys/lifecycle_tests.rs",
+        "sourceSha256": "1ec5fbab1001452401dcd1505a25e15a3bd9ccae611bc6757473a3684c2e4af7",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PRETIRED": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "protocol_retirement_tests::retired_protocol_and_registry_routes_stay_absent_for_every_deployment_mode",
+        "layer": "ROUTER_FIXTURE",
+        "sourcePath": "saas-plateform/backend/src/protocol_retirement_tests.rs",
+        "sourceSha256": "ebc7450af20a7c15862a977c213687d59add21f79e4046d27624091e575ebf59",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PBASE": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "identity_deployment_tests::phase02_auth_model_constraints_and_runtime_boundary",
+        "layer": "CANONICAL_PG_LOGIN",
+        "sourcePath": "saas-plateform/backend/src/identity_deployment_tests.rs",
+        "sourceSha256": "e749c63a4d00d290aec2664241eaa2d6b3fed97043274a2ff11dd53e6e1b7f79",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PMACHINE": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "identity_deployment_tests::phase11_machine_grants_require_a_persisted_client_credential_version",
+        "layer": "CANONICAL_PG_LOGIN",
+        "sourcePath": "saas-plateform/backend/src/identity_deployment_tests.rs",
+        "sourceSha256": "e749c63a4d00d290aec2664241eaa2d6b3fed97043274a2ff11dd53e6e1b7f79",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PCONTEXT": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "context_selection_http::tests::real_platform_selection_http_is_member_and_application_scoped",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/context_selection_http/tests.rs",
+        "sourceSha256": "59fa7fe4cfb2e0a08890022004564185207bf2aab943e3bf959999dbde2edb8c",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PSELECT": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "customer_portal_tests::selection::centralized_customer_consumption_recovery_and_switch_are_exact",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/customer_portal_tests/selection.rs",
+        "sourceSha256": "24607fac41de18fe56374c253b47efacd0ee484904ef8cdd8fe28e72d1e3608a",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PREFRESH": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "bff_tests::canonical::canonical_cross_instance_refresh_single_winner_and_lost_reply_never_replays",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/bff_tests/canonical.rs",
+        "sourceSha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PLOCK": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "bff_tests::canonical::canonical_post_network_account_lock_rechecks_original_source",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/bff_tests/canonical.rs",
+        "sourceSha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PDEADLINE": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "bff_tests::canonical::canonical_short_id_and_online_access_deadlines_cannot_commit_after_lock_wait",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/bff_tests/canonical.rs",
+        "sourceSha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PLOGOUT": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "bff_tests::canonical::canonical_cookie_reload_recovers_only_original_unknown_logout",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/bff_tests/canonical.rs",
+        "sourceSha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PLATE": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "bff_tests::canonical::canonical_late_logout_cannot_erase_new_account_cookie",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/bff_tests/canonical.rs",
+        "sourceSha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PBACK": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "bff_tests::canonical::canonical_backchannel_before_callback_persists_fence_without_revoking_new_source",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/bff_tests/canonical.rs",
+        "sourceSha256": "44a0be14fa28dc2d33f726e3eb93c8045039e8bd3f3e50a930eac363cc26f351",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PRESOURCE": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "identity_deployment_tests::phase15_http::phase15_resource_http_enforces_private_service_user_and_machine_boundaries",
+        "layer": "CANONICAL_PG_LOGIN_HTTP_FIXTURE",
+        "sourcePath": "saas-plateform/backend/src/identity_deployment_tests/phase15_http.rs",
+        "sourceSha256": "3a907c6001765186a12d8a1709243dfee90a764d85156dfb29871dfb6300323a",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PCAP": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "identity_deployment_tests::phase15::phase15_real_roles_keep_internal_capabilities_source_bound_and_nonreviving",
+        "layer": "CANONICAL_PG_LOGIN",
+        "sourcePath": "saas-plateform/backend/src/identity_deployment_tests/phase15.rs",
+        "sourceSha256": "5a2ffee416cebdb25431805925ed2146023299a435ae1bf7db0f71252beafadc",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PBIND": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "identity_binding_tests::identity_binding_canonical_exact_member_revocation",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/identity_binding_tests.rs",
+        "sourceSha256": "8e94c861cac5d6b04db77981300548c7fe8f16bc9a64416756a90214b1d3ac45",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PAPP": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "identity_binding_tests::identity_binding_canonical_application_capability_isolation",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/identity_binding_tests.rs",
+        "sourceSha256": "8e94c861cac5d6b04db77981300548c7fe8f16bc9a64416756a90214b1d3ac45",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "POUTAGE": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "identity_binding_tests::identity_binding_canonical_authority_outage_does_not_execute_business",
+        "layer": "CANONICAL_PG_MOCK_PORT",
+        "sourcePath": "saas-plateform/backend/src/identity_binding_tests.rs",
+        "sourceSha256": "8e94c861cac5d6b04db77981300548c7fe8f16bc9a64416756a90214b1d3ac45",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PREVIEW": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "auth_review::tests::phase19_canonical_submit_review_self_denial_and_durable_operations",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-plateform/backend/src/auth_review/tests.rs",
+        "sourceSha256": "945edea9ba1c1c9e4d49109cd27c169d3109c053d1b05842c39fdde4e38dd1b4",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PPERMS": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "auth_review::tests::phase19_canonical_permission_revocation_blocks_new_writes_and_replays",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-plateform/backend/src/auth_review/tests.rs",
+        "sourceSha256": "945edea9ba1c1c9e4d49109cd27c169d3109c053d1b05842c39fdde4e38dd1b4",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PMFA": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "auth_review::tests::phase19_canonical_missing_and_stale_mfa_facts_block_writes_but_allow_bootstrap",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-plateform/backend/src/auth_review/tests.rs",
+        "sourceSha256": "945edea9ba1c1c9e4d49109cd27c169d3109c053d1b05842c39fdde4e38dd1b4",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PVERSION": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "routes::admission_policy_tests::admission_policy_audit_atomicity_and_concurrent_conflicts",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-plateform/backend/src/routes/admission_policy_tests.rs",
+        "sourceSha256": "18456646e4f5a7cc22564d91df4f8bee03f675fd71226cf661a36fcc660e721b",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "PAUDIT": [
+      {
+        "evidenceFile": "phase-25-platform-final-components.json",
+        "evidenceSha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10",
+        "testName": "management_audit_tests::application_and_menu_cascades_keep_snapshots_and_atomic_audit",
+        "layer": "CANONICAL_PG",
+        "sourcePath": "saas-plateform/backend/src/management_audit_tests.rs",
+        "sourceSha256": "f112e99deb8f4d6d3f05499463abe549344ab63a7d8e36fb82252aa08e22e8da",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ],
+    "SFAIL": [
+      {
+        "evidenceFile": "phase-25-stores-components.json",
+        "evidenceSha256": "59eaf093e1581f97cc8e22e967e4b32ca1775d8b3303adcd4066016fb0bc49fb",
+        "testName": "authorization::tests::upstream_status_body_redirect_json_and_capacity_fail_closed",
+        "layer": "HTTP_FIXTURE",
+        "sourcePath": "saas-stores/backend/src/authorization/tests.rs",
+        "sourceSha256": "e708cd46dd56078f431fff7b811f83db6820a06ddf3bd481ab97559ed9a49716",
+        "snapshot": "phase25-apps-r3",
+        "snapshotSha256": "a078317efaaa94abeb8cf2d96c37077dee5d5eb438f64351e837f75982dbbe49"
+      }
+    ],
+    "WFAIL": [
+      {
+        "evidenceFile": "phase-25-orders-components.json",
+        "evidenceSha256": "b44b26b48d9b8477756105b26358181285386d1919cc040c0bc52e6a13ff18ca",
+        "testName": "authorization::tests::upstream_status_body_redirect_json_and_capacity_fail_closed",
+        "layer": "HTTP_FIXTURE",
+        "sourcePath": "saas-work-orders/backend/src/authorization/tests.rs",
+        "sourceSha256": "bdbabb773eb4b17032cc2ef78dbcd3e9792561794dbaa4536da22ca8aeb0c81d",
+        "snapshot": "phase25-apps-r3",
+        "snapshotSha256": "a078317efaaa94abeb8cf2d96c37077dee5d5eb438f64351e837f75982dbbe49"
+      }
+    ],
+    "NOTIFY": [
+      {
+        "evidenceFile": "phase-25-notification-components.json",
+        "evidenceSha256": "b63aece0ba640ee44b1e07d976954ff8250206f2be8e5da41c25b7c6c32b55c4",
+        "testName": "dual_identity_delivery_local_revocation_replacement_and_reconnect",
+        "layer": "SMALL_SCHEMA_PG_HTTP_FIXTURE",
+        "sourcePath": "saas-notification/tests/identity_isolation.rs",
+        "sourceSha256": "a70eeee435ab1688bad9074e8f8c34857bd84674aa5fde586447493ac598b55c",
+        "snapshot": "phase25-apps-r2",
+        "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d"
+      }
+    ]
+  },
+  "evidence": {
+    "identity": {
+      "file": "phase-25-identity-components.json",
+      "sha256": "5c67437d020aaebb248f93fa375403fbea291f69ff17bd3204cd43a15059df00"
+    },
+    "platform": {
+      "file": "phase-25-platform-final-components.json",
+      "sha256": "f5a389e0fd1136b1e6d82d09bb8b6213989f1c4bca20b9a3f63814c771b8fc10"
+    },
+    "portal": {
+      "file": "phase-25-portal-components.json",
+      "sha256": "19df450b29e8ee537049b5f6223e3f5b7629ca010e7d35c859f534deed5fa613"
+    },
+    "stores": {
+      "file": "phase-25-stores-components.json",
+      "sha256": "59eaf093e1581f97cc8e22e967e4b32ca1775d8b3303adcd4066016fb0bc49fb"
+    },
+    "orders": {
+      "file": "phase-25-orders-components.json",
+      "sha256": "b44b26b48d9b8477756105b26358181285386d1919cc040c0bc52e6a13ff18ca"
+    },
+    "notification": {
+      "file": "phase-25-notification-components.json",
+      "sha256": "b63aece0ba640ee44b1e07d976954ff8250206f2be8e5da41c25b7c6c32b55c4"
+    }
+  },
+  "scenarioSlots": [
+    {
+      "scenarioId": "P25-C01-S01",
+      "categoryId": "C01",
+      "matchedComponentRefIds": [
+        "I04",
+        "I19",
+        "PBASE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C01-S02",
+      "categoryId": "C01",
+      "matchedComponentRefIds": [
+        "I04",
+        "I07GROUP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C01-S03",
+      "categoryId": "C01",
+      "matchedComponentRefIds": [
+        "I19",
+        "PBASE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C01-S04",
+      "categoryId": "C01",
+      "matchedComponentRefIds": [
+        "IRETIRED",
+        "PRETIRED"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C02-S01",
+      "categoryId": "C02",
+      "matchedComponentRefIds": [
+        "I08",
+        "I12"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C02-S02",
+      "categoryId": "C02",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S01",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S02",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S03",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I06",
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S04",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S05",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08",
+        "PMFA"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S06",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08",
+        "ICLAIMS"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S07",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S08",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPFAIL"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S09",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C03-S10",
+      "categoryId": "C03",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C04-S01",
+      "categoryId": "C04",
+      "matchedComponentRefIds": [
+        "I06"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C04-S02",
+      "categoryId": "C04",
+      "matchedComponentRefIds": [
+        "I06"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C04-S03",
+      "categoryId": "C04",
+      "matchedComponentRefIds": [
+        "I06"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C04-S04",
+      "categoryId": "C04",
+      "matchedComponentRefIds": [
+        "I06"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RECOVERY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C05-S01",
+      "categoryId": "C05",
+      "matchedComponentRefIds": [
+        "I08",
+        "ICALLBACK",
+        "I12CALLBACK"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C05-S02",
+      "categoryId": "C05",
+      "matchedComponentRefIds": [
+        "IPKCE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C05-S03",
+      "categoryId": "C05",
+      "matchedComponentRefIds": [
+        "IPKCE",
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C05-S04",
+      "categoryId": "C05",
+      "matchedComponentRefIds": [
+        "I08"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C05-S05",
+      "categoryId": "C05",
+      "matchedComponentRefIds": [
+        "I08",
+        "I22CODE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C05-S06",
+      "categoryId": "C05",
+      "matchedComponentRefIds": [
+        "I22CODE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S01",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I10",
+        "PREFRESH"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S02",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I22REFRESH",
+        "PREFRESH"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S03",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I10",
+        "I22REFRESH"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S04",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I10",
+        "PDEADLINE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S05",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I10"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S06",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I10",
+        "I10REPLAY"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S07",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I10",
+        "I09"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C06-S08",
+      "categoryId": "C06",
+      "matchedComponentRefIds": [
+        "I10"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C07-S01",
+      "categoryId": "C07",
+      "matchedComponentRefIds": [
+        "I04"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCLIENT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C07-S02",
+      "categoryId": "C07",
+      "matchedComponentRefIds": [
+        "I04",
+        "I08",
+        "I11"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C07-S03",
+      "categoryId": "C07",
+      "matchedComponentRefIds": [
+        "I04",
+        "I11",
+        "I11AGE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C07-S04",
+      "categoryId": "C07",
+      "matchedComponentRefIds": [
+        "I04",
+        "I11",
+        "PMACHINE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C08-S01",
+      "categoryId": "C08",
+      "matchedComponentRefIds": [
+        "I09",
+        "PRESOURCE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C08-S02",
+      "categoryId": "C08",
+      "matchedComponentRefIds": [
+        "I09",
+        "PRESOURCE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C08-S03",
+      "categoryId": "C08",
+      "matchedComponentRefIds": [
+        "I09",
+        "I11",
+        "PRESOURCE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C08-S04",
+      "categoryId": "C08",
+      "matchedComponentRefIds": [
+        "I11",
+        "PRESOURCE",
+        "PBIND"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C08-S05",
+      "categoryId": "C08",
+      "matchedComponentRefIds": [
+        "I11",
+        "PMACHINE",
+        "PRESOURCE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C09-S01",
+      "categoryId": "C09",
+      "matchedComponentRefIds": [
+        "I07CONSENT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C09-S02",
+      "categoryId": "C09",
+      "matchedComponentRefIds": [
+        "I07CONSENT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C09-S03",
+      "categoryId": "C09",
+      "matchedComponentRefIds": [
+        "I07CONSENT",
+        "I07GROUP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C09-S04",
+      "categoryId": "C09",
+      "matchedComponentRefIds": [
+        "I07CONSENT",
+        "I06"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C09-S05",
+      "categoryId": "C09",
+      "matchedComponentRefIds": [
+        "I07GROUP",
+        "I07CONSENT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C10-S01",
+      "categoryId": "C10",
+      "matchedComponentRefIds": [
+        "I07DELETE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C10-S02",
+      "categoryId": "C10",
+      "matchedComponentRefIds": [
+        "I07DELETE",
+        "PCAP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C10-S03",
+      "categoryId": "C10",
+      "matchedComponentRefIds": [
+        "I07DELETE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT",
+        "RECOVERY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C10-S04",
+      "categoryId": "C10",
+      "matchedComponentRefIds": [
+        "I07DELETE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S01",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "I12",
+        "PCONTEXT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S02",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "I12"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S03",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "I12"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S04",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "I12"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S05",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "I12",
+        "PCONTEXT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S06",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "I12"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S07",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S08",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "PSELECT",
+        "PRESOURCE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C11-S09",
+      "categoryId": "C11",
+      "matchedComponentRefIds": [
+        "I12"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C12-S01",
+      "categoryId": "C12",
+      "matchedComponentRefIds": [
+        "PBIND",
+        "PCAP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C12-S02",
+      "categoryId": "C12",
+      "matchedComponentRefIds": [
+        "PBIND",
+        "PCAP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C12-S03",
+      "categoryId": "C12",
+      "matchedComponentRefIds": [
+        "PAPP",
+        "PVERSION",
+        "PCAP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C12-S04",
+      "categoryId": "C12",
+      "matchedComponentRefIds": [
+        "I09",
+        "PRESOURCE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C12-S05",
+      "categoryId": "C12",
+      "matchedComponentRefIds": [
+        "PBIND",
+        "PCAP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RECOVERY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C13-S01",
+      "categoryId": "C13",
+      "matchedComponentRefIds": [
+        "PSELECT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C13-S02",
+      "categoryId": "C13",
+      "matchedComponentRefIds": [
+        "PSELECT",
+        "I12"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C13-S03",
+      "categoryId": "C13",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UUPDATE",
+        "UNOTIFY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C13-S04",
+      "categoryId": "C13",
+      "matchedComponentRefIds": [
+        "PLATE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UUPDATE",
+        "UNOTIFY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C13-S05",
+      "categoryId": "C13",
+      "matchedComponentRefIds": [
+        "PLATE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UTABS"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C13-S06",
+      "categoryId": "C13",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UUPDATE",
+        "UMICRO"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C13-S07",
+      "categoryId": "C13",
+      "matchedComponentRefIds": [
+        "NOTIFY"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UNOTIFY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S01",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "I04",
+        "PPERMS"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCLIENT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S02",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "I04",
+        "PREVIEW",
+        "PPERMS"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S03",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "PREVIEW",
+        "PPERMS",
+        "I19"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S04",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "I04",
+        "IKEYPERM"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S05",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "PPERMS",
+        "PAPP"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S06",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "PMFA"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S07",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "PAUDIT",
+        "PVERSION",
+        "IKEYPERM"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S08",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "PREVIEW",
+        "I04",
+        "PLOGOUT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C14-S09",
+      "categoryId": "C14",
+      "matchedComponentRefIds": [
+        "PVERSION",
+        "PREVIEW",
+        "I07DELETE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C15-S01",
+      "categoryId": "C15",
+      "matchedComponentRefIds": [
+        "ILOGOUT",
+        "PLOGOUT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C15-S02",
+      "categoryId": "C15",
+      "matchedComponentRefIds": [
+        "ILOGOUT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C15-S03",
+      "categoryId": "C15",
+      "matchedComponentRefIds": [
+        "I07DELETE",
+        "IDELIVERY"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C15-S04",
+      "categoryId": "C15",
+      "matchedComponentRefIds": [
+        "ISIGNED",
+        "PBACK"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C15-S05",
+      "categoryId": "C15",
+      "matchedComponentRefIds": [
+        "PBACK"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPCAP"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C15-S06",
+      "categoryId": "C15",
+      "matchedComponentRefIds": [
+        "IDELIVERY"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C15-S07",
+      "categoryId": "C15",
+      "matchedComponentRefIds": [
+        "IDELIVERY"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S01",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT",
+        "UCLIENT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S02",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT",
+        "UCLIENT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S03",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT",
+        "UCLIENT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S04",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCLIENT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S05",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCLIENT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S06",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [
+        "I12CALLBACK",
+        "ICALLBACK"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPFAIL"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S07",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "UCONTEXT"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C16-S08",
+      "categoryId": "C16",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S01",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "POUTAGE",
+        "SFAIL",
+        "WFAIL"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S02",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "POUTAGE",
+        "SFAIL",
+        "WFAIL"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S03",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "I22POOL"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S04",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "I22POOL",
+        "I22LOCK"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S05",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "IQUEUE",
+        "IDELIVERY"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S06",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "INET",
+        "PDEADLINE",
+        "SFAIL",
+        "WFAIL"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S07",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "PDEADLINE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RPOIDC"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C17-S08",
+      "categoryId": "C17",
+      "matchedComponentRefIds": [
+        "I22POOL",
+        "PREFRESH",
+        "PLATE",
+        "IREDACT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C18-S01",
+      "categoryId": "C18",
+      "matchedComponentRefIds": [
+        "IKEY",
+        "IKEYPERM"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C18-S02",
+      "categoryId": "C18",
+      "matchedComponentRefIds": [],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RECOVERY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C18-S03",
+      "categoryId": "C18",
+      "matchedComponentRefIds": [
+        "I22POOL"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C18-S04",
+      "categoryId": "C18",
+      "matchedComponentRefIds": [
+        "I22RATE",
+        "IQUEUE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C18-S05",
+      "categoryId": "C18",
+      "matchedComponentRefIds": [
+        "IREDACT"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    },
+    {
+      "scenarioId": "P25-C18-S06",
+      "categoryId": "C18",
+      "matchedComponentRefIds": [
+        "PBASE"
+      ],
+      "componentRefIdsWithoutMatchingNewRustEvidence": [
+        "RECOVERY"
+      ],
+      "runtimeScenarioResult": "NOT_DETERMINED_BY_COMPONENT_MAP"
+    }
+  ],
+  "summary": {
+    "scenarioSlots": 111,
+    "matchedSourceReferences": 55,
+    "scenariosWithAtLeastOneMatchingComponentExecution": 98
+  },
+  "limits": [
+    "Test execution identity and source hashes only; assertion coverage still needs review.",
+    "SMALL_SCHEMA_PG, canonical PG, LOGIN ACL, mock port and HTTP fixture retain distinct layers.",
+    "No runtime/browser/standard SDK/recovery or whole Phase25 completion conclusion.",
+    "No existing matrix result was modified."
+  ]
+}

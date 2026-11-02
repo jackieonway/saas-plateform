@@ -23,6 +23,7 @@ pub(crate) struct LoginLimitOptions {
     /// Fixed window, measured with a monotonic clock rather than wall time.
     pub ttl: Duration,
     pub source_limit: u32,
+    #[cfg(test)]
     pub user_failure_limit: u32,
 }
 
@@ -41,6 +42,7 @@ impl Clock for MonotonicClock {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum IdentityKind {
     Source,
+    #[cfg(test)]
     Account,
 }
 
@@ -95,17 +97,20 @@ impl LoginLimits {
     /// Check an account's failures and reserve its slot before password work.
     /// Reservations prevent concurrent random unknown usernames from bypassing
     /// capacity by waiting until their password work has completed to insert.
+    #[cfg(test)]
     pub(crate) fn check_account(&self, account: &str) -> Option<u64> {
         self.access(IdentityKind::Account, account, false)
     }
 
     /// Record a failed proof. Callers must first use `check_account`; its return
     /// value also protects future callers if that reservation was not obtained.
+    #[cfg(test)]
     pub(crate) fn record_failure(&self, account: &str) -> Option<u64> {
         self.access(IdentityKind::Account, account, true)
     }
 
     /// A successful proof clears only the matching account's failure budget.
+    #[cfg(test)]
     pub(crate) fn clear_account(&self, account: &str) {
         let Some(key) = key_for(IdentityKind::Account, account) else {
             return;
@@ -127,6 +132,7 @@ impl LoginLimits {
     fn access(&self, kind: IdentityKind, identity: &str, increment: bool) -> Option<u64> {
         let limit = match kind {
             IdentityKind::Source => self.options.source_limit,
+            #[cfg(test)]
             IdentityKind::Account => self.options.user_failure_limit,
         };
         if limit == 0 || self.ttl_seconds == 0 || self.options.max_entries == 0 {

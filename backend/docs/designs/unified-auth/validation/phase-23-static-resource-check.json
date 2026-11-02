@@ -1,0 +1,37 @@
+{
+  "clusterId": "7701548153213487841",
+  "ownedHttpsRoleCount": 0,
+  "ownedHttpsDatabaseCount": 0,
+  "contractVersion": "unified-auth-phase23-static-resource-check/1",
+  "recordedAtUtc": "2026-10-29T00:13:56.505306+08:00",
+  "phase23RuntimeFiles": {
+    "https-database.json": false,
+    "https-environment.json": false,
+    "phase23-source-environment.json": false,
+    "phase23-environment-state.json": false,
+    "namespace.pid": false,
+    "gateway.pid": false,
+    "phase23-rp.pid": false,
+    "phase23-scram-proxy.pid": false,
+    "browser-proxy.pid": false
+  },
+  "hbaSha256": "e6305f548fd8096217d02a8f93b5c50716d58df1d2441b12346dfe57db7027fd",
+  "protectedNotificationPid24971Alive": true,
+  "containersCreated": 0,
+  "containersReused": 0,
+  "dockerContext": "default",
+  "dockerSystemDf": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+  "sharedPostgresAndPublicBuildInputsRetained": true,
+  "windowsWslVdiskCompactionPerformed": false,
+  "retainedAllocatedBytes": {
+    "sharedTarget": 9804349440,
+    "appsSnapshot": 32743424,
+    "toolsSnapshot": 33112064
+  },
+  "protectedWindowsListener": {
+    "pid": 5044,
+    "port": 443,
+    "taskProxy24445Absent": true,
+    "address": "127.0.0.1"
+  }
+}

@@ -169,29 +169,7 @@ async fn user(pool: &PgPool, name: &str, org: Uuid, super_admin: bool) -> Result
 }
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<String> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let session = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(session.to_string()),
-            ver: Some(version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 fn signed_session_id(token: &str) -> Result<Uuid> {
@@ -224,7 +202,12 @@ async fn call(
         .await
         .map_err(|_| anyhow!("department organization request timed out"))??;
     let status = response.status();
-    let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await?)?;
+    let bytes = to_bytes(response.into_body(), 1024 * 1024).await?;
+    let body: Value = if status == StatusCode::NOT_FOUND && bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes)?
+    };
     ensure!(
         status == expected,
         "{path} returned {status}, expected {expected}: {body}"
@@ -291,6 +274,7 @@ async fn department_organization_choices() -> Result<()> {
             ("APPLICATION_ENVIRONMENT".into(), "development".into()),
             ("DATABASE_URL".into(), "postgres://unused/department-organization-test".into()),
             ("JWT_SECRET".into(), SECRET.into()),
+            ("DATA_GRANT_POLICY".into(), json!({"applications":[{"applicationId":app_id,"capabilities":[{"resource":"records","action":"read","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]}]}],"managementScopes":[]}).to_string()),
         ]))?;
         let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
         let app = routes::api_router().with_state(state.clone());
@@ -376,15 +360,13 @@ async fn department_organization_choices() -> Result<()> {
             "platform root profile omitted global management context");
         get(&app, &root_token, &format!("/api/organizations/tree?tenantId={other_tenant}"), StatusCode::OK).await?;
         get(&app, &root_token, &format!("/api/departments/tree?organizationId={foreign}"), StatusCode::OK).await?;
-        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,application_id,scopes,id) VALUES('subtree-context-client','Subtree context client','CONFIDENTIAL',$1,'profile',$2)")
-            .bind(app_id).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         for organization_id in [root,current] {
             sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) \
                          SELECT id,$3,'records','read','TENANT' ,$4 FROM memberships WHERE user_id=$1 AND organization_id=$2")
                 .bind(super_admin).bind(organization_id).bind(app_id).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         }
-        let issued_child = call(&app, &super_token, Method::POST, "/api/oauth/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
-        let issued_root = call(&app, &root_token, Method::POST, "/api/oauth/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
+        let issued_child = call(&app, &super_token, Method::POST, "/api/apps/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
+        let issued_root = call(&app, &root_token, Method::POST, "/api/apps/session-token", Some(json!({"appCode":"system"})), StatusCode::CREATED).await?;
         let child_app_token = issued_child["accessToken"].as_str().ok_or_else(||anyhow!("child app token missing"))?;
         let root_app_token = issued_root["accessToken"].as_str().ok_or_else(||anyhow!("root app token missing"))?;
         let child_app_context = get(&app, child_app_token, "/api/apps/system/context", StatusCode::OK).await?;
@@ -423,17 +405,19 @@ async fn department_organization_choices() -> Result<()> {
         sqlx::query("DELETE FROM role_menus WHERE role_id=$1")
             .bind(role).execute(pool).await?;
         get(&app, &manager_token, "/api/departments/organizations", StatusCode::FORBIDDEN).await?;
-        let switch_source = session(pool, super_admin, tenant, current).await?;
-        let switched_root = call(&app, &switch_source, Method::POST, "/api/auth/context", Some(json!({"organizationId":root})), StatusCode::OK).await?;
-        ensure!(switched_root["platformContext"]==true && switched_root["tenant"]["isPlatform"]==true,
-            "switching to platform root did not return its management context");
-        let switched_root_token = switched_root["accessToken"].as_str().ok_or_else(||anyhow!("switched root access token missing"))?;
-        let switched_child = call(&app, switched_root_token, Method::POST, "/api/auth/context", Some(json!({"organizationId":current})), StatusCode::OK).await?;
-        ensure!(switched_child["platformContext"]==false && switched_child["tenant"]["isPlatform"]==true,
-            "switching to platform child retained root management context");
-        let switched_child_token = switched_child["accessToken"].as_str().ok_or_else(||anyhow!("switched child access token missing"))?;
-        let switched_child_profile = get(&app, switched_child_token, "/api/auth/profile", StatusCode::OK).await?;
-        ensure!(switched_child_profile["platformContext"]==false, "profile and newly selected child context disagree");
+        // The employee projection is exercised with newly selected canonical
+        // sources; the retired bearer context-switch route stays closed. BFF
+        // tests own the Cookie-bound selection/consume transaction contract.
+        let selected_child = session(pool, super_admin, tenant, current).await?;
+        call(&app, &selected_child, Method::POST, "/api/auth/context", Some(json!({"organizationId":root})), StatusCode::NOT_FOUND).await?;
+        let selected_root = session(pool, super_admin, tenant, root).await?;
+        let root_view = get(&app, &selected_root, "/api/auth/profile", StatusCode::OK).await?;
+        ensure!(root_view["platformContext"]==true && root_view["tenant"]["isPlatform"]==true,
+            "newly selected platform root omitted its management context");
+        let selected_child = session(pool, super_admin, tenant, current).await?;
+        let child_view = get(&app, &selected_child, "/api/auth/profile", StatusCode::OK).await?;
+        ensure!(child_view["platformContext"]==false && child_view["tenant"]["isPlatform"]==true,
+            "newly selected platform child retained root management context");
         Ok(())
     }.await;
     database.finish(result).await

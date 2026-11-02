@@ -56,7 +56,7 @@ fn valid_claim_ids(claims: &Claims) -> bool {
         && claims
             .sid
             .as_deref()
-            .is_none_or(|value| parse_uuid(value).is_ok())
+            .is_some_and(|value| parse_uuid(value).is_ok())
 }
 
 fn matches_binding(claims: &Claims, row: &AppTokenRow) -> bool {
@@ -89,17 +89,17 @@ fn matches_binding(claims: &Claims, row: &AppTokenRow) -> bool {
     .all(is_uuid_v7)
         && matches!(member_type.as_str(), "EMPLOYEE" | "CUSTOMER")
         && *identity_version >= 1
-        && *account_version >= 0
+        && *account_version >= 1
         && claims.sub == user_id.to_string()
         && claims.tenant.as_deref() == Some(tenant_id.to_string().as_str())
         && claims.org.as_deref() == Some(org_id.to_string().as_str())
         && claims.cid.as_deref() == Some(client_id.as_str())
         && claims.aud.as_deref() == Some(audience.as_str())
         && claims.jti.as_deref() == Some(jti.to_string().as_str())
-        && claims
-            .sid
-            .as_deref()
-            .is_none_or(|sid| sid == session_id.to_string())
+        && claims.sid.as_deref() == Some(session_id.to_string().as_str())
+        && claims.ver == Some(*account_version)
+        && claims.scope.as_deref() == Some(row.7.as_str())
+        && claims.exp == row.8.timestamp()
 }
 
 /// 应用令牌必须同时满足数据库撤销状态、签发会话、成员和两级应用授权。
@@ -108,57 +108,16 @@ pub async fn inspect(
     token: &str,
     claims: &Claims,
 ) -> Result<Option<AppTokenInfo>, sqlx::Error> {
-    if claims.typ != "access" || !valid_claim_ids(claims) {
+    if claims.typ != "app_session" || !valid_claim_ids(claims) {
         return Ok(None);
     }
     let row: Option<AppTokenRow> =
         sqlx::query_as(
-            "SELECT tok.user_id, tok.client_id, tok.tenant_id, tok.organization_id, \
-             tok.application_id, tok.audience, tok.jti, COALESCE(tok.scope,''), tok.expires_at, tok.platform_session_id, \
+            "SELECT tok.user_id,tok.audience AS client_id,tok.tenant_id,tok.organization_id, \
+             tok.application_id,tok.audience,tok.jti,tok.scope,tok.expires_at,tok.platform_session_id, \
              tok.membership_id,tok.member_type,tok.identity_version,tok.account_version \
-             FROM oauth_tokens tok \
-             JOIN oauth_clients client ON client.client_id = tok.client_id \
-               AND client.status = 'ENABLED' AND client.client_type = 'CONFIDENTIAL' \
-               AND client.application_id = tok.application_id \
-               AND client.access_policy_version = tok.client_policy_version \
-               AND tok.application_service_client_ref = client.client_id \
-               AND (client.subject_mode = 'MACHINE' OR \
-                    (client.subject_mode IN ('USER','LEGACY_MIXED') \
-                     AND tok.member_type = ANY(client.allowed_member_types))) \
-             JOIN applications app ON app.id = tok.application_id \
-               AND app.status = 'ENABLED' AND app.code = tok.audience \
-               AND app.access_policy_version = tok.application_policy_version \
-               AND tok.member_type = ANY(app.allowed_member_types) \
-             JOIN users u ON u.id = tok.user_id AND u.status = 'ENABLED' \
-               AND u.session_version = tok.account_version \
-             JOIN organizations o ON o.id = tok.organization_id AND o.tenant_id = tok.tenant_id \
-               AND org_chain_active(o.id) \
-             JOIN tenants tenant ON tenant.id = tok.tenant_id \
-               AND tenant.status = 'ENABLED' \
-               AND (tenant.expires_at IS NULL OR tenant.expires_at > now()) \
-             JOIN memberships member ON member.id = tok.membership_id \
-               AND public.is_uuid_v7(tok.membership_id) \
-               AND member.user_id = tok.user_id \
-               AND member.organization_id = tok.organization_id \
-               AND member.member_type = tok.member_type AND member.status='ENABLED' \
-               AND member.identity_version = tok.identity_version \
-             JOIN tenant_applications ta ON ta.tenant_id = tok.tenant_id \
-               AND ta.application_id = tok.application_id \
-             JOIN organization_applications oa ON oa.organization_id = tok.organization_id \
-               AND oa.application_id = tok.application_id \
-             JOIN platform_sessions session ON session.id = tok.platform_session_id \
-               AND session.user_id = tok.user_id AND session.tenant_id = tok.tenant_id \
-               AND session.organization_id = tok.organization_id \
-               AND session.membership_id = tok.membership_id \
-               AND session.member_type = tok.member_type \
-               AND session.identity_version = tok.identity_version \
-               AND session.account_version = tok.account_version \
-               AND session.origin_issuer = tok.origin_issuer \
-               AND session.origin_client_ref = tok.origin_client_ref \
-               AND session.origin_client_policy_version = tok.origin_client_policy_version \
-               AND public.platform_session_active(session.id) \
-             WHERE tok.token_hash = $1 AND tok.token_type = 'access' \
-               AND tok.token_use = 'app' AND tok.revoked = false AND tok.expires_at > now()",
+             FROM platform_app_capabilities tok WHERE tok.token_hash=$1 \
+             AND platform_app_capability_active(tok.token_hash)",
         )
         .bind(hash::sha256_hex(token))
         .fetch_optional(pool)
@@ -210,7 +169,14 @@ pub(crate) async fn inspect_authorized(
     token: &str,
     claims: &Claims,
 ) -> Result<Option<AppTokenInfo>, AppError> {
-    let info = inspect(&state.pool, token, claims)
+    let verified = crate::util::jwt::verify_internal(
+        token,
+        &state.config.jwt_secret,
+        crate::util::jwt::InternalUse::AppSession,
+        claims.aud.as_deref(),
+    )
+    .map_err(|_| AppError::unauthorized("应用能力用途或来源无效"))?;
+    let info = inspect(&state.pool, token, &verified)
         .await
         .map_err(|_| AppError::Unavailable)?;
     if let Some(info) = &info {
@@ -219,6 +185,21 @@ pub(crate) async fn inspect_authorized(
             // Preserve inactive-token semantics for protocol introspection.
             Err(AppError::Unauthorized(_) | AppError::Forbidden(_)) => return Ok(None),
             Err(error) => return Err(error),
+        }
+        let current = crate::util::jwt::verify_internal(
+            token,
+            &state.config.jwt_secret,
+            crate::util::jwt::InternalUse::AppSession,
+            Some(&info.audience),
+        )
+        .map_err(|_| AppError::unauthorized("应用能力已在来源验证期间过期"))?;
+        if inspect(&state.pool, token, &current)
+            .await
+            .map_err(|_| AppError::Unavailable)?
+            .as_ref()
+            != Some(info)
+        {
+            return Ok(None);
         }
     }
     Ok(info)
@@ -239,22 +220,22 @@ mod tests {
             "opaque-app-code".into(),
             fixture_uuid(5),
             "profile".into(),
-            Utc::now(),
+            DateTime::from_timestamp(Utc::now().timestamp() + 60, 0).unwrap(),
             fixture_uuid(6),
             fixture_uuid(7),
             "EMPLOYEE".into(),
             1,
-            0,
+            1,
         );
         let claims = Claims {
             sub: row.0.to_string(),
-            typ: "access".into(),
+            typ: "app_session".into(),
             tenant: Some(row.2.to_string()),
             org: Some(row.3.to_string()),
             cid: Some(row.1.clone()),
             scope: Some(row.7.clone()),
-            sid: None,
-            ver: None,
+            sid: Some(row.9.to_string()),
+            ver: Some(row.13),
             aud: Some(row.5.clone()),
             jti: Some(row.6.to_string()),
             exp: Utc::now().timestamp() + 60,
@@ -304,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn stored_binding_requires_v7_and_optional_sid_matches_the_session() {
+    fn stored_binding_requires_original_sid_version_scope_and_deadline() {
         let (base, row) = fixture();
         assert!(matches_binding(&base, &row));
         let mut with_sid = base.clone();
@@ -350,8 +331,10 @@ mod tests {
         let mut invalid_identity = row.clone();
         invalid_identity.12 = 0;
         assert!(!matches_binding(&base, &invalid_identity));
-        let mut invalid_account = row.clone();
-        invalid_account.13 = -1;
-        assert!(!matches_binding(&base, &invalid_account));
+        for account in [-1, 0] {
+            let mut invalid_account = row.clone();
+            invalid_account.13 = account;
+            assert!(!matches_binding(&base, &invalid_account));
+        }
     }
 }

@@ -1,0 +1,343 @@
+{
+  "snapshot": "phase24-final-r2",
+  "snapshotSha256": "e1f3e17d31a3b96e548115559127308aa594f40f1e737268907c5523fa474926",
+  "startedUtc": "2026-10-29T09:00:14.227709+00:00",
+  "status": "FAIL",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "fmt": [
+    {
+      "file": "src/authentication_boundary_tests.rs",
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/rustfmt",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "src/authentication_boundary_tests.rs"
+      ],
+      "exitCode": 0,
+      "rawLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "src/bff_tests/canonical.rs",
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/rustfmt",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "src/bff_tests/canonical.rs"
+      ],
+      "exitCode": 0,
+      "rawLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "src/management_audit_tests.rs",
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/rustfmt",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "src/management_audit_tests.rs"
+      ],
+      "exitCode": 0,
+      "rawLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "src/release_tests/database_upgrade.rs",
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/rustfmt",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "src/release_tests/database_upgrade.rs"
+      ],
+      "exitCode": 0,
+      "rawLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "src/routes/department_organization_tests.rs",
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/rustfmt",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "src/routes/department_organization_tests.rs"
+      ],
+      "exitCode": 0,
+      "rawLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "clippy": {
+    "command": [
+      "/home/jackie/.local/rust-1.97/bin/cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "--all-targets",
+      "--all-features",
+      "-j2",
+      "--message-format=json",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exitCode": 101,
+    "durationSeconds": 130.769,
+    "rawLogSha256": "935dc764263acdaebea1ce3025a7aa6ce187d8d79e169bd2c17dd9dc44b8c3f7",
+    "diagnostics": [
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::empty_line_after_doc_comments",
+          "explanation": null
+        },
+        "message": "empty line after doc comment",
+        "spans": [
+          {
+            "file": "src/state.rs",
+            "lineStart": 161,
+            "lineEnd": 162
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::empty_line_after_doc_comments",
+          "explanation": null
+        },
+        "message": "empty line after doc comment",
+        "spans": [
+          {
+            "file": "src/state.rs",
+            "lineStart": 161,
+            "lineEnd": 162
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrows_for_generic_args",
+          "explanation": null
+        },
+        "message": "the borrowed expression implements the required traits",
+        "spans": [
+          {
+            "file": "src/identity_deployment_tests.rs",
+            "lineStart": 921,
+            "lineEnd": 921
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::cmp_owned",
+          "explanation": null
+        },
+        "message": "this creates an owned instance just for comparison",
+        "spans": [
+          {
+            "file": "src/bff_tests/canonical.rs",
+            "lineStart": 1009,
+            "lineEnd": 1009
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 327,
+            "lineEnd": 327
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 333,
+            "lineEnd": 333
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 335,
+            "lineEnd": 335
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 338,
+            "lineEnd": 338
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 348,
+            "lineEnd": 348
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 351,
+            "lineEnd": 351
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 354,
+            "lineEnd": 354
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 358,
+            "lineEnd": 358
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 362,
+            "lineEnd": 362
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 364,
+            "lineEnd": 364
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 371,
+            "lineEnd": 371
+          }
+        ]
+      },
+      {
+        "level": "error",
+        "code": {
+          "code": "clippy::needless_borrow",
+          "explanation": null
+        },
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "spans": [
+          {
+            "file": "src/organization_subtree_reporting_tests.rs",
+            "lineStart": 374,
+            "lineEnd": 374
+          }
+        ]
+      }
+    ]
+  },
+  "frozenMismatchAfterStatic": [],
+  "currentMismatchAfterStatic": [],
+  "finishedUtc": "2026-10-29T09:02:28.085079+00:00"
+}

@@ -1,0 +1,250 @@
+{
+  "buildSnapshot": "phase23-apps-r2",
+  "cleanup": [
+    {
+      "passed": true,
+      "result": {
+        "awaitHba": true,
+        "collectorCanaryScan": {
+          "candidateFindings": 0,
+          "logBytes": 1889,
+          "logFiles": 14,
+          "messagesComparedOnlyInMemory": 0
+        },
+        "collectorPrivateMessagesComparedOnlyInMemory": 0,
+        "containersCreated": 0,
+        "containersReused": 0,
+        "databasesRemoved": 0,
+        "dockerAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+        "dockerBefore": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+        "errors": [],
+        "filesystemAfter": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1239126016 6936469504  16% /tmp\n",
+        "filesystemBefore": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1209946112 6965649408  15% /tmp\n",
+        "privateBytesRemoved": 0,
+        "privateFilesRemoved": 0,
+        "processesRemaining": 0,
+        "remainingLeaseRecords": 0,
+        "result": "AWAIT_HBA",
+        "retainedSharedPostgresAndPublicBuildInputs": true,
+        "rolesRemoved": 0,
+        "rootHbaJournalRemovedByThisWrapper": false,
+        "status": "PHASE23_CLEANUP",
+        "windowsWslVdiskCompactionClaimed": false
+      }
+    },
+    {
+      "passed": true,
+      "result": {
+        "awaitHba": false,
+        "collectorCanaryScan": {
+          "candidateFindings": 0,
+          "logBytes": 1889,
+          "logFiles": 14,
+          "messagesComparedOnlyInMemory": 0
+        },
+        "containersCreated": 0,
+        "containersReused": 0,
+        "databaseBytesBeforeDrop": [
+          16537279,
+          8255167,
+          16938687,
+          8159759
+        ],
+        "databasesRemaining": 0,
+        "databasesRemoved": 4,
+        "dockerAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+        "dockerBefore": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+        "errors": [],
+        "filesystemAfter": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1210085376 6965510144  15% /tmp\n",
+        "filesystemBefore": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1209946112 6965649408  15% /tmp\n",
+        "logRedaction": {
+          "candidateFindings": 0,
+          "candidatesComparedInMemory": 49,
+          "files": 14
+        },
+        "privateBytesRemoved": 31120,
+        "privateFilesRemoved": 43,
+        "processesRemaining": 0,
+        "remainingLeaseRecords": 0,
+        "result": "PASS",
+        "retainedSharedPostgresAndPublicBuildInputs": true,
+        "rolesRemaining": 0,
+        "rolesRemoved": 8,
+        "rootHbaJournalRemovedByThisWrapper": false,
+        "status": "PHASE23_CLEANUP",
+        "windowsWslVdiskCompactionClaimed": false
+      }
+    }
+  ],
+  "containersCreated": 0,
+  "containersReused": 0,
+  "contractVersion": "phase23-actual-recovery-probe/1",
+  "hbaChanged": false,
+  "opsInputs": "WORKSPACE_REPAIR",
+  "opsSha256": {
+    "core.py": "608eefc20644778649a32a91c531d70c30723cde3555418f5f7b5871cc0e4baa",
+    "inventory.py": "5ca4449c7adbc794c642bf34eec584a4ffbbeb176be71980ee92df175f054a9f",
+    "negative_probe.py": "05f6ed1f5c69cf50b3a9f41009b2d5f69e41684e321111a4172af2d0e2d3582d",
+    "reconcile.py": "b0cb2dcd7cd042aae5e582594e47d5691e9848c71f2750a60be5707bf835e812",
+    "recovery.py": "99b4a108b9b1c013d31a04db7d26a440581d078c3a3710fe0aed3f431b3e42b5",
+    "witness.py": "5f96fc2402ec88bcdb5f41ca7e876691b87ed5846887c21a5bdc07f527e3e90d"
+  },
+  "result": "PASS",
+  "snapshot": "phase23-tools-r15",
+  "steps": [
+    {
+      "passed": true,
+      "result": {
+        "compiledApplicationInputsIdentical": true,
+        "compiledFromBuildSnapshot": true,
+        "containersCreated": 0,
+        "opsExecutedFromSelectedSnapshot": true,
+        "services": 3,
+        "status": "PHASE23_PREPARED"
+      },
+      "step": "prepare"
+    },
+    {
+      "passed": true,
+      "result": {
+        "protocolStarted": false,
+        "readiness": {
+          "identityPrivateReady": 200,
+          "identityPublicLiveness": 200,
+          "platformAuthConfig": 200,
+          "portalAuthConfig": 200,
+          "standardRp": 200
+        },
+        "services": 3,
+        "standardRp": true,
+        "status": "PHASE23_ENVIRONMENT_READY"
+      },
+      "step": "start"
+    },
+    {
+      "passed": true,
+      "result": {
+        "databaseConnections": 0,
+        "standardRpRetained": true,
+        "status": "PHASE23_WRITERS_STOPPED"
+      },
+      "step": "stop-writers"
+    },
+    {
+      "passed": true,
+      "result": {
+        "databases": 2,
+        "materials": 13,
+        "runtimeConnections": 2,
+        "sourceUnchanged": true,
+        "status": "PHASE23_RECOVERY_FILES_PREPARED"
+      },
+      "step": "adapter-prepare"
+    },
+    {
+      "passed": true,
+      "result": {
+        "result": {
+          "status": "INITIALIZED"
+        },
+        "stage": "init",
+        "status": "PASS"
+      },
+      "step": "init"
+    },
+    {
+      "passed": true,
+      "result": {
+        "catalogDifferences": [],
+        "stage": "catalog-contract",
+        "status": "PASS"
+      },
+      "step": "catalog-contract"
+    },
+    {
+      "passed": true,
+      "result": {
+        "result": {
+          "archiveBytes": 853687,
+          "sequence": 1,
+          "status": "CHECKPOINT_CAPTURED"
+        },
+        "stage": "capture",
+        "status": "PASS"
+      },
+      "step": "capture"
+    },
+    {
+      "passed": true,
+      "result": {
+        "result": {
+          "sequence": 2,
+          "status": "DENY_CAPTURED"
+        },
+        "stage": "capture-deny",
+        "status": "PASS"
+      },
+      "step": "capture-deny"
+    },
+    {
+      "passed": true,
+      "result": {
+        "databaseConnections": 0,
+        "status": "PHASE23_SOURCE_QUARANTINED"
+      },
+      "step": "quarantine-source"
+    },
+    {
+      "passed": true,
+      "result": {
+        "result": {
+          "catalogsEqual": true,
+          "databaseCount": 2,
+          "materialsEqual": true,
+          "oldCredentialsInvalidated": false,
+          "status": "RESTORED_QUARANTINED"
+        },
+        "stage": "restore-new",
+        "status": "PASS"
+      },
+      "step": "restore-new"
+    },
+    {
+      "passed": true,
+      "result": {
+        "effectiveDefaultAclAccepted": true,
+        "originalEffectiveAclRestored": true,
+        "realExtraTablePrivilegeRejected": true,
+        "stage": "catalog-privilege-negative",
+        "status": "PASS"
+      },
+      "step": "catalog-privilege-negative"
+    },
+    {
+      "passed": true,
+      "result": {
+        "result": {
+          "sequence": 2,
+          "status": "RECONCILED_QUARANTINED"
+        },
+        "stage": "reconcile",
+        "status": "PASS"
+      },
+      "step": "reconcile"
+    },
+    {
+      "passed": true,
+      "result": {
+        "result": {
+          "opensTraffic": false,
+          "sequence": 2,
+          "status": "GATE_PASSED_QUARANTINED"
+        },
+        "stage": "gate",
+        "status": "PASS"
+      },
+      "step": "gate"
+    }
+  ],
+  "validationLayer": "ACTUAL_OWNED_POSTGRES_COMPONENT_PROBE_NO_BROWSER_OR_OLD_CARRIERS"
+}

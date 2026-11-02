@@ -1,0 +1,50 @@
+{
+  "contractVersion": "unified-auth-phase25-matrix-refresh-audit/1",
+  "phase": 25,
+  "result": "PASS_WITH_OPEN_PHASE_GATES",
+  "recordedAtUtc": "2026-10-29T13:07:10.911793+00:00",
+  "python": "3.14.2",
+  "scriptSha256": "6b0bbc0ab3046fc41ccec0a79a90b9a0ff12eb22741e3cf89697eee268925f68",
+  "matrixSha256": "633ab1a9ef2cef5fb6fb87ecf64de32259514e6eee96fa8ca96b5d9230c4900d",
+  "markdownSha256": "4785457fd7d41dbe0c5f9de6bcc33c1e28fdff57e98f8b1f3d47ea7e9ab60463",
+  "rows": 111,
+  "resultCounts": {
+    "PASS": 54,
+    "PARTIAL": 18,
+    "PENDING": 38,
+    "BLOCKED": 1
+  },
+  "requiredRuntimeRowsPromoted": 0,
+  "brokenRelativeLinks": 0,
+  "preparationBytesPreserved": true,
+  "allCurrentEvidenceReportHashesVerified": true,
+  "currentReportCount": 11,
+  "independentReview": {
+    "reviewer": "/root/candidate_audit",
+    "finding": "C14-S02 lacked direct SCOPES positive write evidence",
+    "resolution": "PARTIAL with exact remaining assertion; negative/fine-scope proof retained",
+    "C15SignatureAndReplayReviewed": "No overclaim identified; actual late-callback/refresh SDK assertions added"
+  },
+  "candidateBuildLabel": "phase25-apps-r3",
+  "command": "python -B saas-plateform/backend/tests/unified-auth-https/phase25-matrix-refresh.py --workspace <workspace-root> --candidate-build-label phase25-apps-r3",
+  "operations": {
+    "databaseOperations": 0,
+    "servicesStarted": 0,
+    "dockerCreated": 0,
+    "dockerReused": 0,
+    "resourceDeletion": 0
+  },
+  "limits": [
+    "This document verification does not complete Phase25 or any still pending X/B/R criterion.",
+    "Current complete cleanup remains BLOCKED by automatic approval rejection before targeted temporary-directory removal."
+  ],
+  "priorRefreshBeforeProtocolFix": {
+    "recordedAtUtc": "2026-10-29T12:27:43.252944+00:00",
+    "scriptSha256": "3ade24cbeddacf04e8b113238ef10d067a26956b99b7ee65ba9e20110877ec45",
+    "matrixSha256": "ebe9ee9a61f21201e38d0569252f28c953e892408ad162497dcbe2334b3a7370",
+    "markdownSha256": "b4d9b8a3855b47dfcfb25c2a40ea8b225d424cefdab5a26d8aa53b899594c7a9"
+  },
+  "protocolFixReport": "phase-25-protocol-review-fixes-r2.json",
+  "scopeAssertionWordingCorrected": true,
+  "runtimeR4FactsIntegrated": false
+}

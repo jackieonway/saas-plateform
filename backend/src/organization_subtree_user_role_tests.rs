@@ -15,7 +15,6 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::entity_creation_tests::Database;
 use crate::routes;
-use crate::util::jwt;
 
 const SECRET: &str = "organization-subtree-user-role-tests-only";
 
@@ -71,29 +70,7 @@ async fn role(pool: &PgPool, tenant: Uuid, org: Uuid, name: &str, users: &[Uuid]
 }
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<String> {
-    let id = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    let version = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            sid: Some(id.to_string()),
-            ver: Some(version),
-            cid: None,
-            scope: None,
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 async fn call(

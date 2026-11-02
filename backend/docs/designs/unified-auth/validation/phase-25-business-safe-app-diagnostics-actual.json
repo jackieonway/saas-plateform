@@ -1,0 +1,38 @@
+{
+  "contractVersion": "unified-auth-phase25-actual-app-safe-diagnostics/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T12:10:16.185841+00:00",
+  "candidate": "phase25-apps-r3",
+  "candidateSha256": "a078317efaaa94abeb8cf2d96c37077dee5d5eb438f64351e837f75982dbbe49",
+  "runtimeSourceSha256": "ddd3afedc60e686f0968a05480a88b5b96c9f2fea315408dcfbfca3acdc03046",
+  "checks": [
+    {
+      "service": "stores",
+      "binary": "stores-api",
+      "binarySha256": "6ae57dc93279cdf9fa87888d08f37407a33684000760772b5b6965a10d5823cf",
+      "exitCode": 1,
+      "safeAppFailureCode": "PHASE25_APP_CONFIG_DATABASE_URL",
+      "rawLogPersisted": false,
+      "databaseConfigurationSupplied": false,
+      "temporaryLogBytes": 203
+    },
+    {
+      "service": "orders",
+      "binary": "work-orders-api",
+      "binarySha256": "4fa0970c32475b08bdd326aa306e87a92a4869abd1cbe5c24560ebcb23ca9f03",
+      "exitCode": 1,
+      "safeAppFailureCode": "PHASE25_APP_CONFIG_DATABASE_URL",
+      "rawLogPersisted": false,
+      "databaseConfigurationSupplied": false,
+      "temporaryLogBytes": 213
+    }
+  ],
+  "processesStartedForConfigurationFailure": 2,
+  "applicationServicesStarted": 0,
+  "databasesCreated": 0,
+  "databaseConnectionsAttempted": 0,
+  "listenersCreated": 0,
+  "containersCreated": 0,
+  "temporaryDirectoriesAndLogsRemoved": true,
+  "scope": "Actual native binary configuration rejection and protected JSON-category extraction only; successful application runtime is not claimed."
+}

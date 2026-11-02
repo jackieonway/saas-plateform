@@ -1,0 +1,105 @@
+{
+  "contractVersion": "unified-auth-phase25-component-runner-review/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T11:37:52.381119+00:00",
+  "status": "PASS_WITH_RECORDED_EVIDENCE_BOUNDARY",
+  "scope": "Review and repair of native component runner. Does not retroactively modify already running old runner instances or claim service/HTTPS acceptance.",
+  "runner": {
+    "path": "saas-plateform\\backend\\tests\\unified-auth-https\\phase25-component-run.py",
+    "sha256": "bc91041e17a4a9149af3495a0086afb164467836e78a5aa002439bc39da3f318"
+  },
+  "initialFindings": [
+    {
+      "priority": "P2",
+      "issue": "Timeout/termination killed Cargo only, while descendants and temporary files could remain; cleanup was unconditionally reported true.",
+      "resolution": "Each Popen creates its own session; group members are bound to the creation tick and each original process is pinned with pidfd before signal; TERM/KILL finally is bounded; TERM/HUP enter cleanup. Unique mode0700 TMPDIR/TMP/TEMP is removed only after original group cleanup. Prefix-scoped DB/role residual or failed postcheck is FAIL; runner never deletes databases."
+    },
+    {
+      "priority": "P2",
+      "issue": "Only current project inputs were verified; cross-project canonical SQL and helper binaries were not bound. Ambient Cargo/Rust overrides could affect execution.",
+      "resolution": "Verify every snapshot input before and after, bind build-attestation and CLI/notification/Node binary hashes, use environment allowlist and explicit configuration."
+    }
+  ],
+  "executedChecks": [
+    {
+      "name": "Python AST syntax",
+      "result": "PASS"
+    },
+    {
+      "name": "Unrelated root HTTPS resource prefixes are excluded from component leak classification",
+      "result": "PASS"
+    },
+    {
+      "name": "Normal short-lived subprocess is reaped",
+      "result": "PASS"
+    },
+    {
+      "name": "Parent exits leaving sleeping grandchild and inherited pipe: timeout removes original group",
+      "result": "PASS",
+      "activeProcessesRemaining": 0
+    },
+    {
+      "name": "SIGTERM during sleeping owned subprocess enters finally and removes original group",
+      "result": "PASS",
+      "activeProcessesRemaining": 0
+    }
+  ],
+  "resources": {
+    "applicationOrDatabaseServicesStarted": 0,
+    "databasesCreated": 0,
+    "rolesCreated": 0,
+    "dockerCreated": 0,
+    "dockerReused": 0,
+    "shortLivedNativePythonProcessGroups": 7,
+    "nativeProcessGroupsRemaining": 0,
+    "temporaryFilesCreated": 0
+  },
+  "limits": [
+    "Identity/platform instances started before the repair are not reclassified by this review. Their component evidence needs a separate current-input and resource-audit supplement.",
+    "No global or prefix-wide database deletion is performed. Exact residual ownership recovery remains with the environment coordinator.",
+    "The process checks executed inline import the runner; they do not execute Rust suites."
+  ],
+  "previousReviewedRunnerSha256": "2c318a7d26428cccf19ba42b93dcffa4b0d18e6d964387500590d7b85024f83b",
+  "incrementalReview": {
+    "reviewedAtUtc": "2026-10-29T11:53:57.410477+00:00",
+    "status": "PASS",
+    "changes": [
+      "IDENTITY_PHASE12_TLS_TESTS explicit TASK_OWNED opt-in",
+      "Exact Rust selector and bounded Cargo integration target arguments",
+      "Selected/integration outputs use separate suffix and fullServiceSuiteClaimed=false"
+    ],
+    "executedChecks": [
+      {
+        "name": "Exact current TLS selector runs only its named case",
+        "result": "PASS",
+        "evidence": "phase-25-platform-selected-338b490efae8-components.json",
+        "counts": {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 431
+        },
+        "sha256": "74fc0d437ea8ce6e6386478c36964e4c655c2451a81943dff4c864eaeca26e01"
+      },
+      {
+        "name": "Nonexistent exact selector runs zero tests and must return FAIL despite Cargo success",
+        "result": "PASS",
+        "observedExecutionStatus": "FAIL",
+        "evidence": "phase-25-platform-selected-941c29dade62-components.json",
+        "counts": {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 4
+        },
+        "sha256": "47d2a9e8e6cd6dc9a5f47ae5ac32bd815dab2be6fb3a0efb76047d0898469fcf",
+        "cleanup": "unique temporary directory removed, process group cleanup PASS, zero DB/role differences"
+      },
+      {
+        "name": "Python AST syntax of final runner",
+        "result": "PASS"
+      }
+    ],
+    "resourceNotes": "The negative test only reads owned PG metadata. It creates one unique native temporary runtime directory, removes it, and creates no databases/roles/containers. Prior process regressions were not repeated."
+  }
+}

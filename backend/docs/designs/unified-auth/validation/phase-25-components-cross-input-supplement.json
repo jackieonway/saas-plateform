@@ -1,0 +1,34 @@
+{
+  "contractVersion": "unified-auth-phase25-components-cross-input-supplement/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T11:33:30.083588+00:00",
+  "snapshot": "phase25-apps-r2",
+  "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+  "manifestSha256": "bc6cac8f2ea794b7b8a39b50e4f21fb8b77301f9fd6f4a86a752a1cce8d452b1",
+  "verifiedInputs": 1527,
+  "missingInputs": [],
+  "changedInputs": [],
+  "auxiliaryBinaries": {
+    "saas-platform-admin": {
+      "actualSha256": "3e79b86c9eca51121f42afd9fdc91d29550fc904ede7e5b7a5f7219f802e694d",
+      "expectedCandidateSha256": "3e79b86c9eca51121f42afd9fdc91d29550fc904ede7e5b7a5f7219f802e694d",
+      "matched": true
+    },
+    "saas-notification-ws": {
+      "actualSha256": "c867668b96b073d8836c4f988cfed75ddc195a4c140fd160345fb3e6394b3237",
+      "expectedCandidateSha256": "c867668b96b073d8836c4f988cfed75ddc195a4c140fd160345fb3e6394b3237",
+      "matched": true
+    },
+    "node": {
+      "actualSha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+      "expectedRuntimeAttestationSha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+      "matched": true,
+      "version": "v24.22.1"
+    }
+  },
+  "sourceTestInputClosure": "All 1527 frozen inputs, including cross-project include_str migration/provision/verify files, checked. This supplements the per-project source lists in components reports.",
+  "timingBoundary": "Post identity PASS and while platform suite is running. These supplementary checks are not represented as pre-run observations or a repeat execution.",
+  "status": "PASS",
+  "runtimeMutation": false,
+  "temporaryResourcesCreated": 0
+}

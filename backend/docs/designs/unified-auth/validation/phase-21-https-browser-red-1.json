@@ -1,0 +1,45 @@
+{
+  "contractVersion": "unified-auth-phase21-real-https/1",
+  "date": "2026-10-28T10:51:49.269Z",
+  "result": "FAILED",
+  "standardClient": "openid-client@6.8.8",
+  "tlsErrorsIgnored": false,
+  "httpIssuerFixtures": false,
+  "clientReadsDatabase": false,
+  "ownerFixtureFacts": true,
+  "fixtureSignedReceiverNegatives": true,
+  "checks": [
+    {
+      "scenario": "standalone-desktop-mobile-and-exact-discovery",
+      "result": "PASS",
+      "standalone": true,
+      "standardRpInitiatedLogoutAdvertised": false,
+      "logoutExtensionExplicit": true
+    }
+  ],
+  "endpoints": {
+    "GET https://customer.saas.test/": 1,
+    "GET https://customer.saas.test/style.css": 1,
+    "GET https://customer.saas.test/app.js": 1,
+    "GET https://customer.saas.test/api/session": 3,
+    "GET https://auth.saas.test/.well-known/openid-configuration": 1,
+    "POST https://customer.saas.test/auth/login": 1,
+    "GET https://auth.saas.test/oauth/authorize": 1,
+    "GET https://auth.saas.test/oauth/login": 1,
+    "GET https://auth.saas.test/sso/assets/identity.css": 1,
+    "GET https://auth.saas.test/sso/assets/identity.js": 1,
+    "GET https://auth.saas.test/oauth/interaction/:id": 2,
+    "GET https://auth.saas.test/api/sso/preauth": 1,
+    "POST https://auth.saas.test/api/sso/login": 1
+  },
+  "tlsProtocols": [
+    "TLS 1.3"
+  ],
+  "browserVersion": "156.0.8078.4",
+  "failedStep": "no-membership-account-standard-login-id-token-userinfo-and-refresh",
+  "failureCode": "REAL_AUTHORIZATION_REJECTED_BEFORE_CALLBACK",
+  "page": {
+    "origin": "https://auth.saas.test",
+    "pathname": "/oauth/login"
+  }
+}

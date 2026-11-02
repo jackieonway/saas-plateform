@@ -1,0 +1,30 @@
+{
+  "contractVersion": "unified-auth-fixture-cleanup/1",
+  "recordedAt": "2026-10-28T06:34:29.641342+00:00",
+  "scope": "Phase19 real HTTPS fixture only",
+  "ownedDatabasesRemaining": 0,
+  "ownedRolesRemaining": 0,
+  "applicationServiceRecordsRemaining": 0,
+  "namespaceGatewayProxyRecordsRemaining": 0,
+  "windowsProxyListenerRemaining": false,
+  "preExistingWindows443Untouched": true,
+  "privateFilesAndLogsRemoved": [
+    "https-environment.json",
+    "https-bff-keys.json",
+    "https-context-keys.json",
+    "https-portal-keys.json",
+    "https-signing.json",
+    "https-invitation-keys.json",
+    "service-identity.log",
+    "service-platform.log",
+    "service-portal.log",
+    "gateway.log",
+    "browser-proxy-phase19.stderr.log",
+    "browser-proxy-phase19.stdout.log"
+  ],
+  "privateFilesBytesRemoved": 231243,
+  "dockerContainersCreatedOrReused": 0,
+  "sharedNativePostgresRetainedForLaterPhases": true,
+  "sharedBuildCacheAndSnapshotsRetainedUnderTaskOwnership": true,
+  "windowsVirtualDiskCompacted": false
+}

@@ -5,9 +5,15 @@ use crate::notifications::{self, valid_type, PublishBody, Publisher, Target};
 use crate::routes::{page_json, paging};
 use crate::state::AppState;
 use crate::util::{audit, jwt};
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
-use axum::http::HeaderMap;
+use axum::extract::{
+    rejection::FormRejection, DefaultBodyLimit, Form, Path, Query, Request, State,
+};
+use axum::http::{header, HeaderMap, HeaderValue, Uri};
 use axum::routing::{get, post, put};
+use axum::{
+    middleware::{self, Next},
+    response::Response,
+};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -17,6 +23,7 @@ use uuid::Uuid;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .merge(private_routes())
         .route("/api/apps/{appCode}/notifications", post(app_publish))
         .route(
             "/api/notifications",
@@ -35,6 +42,117 @@ pub fn routes() -> Router<AppState> {
         .route("/api/notifications/{id}/read", put(mark_read))
         .route("/api/notifications/{id}", get(detail).delete(remove))
         .layer(DefaultBodyLimit::max(64 * 1024))
+}
+
+fn private_routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            "/internal/platform/apps/{appCode}/notifications/publish",
+            post(private_publish),
+        )
+        .route(
+            "/internal/platform/apps/{appCode}/notifications/result",
+            post(private_result),
+        )
+        .layer(DefaultBodyLimit::max(64 * 1024))
+        .layer(middleware::from_fn(private_response))
+}
+
+async fn private_response(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+    response.headers_mut().insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    response.headers_mut().insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    response
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NotificationForm {
+    token: String,
+    resource: String,
+    action: String,
+    request: String,
+}
+
+async fn private_operation(
+    state: AppState,
+    code: String,
+    headers: HeaderMap,
+    uri: Uri,
+    input: Result<Form<NotificationForm>, FormRejection>,
+    recovery_only: bool,
+) -> Result<Json<Value>, AppError> {
+    if uri.query().is_some() {
+        return Err(AppError::bad_request("私有通知参数只能出现在请求表单"));
+    }
+    let Form(input) = input.map_err(|_| AppError::bad_request("私有通知表单无效"))?;
+    if input.resource != "notification" || input.action != "publish" {
+        return Err(AppError::forbidden(
+            "私有通知要求 notification/publish 操作",
+        ));
+    }
+    let body: PublishBody = serde_json::from_str(&input.request)
+        .map_err(|_| AppError::bad_request("原通知请求无效"))?;
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let access = crate::directory_authorization::PrivateAccess::authenticate(
+            &state,
+            &code,
+            headers.clone(),
+            input.token,
+            &input.resource,
+            &input.action,
+            crate::directory_authorization::Purpose::Notification,
+        )
+        .await?;
+        let publication = notifications::publish_private(
+            &state,
+            &access,
+            body,
+            recovery_only,
+            &audit::client_ip(&headers),
+            &audit::ua_of(&headers),
+        )
+        .await?;
+        let expires_at = access.expires_at()?;
+        Ok(Json(
+            json!({"contractVersion":"resource-notification/1", "publication":publication,
+            "expiresAt":expires_at.to_rfc3339_opts(chrono::SecondsFormat::Millis,true)}),
+        ))
+    })
+    .await
+    .map_err(|_| AppError::Unavailable)?
+}
+
+async fn private_publish(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+    headers: HeaderMap,
+    uri: Uri,
+    input: Result<Form<NotificationForm>, FormRejection>,
+) -> Result<Json<Value>, AppError> {
+    private_operation(state, code, headers, uri, input, false).await
+}
+
+async fn private_result(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+    headers: HeaderMap,
+    uri: Uri,
+    input: Result<Form<NotificationForm>, FormRejection>,
+) -> Result<Json<Value>, AppError> {
+    private_operation(state, code, headers, uri, input, true).await
 }
 
 // Shared by every inbox operation and per-delivery socket authorization.
@@ -606,7 +724,7 @@ struct PrefsBody {
     muted_types: Vec<String>,
 }
 
-/// HH:MM 时间校验: 匹配 ^([01]\d|2[0-3]):[0-5]\d$ (等价手写实现, 避免引入 regex 依赖)
+/// HH:MM 时间校验: 匹配 `^([01]\d|2[0-3]):[0-5]\d$` (等价手写实现, 避免引入 regex 依赖)
 fn valid_hhmm(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 5

@@ -1,0 +1,93 @@
+{
+  "contractVersion": "unified-auth-phase25-runtime-attempt-summary/1",
+  "recordedAtUtc": "2026-10-29T13:11:19.1698951Z",
+  "phase": 25,
+  "runId": "r4",
+  "result": "FAIL",
+  "buildSnapshot": "phase25-apps-r3",
+  "toolsSnapshot": "phase25-tools-r6",
+  "closedReports": [
+    {
+      "path": "phase-25-ui-current-r4.json",
+      "sha256": "7621b071410d0685f6ade15dfc78e5708318fbfd543fd5309029d5fe972031ab",
+      "result": "PASS",
+      "checks": 9,
+      "failedStep": null,
+      "failureCode": null
+    },
+    {
+      "path": "phase-25-business-current-r4.json",
+      "sha256": "36cd26b65b38b55dd7a0c8a6f5f7874b6a2aa999d64994aee33da65094eb96b8",
+      "result": "FAIL",
+      "checks": 2,
+      "failedStep": "FRESH_BUSINESS_READINESS_AND_AUTHENTICATION",
+      "failureCode": "PHASE25_BUSINESS_STORES_READ_FAILED"
+    },
+    {
+      "path": "phase-25-resource-current-r4.json",
+      "sha256": "2f3a9dc6bebb2be669e40b41ede42be909fdc6d7435e159db3500f8464e65506",
+      "result": "FAIL",
+      "checks": 0,
+      "failedStep": "RESOURCE_MATRIX",
+      "failureCode": "PHASE25_RESOURCE_BASELINE_RESOURCE_DENIED"
+    },
+    {
+      "path": "phase-25-context-current-r4.json",
+      "sha256": "d263d790014c38064a1472809a4a05fd69c6d11222068c6f594638f7dd179804",
+      "result": "FAIL",
+      "checks": 2,
+      "failedStep": "REAL_HOST_ROUTE_DELIVERS_LIFECYCLE_UPDATE",
+      "failureCode": "PHASE25_CONTEXT_BROWSER_TIMEOUT"
+    },
+    {
+      "path": "phase-25-management-current-r4.json",
+      "sha256": "234b169329e9ac134bfbd4341bf29a52595430dd793f0a40dacec81ea83b04fb",
+      "result": "FAILED",
+      "checks": 2,
+      "failedStep": "canonical-registry-pagination-through-real-private-guard",
+      "failureCode": "CANONICAL_REGISTRY_PAGINATION_FAILED"
+    },
+    {
+      "path": "phase-25-logout-current-r4.json",
+      "sha256": "3241b2d87d7d52a9bae12a4c4f5148c25da717b7d4519ac0e10b4cc52c38e7fc",
+      "result": "PASS",
+      "checks": 13,
+      "failedStep": null,
+      "failureCode": null
+    }
+  ],
+  "protocol": {
+    "sha256": "bcb4cdd5b44cec1a0e2cdc009cf263a705399553f7f6cd72e9a693e034770101",
+    "result": "FAIL",
+    "path": "phase-25-protocol-current-r4.json",
+    "originalReportIntegrity": "SPARSE_JSON_AND_HTTP_STATUS_OVERWRITTEN_VERDICT",
+    "historicalBytesPreserved": true,
+    "reportedCompletedChecks": 22,
+    "decodedAudit": "phase-25-protocol-r4-decoded-audit.json"
+  },
+  "hbaInstalled": false,
+  "businessRestoreStarted": false,
+  "identityRestoreStarted": false,
+  "cleanup": {
+    "roleCountRemoved": 13,
+    "corePrivateFilesRemoved": 40,
+    "leaseRecordsRemaining": 0,
+    "coreEvidence": "phase-25-r4-cleanup.json",
+    "executionJournal": "phase-25-r4-execution.json",
+    "databaseCountRemoved": 4,
+    "windowsWslVdiskCompactionClaimed": false,
+    "dockerCreated": 0,
+    "corePrivateBytesRemoved": 257370,
+    "processesRemaining": 0,
+    "dockerReused": 0,
+    "businessNativeLogAudit": {
+      "logFilesRemoved": 3,
+      "evidenceOrigin": "Actual fixed JSON emitted by owned business-runtime stop in r4 wrapper output before fixture cleanup",
+      "candidateCount": 13,
+      "rawContentsPersisted": false,
+      "candidateFindings": 0,
+      "logBytesRemoved": 2165
+    }
+  },
+  "scope": "Mixed actual preflight results in one task-owned installation; no whole-phase, recovery, capacity, release or deployment PASS claim"
+}

@@ -1,0 +1,46 @@
+{
+  "contractVersion": "unified-auth-phase25-business-supervisor-components/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T11:39:22.478510+00:00",
+  "scope": "Post-r1 actual failure repair: Linux root-controller namespace permission and bounded fixed-code supervisor diagnostics. No current full business runtime PASS is claimed.",
+  "actualFailureRootCause": "Owner uid1000 cannot read /proc/<root-controller>/ns/mnt; previous supervise called the root-only Task.namespace guard. Actual Linux old EACCES and repaired owner binding PASS are separately recorded.",
+  "change": "Root parent retains full namespace guard. Owner supervisor verifies protected lease/namespace.identity, unreused root PID/startTime, exact controller argv and own namespace; no cross-uid namespace link read. Parent only preserves an allowlisted fixed supervisorFailureCode from a protected <=8192-byte supervisor log, never raw lines.",
+  "inputs": {
+    "phase25-business-runtime.py": "30e91f79f444d66275f7909f2bff300e60465d6e6dbbf382a4e94cb3f3c44767",
+    "test_phase25_business_runtime.py": "7957e047f6f1910ff4396b10190f923953fd467c4e445eaa1e522ac6d5438eb0"
+  },
+  "validation": {
+    "command": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "saas-plateform/backend/tests/unified-auth-https",
+      "-p",
+      "test_phase25_business_runtime.py",
+      "-q"
+    ],
+    "tests": 46,
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 0.113,
+    "evidenceLayer": "PURE_MOCK_COMPONENT",
+    "additionalCases": "Root-owned controller without privileged namespace-link reads; PID/UID/argv/lease mismatch refusals; malformed namespace records; fixed diagnostic filtering and dead-supervisor group rollback."
+  },
+  "actualLinuxPermissionEvidence": {
+    "path": "phase-25-business-supervisor-permission.json",
+    "sha256": "3e8eccb5c537edd662069f285ed8966db816a2bb4ab0eaaa9edee1c6466f53b3",
+    "runtimeSourceExactlyMatches": true,
+    "limitation": "That isolated permission evidence retains its own then-current 45-case test source digest; one additional dead-supervisor controller regression brings the current suite to 46."
+  },
+  "resources": {
+    "applicationServicesStarted": 0,
+    "databasesCreated": 0,
+    "namespacesCreated": 0,
+    "containersCreated": 0,
+    "realPermissionFixtureRootControllerAndDirectoryCleaned": true
+  }
+}

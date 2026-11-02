@@ -11,7 +11,6 @@ use axum::body::{to_bytes, Body};
 use axum::extract::ConnectInfo;
 use axum::http::{header, Method, Request, StatusCode};
 use axum::{middleware, Router};
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -53,7 +52,6 @@ struct Operation {
     token: Option<String>,
     name: Option<String>,
     preflight_commits: bool,
-    form: bool,
     raw: Option<Vec<u8>>,
     audit_rows: usize,
 }
@@ -68,7 +66,6 @@ impl Operation {
             token: None,
             name: None,
             preflight_commits: false,
-            form: false,
             raw: None,
             audit_rows: 1,
         }
@@ -83,10 +80,6 @@ impl Operation {
     }
     fn preflight(mut self) -> Self {
         self.preflight_commits = true;
-        self
-    }
-    fn form(mut self) -> Self {
-        self.form = true;
         self
     }
     fn binary(mut self, raw: Vec<u8>) -> Self {
@@ -106,7 +99,6 @@ struct Harness {
     tenant: Uuid,
     root: Uuid,
     child: Uuid,
-    actor: Uuid,
     admin: String,
     application: Uuid,
     menu: Uuid,
@@ -114,29 +106,7 @@ struct Harness {
 }
 
 async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<String> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let sid = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(sid.to_string()),
-            ver: Some(version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 impl Harness {
@@ -182,7 +152,6 @@ impl Harness {
             ("system:application", "/system/applications"),
             ("system:menu", "/system/menus"),
             ("system:oauth", "/system/oauth/clients"),
-            ("system:oauth", "/system/oauth/tokens"),
             ("system:settings", "/system/settings"),
             ("system:department", "/system/departments"),
             ("system:region", "/system/regions"),
@@ -210,8 +179,6 @@ impl Harness {
             .bind(tenant).bind(application).execute(pool).await?;
         sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) SELECT id,$2,'notification','publish','TENANT' ,$4 FROM memberships WHERE user_id=$1 AND organization_id=$3")
             .bind(actor).bind(application).bind(root).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
-        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,application_id,grant_types,scopes,redirect_uris,id) VALUES('audit-client','Audit fixture client',$1,$2,'authorization_code,password,refresh_token','profile','https://consumer.example.test/callback',$3)")
-            .bind(hash::sha256_hex(CLIENT_SECRET)).bind(application).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         sqlx::raw_sql(
             "CREATE TABLE phase13_audit_fault(action text PRIMARY KEY,mode text NOT NULL,after_first boolean NOT NULL DEFAULT false); \
              CREATE FUNCTION phase13_reject_audit() RETURNS trigger LANGUAGE plpgsql AS $$ \
@@ -224,7 +191,6 @@ impl Harness {
              FOR EACH ROW EXECUTE FUNCTION phase13_reject_audit();",
         ).execute(pool).await?;
         let app = routes::api_router()
-            .nest("/oauth", routes::oauth2::oauth_router())
             .layer(middleware::from_fn_with_state(
                 state.clone(),
                 crate::observability::observe,
@@ -242,7 +208,6 @@ impl Harness {
             tenant,
             root,
             child,
-            actor,
             admin: admin.clone(),
             application,
             menu: menu.ok_or_else(|| anyhow!("fixture menu missing"))?,
@@ -313,23 +278,6 @@ impl Harness {
         }
         let (content_type, bytes) = if let Some(raw) = &op.raw {
             ("application/octet-stream", raw.clone())
-        } else if op.form {
-            let fields = op
-                .body
-                .as_object()
-                .ok_or_else(|| anyhow!("form fixture must be an object"))?;
-            let encoded = fields
-                .iter()
-                .map(|(key, value)| {
-                    format!(
-                        "{}={}",
-                        utf8_percent_encode(key, NON_ALPHANUMERIC),
-                        utf8_percent_encode(value.as_str().unwrap_or(""), NON_ALPHANUMERIC)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("&");
-            ("application/x-www-form-urlencoded", encoded.into_bytes())
         } else {
             ("application/json", serde_json::to_vec(&op.body)?)
         };
@@ -359,7 +307,12 @@ impl Harness {
         );
         let status = response.status();
         let bytes = to_bytes(response.into_body(), 2 * 1024 * 1024).await?;
-        let body: Value = serde_json::from_slice(&bytes)?;
+        let body: Value = if status == StatusCode::NOT_FOUND && bytes.is_empty() {
+            // An unmounted retired route has no business JSON response.
+            Value::Null
+        } else {
+            serde_json::from_slice(&bytes)?
+        };
         self.remember(&body);
         Ok(Reply {
             status,
@@ -518,7 +471,7 @@ impl Harness {
             );
         }
         ensure!(
-            !rows[0].2.is_empty() && (rows[0].1.is_some() || op.path == "/oauth/revoke"),
+            !rows[0].2.is_empty() && rows[0].1.is_some(),
             "successful audit lost actor snapshot"
         );
         if let Some(name) = &op.name {
@@ -832,7 +785,10 @@ async fn user_security_password_and_platform_settings_mutations_are_audited_atom
         }
         let target_token = session(&h.pool,h.tenant,h.child,user).await?;
         h.atomic(Operation::new(Method::PUT,"/api/auth/password",json!({"oldPassword":NEW_PASSWORD,"newPassword":PASSWORD}),"UPDATE_PASSWORD").token(&target_token)).await?;
-        h.atomic(Operation::new(Method::DELETE,format!("/api/users/{user}"),Value::Null,"DELETE_USER").named("audited-user")).await?;
+        // The local AccountPort audit seam deletes an unbound account only.
+        // A logged-in canonical identity is retired through the remote command.
+        let removable = h.user("audit-unbound-delete-target", h.root).await?;
+        h.atomic(Operation::new(Method::DELETE,format!("/api/users/{removable}"),Value::Null,"DELETE_USER").named("audit-unbound-delete-target")).await?;
         let session_user = h.user("audit-session-target",h.root).await?;
         sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
             .bind(session_user).bind(h.child).bind(crate::util::uuid7::new_uuid()).execute(&h.pool).await?;
@@ -840,9 +796,12 @@ async fn user_security_password_and_platform_settings_mutations_are_audited_atom
         let other = session(&h.pool,h.tenant,h.root,session_user).await?;
         let other_sid = jwt::verify(&other,SECRET)?.sid.ok_or_else(||anyhow!("session fixture omitted sid"))?;
         h.atomic(Operation::new(Method::DELETE,format!("/api/auth/sessions/{other_sid}"),Value::Null,"REVOKE_SESSION").token(&current)).await?;
-        let switched = h.atomic(Operation::new(Method::POST,"/api/auth/context",json!({"organizationId":h.child}),"CONTEXT_SWITCH").token(&current)).await?;
-        let switched_token = switched.body["accessToken"].as_str().ok_or_else(||anyhow!("context switch omitted access token"))?;
-        h.atomic(Operation::new(Method::POST,"/api/auth/logout",Value::Null,"LOGOUT").token(switched_token)).await?;
+        let before_retired = h.snapshot(false).await?;
+        for path in ["/api/auth/context", "/api/auth/logout"] {
+            let reply = h.call(&Operation::new(Method::POST, path, Value::Null, "RETIRED_PLATFORM_AUTH").token(&current)).await?;
+            ensure!(reply.status == StatusCode::NOT_FOUND, "retired platform session mutation remained mounted");
+        }
+        ensure!(h.snapshot(false).await? == before_retired, "retired auth routes changed business, identity, capability or audit facts");
         let settings=json!({
             "platformName":"Audited platform branding","platformDescription":"Audit regression",
             "logoUrl":"/audit-logo.svg","loginTitle":"Audit login","loginDescription":"Owned fixture",
@@ -887,6 +846,19 @@ async fn membership_and_user_role_replacements_rollback_sessions_and_grants_toge
             ),
         )
         .await?;
+        let member_capability = crate::sso_test_fixture::app_capability(
+            &h.pool, user, h.tenant, h.root, h.application, "system", SECRET,
+        ).await?;
+        let member_claims = jwt::verify_internal(&member_capability, SECRET, jwt::InternalUse::AppSession, Some("system"))?;
+        let member_jti: Uuid = member_claims.jti.as_deref().ok_or_else(|| anyhow!("member capability omitted jti"))?.parse()?;
+        ensure!(crate::app_token::inspect(&h.pool, &member_capability, &member_claims).await?.is_some(), "member capability was inactive before the audited replacement");
+        let peer: Uuid = jwt::verify(&h.admin, SECRET)?.sub.parse()?;
+        let peer_capability = crate::sso_test_fixture::app_capability(
+            &h.pool, peer, h.tenant, h.root, h.application, "system", SECRET,
+        ).await?;
+        let peer_claims = jwt::verify_internal(&peer_capability, SECRET, jwt::InternalUse::AppSession, Some("system"))?;
+        // atomic() compares every table, including the membership and signed
+        // capability ledger, after both injected audit failure modes.
         h.atomic(Operation::new(
             Method::PUT,
             format!("/api/users/{user}/memberships"),
@@ -894,6 +866,10 @@ async fn membership_and_user_role_replacements_rollback_sessions_and_grants_toge
             "UPDATE_USER",
         ))
         .await?;
+        let retained: i64 = sqlx::query_scalar("SELECT count(*) FROM platform_app_capabilities WHERE jti=$1")
+            .bind(member_jti).fetch_one(&h.pool).await?;
+        ensure!(retained == 0 && crate::app_token::inspect(&h.pool, &member_capability, &member_claims).await?.is_none(), "retired member capability/jti survived a committed replacement");
+        ensure!(crate::app_token::inspect(&h.pool, &peer_capability, &peer_claims).await?.is_some(), "member replacement removed an unrelated member capability");
         no_event(
             &h,
             Operation::new(
@@ -939,12 +915,6 @@ async fn membership_and_user_role_replacements_rollback_sessions_and_grants_toge
 #[ignore = "requires explicit TEST_DATABASE_URL and disposable database privileges"]
 async fn tenant_organization_authorizations_initialization_and_cascades_are_atomic() -> Result<()> {
     run(tenant_organization_matrix).await
-}
-
-#[tokio::test]
-#[ignore = "requires explicit TEST_DATABASE_URL and disposable database privileges"]
-async fn oauth_client_secrets_revocations_kicks_and_purge_are_atomic() -> Result<()> {
-    run(oauth_matrix).await
 }
 
 #[tokio::test]
@@ -1247,262 +1217,6 @@ async fn assert_organization_grant_rechecks_tenant_after_lock_wait(
     eprintln!("management_audit_special tenant_parent_lock_revalidation=PASS");
     Ok(())
 }
-async fn seed_token(h: &Harness, user: Uuid, expired: bool) -> Result<(Uuid, String)> {
-    let token = format!("owned-audit-{}", crate::util::uuid7::new_uuid().simple());
-    h.secrets.lock().unwrap().push(token.clone());
-    let expiry = if expired {
-        "now()-interval '10 days'"
-    } else {
-        "now()+interval '1 hour'"
-    };
-    let id = sqlx::query_scalar(&format!(
-        "INSERT INTO oauth_tokens(token_hash,token_type,user_id,client_id,tenant_id,organization_id,scope,expires_at,id,account_version,membership_id,member_type,identity_version,client_policy_version,application_id,application_policy_version) \
-         SELECT $1,'access',$2,c.client_id,$3,$4,'profile',{expiry},$5,u.session_version,m.id,m.member_type,m.identity_version,c.access_policy_version,c.application_id,a.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$4 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='audit-client' LEFT JOIN applications a ON a.id=c.application_id WHERE u.id=$2 RETURNING id",
-    )).bind(hash::sha256_hex(&token)).bind(user).bind(h.tenant).bind(h.root).bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
-    Ok((id, token))
-}
-
-async fn seed_device(h: &Harness, user_code: &str) -> Result<Uuid> {
-    h.secrets.lock().unwrap().push(user_code.into());
-    Ok(sqlx::query_scalar("INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,scope,expires_at,id,client_policy_version,application_id,application_policy_version) \
-        SELECT $1,$2,c.client_id,'profile',now()+interval '1 hour',$3,c.access_policy_version,c.application_id,a.access_policy_version \
-        FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id WHERE c.client_id='audit-client' RETURNING id")
-        .bind(hash::sha256_hex(&crate::util::uuid7::new_uuid().to_string())).bind(user_code).bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?)
-}
-
-#[tokio::test]
-#[ignore = "requires explicit TEST_DATABASE_URL and disposable database privileges"]
-async fn oauth_pkce_management_defaults_explicit_overrides_and_audit_rollback() -> Result<()> {
-    run(|h| async move {
-        let body = |name: &str, kind: &str| json!({
-            "clientName":name,"clientType":kind,"grantTypes":["authorization_code","refresh_token"],
-            "scopes":["profile"],"redirectUris":["https://pkce.example.test/callback"]
-        });
-        let public = h.atomic(Operation::new(Method::POST,"/api/oauth/clients",
-            body("New public PKCE client","PUBLIC"),"CREATE_CLIENT")).await?;
-        ensure!(public.body["requirePkce"] == true,"new PUBLIC client did not default to required PKCE");
-        let confidential = h.atomic(Operation::new(Method::POST,"/api/oauth/clients",
-            body("New confidential PKCE client","CONFIDENTIAL"),"CREATE_CLIENT")).await?;
-        ensure!(confidential.body["requirePkce"] == false,"new CONFIDENTIAL client changed its compatibility default");
-        for (kind, required) in [("PUBLIC",false),("CONFIDENTIAL",true)] {
-            let mut explicit = body("Explicit PKCE client",kind);
-            explicit["requirePkce"] = json!(required);
-            let reply = h.call(&Operation::new(Method::POST,"/api/oauth/clients",explicit,"CREATE_CLIENT")).await?;
-            ensure!(reply.status.is_success() && reply.body["requirePkce"] == required,
-                "client creation ignored an explicit PKCE policy");
-        }
-
-        // Direct insertion models an existing client after the additive column
-        // migration; managed creation intentionally has different defaults.
-        let legacy: Uuid = sqlx::query_scalar(
-            "INSERT INTO oauth_clients(client_id,client_name,client_type,grant_types,scopes,id) \
-             VALUES('legacy-pkce-management','Legacy public PKCE client','PUBLIC','authorization_code','profile',$1) RETURNING id",
-        ).bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
-        let listed = h.call(&Operation::new(Method::GET,"/api/oauth/clients",Value::Null,"LIST_CLIENTS")).await?;
-        ensure!(listed.status == StatusCode::OK,"client listing failed");
-        let legacy_row = listed.body.as_array().and_then(|rows| rows.iter().find(|row| row["id"] == legacy.to_string()))
-            .ok_or_else(|| anyhow!("client listing omitted historical PUBLIC client"))?;
-        ensure!(legacy_row["requirePkce"] == false,"client listing hid historical PKCE compatibility mode");
-        let preserved = h.atomic(Operation::new(Method::PUT,format!("/api/oauth/clients/{legacy}"),
-            json!({"clientName":"Renamed legacy PKCE client"}),"UPDATE_CLIENT")).await?;
-        ensure!(preserved.body["requirePkce"] == false,"unrelated edit tightened historical PUBLIC policy implicitly");
-
-        let client = id(&confidential)?;
-        let path = format!("/api/oauth/clients/{client}");
-        let switched = h.atomic(Operation::new(Method::PUT,&path,json!({"clientType":"PUBLIC"}),"UPDATE_CLIENT")).await?;
-        ensure!(switched.body["requirePkce"] == true,"switching to PUBLIC did not default to required PKCE");
-        let detail: Value = sqlx::query_scalar("SELECT detail::jsonb FROM audit_logs WHERE request_id=$1 AND action='UPDATE_CLIENT'")
-            .bind(switched.request_id).fetch_one(&h.pool).await?;
-        ensure!(detail["before"]["requirePkce"] == false && detail["after"]["requirePkce"] == true,
-            "PKCE policy change was omitted from its management audit");
-
-        // atomic() rejects both throwing and silently skipped audit writes and
-        // compares every business table before retrying, including this policy.
-        let disabled = h.atomic(Operation::new(Method::PUT,&path,json!({"requirePkce":false}),"UPDATE_CLIENT")).await?;
-        ensure!(disabled.body["requirePkce"] == false,"explicit compatibility override was ignored");
-        let back = h.atomic(Operation::new(Method::PUT,&path,json!({"clientType":"CONFIDENTIAL"}),"UPDATE_CLIENT")).await?;
-        ensure!(back.body["requirePkce"] == false,"type edit silently changed an existing policy");
-        let overridden = h.atomic(Operation::new(Method::PUT,&path,
-            json!({"clientType":"PUBLIC","requirePkce":false}),"UPDATE_CLIENT")).await?;
-        ensure!(overridden.body["requirePkce"] == false,"explicit false did not override the PUBLIC transition default");
-        let stored: bool = sqlx::query_scalar("SELECT require_pkce FROM oauth_clients WHERE id=$1")
-            .bind(client).fetch_one(&h.pool).await?;
-        ensure!(!stored,"client response and persisted PKCE policy disagree");
-        Ok(())
-    }).await
-}
-
-async fn oauth_matrix(h: Harness) -> Result<()> {
-    let created = h.atomic(Operation::new(Method::POST,"/api/oauth/clients",json!({"clientName":"Audited client","grantTypes":["authorization_code","refresh_token"],"scopes":["profile"],"redirectUris":["https://consumer.example.test/callback"]}),"CREATE_CLIENT").named("Audited client")).await?;
-    let client = id(&created)?;
-    h.atomic(
-        Operation::new(
-            Method::PUT,
-            format!("/api/oauth/clients/{client}"),
-            json!({"clientName":"Renamed audited client"}),
-            "UPDATE_CLIENT",
-        )
-        .named("Renamed audited client"),
-    )
-    .await?;
-    no_event(
-        &h,
-        Operation::new(
-            Method::PUT,
-            format!("/api/oauth/clients/{client}"),
-            json!({"clientName":"Renamed audited client"}),
-            "UPDATE_CLIENT",
-        ),
-    )
-    .await?;
-    h.atomic(Operation::new(
-        Method::POST,
-        format!("/api/oauth/clients/{client}/regenerate-secret"),
-        Value::Null,
-        "UPDATE_CLIENT",
-    ))
-    .await?;
-    let target = h.user("oauth-security-target", h.root).await?;
-    let (revoked_id, _) = seed_token(&h, target, false).await?;
-    h.atomic(Operation::new(
-        Method::DELETE,
-        format!("/api/oauth/tokens/{revoked_id}"),
-        Value::Null,
-        "TOKEN_REVOKED",
-    ))
-    .await?;
-    let _session = session(&h.pool, h.tenant, h.root, target).await?;
-    seed_token(&h, target, false).await?;
-    h.atomic(Operation::new(
-        Method::POST,
-        "/api/oauth/tokens/kick",
-        json!({"userId":target}),
-        "KICK_SESSIONS",
-    ))
-    .await?;
-    let device = seed_device(&h, "AUDIT-ADMIN-CODE").await?;
-    h.atomic(Operation::new(
-        Method::PUT,
-        format!("/api/oauth/device-codes/{device}/revoke"),
-        Value::Null,
-        "DEVICE_DENY",
-    ))
-    .await?;
-    seed_token(&h, target, true).await?;
-    h.atomic(Operation::new(
-        Method::POST,
-        "/api/oauth/tokens/purge",
-        Value::Null,
-        "OAUTH_PURGE",
-    ))
-    .await?;
-    no_event(
-        &h,
-        Operation::new(
-            Method::POST,
-            "/api/oauth/tokens/purge",
-            Value::Null,
-            "OAUTH_PURGE",
-        ),
-    )
-    .await?;
-    h.atomic(
-        Operation::new(
-            Method::DELETE,
-            format!("/api/oauth/clients/{client}"),
-            Value::Null,
-            "DELETE_CLIENT",
-        )
-        .named("Renamed audited client"),
-    )
-    .await?;
-    h.atomic(Operation::new(
-        Method::POST,
-        "/api/oauth/session-token",
-        json!({"appCode":"system"}),
-        "TOKEN_ISSUED",
-    ))
-    .await?;
-    for approve in [true, false] {
-        let request: Uuid = sqlx::query_scalar("INSERT INTO oauth_authorization_requests(client_id,redirect_uri,scope,expires_at,id,client_policy_version,application_id,application_policy_version) \
-            SELECT c.client_id,'https://consumer.example.test/callback','profile',now()+interval '5 minutes',$1,c.access_policy_version,c.application_id,a.access_policy_version \
-            FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id WHERE c.client_id='audit-client' RETURNING id")
-            .bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
-        let action = if approve {
-            "CONSENT_APPROVE"
-        } else {
-            "CONSENT_DENY"
-        };
-        h.atomic(Operation::new(
-            Method::POST,
-            format!("/api/oauth/consent/{request}/decision"),
-            json!({"approve":approve}),
-            action,
-        ))
-        .await?;
-        let code = if approve {
-            "AUDIT-APPROVE-CODE"
-        } else {
-            "AUDIT-DENY-CODE"
-        };
-        seed_device(&h, code).await?;
-        let action = if approve {
-            "DEVICE_APPROVE"
-        } else {
-            "DEVICE_DENY"
-        };
-        h.atomic(Operation::new(
-            Method::POST,
-            format!("/api/device/{code}/decision"),
-            json!({"approve":approve}),
-            action,
-        ))
-        .await?;
-    }
-    let (_, raw) = seed_token(&h, h.actor, false).await?;
-    let revoke = Operation::new(
-        Method::POST,
-        "/oauth/revoke",
-        json!({"client_id":"audit-client","client_secret":CLIENT_SECRET,"token":raw}),
-        "TOKEN_REVOKED",
-    )
-    .form();
-    h.atomic(revoke).await?;
-    sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,id) VALUES('audit-foreign-client','Foreign fixture client',$1,$2)").bind(hash::sha256_hex(CLIENT_SECRET)).bind(crate::util::uuid7::new_uuid()).execute(&h.pool).await?;
-    let (_, foreign_token) = seed_token(&h, h.actor, false).await?;
-    let before = h.snapshot(false).await?;
-    for (client, raw) in [
-        ("audit-client", raw.as_str()),
-        ("audit-client", "unknown-owned-token"),
-        ("audit-foreign-client", foreign_token.as_str()),
-    ] {
-        let reply = h
-            .call(
-                &Operation::new(
-                    Method::POST,
-                    "/oauth/revoke",
-                    json!({"client_id":client,"client_secret":CLIENT_SECRET,"token":raw}),
-                    "TOKEN_REVOKED",
-                )
-                .form(),
-            )
-            .await?;
-        ensure!(
-            reply.status == StatusCode::OK,
-            "RFC7009 repeat/unknown did not preserve 200"
-        );
-    }
-    ensure!(
-        h.snapshot(false).await? == before,
-        "RFC7009 repeat/unknown changed durable state or audit"
-    );
-    assert_kick_lock_wait_counts_current_tokens(&h, target).await?;
-    assert_client_update_waits_for_application_before_client(&h).await?;
-    eprintln!("management_audit_special RFC7009_repeat_unknown_foreign=PASS kick_fresh_snapshot=PASS client_application_lock_order=PASS");
-    Ok(())
-}
 
 async fn wait_for_blocker(pool: &PgPool, blocker: i32, table: &str) -> Result<()> {
     tokio::time::timeout(Duration::from_secs(15), async {
@@ -1525,53 +1239,6 @@ async fn wait_for_blocker(pool: &PgPool, blocker: i32, table: &str) -> Result<()
     .map_err(|_| anyhow!("request did not reach the observed {table} lock barrier"))?
 }
 
-async fn assert_kick_lock_wait_counts_current_tokens(h: &Harness, user: Uuid) -> Result<()> {
-    let mut blocker = h.pool.begin().await?;
-    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
-        .fetch_one(&mut *blocker)
-        .await?;
-    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
-        .bind(user)
-        .execute(&mut *blocker)
-        .await?;
-    let op = Operation::new(
-        Method::POST,
-        "/api/oauth/tokens/kick",
-        json!({"userId":user}),
-        "KICK_SESSIONS",
-    );
-    let control = async {
-        let observed = wait_for_blocker(&h.pool, pid, "users").await;
-        if let Err(error) = observed {
-            blocker.rollback().await?;
-            return Err(error);
-        }
-        sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,user_id,client_id,tenant_id,organization_id,expires_at,id) VALUES($1,'access',$2,'audit-client',$3,$4,now()+interval '1 hour',$5)")
-            .bind(hash::sha256_hex(&crate::util::uuid7::new_uuid().to_string())).bind(user).bind(h.tenant).bind(h.root).bind(crate::util::uuid7::new_uuid()).execute(&mut *blocker).await?;
-        blocker.commit().await?;
-        Ok(())
-    };
-    let (reply, controlled) = tokio::join!(h.call(&op), control);
-    controlled?;
-    let reply = reply?;
-    ensure!(
-        reply.status == StatusCode::OK && reply.body["revoked"] == 1,
-        "kick missed a token committed while waiting for its user lock"
-    );
-    let detail: String = sqlx::query_scalar(
-        "SELECT detail FROM audit_logs WHERE action='KICK_SESSIONS' AND request_id=$1",
-    )
-    .bind(reply.request_id)
-    .fetch_one(&h.pool)
-    .await?;
-    let detail: Value = serde_json::from_str(&detail)?;
-    ensure!(
-        detail["before"]["unrevokedCredentialCount"] == 1
-            && detail["after"]["unrevokedCredentialCount"] == 0,
-        "kick audit used a stale count from before the lock wait"
-    );
-    h.safe_audits().await
-}
 async fn application_matrix(h: Harness) -> Result<()> {
     let department = h
         .atomic(
@@ -1926,7 +1593,6 @@ async fn release_matrix(mut h: Harness) -> Result<()> {
         .into();
     h.state = crate::sso_test_fixture::state(h.pool.clone(), Arc::new(config));
     h.app = routes::api_router()
-        .nest("/oauth", routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
             h.state.clone(),
             crate::observability::observe,
@@ -2101,7 +1767,7 @@ async fn notification_matrix(h: Harness) -> Result<()> {
     let issued = h
         .call(&Operation::new(
             Method::POST,
-            "/api/oauth/session-token",
+            "/api/apps/session-token",
             json!({"appCode": "system"}),
             "TOKEN_ISSUED",
         ))
@@ -2252,100 +1918,4 @@ async fn no_event(h: &Harness, op: Operation) -> Result<()> {
     );
     eprintln!("management_audit_noop action={} result=PASS", op.action);
     Ok(())
-}
-
-async fn assert_client_update_waits_for_application_before_client(h: &Harness) -> Result<()> {
-    let old: Uuid = sqlx::query_scalar("INSERT INTO applications(name,code,id) VALUES('Concurrent old application','audit-old-binding',$1) RETURNING id")
-        .bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
-    let new: Uuid = sqlx::query_scalar("INSERT INTO applications(name,code,id) VALUES('Concurrent new application','audit-new-binding',$1) RETURNING id")
-        .bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
-    let client: Uuid = sqlx::query_scalar("INSERT INTO oauth_clients(client_id,client_name,application_id,id) VALUES('audit-lock-client','Concurrent binding client',$1,$2) RETURNING id")
-        .bind(old).bind(crate::util::uuid7::new_uuid()).fetch_one(&h.pool).await?;
-    // Phase 2 serializes mutations by actor account before entity locks. Two
-    // independently authorized actors keep this regression focused on the
-    // application-before-client order rather than that intentional user lock.
-    let updater = h.user("audit-concurrent-client-updater", h.root).await?;
-    sqlx::query("UPDATE users SET is_super_admin=true WHERE id=$1")
-        .bind(updater)
-        .execute(&h.pool)
-        .await?;
-    let updater_session = session(&h.pool, h.tenant, h.root, updater).await?;
-    let mut blocker = h.pool.begin().await?;
-    let external: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
-        .fetch_one(&mut *blocker)
-        .await?;
-    sqlx::query("SELECT id FROM oauth_clients WHERE id=$1 FOR UPDATE")
-        .bind(client)
-        .execute(&mut *blocker)
-        .await?;
-    let delete = Operation::new(
-        Method::DELETE,
-        format!("/api/applications/{old}"),
-        Value::Null,
-        "DELETE_APPLICATION",
-    );
-    let update = Operation::new(
-        Method::PUT,
-        format!("/api/oauth/clients/{client}"),
-        json!({"applicationId":new}),
-        "UPDATE_CLIENT",
-    )
-    .token(&updater_session);
-    let control = async {
-        let deletion=tokio::time::timeout(Duration::from_secs(15),async {
-            loop {
-                let pid: Option<i32>=sqlx::query_scalar(
-                    "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' \
-                     AND $1=ANY(pg_blocking_pids(pid)) AND query LIKE '%DELETE FROM applications%' LIMIT 1",
-                ).bind(external).fetch_optional(&h.pool).await?;
-                if let Some(pid)=pid { return Ok::<_,anyhow::Error>(pid); }
-                tokio::task::yield_now().await;
-            }
-        }).await;
-        let deletion = match deletion {
-            Ok(Ok(pid)) => pid,
-            _ => {
-                blocker.rollback().await?;
-                return Err(anyhow!(
-                    "application delete did not reach the observed client-cascade lock barrier"
-                ));
-            }
-        };
-        let release = async {
-            let observed = wait_for_blocker(&h.pool, deletion, "applications").await;
-            blocker.rollback().await?;
-            observed
-        };
-        let (reply, observed) = tokio::join!(h.call(&update), release);
-        observed?;
-        let reply = reply?;
-        ensure!(
-            [StatusCode::NOT_FOUND, StatusCode::CONFLICT].contains(&reply.status),
-            "client update after concurrent app deletion returned {}",
-            reply.status
-        );
-        let audits: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_logs WHERE request_id=$1")
-            .bind(reply.request_id)
-            .fetch_one(&h.pool)
-            .await?;
-        ensure!(
-            audits == 0,
-            "rejected concurrent binding wrote success audit"
-        );
-        Ok(())
-    };
-    let (deleted, controlled) = tokio::join!(h.call(&delete), control);
-    controlled?;
-    let deleted = deleted?;
-    ensure!(
-        deleted.status == StatusCode::OK,
-        "concurrent application delete failed or deadlocked"
-    );
-    let remaining:i64=sqlx::query_scalar("SELECT (SELECT count(*) FROM applications WHERE id=$1)+(SELECT count(*) FROM oauth_clients WHERE id=$2 AND application_id IS NOT NULL)")
-        .bind(old).bind(client).fetch_one(&h.pool).await?;
-    ensure!(
-        remaining == 0,
-        "concurrent app deletion did not clear its client binding"
-    );
-    h.safe_audits().await
 }

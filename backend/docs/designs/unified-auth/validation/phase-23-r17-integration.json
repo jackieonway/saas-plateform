@@ -1,0 +1,639 @@
+{
+  "contractVersion": "unified-auth-phase23-real-https/1",
+  "startedAt": "2026-10-29T03:32:00.478Z",
+  "result": "FAIL",
+  "tlsErrorsIgnored": false,
+  "positiveMfaSeededBySql": false,
+  "httpIssuerFixtures": false,
+  "fixtureSignedReceiverNegatives": true,
+  "trustedDeliveryOwnerProofs": "owned SQL fixture bindings plus actual worker delivery",
+  "checks": [
+    {
+      "caseId": "PREFLIGHT",
+      "status": "PASS",
+      "realEnrollment": true,
+      "currentBrowserTotpSourceVerified": true
+    },
+    {
+      "caseId": "KEY_LIFECYCLE",
+      "status": "PASS",
+      "caseCount": 6,
+      "checkpointCReady": true
+    },
+    {
+      "caseId": "CHECKPOINT_PREPARATION",
+      "status": "PASS",
+      "freshLiveUserAndMachineCarriers": true,
+      "sourceReallyResumed": true
+    }
+  ],
+  "endpoints": {
+    "GET https://console.saas.test/auth/login 303": 2,
+    "GET https://auth.saas.test/oauth/authorize 303": 25,
+    "GET https://auth.saas.test/oauth/login 200": 25,
+    "GET https://auth.saas.test/sso/assets/identity.css 200": 30,
+    "GET https://auth.saas.test/sso/assets/identity.js 200": 25,
+    "GET https://auth.saas.test/oauth/interaction/:id 200": 51,
+    "GET https://auth.saas.test/api/sso/preauth 200": 27,
+    "POST https://auth.saas.test/api/sso/login 200": 23,
+    "POST https://auth.saas.test/oauth/interaction/:id 200": 28,
+    "GET https://console.saas.test/auth/callback 303": 6,
+    "GET https://console.saas.test/ 200": 6,
+    "GET https://console.saas.test/assets/index-Ps9xfk9t.css 200": 6,
+    "GET https://console.saas.test/assets/index-BpLa4Vch.js 200": 6,
+    "GET https://console.saas.test/auth/config 200": 15,
+    "GET https://console.saas.test/assets/inter-latin-wght-normal-Dx4kXJAl.woff2 200": 6,
+    "GET https://console.saas.test/auth/session 200": 37,
+    "GET https://auth.saas.test/sso/security 200": 1,
+    "GET https://auth.saas.test/sso/assets/applications.css 200": 3,
+    "GET https://auth.saas.test/sso/assets/security.js 200": 1,
+    "GET https://auth.saas.test/api/sso/session 200": 5,
+    "GET https://auth.saas.test/api/sso/mfa/status 200": 2,
+    "POST https://auth.saas.test/api/sso/mfa/enrollment 200": 1,
+    "POST https://auth.saas.test/api/sso/mfa/enrollment/confirm 200": 1,
+    "GET https://console.saas.test/auth/step-up 303": 4,
+    "POST https://auth.saas.test/api/sso/login 428": 4,
+    "GET https://customer.saas.test:24446/auth/callback 200": 16,
+    "POST https://console.saas.test/auth/context-token 200": 27,
+    "DELETE https://console.saas.test/api/oidc/keys/owned-https 409": 2,
+    "POST https://console.saas.test/api/oidc/keys/activate 409": 2,
+    "POST https://console.saas.test/api/oidc/keys/publish 200": 3,
+    "GET https://auth.saas.test/oauth/jwks 200": 6,
+    "POST https://console.saas.test/api/oidc/keys/activate 200": 4,
+    "GET https://console.saas.test/api/oidc/operations/:id 200": 1,
+    "GET https://auth.saas.test/sso/applications 200": 2,
+    "GET https://auth.saas.test/sso/assets/applications.js 200": 2,
+    "GET https://auth.saas.test/api/sso/consents 200": 2,
+    "DELETE https://console.saas.test/api/oidc/keys/owned-https 200": 1,
+    "POST https://console.saas.test/api/oidc/keys/phase23-b/revoke 200": 1,
+    "POST https://console.saas.test/api/identity/invitations 200": 2,
+    "GET https://auth.saas.test/sso/invitations/:id 200": 2,
+    "GET https://auth.saas.test/sso/assets/invitation.js 200": 2,
+    "POST https://auth.saas.test/api/sso/invitations/:id/accept 200": 1,
+    "POST https://console.saas.test/api/identity/clients 200": 1,
+    "POST https://console.saas.test/api/identity/clients/:id/credentials 200": 2,
+    "GET https://customer.saas.test:24446/api/session 200": 1,
+    "GET https://customer.saas.test:24446/demo-resource 200": 1,
+    "GET https://customer.saas.test/ 200": 4,
+    "GET https://customer.saas.test/assets/index-DJLdva9A.css 200": 4,
+    "GET https://customer.saas.test/assets/index-u1OsXVgx.js 200": 4,
+    "GET https://customer.saas.test/auth/config 200": 8,
+    "GET https://customer.saas.test/auth/session 200": 6,
+    "GET https://customer.saas.test/auth/login-bootstrap 200": 1,
+    "POST https://customer.saas.test/auth/login 200": 2,
+    "GET https://customer.saas.test/auth/callback 303": 2,
+    "GET https://customer.saas.test/api/profile 200": 2,
+    "GET https://customer.saas.test/auth/session 503": 1,
+    "POST https://console.saas.test/auth/backchannel-logout 200": 3,
+    "POST https://console.saas.test/auth/backchannel-logout 409": 1,
+    "POST https://customer.saas.test/auth/backchannel-logout 200": 3,
+    "POST https://customer.saas.test/auth/backchannel-logout 409": 1,
+    "GET https://console.saas.test/api/auth/profile 200": 1,
+    "PUT https://console.saas.test/api/organizations/:id 200": 2,
+    "POST https://console.saas.test/api/oidc/keys/phase23-c/revoke 200": 1,
+    "POST https://console.saas.test/auth/backchannel-logout 400": 1,
+    "POST https://customer.saas.test/auth/backchannel-logout 400": 1,
+    "POST https://console.saas.test/api/identity/invitations/:id/revoke 200": 1,
+    "POST https://auth.saas.test/api/sso/invitations/:id/accept 409": 1,
+    "POST https://console.saas.test/api/identity/clients/:id/credentials/revoke 200": 1,
+    "PATCH https://console.saas.test/api/identity/clients/:id 200": 1,
+    "DELETE https://console.saas.test/api/memberships/:id 200": 1,
+    "POST https://auth.saas.test/api/sso/consents/:id/revoke 500": 1
+  },
+  "timing": {
+    "checkpointPauseStartedAt": "2026-10-29T03:42:29.392Z",
+    "checkpointPauseEndedAt": "2026-10-29T03:42:39.146Z"
+  },
+  "scramBefore": {
+    "caseCount": 6,
+    "cases": [
+      {
+        "label": "IDENTITY_CORRECT",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "IDENTITY_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PLATFORM_CORRECT",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "PLATFORM_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      },
+      {
+        "label": "PORTAL_CORRECT",
+        "observation": "ACCEPTED",
+        "sqlState": null,
+        "status": "PASS"
+      },
+      {
+        "label": "PORTAL_WRONG",
+        "observation": "PASSWORD_REJECTED",
+        "sqlState": "28P01",
+        "status": "PASS"
+      }
+    ],
+    "contractVersion": "unified-auth-phase23-scram/1",
+    "freshConnectionsRequired": true,
+    "hbaChangedByWrapper": false,
+    "mode": "SOURCE",
+    "probeBinarySha256": "acbfebbda80bbdf973a9c9c7ed9a7c9e15d2e278f083177198eb5fecb187966c",
+    "result": "PASS"
+  },
+  "browserVersion": "156.0.8078.4",
+  "identitySelections": [
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "admin",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "employee",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "EMPLOYEE"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    },
+    {
+      "actor": "customer",
+      "mode": "SOURCE",
+      "valid": true,
+      "candidateCount": 1,
+      "tenantCount": 1,
+      "memberTypes": [
+        "CUSTOMER"
+      ],
+      "accountMatches": true,
+      "memberAccountsMatch": true,
+      "expectedMembershipMatches": 1,
+      "expectedMemberTypeOnly": true,
+      "driverAction": "AWAIT_AUTOMATIC_SELECTION",
+      "manualMembershipSelections": 0
+    }
+  ],
+  "adminTotpSource": {
+    "currentBffBound": true,
+    "browserCookieBound": true,
+    "exactGlobalSourceBound": true,
+    "liveCanonicalSource": true,
+    "mfaMethod": "totp",
+    "verifiedWithinFiveMinutes": true
+  },
+  "dualIdentityIssuance": {
+    "caseId": "K03_DUAL_IDENTITY_SIGNING",
+    "status": "PASS",
+    "evidence": {
+      "signingKid": "phase23-b",
+      "observedTokenUpstreamPorts": [
+        23441,
+        23442
+      ],
+      "successfulCodeExchanges": 2,
+      "freshAuthorityJwtVerifiedForEach": true,
+      "cachedSignatureVerifiedForEach": true,
+      "userinfoStatusForEach": 200,
+      "stableSubject": true,
+      "gatewayMetadataRequiresSeparateProcessOwnershipProof": true
+    },
+    "processOwnership": {
+      "configuredKeysetSha256": "65fd5f4df03b47b996be9ac4daa22b6af33a1841d10e081b3499fce706f354dc",
+      "distinctPids": true,
+      "independentProcesses": 2,
+      "sameBinarySha256": "00508485b9a062c24d0e18446c0092cd8c41f9b320aaf28fc8a57c9046a2c8e8"
+    }
+  },
+  "realAdminStepUps": [
+    {
+      "reason": "BEFORE_WRITE_FOUR_MINUTE_REFRESH",
+      "currentBffBound": true,
+      "browserCookieBound": true,
+      "exactGlobalSourceBound": true,
+      "liveCanonicalSource": true,
+      "mfaMethod": "totp",
+      "verifiedWithinFiveMinutes": true
+    },
+    {
+      "reason": "BEFORE_NO_ACTIVE_SIGNER_WINDOW",
+      "currentBffBound": true,
+      "browserCookieBound": true,
+      "exactGlobalSourceBound": true,
+      "liveCanonicalSource": true,
+      "mfaMethod": "totp",
+      "verifiedWithinFiveMinutes": true
+    }
+  ],
+  "protocolFailures": [
+    {
+      "command": "finish",
+      "code": "SDK_REJECTED",
+      "status": 503,
+      "stage": "finishLogin",
+      "sdkCode": "OAUTH_RESPONSE_IS_NOT_CONFORM",
+      "callbackCodePresent": true,
+      "callbackErrorPresent": false,
+      "tokenResponseCount": 1,
+      "lastTokenStatus": 503
+    }
+  ],
+  "keyCases": [
+    {
+      "caseId": "K02_PREPUBLISH",
+      "status": "PASS",
+      "evidence": {
+        "unpublishedActivationStatus": 409,
+        "publishedStatus": 200,
+        "jwksAAndB": true,
+        "signingKid": "owned-https",
+        "freshACarrierAfterPublishWait": true,
+        "prepublication": {
+          "publishedKid": "phase23-b",
+          "minimumPublishSeconds": 61,
+          "observedPublishStartDbEpoch": 1793244759.331853,
+          "observedGateDbEpoch": 1793244820.599958,
+          "observedPublishSeconds": 61.268105030059814,
+          "sdkCacheAgeBeforeActivationSeconds": 65,
+          "sdkCacheUpdatedAtEpoch": 1793244755,
+          "sdkCachedKidsBeforeActivation": [
+            "owned-https"
+          ],
+          "unknownKidRefetchAfterSeconds": 60,
+          "cacheMutationRequested": false,
+          "sameSdkProcessRetained": true,
+          "requestedWaitMs": 59619,
+          "polls": 6
+        }
+      }
+    },
+    {
+      "caseId": "K03_ACTIVE_ORIGINAL_RESULT",
+      "status": "PASS",
+      "evidence": {
+        "applicationReplyIgnored": true,
+        "originalOperationCompleted": true,
+        "uniqueActiveKid": "phase23-b",
+        "idAndLogoutSigningKid": "phase23-b",
+        "oldAStillValid": true,
+        "stableSubject": true
+      }
+    },
+    {
+      "caseId": "K05_LIVE_WINDOW",
+      "status": "PASS",
+      "evidence": {
+        "activeRetirementStatus": 409,
+        "liveWindowRetirementStatus": 409,
+        "highwaterObserved": true
+      }
+    },
+    {
+      "caseId": "K06_NORMAL_RETIREMENT",
+      "status": "PASS",
+      "evidence": {
+        "retiredKid": "owned-https",
+        "signingKid": "phase23-b",
+        "lastSignedExpEpoch": 1793245122.765739,
+        "retainUntilEpoch": 1793245182.765739,
+        "observedDbStartEpoch": 1793244836.210878,
+        "observedDbEndEpoch": 1793245183.077813,
+        "polls": 34,
+        "requestedWaitMs": 336379,
+        "retirementStatus": 200,
+        "oldKeyAbsentFromJwks": true
+      }
+    },
+    {
+      "caseId": "K08_NO_ACTIVE_SIGNER",
+      "status": "PASS",
+      "evidence": {
+        "unpublishedActivationStatus": 409,
+        "revokedActiveKid": "phase23-b",
+        "userIdIssuanceStatus": 503,
+        "recoverySigningKid": "phase23-d",
+        "publishedKeysDuringSignerGap": [
+          "phase23-c",
+          "phase23-d"
+        ],
+        "realStepUpBeforeSignerGap": true,
+        "prepublication": {
+          "publishedKid": "phase23-d",
+          "minimumPublishSeconds": 61,
+          "observedPublishStartDbEpoch": 1793245194.699788,
+          "observedGateDbEpoch": 1793245256.266982,
+          "observedPublishSeconds": 61.56719398498535,
+          "sdkCacheAgeBeforeActivationSeconds": 65,
+          "sdkCacheUpdatedAtEpoch": 1793245191,
+          "sdkCachedKidsBeforeActivation": [
+            "phase23-b"
+          ],
+          "unknownKidRefetchAfterSeconds": 60,
+          "cacheMutationRequested": false,
+          "sameSdkProcessRetained": true,
+          "requestedWaitMs": 58954,
+          "polls": 6
+        },
+        "sdkCachedKidsAfterRecovery": [
+          "phase23-c",
+          "phase23-d"
+        ]
+      }
+    },
+    {
+      "caseId": "K07_CHECKPOINT_CARRIERS_READY",
+      "status": "READY",
+      "evidence": {
+        "statusScope": "PRECONDITION_ONLY",
+        "requestedLegacyOidcTokenTtlSeconds": 600,
+        "legacySettingAppliedToCanonicalTokens": false,
+        "carrierDeadlinesRequireActualObservation": true,
+        "publishedNonactiveKid": "phase23-c",
+        "activeKid": "phase23-d",
+        "stableSubject": true,
+        "revocationDeferredUntilAfterCheckpoint": true
+      }
+    }
+  ],
+  "invitationBefore": [
+    {
+      "caseId": "DR_INVITATION_CHECKPOINT",
+      "status": "PASS",
+      "consumedInvitations": 1,
+      "pendingDeliveredInvitations": 1,
+      "activationReceipts": 1,
+      "accountsCreated": 1,
+      "businessAuthoritiesCreated": 0
+    }
+  ],
+  "policyBefore": [
+    {
+      "caseId": "DR_POLICY_CHECKPOINT",
+      "status": "PASS",
+      "dedicatedClients": 1,
+      "credentialVersions": 1,
+      "machineStatus": 200,
+      "resourceStatus": 200,
+      "retainedRequiredScope": "demo.read",
+      "optionalScopeBeforeContraction": "demo.admin"
+    }
+  ],
+  "serviceGetSource": [
+    {
+      "name": "account",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "review",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "invitation",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "authAdmin",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "oidcAdmin",
+      "source": true,
+      "target": false
+    }
+  ],
+  "serviceContextSource": [
+    {
+      "name": "selection",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "portalConsumer",
+      "source": true,
+      "target": false
+    }
+  ],
+  "serviceAccessSource": [
+    {
+      "name": "source",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "portalSource",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "customerAuthority",
+      "source": true,
+      "target": false
+    },
+    {
+      "name": "profile",
+      "source": true,
+      "target": false
+    }
+  ],
+  "recoveryCheckpointSteps": {
+    "adapterPrepare": true,
+    "coreInit": true,
+    "coreCapture": true,
+    "negativeBaselineSaved": true
+  },
+  "recoverySubstage": "CHECKPOINT_BASELINE_SAVED",
+  "checkpoint": {
+    "sequence": 1,
+    "sourceEnvironmentSha256": "a57c9d472a35506c4b39a1735cd0df99a7f12363b30ccf0ce69b7036d732e882",
+    "stoppedWriterDatabases": 2,
+    "method": "sequential pg_dump while all three writers stopped"
+  },
+  "sourceResumedBusinessAfterCheckpoint": true,
+  "keyEmergency": {
+    "cachedRsaMath": true,
+    "freshAuthorityRejectsC": true,
+    "opaqueGrantStillLiveBeforeRecovery": true,
+    "validD": true
+  },
+  "invitationAfterCheckpoint": [
+    {
+      "caseId": "DR_INVITATION_POSTCHECKPOINT_REVOKE",
+      "status": "PASS",
+      "revokedInvitations": 1,
+      "oldTokenDenied": 1,
+      "newAccounts": 0
+    }
+  ],
+  "policyAfterCheckpoint": [
+    {
+      "caseId": "DR_POLICY_POSTCHECKPOINT",
+      "status": "PASS",
+      "rotatedCredentialVersions": 2,
+      "revokedCredentials": 2,
+      "oldCredentialStatuses": [
+        401,
+        401
+      ],
+      "sameOldTokenActive": false,
+      "rejectionProvedBeforeDisable": true,
+      "retainedScope": "demo.read",
+      "removedScope": "demo.admin",
+      "extraClientDisabled": true,
+      "retiredMemberships": 1,
+      "retiredMemberIdentityVersion": 2
+    }
+  ],
+  "failedStep": "POST_CHECKPOINT_DENY",
+  "failureCode": "REAL_CONSENT_REVOKE_FAILED",
+  "page": {
+    "origin": "https://auth.saas.test",
+    "pathname": "/sso/invitations/:id",
+    "screen": null,
+    "candidateCount": 0,
+    "candidateMemberTypes": [],
+    "identityBusy": false,
+    "organizationStepVisible": false,
+    "selectionSearchActive": false,
+    "consentEnabled": false
+  },
+  "protocolLogRedaction": {
+    "logFiles": 15,
+    "candidatesCompared": 125,
+    "candidateFindings": 0
+  },
+  "ownerLogRedaction": {
+    "logFiles": 15,
+    "candidatesCompared": 59,
+    "candidateFindings": 0
+  },
+  "environmentCleanupFirstPass": {
+    "awaitHba": true,
+    "collectorCanaryScan": {
+      "candidateFindings": 0,
+      "logBytes": 82681,
+      "logFiles": 14,
+      "messagesComparedOnlyInMemory": 2
+    },
+    "collectorPrivateMessagesComparedOnlyInMemory": 2,
+    "containersCreated": 0,
+    "containersReused": 0,
+    "databasesRemoved": 0,
+    "dockerAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+    "dockerBefore": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+    "errors": [],
+    "filesystemAfter": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1307664384 6867931136  16% /tmp\n",
+    "filesystemBefore": "Filesystem      1B-blocks       Used  Available Use% Mounted on\ntmpfs          8175595520 1277018112 6898577408  16% /tmp\n",
+    "privateBytesRemoved": 0,
+    "privateFilesRemoved": 0,
+    "processesRemaining": 0,
+    "remainingLeaseRecords": 0,
+    "result": "AWAIT_HBA",
+    "retainedSharedPostgresAndPublicBuildInputs": true,
+    "rolesRemoved": 0,
+    "rootHbaJournalRemovedByThisWrapper": false,
+    "status": "PHASE23_CLEANUP",
+    "windowsWslVdiskCompactionClaimed": false
+  },
+  "tlsProtocols": [
+    "TLS 1.3"
+  ],
+  "endedAt": "2026-10-29T03:43:01.684Z",
+  "cleanupRequiresEnvironmentAndHbaOwners": true,
+  "checkpointTaken": true
+}

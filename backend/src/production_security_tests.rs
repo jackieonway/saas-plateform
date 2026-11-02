@@ -1,4 +1,4 @@
-//! Phase 12 production initialization and authenticated introspection gates.
+//! Production initialization, unsafe password refusal and exact session invalidation.
 //! Each ignored gate uses its own PostgreSQL database; HTTP gates bind a real
 //! loopback TCP listener and preserve normal connection information.
 //! TEST_DATABASE_URL comes from the environment or ignored root .env.test.
@@ -10,7 +10,6 @@ use std::time::Duration;
 
 use anyhow::{anyhow, ensure, Result};
 use axum::http::StatusCode;
-use axum::Router;
 use serde_json::{json, Value};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::PgPool;
@@ -18,13 +17,12 @@ use tokio::sync::oneshot;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::routes::{self, oauth2};
+use crate::routes;
 use crate::seed;
-use crate::util::{hash, jwt, password};
+use crate::util::{hash, password};
 
 const ADMIN_NAME: &str = "production-gate-admin";
 const ADMIN_PASSWORD: &str = "Synthetic-admin-7D!only-for-tests";
-const CLIENT_SECRET: &str = "synthetic-isolated-client-secret-only";
 
 fn database_options() -> Result<PgConnectOptions> {
     let url = match std::env::var("TEST_DATABASE_URL") {
@@ -248,9 +246,7 @@ impl HttpServer {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
         let url = format!("http://{}", listener.local_addr()?);
         let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
-        let router = Router::new()
-            .nest("/oauth", oauth2::oauth_router())
-            .merge(routes::api_router())
+        let router = routes::api_router()
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 crate::normalize_client_ip,
@@ -277,38 +273,6 @@ impl HttpServer {
             stop: Some(stop),
             task,
         })
-    }
-
-    async fn introspect(
-        &self,
-        client_id: &str,
-        secret: &str,
-        token: &str,
-        forged_ip: Option<&str>,
-    ) -> Result<(StatusCode, Value, Option<u64>)> {
-        // Synthetic fixture strings are unreserved characters, so this deliberately
-        // uses the same standard form body sent by an external business backend.
-        let mut request = self
-            .client
-            .post(format!("{}/oauth/introspect", self.url))
-            .basic_auth(client_id, Some(secret))
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(format!("token={token}"));
-        if let Some(ip) = forged_ip {
-            request = request
-                .header("x-forwarded-for", ip)
-                .header("x-real-ip", ip)
-                .header("forwarded", format!("for={ip}"));
-        }
-        let response = request.send().await?;
-        let status = response.status();
-        let retry = response
-            .headers()
-            .get("retry-after")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.parse().ok());
-        let body = serde_json::from_slice(&response.bytes().await?)?;
-        Ok((status, body, retry))
     }
 
     async fn api(
@@ -348,24 +312,6 @@ impl HttpServer {
         Ok((status, body))
     }
 
-    async fn public_introspect(&self, client_id: &str) -> Result<(StatusCode, Value, Option<u64>)> {
-        let response = self
-            .client
-            .post(format!("{}/oauth/introspect", self.url))
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(format!("client_id={client_id}&token=missing-token"))
-            .send()
-            .await?;
-        let status = response.status();
-        let retry = response
-            .headers()
-            .get("retry-after")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.parse().ok());
-        let body = serde_json::from_slice(&response.bytes().await?)?;
-        Ok((status, body, retry))
-    }
-
     async fn finish(mut self) -> Result<()> {
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
@@ -392,19 +338,6 @@ impl Drop for HttpServer {
     }
 }
 
-async fn fixture_client(pool: &PgPool, client_id: &str) -> Result<()> {
-    sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,subject_mode,allowed_member_types,grant_types,scopes,access_token_validity,id) VALUES($1,$2,$1,'CONFIDENTIAL','MACHINE',ARRAY[]::text[],'client_credentials','profile',300,$3)")
-        .bind(client_id).bind(hash::sha256_hex(CLIENT_SECRET)).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
-    Ok(())
-}
-
-async fn fixture_token(pool: &PgPool, client_id: &str, token: &str) -> Result<Uuid> {
-    Ok(sqlx::query_scalar("INSERT INTO oauth_tokens(client_id,token_hash,token_type,token_use,scope,expires_at,id,client_policy_version,application_id,application_policy_version) \
-        SELECT $1,$2,'access','oauth','profile',now()+interval '5 minutes',$3,c.access_policy_version,c.application_id,a.access_policy_version \
-        FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id WHERE c.client_id=$1 RETURNING id")
-        .bind(client_id).bind(hash::sha256_hex(token)).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?)
-}
-
 async fn fixture_session(
     pool: &PgPool,
     config: &Config,
@@ -412,117 +345,7 @@ async fn fixture_session(
     tenant: Uuid,
     org: Uuid,
 ) -> Result<String> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let now = chrono::Utc::now().timestamp();
-    let sid = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(sid.to_string()),
-            ver: Some(version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        &config.jwt_secret,
-    )
-}
-
-async fn fixture_actor(
-    pool: &PgPool,
-    tenant: Uuid,
-    org: Uuid,
-    name: &str,
-    application: Uuid,
-    menu: Uuid,
-    grant: bool,
-) -> Result<Uuid> {
-    let user: Uuid = sqlx::query_scalar("INSERT INTO users(username,password_hash,is_super_admin,id) VALUES($1,'synthetic-unusable-password',false,$2) RETURNING id")
-        .bind(name).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
-    sqlx::query("INSERT INTO memberships(user_id,organization_id,id) VALUES($1,$2,$3)")
-        .bind(user)
-        .bind(org)
-        .bind(crate::util::uuid7::new_uuid())
-        .execute(pool)
-        .await?;
-    if grant {
-        let role: Uuid = sqlx::query_scalar(
-            "INSERT INTO roles(tenant_id,organization_id,name,id) VALUES($1,$2,$3,$4) RETURNING id",
-        )
-        .bind(tenant)
-        .bind(org)
-        .bind(name)
-        .bind(crate::util::uuid7::new_uuid())
-        .fetch_one(pool)
-        .await?;
-        sqlx::query("INSERT INTO user_roles(user_id,role_id,organization_id) VALUES($1,$2,$3)")
-            .bind(user)
-            .bind(role)
-            .bind(org)
-            .execute(pool)
-            .await?;
-        sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)")
-            .bind(role)
-            .bind(menu)
-            .execute(pool)
-            .await?;
-        sqlx::query("INSERT INTO tenant_applications(tenant_id,application_id) VALUES($1,$2) ON CONFLICT DO NOTHING")
-            .bind(tenant).bind(application).execute(pool).await?;
-        sqlx::query("INSERT INTO organization_applications(organization_id,application_id) VALUES($1,$2) ON CONFLICT DO NOTHING")
-            .bind(org).bind(application).execute(pool).await?;
-        sqlx::query(
-            "INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
-        )
-        .bind(tenant)
-        .bind(menu)
-        .execute(pool)
-        .await?;
-        sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2) ON CONFLICT DO NOTHING")
-            .bind(org).bind(menu).execute(pool).await?;
-    }
-    Ok(user)
-}
-
-fn successful_introspection(
-    response: &(StatusCode, Value, Option<u64>),
-    active: bool,
-) -> Result<()> {
-    ensure!(
-        response.0 == StatusCode::OK,
-        "authenticated introspection unexpectedly rejected"
-    );
-    ensure!(
-        response.1.get("active") == Some(&Value::Bool(active)),
-        "unexpected token activity"
-    );
-    ensure!(
-        response.2.is_none(),
-        "successful response advertised a rate limit retry"
-    );
-    Ok(())
-}
-
-fn rate_limited(response: &(StatusCode, Value, Option<u64>)) -> Result<()> {
-    ensure!(
-        response.0 == StatusCode::TOO_MANY_REQUESTS,
-        "quota boundary was not enforced"
-    );
-    ensure!(
-        response
-            .2
-            .is_some_and(|seconds| (1..=60).contains(&seconds)),
-        "429 must include bounded Retry-After"
-    );
-    Ok(())
+    crate::sso_test_fixture::token(pool, user, tenant, org, &config.jwt_secret).await
 }
 
 #[tokio::test]
@@ -543,6 +366,9 @@ async fn production_bootstrap_is_minimal_explicit_and_idempotent() -> Result<()>
         ).fetch_all(&database.pool).await?;
         ensure!(users.len()==1,"fresh production bootstrap must create exactly one administrator");
         ensure!(users[0].0==ADMIN_NAME && users[0].2 && users[0].3=="ENABLED","explicit initial administrator missing");
+        let initial_generation: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE username=$1")
+            .bind(ADMIN_NAME).fetch_one(&database.pool).await?;
+        ensure!(initial_generation==1,"fresh bootstrap administrator must start at canonical account generation one");
         ensure!(password::verify_password(&users[0].1,ADMIN_PASSWORD),"administrator password differs from explicit configuration");
         let context: (i64,i64,i64) = sqlx::query_as("SELECT (SELECT count(*) FROM tenants WHERE is_platform=true),(SELECT count(*) FROM organizations),(SELECT count(*) FROM memberships m JOIN users u ON u.id=m.user_id JOIN organizations o ON o.id=m.organization_id JOIN tenants t ON t.id=o.tenant_id WHERE u.username=$1 AND t.is_platform=true AND o.parent_id IS NULL)")
             .bind(ADMIN_NAME).fetch_one(&database.pool).await?;
@@ -550,10 +376,10 @@ async fn production_bootstrap_is_minimal_explicit_and_idempotent() -> Result<()>
         let enabled_examples: i64 = sqlx::query_scalar("SELECT count(*) FROM applications WHERE status='ENABLED' AND code IN ('athena','vue-workshop','legacy-jquery','report-center')")
             .fetch_one(&database.pool).await?;
         ensure!(enabled_examples==0,"fresh production enabled demonstration applications");
-        let enabled_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM oauth_clients WHERE status='ENABLED'")
+        let enabled_clients: i64 = sqlx::query_scalar("SELECT count(*) FROM auth_clients WHERE status='ENABLED'")
             .fetch_one(&database.pool).await?;
         ensure!(enabled_clients==0,"fresh production enabled a demonstration OAuth client");
-        let registered_rps: i64 = sqlx::query_scalar("SELECT count(*) FROM oidc_clients")
+        let registered_rps: i64 = sqlx::query_scalar("SELECT count(*) FROM auth_clients")
             .fetch_one(&database.pool).await?;
         ensure!(registered_rps == 0,"fresh bootstrap must leave SSO RP registration to explicit provisioning");
         let system_menus: i64 = sqlx::query_scalar("SELECT count(DISTINCT m.permission) FROM menus m JOIN applications a ON a.id=m.application_id WHERE a.code='system' AND m.permission IN ('system:tenant','system:organization','system:user','system:role','system:application','system:menu','system:oauth','system:audit','system:monitor')")
@@ -664,333 +490,8 @@ async fn production_stock_user_credentials_are_rejected_without_mutation() -> Re
     database.finish(result).await
 }
 
-#[tokio::test]
-#[ignore = "requires isolated PostgreSQL CREATE DATABASE privileges"]
-async fn production_stock_client_secrets_are_rejected_without_mutation() -> Result<()> {
-    let database = Database::create().await?;
-    let result = async {
-        seed::initialize(&database.pool,&production_config()?).await?;
-        // The user-password audit has its own gate; this fixture isolates client
-        // secret hashes without repeating an unrelated Argon audit for every case.
-        sqlx::query("UPDATE users SET status='DISABLED' WHERE username=$1")
-            .bind(ADMIN_NAME).execute(&database.pool).await?;
-        for (client_id,plain) in [("platform-web","platform-web-secret"),("api-service","api-service-secret"),("resource-portal","resource-portal-secret"),("micro-vue-shell","micro-vue-shell-secret"),("micro-jquery-shell","micro-jquery-shell-secret"),("micro-report-shell","micro-report-shell-secret"),("renamed-installed-micro-client","micro-vue-shell-secret")] {
-            sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,id) VALUES($1,$2,$1,'CONFIDENTIAL',$3) ON CONFLICT(client_id) DO UPDATE SET client_secret_hash=EXCLUDED.client_secret_hash,status='ENABLED'")
-                .bind(client_id).bind(hash::sha256_hex(plain)).bind(crate::util::uuid7::new_uuid()).execute(&database.pool).await?;
-            let before = snapshot(&database.pool).await?;
-            ensure!(seed::check_production_credentials(&database.pool).await.is_err(),"enabled known demonstration client secret was accepted");
-            ensure!(before==snapshot(&database.pool).await?,"stock-client startup refusal mutated persisted rows");
-            sqlx::query("UPDATE oauth_clients SET status='DISABLED' WHERE client_id=$1")
-                .bind(client_id).execute(&database.pool).await?;
-            seed::check_production_credentials(&database.pool).await?;
-            sqlx::query("UPDATE oauth_clients SET status='ENABLED',client_secret_hash=$2 WHERE client_id=$1")
-                .bind(client_id).bind(hash::sha256_hex(CLIENT_SECRET)).execute(&database.pool).await?;
-            seed::check_production_credentials(&database.pool).await?;
-        }
-        Ok(())
-    }.await;
-    database.finish(result).await
-}
-
-#[tokio::test]
-#[ignore = "requires isolated PostgreSQL and actual loopback HTTP"]
-async fn authenticated_introspection_quotas_isolate_clients_and_failed_authentication() -> Result<()>
-{
-    let database = Database::create().await?;
-    let result = async {
-        let mut config = production_config()?;
-        config.oauth_introspection_client_requests_per_minute = 2;
-        config.oauth_auth_failure_requests_per_minute = 3;
-        fixture_client(&database.pool, "quota-a").await?;
-        fixture_client(&database.pool, "quota-b").await?;
-        fixture_client(&database.pool, "quota-public").await?;
-        sqlx::query("UPDATE oauth_clients SET subject_mode='USER',allowed_member_types=ARRAY['EMPLOYEE']::text[],grant_types='authorization_code',client_type='PUBLIC',client_secret_hash=NULL WHERE client_id='quota-public'")
-            .execute(&database.pool).await?;
-        let server = HttpServer::start(&database.pool, config).await?;
-        let assertions = async {
-            for index in 0..3 {
-                let forged = format!("198.51.100.{}", index + 10);
-                let response = server
-                    .introspect("quota-a", "incorrect", "missing-token", Some(&forged))
-                    .await?;
-                ensure!(
-                    response.0 == StatusCode::UNAUTHORIZED,
-                    "failed authentication boundary changed"
-                );
-                ensure!(
-                    response.1.get("error") == Some(&Value::String("invalid_client".into())),
-                    "bad client credentials must produce invalid_client"
-                );
-            }
-            rate_limited(
-                &server
-                    .introspect(
-                        "quota-a",
-                        "incorrect",
-                        "missing-token",
-                        Some("203.0.113.91"),
-                    )
-                    .await?,
-            )?;
-            // Real direct peer remains the same despite changing every forwarded header.
-            rate_limited(
-                &server
-                    .introspect(
-                        "unknown-client",
-                        "incorrect",
-                        "missing-token",
-                        Some("203.0.113.92"),
-                    )
-                    .await?,
-            )?;
-            rate_limited(&server.public_introspect("quota-public").await?)?;
-            successful_introspection(
-                &server
-                    .introspect("quota-a", CLIENT_SECRET, "missing-token", None)
-                    .await?,
-                false,
-            )?;
-            successful_introspection(
-                &server
-                    .introspect("quota-a", CLIENT_SECRET, "missing-token", None)
-                    .await?,
-                false,
-            )?;
-            rate_limited(
-                &server
-                    .introspect(
-                        "quota-a",
-                        CLIENT_SECRET,
-                        "missing-token",
-                        Some("203.0.113.93"),
-                    )
-                    .await?,
-            )?;
-            successful_introspection(
-                &server
-                    .introspect("quota-b", CLIENT_SECRET, "missing-token", None)
-                    .await?,
-                false,
-            )?;
-            successful_introspection(
-                &server
-                    .introspect("quota-b", CLIENT_SECRET, "missing-token", None)
-                    .await?,
-                false,
-            )?;
-            rate_limited(
-                &server
-                    .introspect("quota-b", CLIENT_SECRET, "missing-token", None)
-                    .await?,
-            )?;
-            // Successful authentication does not erase previous failure protection.
-            rate_limited(
-                &server
-                    .introspect(
-                        "quota-a",
-                        "incorrect",
-                        "missing-token",
-                        Some("203.0.113.94"),
-                    )
-                    .await?,
-            )?;
-            Ok(())
-        }
-        .await;
-        let stopped = server.finish().await;
-        assertions?;
-        stopped?;
-        Ok(())
-    }
-    .await;
-    database.finish(result).await
-}
-
-#[tokio::test]
-#[ignore = "requires isolated PostgreSQL and actual loopback HTTP"]
-async fn default_introspection_capacity_preserves_immediate_revocation_and_client_disable(
-) -> Result<()> {
-    let database = Database::create().await?;
-    let result = async {
-        let config = production_config()?;
-        ensure!(
-            config.oauth_introspection_client_requests_per_minute == 600,
-            "production introspection default differs from reviewed capacity"
-        );
-        fixture_client(&database.pool, "capacity-a").await?;
-        fixture_client(&database.pool, "capacity-b").await?;
-        let token_id =
-            fixture_token(&database.pool, "capacity-a", "synthetic-capacity-token").await?;
-        let server = HttpServer::start(&database.pool, config).await?;
-        let assertions = async {
-            for _ in 0..31 {
-                successful_introspection(
-                    &server
-                        .introspect(
-                            "capacity-a",
-                            CLIENT_SECRET,
-                            "synthetic-capacity-token",
-                            None,
-                        )
-                        .await?,
-                    true,
-                )?;
-            }
-            successful_introspection(
-                &server
-                    .introspect(
-                        "capacity-b",
-                        CLIENT_SECRET,
-                        "synthetic-capacity-token",
-                        None,
-                    )
-                    .await?,
-                false,
-            )?;
-            sqlx::query("UPDATE oauth_tokens SET revoked=true WHERE id=$1")
-                .bind(token_id)
-                .execute(&database.pool)
-                .await?;
-            successful_introspection(
-                &server
-                    .introspect(
-                        "capacity-a",
-                        CLIENT_SECRET,
-                        "synthetic-capacity-token",
-                        None,
-                    )
-                    .await?,
-                false,
-            )?;
-            sqlx::query("UPDATE oauth_clients SET status='DISABLED' WHERE client_id='capacity-a'")
-                .execute(&database.pool)
-                .await?;
-            let response = server
-                .introspect(
-                    "capacity-a",
-                    CLIENT_SECRET,
-                    "synthetic-capacity-token",
-                    None,
-                )
-                .await?;
-            ensure!(
-                response.0 == StatusCode::UNAUTHORIZED,
-                "disabled authenticated client was accepted on its next request"
-            );
-            successful_introspection(
-                &server
-                    .introspect("capacity-b", CLIENT_SECRET, "missing-token", None)
-                    .await?,
-                false,
-            )?;
-            Ok(())
-        }
-        .await;
-        let stopped = server.finish().await;
-        assertions?;
-        stopped?;
-        Ok(())
-    }
-    .await;
-    database.finish(result).await
-}
-
-#[tokio::test]
-#[ignore = "requires isolated PostgreSQL and actual loopback HTTP"]
-async fn global_oauth_administration_requires_platform_context_and_operation_permission(
-) -> Result<()> {
-    let database = Database::create().await?;
-    let result = async {
-        let config = production_config()?;
-        let application: Uuid = sqlx::query_scalar("INSERT INTO applications(code,name,base_path,id) VALUES('production-oauth-admin-gate','OAuth security gate','/gate',$1) RETURNING id")
-            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission,id) VALUES($1,'MENU','OAuth clients','/system/oauth/clients','system:oauth',$2) RETURNING id")
-            .bind(application).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        let tokens_menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,path,permission,id) VALUES($1,'MENU','OAuth tokens','/system/oauth/tokens','system:oauth',$2) RETURNING id")
-            .bind(application).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        let platform: Uuid = sqlx::query_scalar("INSERT INTO tenants(code,name,is_platform,id) VALUES('oauth-admin-platform','Platform',true,$1) RETURNING id")
-            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        let ordinary: Uuid = sqlx::query_scalar("INSERT INTO tenants(code,name,is_platform,id) VALUES('oauth-admin-ordinary','Ordinary',false,$1) RETURNING id")
-            .bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-        let mut organizations = Vec::new();
-        for tenant in [platform, ordinary] {
-            let org: Uuid = sqlx::query_scalar("INSERT INTO organizations(tenant_id,name,id) VALUES($1,'Root',$2) RETURNING id")
-                .bind(tenant).bind(crate::util::uuid7::new_uuid()).fetch_one(&database.pool).await?;
-            organizations.push(org);
-        }
-        let platform_user = fixture_actor(&database.pool,platform,organizations[0],"oauth-platform-operator",application,menu,true).await?;
-        let ordinary_user = fixture_actor(&database.pool,ordinary,organizations[1],"oauth-ordinary-operator",application,menu,true).await?;
-        let unprivileged = fixture_actor(&database.pool,platform,organizations[0],"oauth-platform-without-permission",application,menu,false).await?;
-        for (user, tenant, org) in [(platform_user, platform, organizations[0]), (ordinary_user, ordinary, organizations[1])] {
-            sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2) ON CONFLICT DO NOTHING")
-                .bind(tenant).bind(tokens_menu).execute(&database.pool).await?;
-            sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2) ON CONFLICT DO NOTHING")
-                .bind(org).bind(tokens_menu).execute(&database.pool).await?;
-            sqlx::query("INSERT INTO role_menus(role_id,menu_id) SELECT role_id,$2 FROM user_roles WHERE user_id=$1 ON CONFLICT DO NOTHING")
-                .bind(user).bind(tokens_menu).execute(&database.pool).await?;
-        }
-        let platform_token = fixture_session(&database.pool,&config,platform_user,platform,organizations[0]).await?;
-        let ordinary_token = fixture_session(&database.pool,&config,ordinary_user,ordinary,organizations[1]).await?;
-        let unprivileged_token = fixture_session(&database.pool,&config,unprivileged,platform,organizations[0]).await?;
-        let state = crate::sso_test_fixture::state(database.pool.clone(),Arc::new(config.clone()));
-        ensure!(state.permissions_of(ordinary_user,organizations[1]).await?.contains("system:oauth"),"ordinary actor fixture lacks the explicit OAuth operation grant being tested");
-        ensure!(state.permissions_of(platform_user,organizations[0]).await?.contains("system:oauth"),"platform actor fixture lacks an explicit OAuth operation grant");
-        ensure!(!state.permissions_of(unprivileged,organizations[0]).await?.contains("system:oauth"),"unprivileged platform actor inherited unexpected OAuth operation permission");
-        fixture_client(&database.pool,"oauth-admin-target").await?;
-        fixture_client(&database.pool,"oauth-pagination-second").await?;
-        fixture_client(&database.pool,"oauth-pagination-third").await?;
-        let client: Uuid = sqlx::query_scalar("SELECT id FROM oauth_clients WHERE client_id='oauth-admin-target'")
-            .fetch_one(&database.pool).await?;
-        let expired = fixture_token(&database.pool,"oauth-admin-target","synthetic-expired-admin-token").await?;
-        sqlx::query("UPDATE oauth_tokens SET expires_at=now()-interval '14 days' WHERE id=$1")
-            .bind(expired).execute(&database.pool).await?;
-        let regenerate = format!("/api/oauth/clients/{client}/regenerate-secret");
-        let server = HttpServer::start(&database.pool,config).await?;
-        let assertions = async {
-            let before = snapshot(&database.pool).await?;
-            for token in [&ordinary_token,&unprivileged_token] {
-                for (method,path) in [(reqwest::Method::GET,"/api/oauth/clients"),(reqwest::Method::GET,"/api/oauth/clients?page=1&size=1"),(reqwest::Method::GET,"/api/oauth/tokens"),
-                    (reqwest::Method::POST,"/api/oauth/tokens/purge"),(reqwest::Method::POST,regenerate.as_str())] {
-                    let response = server.api(method,path,token).await?;
-                    ensure!(response.0==StatusCode::FORBIDDEN,"global OAuth operation accepted a user without both platform context and operation permission");
-                    ensure!(before==snapshot(&database.pool).await?,"rejected global OAuth operation mutated persisted rows");
-                }
-            }
-            let clients = server.api(reqwest::Method::GET,"/api/oauth/clients",&platform_token).await?;
-            ensure!(clients.0==StatusCode::OK && clients.1.is_array(),"authorized non-super platform user cannot list OAuth clients");
-            ensure!(clients.1.as_array().is_some_and(|rows|rows.iter().any(|row|row.get("id")==Some(&Value::String(client.to_string())))),"platform global OAuth list did not expose its actual target fixture");
-            ensure!(clients.1.as_array().is_some_and(|rows|rows.iter().all(|row|row.get("clientSecret").is_none() && row.get("clientSecretHash").is_none())),"global client list disclosed a client credential");
-            let first = server.api(reqwest::Method::GET,"/api/oauth/clients?page=1&size=1",&platform_token).await?;
-            let second = server.api(reqwest::Method::GET,"/api/oauth/clients?page=2&size=1",&platform_token).await?;
-            ensure!(first.0==StatusCode::OK && first.1["total"]==3 && first.1["page"]==1 && first.1["size"]==1,"OAuth pagination metadata incorrect");
-            ensure!(first.1["records"].as_array().is_some_and(|rows|rows.len()==1) && second.1["records"].as_array().is_some_and(|rows|rows.len()==1),"OAuth page size not respected");
-            ensure!(first.1["records"][0]["id"]!=second.1["records"][0]["id"],"OAuth pages overlap");
-            ensure!(first.1["records"][0]==clients.1[0] && second.1["records"][0]==clients.1[1],"OAuth paged metadata/order differs from full listing");
-            let empty = server.api(reqwest::Method::GET,"/api/oauth/clients?page=100&size=1",&platform_token).await?;
-            ensure!(empty.0==StatusCode::OK && empty.1["total"]==3 && empty.1["records"].as_array().is_some_and(Vec::is_empty),"out-of-range page must retain total and return no rows");
-            let tokens = server.api(reqwest::Method::GET,"/api/oauth/tokens",&platform_token).await?;
-            ensure!(tokens.0==StatusCode::OK && tokens.1.is_array(),"authorized platform user cannot list OAuth tokens");
-            let purge = server.api(reqwest::Method::POST,"/api/oauth/tokens/purge",&platform_token).await?;
-            ensure!(purge.0==StatusCode::OK && purge.1.get("tokensDeleted").and_then(Value::as_u64)==Some(1),"authorized explicit purge did not remove the expired fixture token");
-            let remains: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM oauth_tokens WHERE id=$1)")
-                .bind(expired).fetch_one(&database.pool).await?;
-            ensure!(!remains,"authorized purge reported deletion while retaining target token");
-            let rotated = server.api(reqwest::Method::POST,&regenerate,&platform_token).await?;
-            ensure!(rotated.0==StatusCode::OK,"authorized platform secret rotation failed");
-            let secret = rotated.1.get("clientSecret").and_then(Value::as_str)
-                .ok_or_else(||anyhow!("authorized rotation omitted its one-time credential"))?;
-            let persisted: String = sqlx::query_scalar("SELECT client_secret_hash FROM oauth_clients WHERE id=$1")
-                .bind(client).fetch_one(&database.pool).await?;
-            ensure!(secret != CLIENT_SECRET && persisted==hash::sha256_hex(secret),"authorized secret rotation failed to persist the new credential hash");
-            Ok(())
-        }.await;
-        let stopped = server.finish().await;
-        assertions?;
-        stopped?;
-        Ok(())
-    }.await;
-    database.finish(result).await
-}
+// Platform-owned OAuth introspection, quota and client-administration suites
+// retired with their authority. Canonical identity owns those protocol tests.
 
 #[tokio::test]
 #[ignore = "requires isolated PostgreSQL and actual loopback HTTP"]

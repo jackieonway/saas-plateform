@@ -1,0 +1,106 @@
+{
+  "contractVersion": "unified-auth-work-orders-component-validation/1",
+  "date": "2026-10-28T06:58:12.503Z",
+  "project": "saas-work-orders",
+  "baselineHead": "f0c87d7aea301dddb38ac4a3435431660b8b7632",
+  "result": "PASS",
+  "evidenceLayer": "typed-private-HTTP-fixture-and-independent-real-PostgreSQL",
+  "realCanonicalTls": false,
+  "sqlSuccessfulCapabilityFabrication": false,
+  "checks": {
+    "format": "PASS",
+    "allTargetsCheck": "PASS",
+    "allTargetsStrictClippy": "PASS",
+    "ordinaryTests": {
+      "passed": 81,
+      "lib": 75,
+      "cliAndStartup": 6
+    },
+    "docTests": {
+      "passed": 1
+    },
+    "postgresBusiness": {
+      "passed": 58,
+      "member": 14,
+      "read": 15,
+      "write": 16,
+      "reminder": 13
+    },
+    "targetedFinalMemberReplay": "PASS",
+    "currentDocumentationLinks": {
+      "passed": 22
+    },
+    "diffWhitespace": "PASS",
+    "finalMemberReplay": {
+      "passed": 14,
+      "ignored": 0,
+      "durationSeconds": 4.29,
+      "reviewer": "root",
+      "latestDirectoryHelper": true
+    }
+  },
+  "database": {
+    "endpoint": "127.0.0.1:55494",
+    "clusterId": "7701548153213487841",
+    "independentOwnedDatabases": true,
+    "allAttemptCleanupConfirmed": true,
+    "ownedPrefixResidualDatabases": 0,
+    "ownedPrefixResidualConnections": 0,
+    "createdRoles": 0,
+    "finalCatalogCheckAt": "2026-10-28T07:08:14.135Z",
+    "independentCatalogRecheck": {
+      "expectedCluster": true,
+      "databases": 0,
+      "connections": 0
+    }
+  },
+  "docker": {
+    "createdContainers": 0,
+    "reusedContainers": 0,
+    "createdImages": 0,
+    "createdVolumes": 0,
+    "createdNetworks": 0
+  },
+  "scope": {
+    "userPrivatePrincipal": true,
+    "publicSubjectParsedAsUuid": false,
+    "machineReadExportOnly": true,
+    "machinePersonFields": false,
+    "scopeBindingsExplicitAndDuplicateKeysRejected": true,
+    "privateDirectoryBasicForm": true,
+    "legacyRuntimeFallback": false,
+    "onlineOriginalBindingRecheckBeforeWriteTransaction": true,
+    "httpWithBusinessConnectionOrRowLock": false
+  },
+  "notificationBoundary": {
+    "internalUserAppSession": "SUPPORTED",
+    "canonicalExternalUser": "DENIED_403_UNTIL_PHASE18_PRIVATE_PUBLISHER",
+    "machine": "DENIED_403"
+  },
+  "canonicalMigrationSha256": "fe19110bd520afab0f748505228597268df864b0a93b753bf20047d47ac09dee",
+  "files": {
+    "backend/API.md": "7cea5ffdf736d5a03eca148add7378904442afa0727d4abb7e4beaf6d900da9e",
+    "backend/README.md": "462655cad9f5c05e56c2a2a1c96f70d3a4c6387b36b6bb7e5ed731baaf9c6deb",
+    "backend/compose.yml": "b8dade3d491c21f0f2a5f1fb3e86656ba33fd19b88fb9f8bc325d64882a52411",
+    "backend/config.rust.env.example": "ecacf7187a0b393ce1d9035f7c7de8b79c1b04b0e112c3940edf4c18d731ef91",
+    "backend/docs/deployment.md": "aab32942422f4994f2d9fe9780c3e637ce781102f56c217f1176f862d9532a7b",
+    "backend/docs/development.md": "39c2a31e5ca067296ebf739bd147fad5fcbfd15a691a9a6077add5b915df35e0",
+    "backend/src/authorization.rs": "8dfed6acab22d176e13532b26d0af0f4cbaa9725d6fea0122f09d8b7c9ceaa7e",
+    "backend/src/authorization/client.rs": "7d69d1af7f13ecb529f44a636f5bc69c7de40b142518a99464c3000962c2dabc",
+    "backend/src/authorization/policy.rs": "4f85604913bb1fe8d3ea1b76b2c4693f91c659725cddf0110a0d79e7335ee476",
+    "backend/src/authorization/policy/resource.rs": "b64f90e5f5d96e9ac673289703d60c09e9d958810fe0b0c0bd2b768a20dcc584",
+    "backend/src/authorization/policy/resource/tests.rs": "3a5aacd28bbdcac434a9372564331d9b74d7b3374576275a59cc5392d47b5835",
+    "backend/src/authorization/tests.rs": "2422e6f1452f310f8f41e13218b3c6b9646a0d6df90441044845d745cd688a8d",
+    "backend/src/config.rs": "04bcee7afa9389e138e5ff4f830eee7c6c5823a2fc8cd6cb0c879cac96b9b1ea",
+    "backend/src/directory.rs": "702d12e2c8329c45e77fc9f7e304b3d9b2053c5df1d080aa68f5f56dc1304c97",
+    "backend/src/error.rs": "2e19e7b27617857afcd4270513761dbf0d3c0fc92ad51d26cbe57e44b6dc2fd0",
+    "backend/src/http.rs": "b34cff59f487eb830d93db069800404fdf4612789a653b6d035f8f011db9be18",
+    "backend/src/lib.rs": "f89eda288140b32f236224ec63fa3195eb259d6bc95ffdc428ac629f67f35876",
+    "backend/src/reminders/store.rs": "9314768e7b1d9c12fbe803075c27723566205ee08b255e0e6f7700c8577bfdf0",
+    "backend/src/writes.rs": "944d4807a6e55ee82c845099c8c807743c37b50241896d3ad2f5c78380898b23",
+    "backend/tests/member_contracts.rs": "17974b31367f730989826964cb6ca609ecc9904b988af2ad27e866e9de471bc5",
+    "backend/tests/read_contracts.rs": "70a63064b57bde78dec87d934757960a75ba24521e15ba6682c018a27fd836fa",
+    "backend/tests/reminder_contracts.rs": "cd6e1cb1cc88fd6328a1d8c430ec80f6a220617cb0fbdc992ff3f0f78195038e",
+    "backend/tests/write_contracts.rs": "76e45e9880f06a8b3013ea7e956bc6aca628a4381cd8f587dc9e7e395cd66c86"
+  }
+}

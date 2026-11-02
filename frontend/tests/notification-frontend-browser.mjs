@@ -41,6 +41,10 @@ async function waitState(predicate, message, timeout = 10_000) {
 
 const systemApplication = { id: fixtureUuid("notification-test-system"), code: "system", name: "系统管理", icon: "Bell", basePath: "/system",
   entryType: "HTML", runtimeMode: "TRUSTED" }
+const phase18Application = { id: fixtureUuid("phase18-micro-app"), code: "phase18-fixture", name: "阶段18微应用", icon: "Bell",
+  basePath: "/micro/phase18-fixture", entryType: "HTML", runtimeMode: "TRUSTED", entryUrl: "/__phase18-micro/entry.html" }
+const phase18Menu = { id: fixtureUuid("phase18-menu"), parentId: null, type: "MENU", title: "阶段18微应用",
+  path: "/micro/phase18-fixture", icon: null, permission: "", sortOrder: 0, visible: true, children: [] }
 const user = { id: fixtureUuid("notification-user"), username: "notification-browser", realName: "通知浏览器用户",
   email: "", phone: "", avatar: "", gender: "UNKNOWN", isSuperAdmin: false }
 const groups = ["A", "B", "C", "D", "E"]
@@ -136,10 +140,16 @@ async function fixture(options = {}) {
   page.on("pageerror", (error) => errors.push(error.message))
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()) })
   page.on("requestfailed", (request) => failedRequests.push({ pathname: new URL(request.url()).pathname, error: request.failure()?.errorText }))
-  await installSession(context, tokens.A, proof("A"))
+  state.auth = await installSession(context, tokens.A, proof("A"))
+  const actualProfile = group => { const value = profile(group); if (state.phase18) value.applications.push(phase18Application); return value }
+  if (state.phase18) { state.auth.centralizedContextSelection = true; state.auth.profile = actualProfile("A") }
   await context.addInitScript(() => {
     localStorage.setItem("platform-theme", "light")
     window.__notificationUi = { swings: 0 }
+    window.__phase18Notices = []
+    const phase18Notices = new BroadcastChannel('platform-bff-session-v1')
+    phase18Notices.onmessage = event => window.__phase18Notices.push(event.data)
+    window.addEventListener('pagehide', () => phase18Notices.close(), { once: true })
     const observed = new WeakSet()
     new MutationObserver((changes) => {
       for (const change of changes) for (const node of change.addedNodes) {
@@ -155,7 +165,9 @@ async function fixture(options = {}) {
     const response = await route.fetch()
     const body = await response.text()
     assert.match(body, /const queryClient\s*=/, "The real host QueryClient must be present.")
-    await route.fulfill({ response, body: body + `\nwindow.__notificationQueryClient = queryClient;
+    await route.fulfill({ response, body: body + `\nimport { createContextClient as phase18Client } from '/vendor/micro-app-sdk/index.mjs';
+      window.__phase18 = { createContextClient: phase18Client, mounts: [], unmounts: [], retired: [], rejected: [], lateAccepted: [] };
+      window.__notificationQueryClient = queryClient;
       window.__notificationSuccesses = [];
       queryClient.getQueryCache().subscribe((event) => {
         if (event.query.queryKey[0] === 'notifications' && event.query.state.status === 'success')
@@ -166,17 +178,57 @@ async function fixture(options = {}) {
     contentType: "application/json", body: JSON.stringify(value) }).catch((error) => {
     if (!/closed|disposed|Invalid Interception|Target|cancelled/i.test(error.message)) throw error
   })
+  if (state.phase18) {
+    await context.route('https://identity.phase18.invalid/oauth/authorize**', route => route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Phase18 isolated identity selection</title><p>Owned selection authority fixture</p>'}))
+    await context.route(url=>url.origin===origin && url.pathname==='/auth/context-switch',async route=>{
+      state.switches=(state.switches??0)+1
+      state.switchReturn=route.request().postDataJSON().returnPath
+      const target=new URL(state.switchReturn,origin)
+      assert.equal(target.origin,origin)
+      assert.equal(target.searchParams.getAll('__platform_context_switch').length,1)
+      assert.match(target.searchParams.get('__platform_context_switch'),/^[0-9a-f-]{36}\.[0-9]+\.[a-f0-9]{32}$/)
+      return fulfill(route,{redirectTo:'https://identity.phase18.invalid/oauth/authorize?owned=phase18'})
+    })
+    await context.route(url=>url.origin===origin && url.pathname.startsWith('/__phase18-micro/'),async route=>{
+      const pathname=new URL(route.request().url()).pathname
+      if(pathname.endsWith('entry.html')) return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body><div data-phase18-child></div><script src="./fixture.js" entry></script></body></html>'})
+      return route.fulfill({status:200,contentType:'application/javascript',body:`
+        (function(){var root,props,client,qa;
+        window.phase18Micro={bootstrap:async function(){},mount:async function(input){
+          props=input.platform;qa=input.container.ownerDocument.defaultView.__phase18;
+          client=qa.createContextClient(props,function(url,options){var copy=Object.assign({},options);delete copy.signal;return fetch(url,copy)});
+          root=input.container.querySelector('[data-phase18-child]');root.textContent='micro:'+props.organization.id;
+          root.dataset.organization=props.organization.id;
+          qa.mounts.push({organizationId:props.organization.id,epoch:props.contextEpoch});
+          var capturedClient=client,capturedProps=props;
+          qa.write=function(){return capturedClient.requestJson('/api/phase18-business',{method:'POST',body:JSON.stringify({organizationId:capturedProps.organization.id})})};
+          qa.late=function(){return capturedClient.requestJson('/api/phase18-late').then(function(value){qa.lateAccepted.push(value)},function(error){qa.rejected.push(error.name)})};
+        },update:async function(input){props=input.platform;client.update(props);root.dataset.organization=props.organization.id},
+        unmount:async function(){qa.retired.push(qa.write);qa.unmounts.push(props.organization.id);client.dispose();root.replaceChildren()}};
+        })();`})
+    })
+  }
   await context.route((url) => url.origin === origin && url.pathname.startsWith("/api/"), async (route) => {
     const request = route.request(), url = new URL(request.url())
     if (url.pathname === '/api/platform/branding') return fulfill(route, { platformName: '通知验收平台',
       platformDescription: '隔离浏览器测试', logoUrl: '', loginTitle: '登录', loginDescription: '', footerText: '' })
-    const group = Object.keys(tokens).find((candidate) => request.headers().authorization === `Bearer ${tokens[candidate]}`)
+    const group = Object.keys(tokens).find((candidate) => request.headers().authorization === `Bearer ${tokens[candidate]}`
+      || state.phase18 && request.headers().authorization === `Bearer phase18-micro-${tokens[candidate]}`)
     assert(group, "Every fixture API request must carry a captured platform session.")
     const record = { group, pathname: url.pathname, query: url.search, method: request.method(),
       body: request.postData() ? request.postDataJSON() : undefined }
     state.requests.push(record)
     let value
-    if (url.pathname === "/api/auth/profile") value = profile(group)
+    if (url.pathname === "/api/auth/profile") value = actualProfile(group)
+    else if (url.pathname === '/api/apps/session-token' && state.phase18) value = {accessToken:`phase18-micro-${tokens[group]}`,expiresIn:120,audience:phase18Application.code}
+    else if (url.pathname === '/api/apps/phase18-fixture/context' && state.phase18) value = {
+      contractVersion:'1.0',contextVersion:`phase18-context-${group}`,expiresAt:new Date(Date.now()+30000).toISOString(),appCode:phase18Application.code,
+      application:{id:phase18Application.id,name:phase18Application.name,runtimeMode:'TRUSTED',entryType:'HTML',entryUrl:phase18Application.entryUrl,deploymentVersion:null,entryVersionId:null},
+      user:{id:owner(group).userId,username:'phase18-user',displayName:'Phase18'},tenant:{id:owner(group).tenantId,name:'Phase18',code:group},
+      organization:{id:owner(group).organizationId,name:'Phase18 '+group,path:'/Phase18'},organizationScopeIds:[owner(group).organizationId],roles:[],permissions:['fixture:update'],
+      dataGrants:[{resource:'fixture',action:'update',scope:'ORG',subjectUserId:owner(group).userId,tenantId:owner(group).tenantId,organizationIds:[owner(group).organizationId]}],menus:[phase18Menu]}
+    else if (url.pathname === '/api/phase18-business' && state.phase18) value={organizationId:owner(group).organizationId}
+    else if (url.pathname === '/api/phase18-late' && state.phase18) value={organizationId:owner(group).organizationId,oldData:'must-not-replace-new-organization'}
     else if (url.pathname === "/api/auth/permissions") value = { permissions: ["system:notification", ...(state.canPublish ? ["notification:publish"] : []),
       ...(state.canPublish && state.directoryRead ? ["system:user", "system:organization"] : [])], roles: [] }
     else if (url.pathname === "/api/search") value = { users: [], tenants: [], organizations: [], roles: [] }
@@ -191,7 +243,7 @@ async function fixture(options = {}) {
       assert.equal(url.searchParams.get("organizationId"), owner(group).organizationId, "USER selection must explicitly bind its receiving organization.")
       value = { records: [{ id: fixtureUuid(`recipient-${group}`), username: `receiver-${group}`, realName: `接收用户 ${group}` }], total: 1, page: 1, size: 100 }
     }
-    else if (url.pathname === "/api/auth/menus") value = [{ id: "notification-menu", parentId: null, type: "MENU", title: "通知中心",
+    else if (url.pathname === "/api/auth/menus") value = state.phase18 ? [phase18Menu] : [{ id: "notification-menu", parentId: null, type: "MENU", title: "通知中心",
       path: "/system/notifications", icon: "Bell", permission: "system:notification", sortOrder: 1, visible: true, children: [] }]
     else if (url.pathname === "/api/notifications/unread-count") value = { count: state.count[group] }
     else if (url.pathname === "/api/notifications/prefs") value = state.prefs[group]
@@ -301,6 +353,126 @@ async function withFixture(options, run) {
 }
 
 const scenarios = {
+  phase18: async () => {
+    await withFixture({phase18:true,startPath:'/micro/phase18-fixture'},async test=>{
+      const {page,context,state}=test
+      const peer=await context.newPage();peer.setDefaultTimeout(20000)
+      peer.on('pageerror',error=>test.errors.push(error.message))
+      await peer.goto(origin+state.startPath)
+      const mounted=(target,group)=>target.locator(`[data-phase18-child][data-organization="${owner(group).organizationId}"]`).waitFor()
+      await mounted(page,'A');await mounted(peer,'A')
+      await peer.evaluate(()=>window.__phase18.write())
+      const oldConnections=state.connections.filter(entry=>entry.group==='A')
+      state.holds.add('A:/api/phase18-late')
+      await peer.evaluate(()=>{void window.__phase18.late()})
+      await waitState(()=>state.held.some(entry=>entry.pathname==='/api/phase18-late'),'The old micro request must be in flight.')
+      await page.evaluate(async()=>{
+        const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts')
+        const {captureSessionFence}=await import('/src/stores/auth.ts')
+        void bffSessionCoordinator.beginContextSwitch(captureSessionFence(),'/micro/phase18-fixture').catch(()=>{})
+      })
+      await page.waitForURL('https://identity.phase18.invalid/oauth/authorize?owned=phase18')
+      await peer.waitForFunction(async()=>{const {useAuthStore}=await import('/src/stores/auth.ts');return useAuthStore.getState().contextSwitching && !useAuthStore.getState().token})
+      await peer.locator('[data-phase18-child]').waitFor({state:'detached'})
+      await waitState(()=>oldConnections.every(entry=>entry.disconnected),'Every old notification source must disconnect during switch.')
+      await peer.evaluate(async()=>{const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');await bffSessionCoordinator.reconcile()})
+      assert.equal(await peer.evaluate(async()=>{const {useAuthStore}=await import('/src/stores/auth.ts');return useAuthStore.getState().token}),null,'A racing old session GET must stay frozen.')
+      await peer.evaluate(async oldSessionId=>{
+        const channel=new BroadcastChannel('platform-bff-session-v1')
+        channel.postMessage({sessionId:oldSessionId,revision:'1',invalid:false,phase:'settled'})
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))
+        const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts')
+        await bffSessionCoordinator.reconcile()
+        channel.close()
+      },fixtureUuid('phase18-retired-session-notice'))
+      assert.equal(await peer.evaluate(async()=>{const {useAuthStore}=await import('/src/stores/auth.ts');return useAuthStore.getState().token}),null,'A delayed settled notice from another session cannot release this pending switch.')
+      assert.equal(await peer.locator('[data-phase18-child]').count(),0,'The old micro app must stay unmounted before authoritative commit.')
+      assert(oldConnections.every(entry=>entry.disconnected),'A foreign terminal hint cannot resubscribe the old notification source.')
+      await peer.evaluate(async({sessionId,revision})=>{
+        const channel=new BroadcastChannel('platform-bff-session-v1')
+        channel.postMessage({sessionId,revision,invalid:false})
+        channel.postMessage({sessionId,revision,invalid:false,phase:'settled',switchId:'b'.repeat(32)})
+        channel.postMessage({sessionId,revision,invalid:false,phase:'switching',switchId:'d'.repeat(32)})
+        channel.postMessage({sessionId,revision,invalid:false,phase:'settled',switchId:'d'.repeat(32)})
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))
+        const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');await bffSessionCoordinator.reconcile()
+        channel.close()
+      },{sessionId:state.auth.sessionId,revision:String(state.auth.version)})
+      assert.equal(await peer.evaluate(async()=>{const {useAuthStore}=await import('/src/stores/auth.ts');return useAuthStore.getState().token}),null,'Same-revision initialization, an old switchId or another completed operation cannot settle this pending operation.')
+      assert.equal(await peer.locator('[data-phase18-child]').count(),0)
+      Object.assign(state.auth,{proof:proof('B'),profile:profile('B'),token:test.tokens.B,version:state.auth.version+1})
+      state.auth.profile.applications.push(phase18Application)
+      await page.goto(origin+state.switchReturn)
+      assert(!new URL(page.url()).searchParams.has('__platform_context_switch'),'return correlation is consumed before application routing')
+      await mounted(page,'B');await mounted(peer,'B')
+      await waitState(()=>state.connections.filter(entry=>entry.group==='B' && entry.authenticated && !entry.disconnected).length===2,'Both tabs must subscribe using the new source.')
+      for(const held of state.held) held.release.resolve()
+      await peer.waitForFunction(()=>window.__phase18.rejected.includes('AbortError'))
+      assert.equal(await peer.evaluate(()=>window.__phase18.lateAccepted.length),0,'An ignored-abort response must never replace B data.')
+      const before=state.requests.filter(entry=>entry.pathname==='/api/phase18-business').length
+      const retired=await peer.evaluate(async()=>Promise.all(window.__phase18.retired.map(write=>write().then(()=> 'BAD_SUCCESS',error=>error.name))))
+      assert(retired.length>0 && retired.every(name=>name==='AbortError'),'Old SDK clients must reject before transmitting a write.')
+      assert.equal(state.requests.filter(entry=>entry.pathname==='/api/phase18-business').length,before)
+      await peer.evaluate(()=>window.__phase18.write())
+      assert.equal(state.requests.filter(entry=>entry.pathname==='/api/phase18-business').at(-1).group,'B')
+      for(const current of state.connections.filter(entry=>entry.group==='B'&&!entry.disconnected)) current.socket.emit('notification',realtime('A','phase18-old-event','OLD EMPLOYEE EVENT MUST BE DROPPED'))
+      await peer.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
+      assert.equal(await peer.getByText('OLD EMPLOYEE EVENT MUST BE DROPPED',{exact:true}).count(),0)
+      assert.equal(await peer.evaluate(()=>window.__phase18.unmounts.includes(window.__phase18.mounts[0].organizationId)),true)
+      Object.assign(state.auth,{proof:proof('C'),profile:profile('C'),token:test.tokens.C,version:1,sessionId:fixtureUuid('phase18-replacement-account')})
+      state.auth.profile.applications.push(phase18Application)
+      await page.evaluate(async()=>{const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');await bffSessionCoordinator.reconcile()})
+      await mounted(page,'C');await mounted(peer,'C')
+      await waitState(()=>state.connections.filter(entry=>entry.group==='B').every(entry=>entry.disconnected),'Prior account notification connections must be retired.')
+      const prior=state.connections.filter(entry=>entry.group==='C')
+      state.auth.proof={...proof('C'),memberType:'CUSTOMER',membershipId:fixtureUuid('phase18-customer-membership')};state.auth.profile={...profile('C'),memberships:[]}
+      await page.evaluate(async()=>{const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');await bffSessionCoordinator.reconcile().catch(()=>{})})
+      await peer.evaluate(async()=>{const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');await bffSessionCoordinator.reconcile().catch(()=>{})})
+      await waitState(()=>prior.every(entry=>entry.disconnected),'A customer projection cannot retain an employee subscription.')
+      assert.equal(await peer.evaluate(async()=>{const {useAuthStore}=await import('/src/stores/auth.ts');return useAuthStore.getState().token}),null)
+      assert.equal(await peer.locator('[data-phase18-child]').count(),0)
+      console.log('PASS Phase18 browser: two-tab freeze, real qiankun remount, SDK3 old-write/late-response fence, new notification source, account/customer isolation')
+    })
+    for(const live of [true,false]) await withFixture({phase18:true,startPath:'/micro/phase18-fixture'},async test=>{
+      const peer=await test.context.newPage();peer.setDefaultTimeout(20000)
+      await peer.goto(origin+test.state.startPath)
+      await peer.locator('[data-phase18-child]').waitFor()
+      await test.page.evaluate(async()=>{const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');const {captureSessionFence}=await import('/src/stores/auth.ts');void bffSessionCoordinator.beginContextSwitch(captureSessionFence(),'/micro/phase18-fixture').catch(()=>{})})
+      await test.page.waitForURL('https://identity.phase18.invalid/oauth/authorize?owned=phase18')
+      await peer.locator('[data-phase18-child]').waitFor({state:'detached'})
+      if(!live) test.state.auth.proof=null
+      await test.page.goto(origin+test.state.switchReturn)
+      assert(!new URL(test.page.url()).searchParams.has('__platform_context_switch'))
+      await peer.evaluate(async()=>{const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');await bffSessionCoordinator.reconcile().catch(()=>{})})
+      if(live) await peer.locator(`[data-phase18-child][data-organization="${owner('A').organizationId}"]`).waitFor()
+      else {
+        assert.equal(await peer.evaluate(async()=>{const {useAuthStore}=await import('/src/stores/auth.ts');return useAuthStore.getState().token}),null)
+        assert.equal(await peer.locator('[data-phase18-child]').count(),0)
+      }
+      console.log(`PASS Phase18 browser: cancel original source live=${live}`)
+    })
+    const originalMarker=`${fixtureUuid('phase18-marker-origin')}.1.${'c'.repeat(32)}`
+    for(const query of [`__platform_context_switch=bad-format`,`__platform_context_switch=${'x'.repeat(100)}`,
+      `__platform_context_switch=${originalMarker}&__platform_context_switch=${originalMarker}`]) {
+      await withFixture({phase18:true,startPath:`/micro/phase18-fixture?${query}`},async test=>{
+        await test.page.locator('[data-phase18-child]').waitFor()
+        assert(!new URL(test.page.url()).searchParams.has('__platform_context_switch'))
+        assert.equal(await test.page.evaluate(()=>window.__phase18Notices.some(notice=>notice.switchId)),false,'Malformed or duplicate return markers cannot claim completion correlation.')
+      })
+    }
+    await withFixture({phase18:true,startPath:'/micro/phase18-fixture'},async test=>{
+      const old=connection(test.state)
+      test.state.auth.proof=null
+      await test.page.goto(`${origin}/micro/phase18-fixture?__platform_context_switch=${originalMarker}`)
+      await test.page.waitForFunction(()=>!!window.__notificationQueryClient)
+      await test.page.evaluate(async()=>{const {bffSessionCoordinator}=await import('/src/lib/bff-session.ts');await bffSessionCoordinator.reconcile().catch(()=>{})})
+      assert.equal(await test.page.evaluate(async()=>{const {useAuthStore}=await import('/src/stores/auth.ts');return useAuthStore.getState().token}),null,'Even a well-formed forged correlation cannot authorize a source rejected by the server.')
+      assert(!new URL(test.page.url()).searchParams.has('__platform_context_switch'))
+      assert.equal(await test.page.locator('[data-phase18-child]').count(),0)
+      await waitState(()=>old.disconnected,'Forged return metadata cannot preserve an employee connection.')
+    })
+    console.log('PASS Phase18 browser: strict single bounded return marker, immediate URL removal, forged correlation cannot grant authority')
+  },
   recovery: async () => withFixture({ authMode: "hold" }, async (test) => {
     const { page, state } = test
     await unread(page, 2).waitFor()

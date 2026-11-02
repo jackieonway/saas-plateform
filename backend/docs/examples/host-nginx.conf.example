@@ -76,8 +76,11 @@ server {
     proxy_send_timeout 65s;
     proxy_read_timeout 65s;
 
+    # APP_RESOURCE Basic 授权仅在私有 TLS 入口开放，浏览器能力/context 仍走 /api。
+    location ~ ^/api/apps/[^/]+/authorize$ { return 404; }
+
     # 私有指标和内部事件不得通过公共入口开放。
-    location ~ ^/(?:internal|metrics|api/internal|work-orders-api/(?:internal|metrics)|stores-api/(?:internal|metrics)|oauth-playground-api/(?:internal|metrics)|socket\.io/metrics|notification-api/metrics)(?:/|$) {
+    location ~ ^/(?:internal|metrics|api/internal|work-orders-api/(?:internal|metrics)|stores-api/(?:internal|metrics)|socket\.io/metrics|notification-api/metrics)(?:/|$) {
         return 404;
     }
 
@@ -96,19 +99,26 @@ server {
         add_header Referrer-Policy "no-referrer" always;
         proxy_pass http://saas_platform_api;
     }
-    # 不带结尾 / 的 proxy_pass 保留完整 /api、/oauth 路径。
+    # 不带结尾 / 的 proxy_pass 保留完整平台 /api 路径。
     location = /api { proxy_pass http://saas_platform_api; }
     location /api/ { proxy_pass http://saas_platform_api; }
-    location = /oauth { proxy_pass http://saas_platform_api; }
-    location /oauth/ { proxy_pass http://saas_platform_api; }
 
-    # 可选 OAuth 演练默认关闭，独立命名空间不能落入平台 /oauth 或 SPA。
-    # 部署后按 existing-nginx.md 的生成步骤替换这五条，不放宽上面的私有路径门禁。
+    # 平台旧签发、客户端登记和演练入口已退役。
+    location = /oauth { return 404; }
+    location ^~ /oauth/ { return 404; }
+    location = /oidc { return 404; }
+    location ^~ /oidc/ { return 404; }
+    location = /api/oauth { return 404; }
+    location ^~ /api/oauth/ { return 404; }
+    location = /api/oidc { return 404; }
+    location ^~ /api/oidc/ { return 404; }
     location = /oauth-playground-api { return 404; }
     location ^~ /oauth-playground-api/ { return 404; }
-    location = /callback { return 404; }
     location = /sub/oauth-playground { return 404; }
     location ^~ /sub/oauth-playground/ { return 404; }
+    location = /callback { return 404; }
+    location = /device { return 404; }
+    location = /consent { return 404; }
 
     # URL 微应用静态代理；保留完整路径，/micro/* 仍交给平台 SPA。
     location = /micro-proxy { return 404; }

@@ -16,7 +16,6 @@ const ROUTE_PERMISSIONS: Readonly<Record<string, string>> = {
   "/system/roles": "system:role",
   "/system/regions": "system:region",
   "/system/oauth/clients": "system:oauth",
-  "/system/oauth/tokens": "system:oauth",
   "/system/audit-logs": "system:audit",
   "/system/monitor": "system:monitor",
   "/athena/overview": "athena:overview",
@@ -28,7 +27,7 @@ const ROUTE_PERMISSIONS: Readonly<Record<string, string>> = {
 }
 
 const PLATFORM_ROOT_PATHS = new Set([
-  "/system/settings", "/system/applications", "/system/menus", "/system/oauth/clients", "/system/oauth/tokens",
+  "/system/settings", "/system/applications", "/system/menus", "/system/oauth/clients",
 ])
 
 export type RoutePolicy =

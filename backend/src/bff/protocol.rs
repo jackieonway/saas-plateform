@@ -12,10 +12,12 @@ use base64::{
 };
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
 pub(super) struct AccountProof {
+    pub subject: String,
     pub user_id: Uuid,
     pub global_session_id: Uuid,
     pub grant_id: Uuid,
@@ -24,18 +26,19 @@ pub(super) struct AccountProof {
     pub client_policy_version: i64,
     pub auth_time: i64,
     pub expires_at: DateTime<Utc>,
+    pub absolute_expires_at: DateTime<Utc>,
 }
 pub(super) struct Verified {
+    pub public_sid: String,
     pub selection: Option<crate::context_selection_http::consumption::Extension>,
     pub proof: AccountProof,
     pub access: String,
     pub refresh: String,
     pub absolute_expires_at: DateTime<Utc>,
-    pub id_expires_at: DateTime<Utc>,
 }
 struct Identity {
-    user_id: Uuid,
-    sid: Uuid,
+    subject: String,
+    sid: String,
     auth_time: i64,
     expires_at: DateTime<Utc>,
 }
@@ -94,6 +97,28 @@ fn basic(chain: &Chain<'_>) -> Result<String, AppError> {
         STANDARD.encode(format!("{client}:{secret}"))
     ))
 }
+
+fn source_basic(chain: &Chain<'_>) -> Result<String, AppError> {
+    let client = chain
+        .state
+        .config
+        .context_source_service_client_id
+        .as_deref()
+        .ok_or(AppError::Unavailable)?;
+    let secret = chain
+        .state
+        .config
+        .context_source_service_client_secret
+        .as_deref()
+        .ok_or(AppError::Unavailable)?;
+    if !super::canonical_secret(secret) {
+        return Err(AppError::Unavailable);
+    }
+    Ok(format!(
+        "Basic {}",
+        STANDARD.encode(format!("{client}:{secret}"))
+    ))
+}
 async fn call(
     chain: &Chain<'_>,
     endpoint: Endpoint,
@@ -119,12 +144,12 @@ pub(super) async fn discovery(chain: &Chain<'_>) -> Result<(), AppError> {
         return Err(AppError::Unavailable);
     }
     for (name, endpoint) in [
-        ("authorization_endpoint", "/oidc/authorize"),
-        ("token_endpoint", "/oidc/token"),
-        ("jwks_uri", "/oidc/jwks"),
-        ("userinfo_endpoint", "/oidc/userinfo"),
-        ("introspection_endpoint", "/oidc/introspect"),
-        ("revocation_endpoint", "/oidc/revoke"),
+        ("authorization_endpoint", "/oauth/authorize"),
+        ("token_endpoint", "/oauth/token"),
+        ("jwks_uri", "/oauth/jwks"),
+        ("userinfo_endpoint", "/oauth/userinfo"),
+        ("introspection_endpoint", "/oauth/introspect"),
+        ("revocation_endpoint", "/oauth/revoke"),
     ] {
         if document.get(name).and_then(Value::as_str)
             != Some(format!("{issuer}{endpoint}").as_str())
@@ -152,7 +177,10 @@ pub(super) async fn discovery(chain: &Chain<'_>) -> Result<(), AppError> {
     Ok(())
 }
 
-async fn identity(chain: &Chain<'_>, token: &str, nonce_hash: &str) -> Result<Identity, AppError> {
+pub(super) async fn verification_key(
+    chain: &Chain<'_>,
+    token: &str,
+) -> Result<DecodingKey, AppError> {
     if token.len() > 16384 {
         return Err(invalid());
     }
@@ -214,7 +242,19 @@ async fn identity(chain: &Chain<'_>, token: &str, nonce_hash: &str) -> Result<Id
     {
         return Err(invalid());
     }
-    let decoding = DecodingKey::from_rsa_components(n, "AQAB").map_err(|_| invalid())?;
+    DecodingKey::from_rsa_components(n, "AQAB").map_err(|_| invalid())
+}
+
+async fn identity(chain: &Chain<'_>, token: &str, nonce_hash: &str) -> Result<Identity, AppError> {
+    if jsonwebtoken::decode_header(token)
+        .map_err(|_| invalid())?
+        .typ
+        .as_deref()
+        != Some("JWT")
+    {
+        return Err(invalid());
+    }
+    let decoding = verification_key(chain, token).await?;
     let client = store::client(chain.state)?.to_string();
     let issuer = store::issuer(chain.state)?;
     let mut validation = Validation::new(Algorithm::RS256);
@@ -244,10 +284,16 @@ async fn identity(chain: &Chain<'_>, token: &str, nonce_hash: &str) -> Result<Id
         return Err(invalid());
     }
     let now = Utc::now().timestamp();
+    let subject = text(&claims, "sub")?;
+    let sid = text(&claims, "sid")?;
     let iat = number(&claims, "iat")?;
     let exp = number(&claims, "exp")?;
     let auth_time = number(&claims, "auth_time")?;
-    if iat <= 0
+    if subject.is_empty()
+        || subject.len() > 256
+        || !subject.bytes().all(|byte| byte.is_ascii_graphic())
+        || !super::canonical_secret(sid)
+        || iat <= 0
         || iat > now + 60
         || exp <= iat
         || exp - iat > 660
@@ -260,58 +306,95 @@ async fn identity(chain: &Chain<'_>, token: &str, nonce_hash: &str) -> Result<Id
     }
     let expires_at = DateTime::from_timestamp(exp, 0).ok_or_else(invalid)?;
     Ok(Identity {
-        user_id: id(text(&claims, "sub")?)?,
-        sid: id(text(&claims, "sid")?)?,
+        subject: subject.to_owned(),
+        sid: sid.to_owned(),
         auth_time,
         expires_at,
     })
 }
 
 async fn inspect(chain: &Chain<'_>, token: &str) -> Result<AccountProof, AppError> {
-    let value = call(
-        chain,
-        Endpoint::Introspect,
-        Some(basic(chain)?),
-        vec![("token".into(), token.into())],
+    let response = chain
+        .send(OidcRequest {
+            endpoint: Endpoint::AccountProof,
+            authorization: Some(source_basic(chain)?),
+            form: vec![],
+            json: Some(serde_json::json!({
+                "contractVersion":"platform-account-proof-request/1",
+                "oidcAccessToken":token,
+                "expectedClientId":store::client(chain.state)?
+            })),
+        })
+        .await?;
+    parse_account_proof(
+        &json(response)?,
+        store::client(chain.state)?,
+        store::issuer(chain.state)?,
+        Utc::now(),
     )
-    .await?;
-    if value.get("active").and_then(Value::as_bool) != Some(true) {
-        return Err(invalid());
-    }
-    let client = store::client(chain.state)?;
-    if text(&value, "client_id")? != client.to_string()
-        || text(&value, "aud")? != client.to_string()
-        || text(&value, "iss")? != store::issuer(chain.state)?
-        || text(&value, "token_type")? != "Bearer"
-        || !text(&value, "scope")?
-            .split_whitespace()
-            .any(|scope| scope == "openid")
+}
+
+fn parse_account_proof(
+    value: &Value,
+    client: Uuid,
+    issuer: &str,
+    now: DateTime<Utc>,
+) -> Result<AccountProof, AppError> {
+    if text(value, "contractVersion")? != "platform-account-proof/1"
+        || text(value, "clientId")? != client.to_string()
+        || text(value, "issuer")? != issuer
+        || text(value, "clientPurpose")? != "PLATFORM_CONSOLE"
+        || text(value, "contextMode")? != "PLATFORM_CONTEXT"
+        || value.get("allowedMemberTypes") != Some(&serde_json::json!(["EMPLOYEE"]))
+        || !value
+            .get("scope")
+            .and_then(Value::as_array)
+            .is_some_and(|scopes| {
+                scopes.len() == 2
+                    && scopes.iter().any(|scope| scope.as_str() == Some("openid"))
+                    && scopes.iter().any(|scope| scope.as_str() == Some("profile"))
+            })
     {
         return Err(invalid());
     }
-    let projection = value.get("accountProof").ok_or_else(invalid)?;
-    if text(projection, "contractVersion")? != "oidc-account-proof/1"
-        || text(projection, "clientPurpose")? != "PLATFORM_CONSOLE"
-        || projection.get("allowedMemberTypes") != Some(&serde_json::json!(["EMPLOYEE"]))
-    {
-        return Err(invalid());
-    }
-    let expires_at = DateTime::from_timestamp(number(&value, "exp")?, 0)
-        .filter(|expires| *expires > Utc::now())
+    let expires_at = chrono::DateTime::parse_from_rfc3339(text(value, "expiresAt")?)
+        .map(|value| value.with_timezone(&Utc))
+        .ok()
+        .filter(|expires| *expires > now)
         .ok_or_else(invalid)?;
+    let absolute_expires_at =
+        chrono::DateTime::parse_from_rfc3339(text(value, "absoluteExpiresAt")?)
+            .map(|value| value.with_timezone(&Utc))
+            .ok()
+            .filter(|expires| *expires >= expires_at)
+            .ok_or_else(invalid)?;
+    let subject = text(value, "sub")?;
+    let auth_time = number(value, "authTime")?;
+    if subject.is_empty()
+        || subject.len() > 256
+        || subject.chars().any(char::is_control)
+        || auth_time <= 0
+        || auth_time > now.timestamp() + 60
+        || auth_time >= expires_at.timestamp()
+    {
+        return Err(invalid());
+    }
     Ok(AccountProof {
-        user_id: id(text(&value, "sub")?)?,
-        global_session_id: id(text(&value, "sid")?)?,
-        grant_id: id(text(projection, "grantId")?)?,
-        account_version: generation(text(projection, "accountVersion")?, 0)?,
+        subject: subject.to_owned(),
+        user_id: id(text(value, "userId")?)?,
+        global_session_id: id(text(value, "globalSessionId")?)?,
+        grant_id: id(text(value, "grantId")?)?,
+        account_version: generation(text(value, "accountVersion")?, 0)?,
         client_id: client,
-        client_policy_version: generation(text(projection, "clientPolicyVersion")?, 1)?,
-        auth_time: number(projection, "authTime")?,
+        client_policy_version: generation(text(value, "clientPolicyVersion")?, 1)?,
+        auth_time,
         expires_at,
+        absolute_expires_at,
     })
 }
 fn same(proof: &AccountProof, session: &store::Session) -> Result<(), AppError> {
-    if proof.user_id != session.user_id
+    if proof.subject != session.oidc_public_sub
+        || proof.user_id != session.user_id
         || proof.global_session_id != session.global_session_id
         || proof.grant_id != session.oidc_grant_id
         || proof.account_version != session.account_version
@@ -323,7 +406,7 @@ fn same(proof: &AccountProof, session: &store::Session) -> Result<(), AppError> 
     }
     Ok(())
 }
-async fn userinfo(chain: &Chain<'_>, access: &str, user: Uuid) -> Result<(), AppError> {
+async fn userinfo(chain: &Chain<'_>, access: &str, subject: &str) -> Result<(), AppError> {
     let value = call(
         chain,
         Endpoint::UserInfo,
@@ -331,7 +414,7 @@ async fn userinfo(chain: &Chain<'_>, access: &str, user: Uuid) -> Result<(), App
         vec![],
     )
     .await?;
-    if id(text(&value, "sub")?)? != user {
+    if text(&value, "sub")? != subject {
         return Err(invalid());
     }
     Ok(())
@@ -343,7 +426,7 @@ pub(super) async fn existing(
 ) -> Result<AccountProof, AppError> {
     let proof = inspect(chain, access).await?;
     same(&proof, session)?;
-    userinfo(chain, access, session.user_id).await?;
+    userinfo(chain, access, &proof.subject).await?;
     Ok(proof)
 }
 
@@ -363,34 +446,47 @@ async fn verified(
         return Err(invalid());
     }
     let scopes = text(&response, "scope")?;
-    if ["openid", "profile", "offline_access"]
+    if ["openid", "profile"]
         .iter()
         .any(|required| !scopes.split_whitespace().any(|scope| scope == *required))
     {
         return Err(invalid());
     }
-    let identity = identity(chain, text(&response, "id_token")?, nonce_hash).await?;
+    let identity = match response.get("id_token") {
+        Some(value) => {
+            Some(identity(chain, value.as_str().ok_or_else(invalid)?, nonce_hash).await?)
+        }
+        None => None,
+    };
+    if original.is_none() && identity.is_none() {
+        return Err(invalid());
+    }
     let mut proof = inspect(chain, &access).await?;
-    let refresh_proof = inspect(chain, &refresh).await?;
-    if identity.user_id != proof.user_id
-        || identity.sid != proof.global_session_id
-        || identity.auth_time != proof.auth_time
-        || refresh_proof.user_id != proof.user_id
-        || refresh_proof.global_session_id != proof.global_session_id
-        || refresh_proof.grant_id != proof.grant_id
-        || refresh_proof.account_version != proof.account_version
-        || refresh_proof.client_policy_version != proof.client_policy_version
-        || refresh_proof.auth_time != proof.auth_time
-        || refresh_proof.expires_at < proof.expires_at
-    {
+    if identity.as_ref().is_some_and(|identity| {
+        identity.subject != proof.subject || identity.auth_time != proof.auth_time
+    }) {
         return Err(invalid());
     }
     if let Some(original) = original {
         same(&proof, original)?;
+        if identity.as_ref().is_some_and(|identity| {
+            identity.sid != original.oidc_public_sid || identity.subject != original.oidc_public_sub
+        }) {
+            return Err(invalid());
+        }
     }
-    userinfo(chain, &access, proof.user_id).await?;
-    proof.expires_at = proof.expires_at.min(identity.expires_at);
+    userinfo(chain, &access, &proof.subject).await?;
+    let public_sid = if let Some(original) = original {
+        original.oidc_public_sid.clone()
+    } else {
+        identity.as_ref().ok_or_else(invalid)?.sid.clone()
+    };
+    if let Some(identity) = identity {
+        proof.expires_at = proof.expires_at.min(identity.expires_at);
+    }
+    let absolute_expires_at = proof.absolute_expires_at;
     Ok(Verified {
+        public_sid,
         selection: if original.is_none() {
             response
                 .get("context_selection")
@@ -405,8 +501,7 @@ async fn verified(
         proof,
         access,
         refresh,
-        absolute_expires_at: refresh_proof.expires_at,
-        id_expires_at: identity.expires_at,
+        absolute_expires_at,
     })
 }
 
@@ -467,25 +562,68 @@ pub(super) async fn logout(
     {
         return Err(invalid());
     }
-    let endpoint = if scope == "GLOBAL" {
-        Endpoint::GlobalLogout
-    } else {
-        Endpoint::Revoke
+    let canonical_scope = match scope {
+        "GLOBAL" => "GLOBAL",
+        "PLATFORM" => "CURRENT_APP",
+        _ => return Err(invalid()),
     };
-    let mut form = vec![("token".into(), refresh.into())];
-    if scope == "GLOBAL" {
-        form.push(("request_id".into(), request.to_string()));
+    if !super::canonical_secret(&session.oidc_public_sid)
+        || session.oidc_public_sub.is_empty()
+        || session.oidc_public_sub.len() > 256
+        || !session
+            .oidc_public_sub
+            .bytes()
+            .all(|byte| byte.is_ascii_graphic())
+    {
+        return Err(invalid());
     }
-    let response = chain
+    let form = vec![
+        ("token".into(), refresh.into()),
+        ("scope".into(), canonical_scope.into()),
+        ("operation_id".into(), request.to_string()),
+        ("sid".into(), session.oidc_public_sid.clone()),
+        ("sub".into(), session.oidc_public_sub.clone()),
+    ];
+    // The same original credential remains a receipt proof after revocation.
+    // Only an authenticated, explicit NOT_FOUND permits submitting this exact
+    // operation; uncertainty never changes the operation or its source.
+    let recovery = chain
         .send(OidcRequest {
             json: None,
-            endpoint,
+            endpoint: Endpoint::LogoutOperation(request),
             authorization: Some(basic(chain)?),
-            form,
+            form: form.clone(),
         })
         .await?;
+    let response = if recovery.status == 404
+        && serde_json::from_slice::<Value>(&recovery.body)
+            .ok()
+            .is_some_and(|value| value["code"] == "NOT_FOUND")
+    {
+        chain
+            .send(OidcRequest {
+                json: None,
+                endpoint: Endpoint::GlobalLogout,
+                authorization: Some(basic(chain)?),
+                form,
+            })
+            .await?
+    } else {
+        recovery
+    };
     if response.status != 200 {
         json(response)?;
+        return Err(AppError::Unavailable);
+    }
+    let receipt: LogoutReceipt =
+        serde_json::from_slice(&response.body).map_err(|_| AppError::Unavailable)?;
+    if receipt.operation_id != request
+        || receipt.scope != canonical_scope
+        || receipt.state != "COMPLETED"
+        || receipt.revoked_grant_count < 0
+        || receipt.revoked_sso_count < 0
+        || receipt.notification_count < 0
+    {
         return Err(AppError::Unavailable);
     }
     // Keep the original caller-owned identity in this command; never derive a
@@ -494,6 +632,17 @@ pub(super) async fn logout(
         return Err(invalid());
     }
     Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LogoutReceipt {
+    operation_id: Uuid,
+    scope: String,
+    state: String,
+    revoked_grant_count: i64,
+    revoked_sso_count: i64,
+    notification_count: i64,
 }
 
 pub(super) async fn create_selection(
@@ -509,8 +658,90 @@ pub(super) async fn create_selection(
             "redirectUri":chain.state.config.bff_oidc_redirect_uri,"stateHash":state_hash,"nonceHash":nonce_hash,"codeChallenge":challenge})) }).await?;
     let value = json(response)?;
     let reference = text(&value, "contextRequest")?;
-    if !super::canonical_secret(reference) {
+    let expires = DateTime::parse_from_rfc3339(text(&value, "expiresAt")?)
+        .map(|value| value.with_timezone(&Utc))
+        .map_err(|_| invalid())?;
+    if text(&value, "contractVersion")? != "context-selection/1"
+        || !super::canonical_secret(reference)
+        || expires <= Utc::now()
+    {
         return Err(invalid());
     }
     Ok(reference.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn proof(client: Uuid, now: DateTime<Utc>) -> Value {
+        json!({
+            "contractVersion":"platform-account-proof/1",
+            "issuer":"https://auth.example.invalid",
+            "clientId":client,
+            "clientPurpose":"PLATFORM_CONSOLE",
+            "contextMode":"PLATFORM_CONTEXT",
+            "allowedMemberTypes":["EMPLOYEE"],
+            "scope":["openid","profile"],
+            "sub":"pairwise-account-with-no-uuid",
+            "userId":Uuid::now_v7(),
+            "globalSessionId":Uuid::now_v7(),
+            "grantId":Uuid::now_v7(),
+            "accountVersion":"0",
+            "clientPolicyVersion":"1",
+            "authTime":now.timestamp()-60,
+            "expiresAt":now+chrono::Duration::minutes(5),
+            "absoluteExpiresAt":now+chrono::Duration::hours(1)
+        })
+    }
+
+    #[test]
+    fn private_account_proof_keeps_opaque_subject_separate_from_internal_account() {
+        let client = Uuid::now_v7();
+        let now = Utc::now();
+        let value = proof(client, now);
+        let parsed = parse_account_proof(&value, client, "https://auth.example.invalid", now)
+            .expect("valid private account proof");
+        assert_eq!(parsed.subject, "pairwise-account-with-no-uuid");
+        assert_eq!(parsed.user_id.to_string(), value["userId"]);
+        assert_ne!(parsed.subject, parsed.user_id.to_string());
+    }
+
+    #[test]
+    fn private_account_proof_rejects_wrong_audience_purpose_versions_and_deadlines() {
+        let client = Uuid::now_v7();
+        let now = Utc::now();
+        let value = proof(client, now);
+        for (field, invalid_value) in [
+            ("contractVersion", json!("oidc-account-proof/1")),
+            ("issuer", json!("https://other.example.invalid")),
+            ("clientId", json!(Uuid::now_v7())),
+            ("clientPurpose", json!("CUSTOMER_PORTAL")),
+            ("contextMode", json!("ACCOUNT_ONLY")),
+            ("allowedMemberTypes", json!(["CUSTOMER"])),
+            ("allowedMemberTypes", json!(["EMPLOYEE", "CUSTOMER"])),
+            ("scope", json!(["openid"])),
+            ("scope", json!(["openid", "profile", "offline_access"])),
+            ("sub", json!("")),
+            ("sub", json!("invalid\nsubject")),
+            ("userId", json!(Uuid::nil())),
+            ("globalSessionId", json!(Uuid::nil())),
+            ("grantId", json!(Uuid::nil())),
+            ("accountVersion", json!("00")),
+            ("clientPolicyVersion", json!("0")),
+            ("authTime", json!(now.timestamp() + 61)),
+            ("authTime", json!(0)),
+            ("expiresAt", json!(now)),
+            ("absoluteExpiresAt", json!(now)),
+        ] {
+            let mut invalid_proof = value.clone();
+            invalid_proof[field] = invalid_value;
+            assert!(
+                parse_account_proof(&invalid_proof, client, "https://auth.example.invalid", now)
+                    .is_err(),
+                "invalid private proof field accepted: {field}"
+            );
+        }
+    }
 }

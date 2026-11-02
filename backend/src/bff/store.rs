@@ -18,6 +18,8 @@ pub(super) struct Session {
     pub oidc_client_id: Uuid,
     pub oidc_grant_id: Uuid,
     pub oidc_client_policy_version: i64,
+    pub oidc_public_sid: String,
+    pub oidc_public_sub: String,
     pub issuer: String,
     pub auth_time: i64,
     pub nonce_hash: String,
@@ -32,6 +34,7 @@ pub(super) struct Session {
     pub refresh_uncertain: bool,
     pub logout_request_id: Option<Uuid>,
     pub logout_scope: Option<String>,
+    pub logout_confirmed_at: Option<DateTime<Utc>>,
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
 }
@@ -93,7 +96,9 @@ pub(super) async fn session_id<'e, E: Executor<'e, Database = Postgres>>(
         .map_err(|_| AppError::Unavailable)
 }
 pub(super) async fn session_cookie(state: &AppState, cookie: &str) -> Result<Session, AppError> {
-    sqlx::query_as("SELECT * FROM bff_sessions WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp()")
+    // A retired credential is readable only to confirm its original durable
+    // logout. Ordinary authentication still rejects it in online().
+    sqlx::query_as("SELECT * FROM bff_sessions WHERE token_hash=$1 AND ((revoked_at IS NULL AND expires_at>clock_timestamp()) OR logout_request_id IS NOT NULL)")
         .bind(super::digest(cookie)).fetch_optional(&state.pool).await.map_err(|_|AppError::Unavailable)?
         .ok_or_else(||AppError::unauthorized("平台认证已失效，请重新登录"))
 }
@@ -132,7 +137,7 @@ pub(super) async fn lock_client(
     id: Uuid,
     issuer: &str,
 ) -> Result<(), AppError> {
-    let found: bool = sqlx::query_scalar("SELECT identity_lock_oidc_source($1,$2)")
+    let found: bool = sqlx::query_scalar("SELECT identity_lock_auth_source($1,$2)")
         .bind(id.to_string())
         .bind(issuer)
         .fetch_one(connection)
@@ -164,7 +169,7 @@ pub(super) async fn proof(
     proof: &protocol::AccountProof,
     issuer: &str,
 ) -> Result<(), AppError> {
-    let valid: bool = sqlx::query_scalar("SELECT bff_oidc_proof_active($1,$2,$3,$4,$5,$6,$7)")
+    let valid: bool = sqlx::query_scalar("SELECT bff_auth_proof_active($1,$2,$3,$4,$5,$6,$7)")
         .bind(proof.user_id)
         .bind(proof.global_session_id)
         .bind(proof.grant_id)
@@ -186,7 +191,7 @@ pub(super) async fn proof(
 /// This read projection can only reject a recorded authority binding. A true
 /// result still requires the complete back-channel and final commit checks.
 async fn reject_inactive_source(state: &AppState, original: &Session) -> Result<(), AppError> {
-    let active: bool = sqlx::query_scalar("SELECT bff_oidc_proof_active($1,$2,$3,$4,$5,$6,$7)")
+    let active: bool = sqlx::query_scalar("SELECT bff_auth_proof_active($1,$2,$3,$4,$5,$6,$7)")
         .bind(original.user_id)
         .bind(original.global_session_id)
         .bind(original.oidc_grant_id)
@@ -227,12 +232,6 @@ pub(super) async fn revoke(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Resu
     .await?;
     sqlx::query("UPDATE platform_sessions SET revoked_at=COALESCE(revoked_at,clock_timestamp()) WHERE bff_session_id=$1").bind(id).execute(&mut **tx).await?;
     sqlx::query("UPDATE platform_session_refresh_tokens r SET consumed_at=COALESCE(consumed_at,clock_timestamp()) FROM platform_sessions s WHERE r.session_id=s.id AND s.bff_session_id=$1")
-        .bind(id).execute(&mut **tx).await?;
-    sqlx::query("UPDATE oauth_tokens t SET revoked=true FROM platform_sessions s WHERE t.platform_session_id=s.id AND s.bff_session_id=$1 AND NOT t.revoked")
-        .bind(id).execute(&mut **tx).await?;
-    sqlx::query("UPDATE oauth_authorization_codes c SET consumed=true FROM platform_sessions s WHERE c.platform_session_id=s.id AND s.bff_session_id=$1 AND NOT c.consumed")
-        .bind(id).execute(&mut **tx).await?;
-    sqlx::query("UPDATE oauth_device_codes c SET status='EXPIRED' FROM platform_sessions s WHERE c.platform_session_id=s.id AND s.bff_session_id=$1 AND c.status IN ('PENDING','APPROVED')")
         .bind(id).execute(&mut **tx).await?;
     Ok(())
 }
@@ -288,6 +287,13 @@ pub(super) async fn online(
             .begin()
             .await
             .map_err(|_| AppError::Unavailable)?;
+        super::backchannel::reject_revoked(
+            &mut tx,
+            &original.issuer,
+            original.oidc_client_id,
+            &original.oidc_public_sid,
+        )
+        .await?;
         lock_user(&mut tx, original.user_id).await?;
         lock_client(&mut tx, original.oidc_client_id, &original.issuer).await?;
         let current = session_id(&mut *tx, original.id, true)
@@ -305,14 +311,9 @@ pub(super) async fn online(
             + chrono::Duration::milliseconds(state.config.bff_authority_timeout_ms as i64);
         deadline(&mut tx, lease_deadline).await?;
         proof(&mut tx, &verified.proof, &original.issuer).await?;
-        deadline(
-            &mut tx,
-            original
-                .expires_at
-                .min(verified.proof.expires_at)
-                .min(verified.id_expires_at),
-        )
-        .await?;
+        let session_deadline = original.expires_at.min(verified.absolute_expires_at);
+        deadline(&mut tx, session_deadline).await?;
+        deadline(&mut tx, verified.proof.expires_at).await?;
         deadline(&mut tx, lease_deadline).await?;
         let encrypted_access = keys(state)?.seal(
             original.id,
@@ -328,19 +329,13 @@ pub(super) async fn online(
             "oidc-refresh",
             &verified.refresh,
         )?;
-        sqlx::query("UPDATE bff_sessions SET access_ciphertext=$2,refresh_ciphertext=$3,access_expires_at=$4,refresh_lease_id=NULL,refresh_started_at=NULL WHERE id=$1")
-            .bind(original.id).bind(encrypted_access).bind(encrypted_refresh).bind(verified.proof.expires_at).execute(&mut *tx).await?;
+        sqlx::query("UPDATE bff_sessions SET access_ciphertext=$2,refresh_ciphertext=$3,access_expires_at=$4,expires_at=$5,refresh_lease_id=NULL,refresh_started_at=NULL WHERE id=$1")
+            .bind(original.id).bind(encrypted_access).bind(encrypted_refresh).bind(verified.proof.expires_at).bind(session_deadline).execute(&mut *tx).await?;
         let current = session_id(&mut *tx, original.id, false)
             .await?
             .ok_or(AppError::Unavailable)?;
-        deadline(
-            &mut tx,
-            original
-                .expires_at
-                .min(verified.proof.expires_at)
-                .min(verified.id_expires_at),
-        )
-        .await?;
+        deadline(&mut tx, session_deadline).await?;
+        deadline(&mut tx, verified.proof.expires_at).await?;
         tx.commit().await?;
         return Ok(current);
     }

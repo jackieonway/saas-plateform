@@ -1,12 +1,12 @@
 # 统一身份选择协议 v1：实施合同
 
-状态：核心校验、存储、交互创建/来源核验、查询/确认接口、认证中心分步页面与 code 扩展已加入；员工 BFF 已接入同库消费，客户门户已接入消费及原结果恢复。真实 HTTPS 串联和整体验收尚未完成，不得据此声明完整登录流程已经可部署。
+状态：核心校验、存储、交互创建/来源核验、查询/确认接口、认证中心分步页面与 code 扩展已加入；员工 BFF 已接入同库消费，客户门户已接入消费及原结果恢复。Phase 12 验证了 canonical `/oauth/*` 交互、账号/业务上下文分流、一次性结果恢复与来源代际栅栏。管理平台和客户门户的真实 HTTPS 登录/续期仍分别由 Phase 13/14 验收，不得据此声明完整登录流程已经可部署。
 
 本合同细化[总体方案](centralized-context-selection.md)，是后续认证中心、平台与客户门户接入的共同约束。接口上线时，必须将此状态更新为实际验证范围，再纳入现行文档索引。
 
 ## 1. 编码与版本
 
-合同版本固定为 `context-selection/1`。所有请求与响应使用 UTF-8 JSON，字段为 camelCase，拒绝未知字段和重复字段。标识使用规范小写、有连字符的 RFC UUIDv7；代际和会话版本使用无前导零的十进制字符串，范围为 `0..=i64::MAX`。客户端策略、应用策略和会话版本从 1 开始，账号与成员代际允许 0。
+合同版本固定为 `context-selection/1`。所有请求与响应使用 UTF-8 JSON，字段为 camelCase，拒绝未知字段和重复字段。标识使用规范小写、有连字符的 RFC UUIDv7；代际和会话版本使用无前导零的十进制字符串，范围为 `1..=i64::MAX`。客户端策略、应用策略、会话版本以及新账号与成员代际从 1 开始。
 
 选择凭据和交互秘密均为 32 字节密码学随机数的 64 位小写十六进制编码。选择凭据由平台生成，平台只保存其 SHA-256 摘要；认证中心为了向后端 code 兑换结果交付凭据，只能短期加密保存原文。禁止将原文写入日志、审计、公开 URL 或浏览器持久化存储。
 
@@ -14,9 +14,9 @@
 
 ## 2. RP 登记与服务用途
 
-身份服务的 RP 登记新增统一选择能力标记；启用或停用都必须改变 RP 策略版本。`ACCOUNT` 用途不启用业务身份选择。已启用 RP 在 code 兑换时必须携带完整选择扩展，缺失即拒绝建立业务会话；refresh 不产生该扩展。
+身份服务的 RP 登记新增统一选择能力标记；启用或停用都必须改变 RP 策略版本。`ACCOUNT_ONLY` 模式不启用业务身份选择。已启用 RP 在 code 兑换时必须携带完整选择扩展，缺失即拒绝建立业务会话；refresh 不产生该扩展。
 
-平台持有对应 RP 的上下文登记：RP 标识、登记版本、用途、目标应用、允许成员类型和状态。员工控制台为 EMPLOYEE；客户门户为 CUSTOMER。控制台可以不绑定单一业务应用；客户门户及独立业务入口必须绑定目标应用和其策略版本。平台检查应用、租户应用及组织应用准入，客户端不能自行指定另一个目标应用。
+平台持有对应 RP 的上下文登记：RP 标识、登记版本、用途、目标应用、允许成员类型和状态。员工控制台为 EMPLOYEE；客户门户为 CUSTOMER。统一 `AUTH` 客户端必须绑定目标应用和其策略版本；仅阶段性 `OIDC` 员工登记可不绑定单一业务应用。平台检查应用、租户应用及组织应用准入，客户端不能自行指定另一个目标应用。
 
 反向私有调用分开登记服务用途：
 
@@ -32,7 +32,7 @@
 
 ## 3. 发起交互
 
-拟新增 `POST /oidc/context-interactions`，由 BFF 使用其 OIDC RP Basic 认证调用。此接口是已登记 RP 的后端端口，不能挂载到认证页面的公开浏览器调用路径。
+已实现 `POST /internal/identity/auth/context-interactions`，由 BFF 使用其 OIDC RP Basic 认证调用。此接口是已登记 RP 的后端端口，不能挂载到认证页面的公开浏览器调用路径。
 
 请求包含 `contractVersion`、`transactionId`、`intent`、`redirectUri`、`stateHash`、`nonceHash`、`codeChallenge`。后四项绑定 BFF 随后发出的授权请求。平台保存返回路径，禁止把返回路径传入身份服务作为任意重定向目标。
 
@@ -46,17 +46,17 @@
 {"kind":"SWITCH","sessionId":"019a1163-0000-7000-8000-000000000007","expectedVersion":"1"}
 ```
 
-响应包含短期、不透明的 `contextRequest` 引用与 `expiresAt`。BFF 将此引用作为 `/oidc/authorize` 的扩展参数提交。身份服务把它与本次 flow 原子绑定，逐项检查 RP、回调、state/nonce 摘要与 PKCE challenge；不能将同一引用绑定另一个 flow。确认使用的账号由该 flow 的当前 SSO 来源决定。
+响应包含短期、不透明的 `contextRequest` 引用与 `expiresAt`。BFF 将此引用作为 `/oauth/authorize` 的扩展参数提交。身份服务把它与本次 flow 原子绑定，逐项检查 RP、回调、state/nonce 摘要与 PKCE challenge；不能将同一引用绑定另一个 flow。确认使用的账号由该 flow 的当前 SSO 来源决定。
 
-页面按需推进账号登录、应用授权、租户和组织选择。首次授权通过独立 CSRF `consent` 操作写入身份所有的 `oidc_consents`；后端在账号锁内检查当前账号、RP 和 scope，已有未撤销的覆盖授权不再重复展示，退出登录/令牌过期/组织切换不清除记录。请求新增 scope 需要重新确认。授权有效前不得查询成员或提交 `membershipId`，确认授权时不签发 code。只有一个租户时直接展示组织；选定租户下只有一个可用成员身份时，页面自动通过相同的 CSRF `approve` 与完整服务端来源/成员校验继续，包括 SWITCH。搜索过滤不改变自动选择的真实候选数。`prompt=none` 仍不能绕过受管 RP 所需的服务端选择交互。
+页面按需推进账号登录、应用授权、租户和组织选择。首次授权通过独立 CSRF `consent` 操作写入身份所有的 `auth_consents`；后端在账号锁内检查当前账号、RP 和 scope，已有未撤销的覆盖授权不再重复展示，退出登录/令牌过期/组织切换不清除记录。请求新增 scope 需要重新确认。授权有效前不得查询成员或提交 `membershipId`，确认授权时不签发 code。只有一个租户时直接展示组织；选定租户下只有一个可用成员身份时，页面自动通过相同的 CSRF `approve` 与完整服务端来源/成员校验继续，包括 SWITCH。搜索过滤不改变自动选择的真实候选数。`prompt=none` 仍不能绕过受管 RP 所需的服务端选择交互。
 
-认证中心 `/sso/applications` 提供账号级授权管理；列表和撤销 API 在 `/api/sso/applications` 下。撤销与 code 签发使用同一个账号锁，原子撤销该账号对 RP 的持久授权、现有 grants 及未完成请求；旧标签页不能恢复授权。其他 RP 的持久授权保持有效。平台 runtime 不能直接读写此表。
+认证中心 `/sso/applications` 提供账号级授权管理；列表和撤销 API 在 `/api/sso/consents` 下。撤销与 code 签发使用同一个账号锁，原子撤销该账号对 RP 的持久授权、现有 grants 及未完成请求；旧标签页不能恢复授权。其他 RP 的持久授权保持有效。平台 runtime 不能直接读写此表。
 
 ## 4. 来源证明
 
 认证中心为已绑定且已认证的交互创建短期来源证明引用。该引用只通过服务通道交付平台，不能依赖可猜测 flow ID 作为秘密。
 
-拟新增 `POST /internal/identity/context-selection/source`。平台以 CONTEXT_SELECTION_SOURCE 身份发送合同版本、来源证明引用和预期 RP。认证中心核对原 flow、SSO 会话、账号代际、RP 策略和有效期后，返回：
+已实现 `POST /internal/identity/auth/context-selection/source`。平台以 CONTEXT_SELECTION_SOURCE 身份发送合同版本、来源证明引用和预期 RP。认证中心核对原 flow、SSO 会话、账号代际、RP 策略和有效期后，返回：
 
 - 账号来源：`issuer`、`userId`、`accountVersion`、`globalSessionId`、`interactionId`、`authTime`。
 - 原 RP 登记与回调、本次 `transactionId` 和 `intent`。
@@ -136,7 +136,9 @@ code 重放沿用现有拒绝/撤销规则，不再次交付有效选择授权�
 
 ## 10. 当前代码接入说明
 
-目前已接入的路由为认证中心 `/oidc/context-interactions`、`/internal/identity/context-selection/source`，以及平台 `/internal/platform/context-selection/choices`、`confirm`、`consume` 和 `result`。员工 BFF 使用进程内消费适配器；外部消费和结果恢复端口目前只允许登记的 CUSTOMER 门户用途。员工 `POST /auth/context-switch` 必须携带 Cookie、CSRF、`expectedVersion` 与经过校验的站内 `returnPath`，仅返回服务器构建的认证中心授权地址。
+目前已接入的路由为认证中心 `/internal/identity/auth/context-interactions`、`/internal/identity/auth/context-selection/source`，以及平台 `/internal/platform/context-selection/choices`、`confirm`、`consume` 和 `result`。员工 BFF 使用进程内消费适配器；外部消费和结果恢复端口目前只允许登记的 CUSTOMER 门户用途。员工 `POST /auth/context-switch` 必须携带 Cookie、CSRF、`expectedVersion` 与经过校验的站内 `returnPath`，仅返回服务器构建的认证中心授权地址。
+
+平台来源传输逐次读取已启用的 `context_selection_registrations.client_registry`：`AUTH` 固定调用 canonical `/internal/identity/auth/context-selection/source`，过渡期 `OIDC` 只调用其明确登记的 `/internal/identity/context-selection/source`。返回 proof 的 `clientRegistry` 必须与原登记一致；canonical 拒绝、超时或不可用都不能尝试旧入口。过渡 OIDC 路径在 Phase 24 删除。
 
 客户消费/恢复请求采用平铺字段：`contractVersion`、`transactionId`、`credential`、`expectedClientId`、`oidcAccessToken`、新门户 `bffSessionId` 和十进制字符串 `version`。LOGIN 不带 `oldOidcAccessToken`（可为 null）；SWITCH 必须带原门户 access，原会话 ID/版本来自身份服务的不可变 intent。新门户版本必须大于原版本。原客户证明记录关联原 BFF ID/版本，平台在切换事务内撤销该版本的全部客户证明；同一旧版本只允许一笔选择消费提交。
 
@@ -144,8 +146,10 @@ code 重放沿用现有拒绝/撤销规则，不再次交付有效选择授权�
 
 门户通过 `CONTEXT_SELECTION_ENABLED=true` 及独立 `CONTEXT_SELECTION_CONSUMER_ID/SECRET` 明确启用；回调先加密保存待完成操作，随后才能外呼消费。受同源读取保护的 `GET /auth/session` 只恢复服务端已保存的操作，不从查询串、Cookie 或浏览器表单创建新选择。待完成记录不会进入普通 session/profile 用例。已启用模式的 `/auth/context` 拒绝本地直接选择。
 
-身份域使用 `oidc_context_clients` 显式登记 RP 能力；能力变更会递增 RP 策略代际，撤销原 grant。平台使用 `context_selection_registrations` 登记 RP 策略快照和应用映射，使用 `context_selection_services` 登记反向调用的服务用途与允许 RP。身份来源服务登记继续位于身份域 `identity_service_clients`，新增 `CONTEXT_SELECTION_SOURCE` 用途与 `allowed_oidc_clients` 范围。
+统一身份域通过 `auth_clients` 的 `context_mode=PLATFORM_CONTEXT` 与允许成员类型登记能力，使用 `auth_context_interactions` 绑定原交互；策略变更使原 grant 失效。平台使用 `context_selection_registrations` 登记 RP 策略快照和应用映射，使用 `context_selection_services` 登记反向调用的服务用途与允许 RP。身份来源服务登记继续位于身份域 `identity_service_clients`，以 `CONTEXT_SELECTION_SOURCE` 用途与 `allowed_auth_clients` 精确限定统一客户端范围。
 
 平台外呼来源核验使用独立配置 `CONTEXT_SOURCE_SERVICE_CLIENT_ID` 和 `CONTEXT_SOURCE_SERVICE_CLIENT_SECRET`。必须成对提供，要求独立身份部署，并禁止复用账号命令、OIDC 管理、客户证明或 BFF RP 的凭据；HTTPS/CA、连接超时、禁止重定向及禁止自动重试复用既有身份服务传输配置。未配置时私有选择接口失败关闭，不改用本地身份表。
 
 当前授权端点将受管选择交互与精确回调、state/nonce 摘要及 PKCE challenge 绑定，并保留尚处于来源核验窗口内的授权请求。来源核验是只读账号证明，不请求平台调用方可能已经持有的账号写锁。受管 RP 只有在本次应用授权和成员选择完成后才能签发 code；code 兑换只交付一次选择凭据，refresh 不交付。员工 BFF 校验发起时能力快照与当前登记，并在同一事务完成选择消费、旧上下文及派生凭据撤销、新业务会话和续期证明建立；缺少选择扩展时失败关闭。
+
+Phase 12 已将交互比较扩展到 scope、state/nonce、CSRF、prompt、max-age 与原 session 快照；查询、确认和消费都重新验证原始授权来源。平台用选择凭据摘要实现一次性消费，并以受配置 AES-GCM keyring 加密保存仅用于不确定提交恢复的短期凭据；恢复只能返回原交易结果，不能重签发凭据或延长原来源期限，成功消费后删除密文。canonical `0001` 限制恢复密文不可替换且消费后必须清空。`ACCOUNT_ONLY` 路径不调用平台成员服务；受管上下文确认仍按未过滤前的服务端候选和当前业务资格判定。

@@ -613,8 +613,8 @@ fn confirmed_receipt(
         || !digest
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        || before < 0
-        || after < before
+        || before != 0
+        || after != 1
         || before.to_string() != receipt.before_version
         || after.to_string() != receipt.after_version
     {
@@ -955,13 +955,16 @@ mod recovery_contract_tests {
         let target = crate::util::uuid7::new_uuid();
         let digest = "a".repeat(64);
         let receipt = json!({"operationId":operation,"targetUserId":target,"canonicalDigest":digest,
-            "state":"COMPLETED","beforeVersion":"0","afterVersion":"0","revokedSessions":0,"revokedTokens":0});
+            "state":"COMPLETED","beforeVersion":"0","afterVersion":"1","revokedSessions":0,"revokedTokens":0});
         assert!(confirmed_receipt(&receipt, operation, target, &digest).is_ok());
         for (field, changed) in [
             ("operationId", json!(crate::util::uuid7::new_uuid())),
             ("targetUserId", json!(crate::util::uuid7::new_uuid())),
             ("canonicalDigest", json!("b".repeat(64))),
             ("state", json!("UNKNOWN")),
+            ("afterVersion", json!("0")),
+            ("afterVersion", json!("2")),
+            ("beforeVersion", json!("1")),
             ("afterVersion", json!("-1")),
             ("beforeVersion", json!("00")),
         ] {

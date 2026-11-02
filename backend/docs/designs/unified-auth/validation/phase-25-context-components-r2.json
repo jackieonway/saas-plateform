@@ -1,0 +1,82 @@
+{
+  "contractVersion": "unified-auth-phase25-context-components/1",
+  "result": "PASS",
+  "recordedAtUtc": "2026-10-29T13:01:45.9349969Z",
+  "pythonVersion": "Python 3.14.2",
+  "nodeVersion": "v24.22.1",
+  "commands": [
+    {
+      "tests": 10,
+      "result": "PASS",
+      "errors": 0,
+      "command": "python -B -m unittest discover -s saas-plateform/backend/tests/unified-auth-https -p test_phase25_context_control.py -q",
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "result": "PASS",
+      "command": "node --check saas-plateform/backend/tests/unified-auth-https/phase25-context-browser.mjs"
+    }
+  ],
+  "evidenceLayer": "PURE_OWNERSHIP_COMPONENTS_AND_STATIC_SYNTAX",
+  "sourceInputs": [
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-context-control.py",
+      "sha256": "6ce4275a5e9560ac0b6ca76a7155dd6284547cf71f8496e31eaf881cee63b87a"
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-context-browser.mjs",
+      "sha256": "c7c5e4b9b878acb6c774144e71a331f0a2c2a132b83f9e44e528f53676845b83"
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/test_phase25_context_control.py",
+      "sha256": "c8dae767da0035e293454edf17aee60787c280694db63bb81330a305508fc8ba"
+    }
+  ],
+  "coverage": [
+    "Foreign cluster/database/deployment/snapshot denied",
+    "Foreign user/tenant/organization/application/menu scope denied",
+    "Unknown manifest fields and SQL input rejected before Task/database I/O",
+    "Unique UUIDv7 and fixed grant count enforced",
+    "Invalid prepare/cleanup state rejected",
+    "Committed cleanup removes its protected private marker",
+    "New deployment can create a new marker in the same task",
+    "Foreign task file is preserved"
+  ],
+  "cleanup": {
+    "temporaryComponentDirectories": 2,
+    "containersCreated": 0,
+    "temporaryComponentDirectoriesRemoved": true,
+    "applicationProcessesStarted": 0,
+    "containersReused": 0,
+    "wslEnvironmentTouched": false,
+    "databaseOperations": 0
+  },
+  "limitations": [
+    "No actual PostgreSQL fixture preparation or cleanup executed",
+    "No actual host or browser/socket interoperability executed",
+    "The real current C13 runner must execute under the root-owned frozen SOURCE environment"
+  ],
+  "revision": "r2-explicit-detail-menu-and-safe-runtime-diagnostics",
+  "priorComponentReport": "phase-25-context-components.json",
+  "preservedRuntimeFailure": "phase-25-context-current-r4.json",
+  "changeReason": "The real host explicitly denies unlisted detail descendants; add an owned read-only detail MENU and exact links, preserve route policy, and record safe step/DOM diagnostics.",
+  "diagnosisVerification": {
+    "command": "node --test --test-name-pattern 'micro parent MENU|micro route' tests/route-policy.mjs",
+    "workingDirectory": "saas-plateform/frontend",
+    "result": "PASS",
+    "tests": 1,
+    "testName": "micro parent MENU and application grant never authorize an unlisted descendant",
+    "evidenceLayer": "CURRENT_FRONTEND_ROUTE_POLICY_COMPONENT",
+    "sourceInputs": [
+      {
+        "path": "saas-plateform/frontend/src/lib/micro-route-permissions.ts",
+        "sha256": "bb59782af69448ecda93a9b2e13f09f9bca5629aa5a2c585c12e8c858e09ebe5"
+      },
+      {
+        "path": "saas-plateform/frontend/tests/route-policy.mjs",
+        "sha256": "b200244582f3654210e63d5f3bcfd6973c17733b15c53c0f2c4f809a1bd886f5"
+      }
+    ]
+  }
+}

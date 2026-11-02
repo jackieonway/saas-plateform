@@ -420,9 +420,6 @@ async fn update_policy(
     id: Path<String>,
     ApiJson(body): ApiJson<PolicyUpdate>,
 ) -> Result<Json<Value>, AppError> {
-    if body.subject_mode.is_some() {
-        return Err(AppError::bad_request("应用准入不接受 subjectMode"));
-    }
     let Json(row) = update(
         state,
         headers,

@@ -90,15 +90,27 @@ async fn cases(pool: PgPool) -> Result<()> {
         .await?;
     let (selected, consumer) = confirmed(&pool).await?;
     let credential = credential();
+    let credential_ciphertext = "v1.test-selection-credential-ciphertext";
     let mut tx = pool.begin().await?;
-    store::issue(&mut tx, &selected, &credential, consumer, 32).await?;
+    store::issue(
+        &mut tx,
+        &selected,
+        &credential,
+        credential_ciphertext,
+        consumer,
+        32,
+    )
+    .await?;
     tx.commit().await?;
-    let persisted: String = sqlx::query_scalar("SELECT credential_hash FROM context_selections")
-        .fetch_one(&pool)
-        .await?;
+    let persisted: (String, String) =
+        sqlx::query_as("SELECT credential_hash,credential_ciphertext FROM context_selections")
+            .fetch_one(&pool)
+            .await?;
     ensure!(
-        persisted == credential.digest(),
-        "only the digest is persisted"
+        persisted.0 == credential.digest()
+            && persisted.1 == credential_ciphertext
+            && !persisted.1.contains(credential.as_secret()),
+        "only the digest and an encrypted credential envelope are persisted"
     );
 
     let mut tx = pool.begin().await?;
@@ -111,10 +123,58 @@ async fn cases(pool: PgPool) -> Result<()> {
     tx.rollback().await?;
 
     let mut tx = pool.begin().await?;
-    let duplicate = store::issue(&mut tx, &selected, &self::credential(), consumer, 32).await;
+    let replaced = sqlx::query(
+        "UPDATE context_selections SET credential_ciphertext='v1.forged.value' \
+         WHERE credential_hash=$1",
+    )
+    .bind(credential.digest())
+    .execute(&mut *tx)
+    .await;
     ensure!(
-        matches!(duplicate, Err(StoreError::Database(_))),
-        "an interaction cannot issue two independent credentials"
+        replaced.is_err(),
+        "recoverable ciphertext cannot be replaced before consumption"
+    );
+    tx.rollback().await?;
+
+    let mut tx = pool.begin().await?;
+    let recovered = store::issue(
+        &mut tx,
+        &selected,
+        &credential,
+        credential_ciphertext,
+        consumer,
+        32,
+    )
+    .await?;
+    ensure!(
+        recovered == selected,
+        "an uncertain confirmation reuses the original selection and deadline"
+    );
+    tx.commit().await?;
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM context_selections")
+        .fetch_one(&pool)
+        .await?;
+    ensure!(
+        rows == 1,
+        "recovering a confirmation inserted a second credential"
+    );
+
+    let mut tx = pool.begin().await?;
+    let duplicate = store::issue(
+        &mut tx,
+        &selected,
+        &self::credential(),
+        "v1.different-selection-credential",
+        consumer,
+        32,
+    )
+    .await;
+    ensure!(
+        matches!(
+            duplicate,
+            Err(StoreError::Selection(SelectionError::Changed))
+        ),
+        "an interaction cannot replace its original credential with another"
     );
     tx.rollback().await?;
 
@@ -135,7 +195,8 @@ async fn cases(pool: PgPool) -> Result<()> {
                 wrong,
                 &selected.binding,
                 &selected.member,
-                &result
+                &result,
+                None
             )
             .await,
             Err(StoreError::NotFound)
@@ -157,7 +218,8 @@ async fn cases(pool: PgPool) -> Result<()> {
                 consumer,
                 &selected.binding,
                 &selected.member,
-                &customer_result
+                &customer_result,
+                None
             )
             .await,
             Err(StoreError::Selection(SelectionError::Changed))
@@ -174,6 +236,7 @@ async fn cases(pool: PgPool) -> Result<()> {
         &selected.binding,
         &selected.member,
         &result,
+        None,
     )
     .await?;
     tx.rollback().await?;
@@ -212,6 +275,7 @@ async fn cases(pool: PgPool) -> Result<()> {
                 &selected.binding,
                 &selected.member,
                 &result,
+                None,
             )
             .await
             {
@@ -237,6 +301,16 @@ async fn cases(pool: PgPool) -> Result<()> {
         "exactly one concurrent consume commits"
     );
     let winner = first.or(second).context("winning result missing")?;
+    let credential_ciphertext: Option<String> = sqlx::query_scalar(
+        "SELECT credential_ciphertext FROM context_selections WHERE credential_hash=$1",
+    )
+    .bind(credential.digest())
+    .fetch_one(&pool)
+    .await?;
+    ensure!(
+        credential_ciphertext.is_none(),
+        "consumption clears the recoverable credential ciphertext"
+    );
     let mut tx = pool.begin().await?;
     let overwritten = sqlx::query("UPDATE context_selections SET result=jsonb_set(result,'{version}','\"99\"') WHERE credential_hash=$1")
         .bind(credential.digest()).execute(&mut *tx).await;
@@ -284,7 +358,15 @@ async fn cases(pool: PgPool) -> Result<()> {
     let mut tx = pool.begin().await?;
     ensure!(
         matches!(
-            store::issue(&mut tx, &other, &other_credential, other_consumer, 1).await,
+            store::issue(
+                &mut tx,
+                &other,
+                &other_credential,
+                "v1.other-selection-credential",
+                other_consumer,
+                1,
+            )
+            .await,
             Err(StoreError::Capacity)
         ),
         "live consumed result must retain its recovery slot"

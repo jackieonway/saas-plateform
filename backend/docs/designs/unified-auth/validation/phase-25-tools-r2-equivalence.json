@@ -1,0 +1,227 @@
+{
+  "contractVersion": "unified-auth-phase25-tools-equivalence/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T11:26:55.571317+00:00",
+  "buildSnapshot": {
+    "label": "phase25-apps-r2",
+    "sha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+    "inputFiles": 1527
+  },
+  "toolsSnapshot": {
+    "label": "phase25-tools-r2",
+    "sha256": "e3a018eb14ed95135089d2cf410225b3c9185564fe09d65e00685ccc62384fef",
+    "inputFiles": 1539
+  },
+  "copiedFromWorkspace": "/mnt/d/WorkSpace/rust/rust-saas",
+  "copyCommand": [
+    "python3",
+    "-B",
+    "/mnt/d/WorkSpace/rust/rust-saas/saas-plateform/backend/tests/unified-auth-https/snapshot-build.py",
+    "copy",
+    "--task-dir",
+    "/tmp/rust-saas-unified-auth-20261028",
+    "--label",
+    "phase25-tools-r2",
+    "--workspace",
+    "/mnt/d/WorkSpace/rust/rust-saas",
+    "--include-all-projects",
+    "--require-frontend-outputs",
+    "--frontend-output",
+    "saas-customer-portal/frontend=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-customer-portal/frontend/dist",
+    "--frontend-output",
+    "saas-examples/micro-jquery=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-examples/micro-jquery/dist",
+    "--frontend-output",
+    "saas-examples/micro-vue=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-examples/micro-vue/dist",
+    "--frontend-output",
+    "saas-examples/report-center=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-examples/report-center/dist",
+    "--frontend-output",
+    "saas-examples/websocket=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-examples/websocket/dist",
+    "--frontend-output",
+    "saas-plateform/frontend=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-plateform/frontend/dist",
+    "--frontend-output",
+    "saas-stores/frontend=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-stores/frontend/dist",
+    "--frontend-output",
+    "saas-work-orders/frontend=/tmp/rust-saas-unified-auth-20261028/source-snapshot-phase25-apps-r2/saas-work-orders/frontend/dist"
+  ],
+  "compiledInputCount": 1154,
+  "compiledInputMapsExactlyEqual": true,
+  "taskSnapshotValidation": "PASS",
+  "buildSnapshotInputsChecked": 1527,
+  "binaryDigestsChecked": 12,
+  "frontendOutputs": {
+    "saas-customer-portal/frontend": {
+      "files": 3,
+      "sha256": "8df7420745235ae37aa52602167e18e687a07c74e3160c46e4895b7313387997",
+      "equalsBuildSnapshot": true
+    },
+    "saas-examples/micro-jquery": {
+      "files": 7,
+      "sha256": "d3696523f7a599bc5bed3501f52e0923ff92436afed83c35de2469ff9d1d7b4f",
+      "equalsBuildSnapshot": true
+    },
+    "saas-examples/micro-vue": {
+      "files": 7,
+      "sha256": "e0bdcc42ef912bd909d6f978efc27c8e88d764048b01d89ac75d67bcdf0f27ab",
+      "equalsBuildSnapshot": true
+    },
+    "saas-examples/report-center": {
+      "files": 8,
+      "sha256": "785772d016bcdab6040fce78324c2d95cfcdb51eff7b3455d29ed819ef38666e",
+      "equalsBuildSnapshot": true
+    },
+    "saas-examples/websocket": {
+      "files": 4,
+      "sha256": "9d6b7896ab8520544978aba6e7ef6009e497736d1d7dc4ae4d30c294f2b8752b",
+      "equalsBuildSnapshot": true
+    },
+    "saas-plateform/frontend": {
+      "files": 184,
+      "sha256": "60fc449069cc941fca74c47ca5ab2927449e1c5e5d34deafa257ffda0059b271",
+      "equalsBuildSnapshot": true
+    },
+    "saas-stores/frontend": {
+      "files": 7,
+      "sha256": "610db67e44764bcdd8b5aefe863f89a9016939bed2afd759ac8307ee65413010",
+      "equalsBuildSnapshot": true
+    },
+    "saas-work-orders/frontend": {
+      "files": 7,
+      "sha256": "fb5d539efcb7938fcd30e1b81dfbda3b3eed508f58bb2bb0bbaa4cd60790f3d2",
+      "equalsBuildSnapshot": true
+    }
+  },
+  "differences": [
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/README.md",
+      "kind": "CHANGED",
+      "buildSha256": "3a988e1ed6e8f213236f33bdc7068f742d758ebfb769c6eaf754abe3c3302759",
+      "toolsSha256": "785926f6b8f87bcf6f19e276e94118e11c3ba6c916c219a1c47e40db23b45b7a",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-cleanup-selftest.py",
+      "kind": "CHANGED",
+      "buildSha256": "f6119f16db2196b523b5014a52e973018aae356048d64725aab6e80dcefc36ed",
+      "toolsSha256": "776a5c1e1ca046e59bc5bc451bb0e464abbe661788e9117ea369d4ff06785d4f",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-run.py",
+      "kind": "CHANGED",
+      "buildSha256": "ce3cfd1eefcdcf9285cc29a39fc07223344b14754fee443b8dd26837da3a6db3",
+      "toolsSha256": "cb207c06ee86f4fe7c54568d261566f2038979d4f404e1826b0c34c3e2b0bb39",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase22-runtime.mjs",
+      "kind": "CHANGED",
+      "buildSha256": "fbf2928650ba87f57da1d13f6774f3cb17c1e0a9103462f7d97fb5a38432a119",
+      "toolsSha256": "3f2488fdf6c3802a65df2b9b6ec11be6685719824776788191dfefdad7ba828e",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase23-environment.py",
+      "kind": "CHANGED",
+      "buildSha256": "7520bb8c759168d5edd72b3687f44b12851b11764bf0439c23b28ebed4498b9c",
+      "toolsSha256": "7d70ef966e3e41ceda8d48f93fd4438b6f64bd40f6e7f161027a0c6eac302fcc",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-business-browser.mjs",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "739d301655d2fe40205b3baf46bf7167e4913b28fc56561747d8ad0cc6407e3d",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-business-fixture.py",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "9e9da66c6348adbc54af56b64d34b5ee671fb8d3af85b89e405f8818594f64ff",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-business-http.mjs",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "71f74a3deb5725d95c707275b74631532b5187efdafc51c4d280a408a93d2489",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-business-http.test.mjs",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "709ed72f9383610879ba55e8be10b2e0223fbedef2a0d0b82870120a2681b410",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-business-runtime.py",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "bd1f75f9f45f870057254244f3a9368b6fc31d0c1aa1979d1309c588602d2685",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-capacity-options.test.mjs",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "4e0e5f471fd8ee7f11d3e3ff14f681a4c26a6b88717cc3e3b803b73d34ece14e",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-component-run.py",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "297c3673391cb55caa9e4c69e02d18e181ae6371d50f9d3686e3bd9be80b0892",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.mjs",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "4d770afd484e0a217eb694d2ee5f5cb853bbb1f7342b9be13b5db9b38fc097cf",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.test.mjs",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "7fbe21eaede3e9a70955b27652b96f8567c47771a3c82ba3be69f53cc0b44955",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-ui-browser.mjs",
+      "kind": "CHANGED",
+      "buildSha256": "20b1e2d06ab111d9f64927053d6beedbbd6996a622d61dfc59661ec9d1e75524",
+      "toolsSha256": "6586fdc59a641ba499abc360b92c7ddd6d37bbf3f107bfb613c85906034c4f1d",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/test_phase25_business_runtime.py",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "e9d870498990fb73b44d8e41ba04129f19ec18d035489f9e16e19f46cb93f29d",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/test_phase25_capacity_runner.py",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "d8201105a3476ced345412202c65756fc480f2978771a97d36e2a6be7a20a288",
+      "compiledInput": false
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/test_phase25_snapshot_binding.py",
+      "kind": "ADDED",
+      "buildSha256": null,
+      "toolsSha256": "a73af6d81a80710b056fb4b205027cbf7044bb6cc2941df665a4b5a6ba473966",
+      "compiledInput": false
+    }
+  ],
+  "servicesStarted": 0,
+  "databasesCreated": 0,
+  "containersCreated": 0,
+  "binariesModified": false,
+  "limitation": "App/frontends are the unchanged phase25-apps-r2 candidate. Only listed operational tools differ. Live dist is not selected and is not claimed equal. Root owns environment preparation and final cleanup.",
+  "supersedesFailedToolsSnapshot": "phase25-tools-r1"
+}

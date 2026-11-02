@@ -1,0 +1,40 @@
+{
+  "contractVersion": "unified-auth-phase25-cookie-policy-component/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T11:26:36.4878045Z",
+  "result": "PASS",
+  "evidenceLayer": "ACTUAL_CHROMIUM_AND_LOCAL_HTTP_FIXTURE",
+  "scope": "Real browser cookie BLOCK policy and temporary profile failure cleanup only; real SaaS HTTPS UI remains for parent",
+  "sourceSha256": {
+    "phase25-ui-browser.mjs": "6586fdc59a641ba499abc360b92c7ddd6d37bbf3f107bfb613c85906034c4f1d",
+    "phase25-cookie-policy.mjs": "4d770afd484e0a217eb694d2ee5f5cb853bbb1f7342b9be13b5db9b38fc097cf",
+    "phase25-cookie-policy.test.mjs": "7fbe21eaede3e9a70955b27652b96f8567c47771a3c82ba3be69f53cc0b44955"
+  },
+  "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-cookie-policy.test.mjs",
+  "testsRun": 1,
+  "passed": 1,
+  "skipped": 0,
+  "assertions": [
+    "actual HTTP Set-Cookie rejected",
+    "document.cookie write rejected",
+    "context cookies empty",
+    "server received no Cookie header",
+    "CDP UserPreferences blocked reason observed",
+    "action failure propagated",
+    "temporary browser profile removed after failure"
+  ],
+  "browserChannel": "chromium",
+  "priorAttempt": {
+    "browserChannel": "default headless_shell",
+    "reason": "headless shell did not load persistent Chromium content settings; real browser accepted public test cookies",
+    "result": "FAIL",
+    "productionOrSecretsUsed": false
+  },
+  "cleanup": {
+    "profileDirectoryRemoved": true,
+    "databasesUsed": 0,
+    "containersCreated": 0,
+    "httpListenerClosed": true
+  },
+  "actualSaasHttpsExecuted": false
+}

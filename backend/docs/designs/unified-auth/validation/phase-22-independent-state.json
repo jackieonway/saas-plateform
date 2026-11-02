@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-28",
+  "status": "PASS",
+  "scope": "Two independent IdentityState instances in one OS test process; production router and canonical PostgreSQL. No separate deployed process, HTTP listener, or HTTPS claim.",
+  "testCommand": "cargo test --locked --lib oidc::oauth::phase22_tests -- --include-ignored --test-threads=1 --nocapture",
+  "final": {
+    "passed": 6,
+    "failed": 0,
+    "ignored": 0,
+    "elapsedSeconds": 10.35
+  },
+  "clippy": {
+    "command": "cargo clippy --locked --lib --tests -- -D warnings",
+    "status": "PASS",
+    "elapsedSeconds": 15.82
+  },
+  "checks": [
+    "Rust 2021 owned file formatting PASS",
+    "git diff --check PASS"
+  ],
+  "tests": [
+    "actual_client_table_lock_failure_is_503_and_preserves_original_tokens",
+    "client_budget_cannot_be_reset_by_rotating_socket_sources",
+    "independent_nodes_logout_operation_is_one_durable_commit",
+    "independent_nodes_redeem_one_actual_authorization_code_once",
+    "independent_nodes_refresh_race_detects_reuse_without_crossing_sources",
+    "saturated_and_closed_pools_return_503_without_clearing_legal_sources"
+  ],
+  "initialFailure": "5/6: fixture omitted same-origin Origin on SSO session GET. Production correctly returned 403. Fixture corrected; targeted 1/1 then final 6/6 passed.",
+  "cleanup": {
+    "clusterIdentifier": "7701548153213487841",
+    "databasesCreatedAndRemoved": 13,
+    "databasePrefix": "identity_phase22_core_",
+    "independentCatalogDatabaseCount": 0,
+    "independentCatalogActivityCount": 0,
+    "ephemeralSigningDirectoryCount": 0,
+    "containersCreated": 0,
+    "containersReused": 0,
+    "listenersCreated": 0,
+    "sharedPostgresAndBuildCacheRetained": true
+  },
+  "sourceSha256": [
+    {
+      "path": "saas-identity/src/oidc/oauth/phase22_tests.rs",
+      "sha256": "a6eee3b2e43c262b963cd57ee389734be7d310bdca93fae1b312e012dfeb1c2d"
+    },
+    {
+      "path": "saas-identity/src/test_support.rs",
+      "sha256": "b7b26ba80cf8f52097550eb1b9546e52e23889503ae07f1d23f1fb4eb88fad9d"
+    },
+    {
+      "path": "saas-plateform/backend/migrations/0001_init.sql",
+      "sha256": "33a3cb1f47b80ee38d97ed3d077b5c8296e5383edf75e909b310e183a0b03b59"
+    }
+  ]
+}

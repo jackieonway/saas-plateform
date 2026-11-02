@@ -12,7 +12,6 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 const MIGRATIONS:&str="SELECT version::text||':'||encode(checksum,'hex')||':'||success::text FROM _sqlx_migrations ORDER BY version";
-const RESET: &str = include_str!("../invalidate.sql");
 fn now() -> Result<u64> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -110,11 +109,17 @@ impl Drop for Lock {
         let _ = fs::remove_dir(&self.0);
     }
 }
-/// Execute a bounded offline operation using a private, operator-owned config.
-/// Production PITR is deliberately rejected: this implementation accepts only
-/// the pilot 24h/4h dump profile. Errors retain any created targets and encrypted files.
+/// Back up or verify an authenticated snapshot using a private operator config.
+///
+/// `restore` returns `CANONICAL_IDENTITY_RECOVERY_REQUIRED` before reading the
+/// config, creating a lock, invoking native tools or sending any network request.
+/// Canonical identity recovery is owned by `ops/identity-recovery`; this tool
+/// cannot restore databases, replay denial facts or open recovered traffic.
 pub fn execute(operation: &str, path: &Path) -> Result<String> {
-    if !["backup", "backup-new", "verify", "age", "restore"].contains(&operation) {
+    if operation == "restore" {
+        return Err(Error("CANONICAL_IDENTITY_RECOVERY_REQUIRED"));
+    }
+    if !["backup", "backup-new", "verify", "age"].contains(&operation) {
         return Err(Error("unknown operation"));
     }
     let mut c = Config::load(path)?;
@@ -162,6 +167,9 @@ pub fn execute(operation: &str, path: &Path) -> Result<String> {
     })
 }
 fn perform(c: &Config, op: &str) -> Result<serde_json::Value> {
+    if !["backup", "verify", "age"].contains(&op) {
+        return Err(Error("unknown operation"));
+    }
     let key = private_file(&c.key_file)?;
     if key.len() != 32 {
         return Err(Error("key must contain 32 random bytes"));
@@ -257,139 +265,33 @@ fn perform(c: &Config, op: &str) -> Result<serde_json::Value> {
     if op == "age" && age > 86400 {
         return Err(Error("remote recovery point older than pilot RPO"));
     }
-    if op != "restore" {
-        return Ok(
-            serde_json::json!({"status":"PASS","profile":"pilot","remote_retrieval_authenticated":true,"recovery_point":b.recovery_point,"age_seconds":age,"entries":b.entries.len(),"bundle_sha256":bundle::hash(&retrieved)}),
-        );
-    }
-    let scratch = Scratch::new(&c.scratch)?;
-    if c.restored_artifacts.exists() {
-        return Err(Error("artifact target must be new"));
-    }
-    // All existence/source checks precede the first CREATE DATABASE. CREATE itself
-    // refuses a racing existing target; no --clean, DROP or destructive retry exists.
-    for d in &c.databases {
-        if b.databases.iter().any(|s| s.source_name == d.target) {
-            return Err(Error("source and target must differ"));
-        }
-        let live_source = native::sql(
-            c,
-            &scratch,
-            &d.source_service,
-            None,
-            "SELECT current_database()",
-        )?;
-        if live_source.trim() == d.target {
-            return Err(Error("source and target must differ"));
-        }
-        let exists = native::sql(
-            c,
-            &scratch,
-            &c.admin_service,
-            None,
-            &format!(
-                "SELECT count(*) FROM pg_database WHERE datname='{}'",
-                d.target
-            ),
-        )?;
-        if exists.trim() != "0" {
-            return Err(Error("existing target refused"));
-        }
-        let owner = native::sql(
-            c,
-            &scratch,
-            &c.admin_service,
-            None,
-            &format!("SELECT count(*) FROM pg_roles WHERE rolname='{}' AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication", d.owner),
-        )?;
-        if owner.trim() != "1" {
-            return Err(Error("target owner must be provisioned separately"));
-        }
-    }
-    for d in &c.databases {
-        native::sql(
-            c,
-            &scratch,
-            &c.admin_service,
-            None,
-            &format!(
-                "CREATE DATABASE \"{}\" OWNER \"{}\" TEMPLATE template0",
-                d.target, d.owner
-            ),
-        )?;
-        let e = b
-            .entries
-            .iter()
-            .find(|e| e.path == format!("db/{}.dump", d.kind))
-            .ok_or(Error("dump missing"))?;
-        let dump = scratch.0.join("restore.dump");
-        native::create_private(&dump, &bundle::decode(e)?)?;
-        native::run(
-            c,
-            &scratch,
-            "pg_restore",
-            &c.admin_service,
-            Some(&d.target),
-            &[
-                "--dbname",
-                &d.target,
-                "--no-owner",
-                "--no-privileges",
-                "--single-transaction",
-                "--exit-on-error",
-                "--role",
-                &d.owner,
-                dump.to_str().ok_or(Error("non UTF-8 scratch"))?,
-            ],
-        )?;
-        io(fs::remove_file(dump))?;
-        if d.kind != "platform" {
-            crate::schema::canonicalize(c, &scratch, &d.kind, &d.target)?;
-            let restored_catalog =
-                crate::schema::capture(c, &scratch, &c.admin_service, Some(&d.target))?;
-            if b.databases
-                .iter()
-                .find(|s| s.kind == d.kind)
-                .map(|s| s.catalog.as_str())
-                != Some(restored_catalog.as_str())
-            {
-                return Err(Error(
-                    "restored business catalog differs from authenticated source",
-                ));
-            }
-        }
-        let actual = native::sql(c, &scratch, &c.admin_service, Some(&d.target), MIGRATIONS)?;
-        if b.databases
-            .iter()
-            .find(|s| s.kind == d.kind)
-            .map(|s| s.migrations.as_str())
-            != Some(actual.as_str())
-        {
-            return Err(Error("restored migration fingerprint mismatch"));
-        }
-        if d.kind == "platform" {
-            native::sql(c, &scratch, &c.admin_service, Some(&d.target), RESET)?;
-        }
-    }
-    io(fs::create_dir(&c.restored_artifacts))?;
-    for e in &b.entries {
-        if let Some(relative) = e.path.strip_prefix("artifacts/") {
-            let dest = c.restored_artifacts.join(relative);
-            io(fs::create_dir_all(
-                dest.parent().ok_or(Error("artifact parent missing"))?,
-            ))?;
-            native::create_private(&dest, &bundle::decode(e)?)?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                io(fs::set_permissions(
-                    &dest,
-                    fs::Permissions::from_mode(if e.executable { 0o755 } else { 0o644 }),
-                ))?;
-            }
-        }
-    }
     Ok(
-        serde_json::json!({"status":"QUARANTINED","profile":"pilot","recovery_point":b.recovery_point,"age_seconds":age,"credentials_invalidated":true,"production_pitr":"NOT_ACCEPTED","business_acceptance_required":true}),
+        serde_json::json!({"status":"PASS","profile":"pilot","remote_retrieval_authenticated":true,"recovery_point":b.recovery_point,"age_seconds":age,"entries":b.entries.len(),"bundle_sha256":bundle::hash(&retrieved)}),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restore_refuses_before_configuration_or_any_external_operation() {
+        for path in [
+            "relative-config.json",
+            "",
+            "/",
+            "/missing-canonical-recovery/config.json",
+        ] {
+            let error = execute("restore", Path::new(path)).unwrap_err();
+            assert_eq!(error.0, "CANONICAL_IDENTITY_RECOVERY_REQUIRED");
+        }
+    }
+
+    #[test]
+    fn backup_and_verification_commands_still_reach_private_config_validation() {
+        for operation in ["backup", "backup-new", "verify", "age"] {
+            let error = execute(operation, Path::new("relative-config.json")).unwrap_err();
+            assert_eq!(error.0, "absolute private file required");
+        }
+    }
 }

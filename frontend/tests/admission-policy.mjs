@@ -10,8 +10,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(path.join(root, 'package.json'))
 const ts = require('typescript')
 const id = value => `01962345-6789-7abc-8def-${value.toString(16).padStart(12, '0')}`
-const target = { kind: 'client', id: id(1), name: 'Customer portal' }
-const policy = (patch = {}) => ({ id: target.id, status: 'ENABLED', subjectMode: 'USER', allowedMemberTypes: ['EMPLOYEE'], accessPolicyVersion: 3, ...patch })
+const target = { kind: 'application', id: id(1), name: 'Customer portal' }
+const policy = (patch = {}) => ({ id: target.id, status: 'ENABLED', allowedMemberTypes: ['EMPLOYEE'], accessPolicyVersion: 3, ...patch })
 const plain = value => JSON.parse(JSON.stringify(value))
 class ApiError extends Error { constructor(status) { super('concurrent policy update'); this.status = status } }
 
@@ -38,30 +38,25 @@ function apiFixture() {
   return { ...module, reads, writes, response: value => { response = value }, put: handler => { put = handler } }
 }
 
-test('policy reads bind the exact owner and preserve cancellation on both endpoint families', async () => {
+test('application policy reads bind the exact owner and preserve cancellation', async () => {
   const f = apiFixture(), controller = new AbortController()
   await f.admissionPoliciesApi.read(target, controller.signal)
-  assert.equal(f.reads[0].url, `/api/oauth/clients/${target.id}/access-policy`)
+  assert.equal(f.reads[0].url, `/api/applications/${target.id}/access-policy`)
   assert.equal(f.reads[0].options.signal, controller.signal)
-  const application = { ...target, kind: 'application' }
-  const appPolicy = policy(); delete appPolicy.subjectMode; f.response(appPolicy)
-  await f.admissionPoliciesApi.read(application, controller.signal)
-  assert.equal(f.reads[1].url, `/api/applications/${target.id}/access-policy`)
   await assert.rejects(f.admissionPoliciesApi.read({ ...target, id: 'old-owner' }))
-  assert.equal(f.reads.length, 2)
+  await assert.rejects(f.admissionPoliciesApi.read({ ...target, kind: 'client' }))
+  assert.equal(f.reads.length, 1)
 })
 
 test('policy response rejects unknown identities, incoherent purposes, wrong owners and unsafe versions', () => {
   const f = apiFixture()
-  for (const patch of [{ id: id(2) }, { status: 'UNKNOWN' }, { subjectMode: undefined }, { subjectMode: 'UNKNOWN' },
+  for (const patch of [{ id: id(2) }, { status: 'UNKNOWN' }, { subjectMode: 'UNKNOWN' },
     { allowedMemberTypes: [] }, { allowedMemberTypes: ['EMPLOYEE', 'STAFF'] }, { allowedMemberTypes: ['EMPLOYEE', 'EMPLOYEE'] },
     { subjectMode: 'MACHINE' }, { accessPolicyVersion: 0 }, { accessPolicyVersion: -1 }, { accessPolicyVersion: '3' },
     { accessPolicyVersion: 1.5 }, { accessPolicyVersion: Number.MAX_SAFE_INTEGER + 1 }]) {
     assert.throws(() => f.parseAdmissionPolicy(policy(patch), target))
   }
-  assert.equal(f.parseAdmissionPolicy(policy({ subjectMode: 'MACHINE', allowedMemberTypes: [] }), target).subjectMode, 'MACHINE')
-  assert.equal(f.parseAdmissionPolicy(policy({ subjectMode: 'LEGACY_MIXED' }), target).subjectMode, 'LEGACY_MIXED')
-  assert.throws(() => f.parseAdmissionPolicy(policy({ subjectMode: 'MACHINE', allowedMemberTypes: [] }), { ...target, kind: 'application' }))
+
 })
 
 test('policy body keeps the old numeric version, trims real reason and canonicalizes only supported types', () => {
@@ -86,7 +81,7 @@ test('a policy 409 is surfaced after one PUT without refreshing or rewriting its
   await assert.rejects(f.admissionPoliciesApi.save(target, { allowedMemberTypes: ['CUSTOMER'], accessPolicyVersion: 3, reason: 'Reviewed customer entry' }), error => error.status === 409)
   assert.equal(f.writes.length, 1)
   assert.equal(f.reads.length, 0)
-  assert.deepEqual(plain(f.writes[0]), { url: `/api/oauth/clients/${target.id}/access-policy`, body: {
+  assert.deepEqual(plain(f.writes[0]), { url: `/api/applications/${target.id}/access-policy`, body: {
     allowedMemberTypes: ['CUSTOMER'], accessPolicyVersion: 3, reason: 'Reviewed customer entry',
   } })
 })
@@ -188,12 +183,4 @@ test('successful policy save closes its reviewed view then retires projections u
   assert.deepEqual(f.events.filter(event => event.kind !== 'cache').map(event => event.kind), ['toast', 'close', 'retire'])
   assert.equal(f.events.find(event => event.kind === 'retire').fence, f.fence)
   assert.equal(f.api.writes.length, 1)
-})
-
-test('machine policy is separately displayed without human selectors or a save action', () => {
-  const f = dialogFixture(policy({ subjectMode: 'MACHINE', allowedMemberTypes: [] })), tree = f.render()
-  assert.ok(f.text(tree).includes('机器凭据'))
-  assert.equal(f.nodes(tree, 'Checkbox').length, 0)
-  assert.equal(f.nodes(tree, 'Textarea').length, 0)
-  assert.equal(f.saveButton(tree), undefined)
 })

@@ -47,6 +47,13 @@ impl Credential {
     pub fn digest(&self) -> String {
         hex::encode(Sha256::digest(self.0.as_bytes()))
     }
+
+    /// Expose the credential only to an authenticated private service adapter
+    /// that must serialize it or seal it before persistence. It has no `Debug`
+    /// or `Display` implementation and must never be logged.
+    pub fn as_secret(&self) -> &str {
+        &self.0
+    }
 }
 
 impl<'de> Deserialize<'de> for Credential {

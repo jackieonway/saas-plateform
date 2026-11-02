@@ -119,7 +119,6 @@ fn app(pool: &PgPool, lifecycle: bool, customer: bool, dual: bool) -> Result<Rou
     ]))?;
     let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
     Ok(crate::routes::api_router()
-        .nest("/oauth", crate::routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::observability::observe,
@@ -271,21 +270,22 @@ async fn session(pool: &PgPool, member: Member) -> Result<String> {
         uuid7::new_uuid()
     };
     let now = chrono::Utc::now().timestamp();
-    jwt::sign(
+    jwt::sign_internal(
         &jwt::Claims {
             sub: member.user.to_string(),
-            typ: "session".into(),
+            typ: "platform_session".into(),
             tenant: Some(member.tenant.to_string()),
             org: Some(member.org.to_string()),
             cid: None,
             scope: None,
             sid: Some(sid.to_string()),
             ver: Some(member.account_version),
-            aud: None,
+            aud: Some(jwt::PLATFORM_API_AUDIENCE.into()),
             jti: None,
             iat: now,
             exp: now + 3600,
         },
+        jwt::InternalUse::PlatformSession,
         SECRET,
     )
 }
@@ -501,19 +501,20 @@ async fn grant_member_management(pool: &PgPool, manager: Member) -> Result<()> {
 
 #[tokio::test]
 #[ignore = "requires explicit IDENTITY_PHASE05_TEST_DATABASE_URL and disposable database creation"]
-async fn user_directory_member_type_filter_binds_type_and_organization_to_the_same_relationship() -> Result<()> {
+async fn user_directory_member_type_filter_binds_type_and_organization_to_the_same_relationship(
+) -> Result<()> {
     let db = Database::create().await?;
     let result = async {
         let (tenant, root) = tenant(&db.pool).await?;
         let child = organization(&db.pool, tenant, Some(root)).await?;
-        let manager_id = user(&db.pool, "typed-directory-manager", 0, false).await?;
+        let manager_id = user(&db.pool, "typed-directory-manager", 1, false).await?;
         let manager = member(&db.pool, manager_id, root, "EMPLOYEE", "ENABLED", 1).await?;
         grant_member_management(&db.pool, manager).await?;
-        let employee_id = user(&db.pool, "typed-directory-employee", 0, false).await?;
+        let employee_id = user(&db.pool, "typed-directory-employee", 1, false).await?;
         member(&db.pool, employee_id, root, "EMPLOYEE", "ENABLED", 1).await?;
-        let customer_id = user(&db.pool, "typed-directory-customer", 0, false).await?;
+        let customer_id = user(&db.pool, "typed-directory-customer", 1, false).await?;
         member(&db.pool, customer_id, root, "CUSTOMER", "ENABLED", 1).await?;
-        let dual_id = user(&db.pool, "typed-directory-dual", 0, false).await?;
+        let dual_id = user(&db.pool, "typed-directory-dual", 1, false).await?;
         member(&db.pool, dual_id, root, "EMPLOYEE", "ENABLED", 1).await?;
         member(&db.pool, dual_id, child, "CUSTOMER", "ENABLED", 1).await?;
         let app = app(&db.pool, true, true, true)?;
@@ -523,21 +524,61 @@ async fn user_directory_member_type_filter_binds_type_and_organization_to_the_sa
             ("CUSTOMER", root, vec![customer_id]),
             ("CUSTOMER", child, vec![dual_id]),
         ] {
-            let reply = call(&app, Method::GET, &format!("/api/users?memberType={kind}&organizationId={org}&size=200"), Some(&token), Value::Null).await?;
+            let reply = call(
+                &app,
+                Method::GET,
+                &format!("/api/users?memberType={kind}&organizationId={org}&size=200"),
+                Some(&token),
+                Value::Null,
+            )
+            .await?;
             expect(&reply, StatusCode::OK, "typed user information directory")?;
-            let rows = reply.body["records"].as_array().ok_or_else(|| anyhow!("missing directory rows"))?;
-            ensure!(reply.body["total"] == json!(expected.len()) && rows.len() == expected.len(), "typed pagination totals differ");
-            let ids: Vec<Uuid> = rows.iter().map(|row| row["id"].as_str().unwrap().parse()).collect::<Result<_,_>>()?;
-            ensure!(ids.iter().all(|id| expected.contains(id)), "directory leaked another membership type or organization");
+            let rows = reply.body["records"]
+                .as_array()
+                .ok_or_else(|| anyhow!("missing directory rows"))?;
+            ensure!(
+                reply.body["total"] == json!(expected.len()) && rows.len() == expected.len(),
+                "typed pagination totals differ"
+            );
+            let ids: Vec<Uuid> = rows
+                .iter()
+                .map(|row| row["id"].as_str().unwrap().parse())
+                .collect::<Result<_, _>>()?;
+            ensure!(
+                ids.iter().all(|id| expected.contains(id)),
+                "directory leaked another membership type or organization"
+            );
             for row in rows {
-                ensure!(row["username"].as_str().is_some() && row["realName"].is_string(), "user information is missing");
-                ensure!(row["memberships"].as_array().unwrap().iter().all(|m| m["memberType"] == kind), "directory projection mixed member types");
+                ensure!(
+                    row["username"].as_str().is_some() && row["realName"].is_string(),
+                    "user information is missing"
+                );
+                ensure!(
+                    row["memberships"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .all(|m| m["memberType"] == kind),
+                    "directory projection mixed member types"
+                );
             }
         }
-        let invalid = call(&app, Method::GET, "/api/users?memberType=ALL", Some(&token), Value::Null).await?;
-        expect(&invalid, StatusCode::BAD_REQUEST, "invalid membership filter")?;
+        let invalid = call(
+            &app,
+            Method::GET,
+            "/api/users?memberType=ALL",
+            Some(&token),
+            Value::Null,
+        )
+        .await?;
+        expect(
+            &invalid,
+            StatusCode::BAD_REQUEST,
+            "invalid membership filter",
+        )?;
         Ok(())
-    }.await;
+    }
+    .await;
     db.finish(result).await
 }
 
@@ -548,18 +589,17 @@ async fn phase05_capabilities_reflect_server_gates_and_customer_console_access_s
     let db = Database::create().await?;
     let result: Result<()> = async {
         let (_, root) = tenant(&db.pool).await?;
-        let manager = user(&db.pool, "phase05-capability-manager", 0, false).await?;
+        let manager = user(&db.pool, "phase05-capability-manager", 1, false).await?;
         let manager = member(&db.pool, manager, root, "EMPLOYEE", "ENABLED", 1).await?;
-        let plain = user(&db.pool, "phase05-capability-plain", 0, false).await?;
+        let plain = user(&db.pool, "phase05-capability-plain", 1, false).await?;
         let plain = member(&db.pool, plain, root, "EMPLOYEE", "ENABLED", 1).await?;
-        let customer = user(&db.pool, "phase05-capability-customer", 0, true).await?;
+        let customer = user(&db.pool, "phase05-capability-customer", 1, true).await?;
         let customer = member(&db.pool, customer, root, "CUSTOMER", "ENABLED", 1).await?;
-        let target = user(&db.pool, "phase05-capability-write-target", 0, false).await?;
+        let target = user(&db.pool, "phase05-capability-write-target", 1, false).await?;
         grant_member_management(&db.pool, manager).await?;
         let manager_token = session(&db.pool, manager).await?;
         let plain_token = session(&db.pool, plain).await?;
-        // This customer session is active under a customer-allowing source, so
-        // employee-only API rejection cannot be explained by a broken fixture.
+        // A customer-shaped signed token cannot establish an employee session.
         let customer_token = session(&db.pool, customer).await?;
         for (lifecycle, customer_enabled, dual) in [
             (false, false, false),

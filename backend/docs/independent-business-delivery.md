@@ -8,8 +8,8 @@
 
 1. 在所属业务仓库安装锁定依赖，运行其检查并构建前后端，记录源提交、构建标识和镜像摘要。
 2. 为业务准备专属 PostgreSQL 数据库、运行账号和迁移执行条件。平台 Compose 不创建业务数据库。
-3. 在平台创建机密 OAuth 客户端，将生成的 client ID 和一次性 secret 保存到业务 API 私有环境中。
-4. 登记应用与绑定已有客户端，核对业务 `backend/manifests` 的菜单、资源动作和平台协议。
+3. 为目标业务应用登记独立 APP_RESOURCE 私有服务身份，绑定准确受众与资源动作，将其 ID 和 secret 保存到业务 API 私有环境。外部 OAuth 客户端另外通过身份统一注册簿登记。
+4. 登记业务应用与菜单，并核对私有服务登记的应用绑定，核对业务 `backend/manifests` 的菜单、资源动作和平台协议。
 5. 在平台 `DATA_GRANT_POLICY` 中审阅应用 capability、成员查找和管理范围；空策略拒绝业务数据访问。
 6. 为用户当前直接成员配置功能权限和数据授权，实测读写、组织切换和撤权。
 
@@ -17,7 +17,7 @@
 
 ## 2. 构建 qiankun 前端
 
-新接入应用使用 `HTML`、`TRUSTED`，宿主导航为 `/micro/<code>`。前端构建须输出包含 `bootstrap`、`mount`、`unmount` 的 qiankun HTML/UMD 产物，SDK 使用所属仓库锁定的 2.0.0 交付。SDK、宿主上下文和业务鉴权分别承担不同责任，接入细节见[微应用接入](micro-application-onboarding.md)。
+新接入应用使用 `HTML`、`TRUSTED`，宿主导航为 `/micro/<code>`。前端构建须输出包含 `bootstrap`、`mount`、`unmount` 的 qiankun HTML/UMD 产物，SDK 使用所属仓库锁定的 3.0.0 交付。SDK、宿主上下文和业务鉴权分别承担不同责任，接入细节见[微应用接入](micro-application-onboarding.md)。
 
 工单和门店静态 Dockerfile 接收 `APP_CODE`、`APP_VERSION`、`HOST_ORIGIN`、`API_BASE` 等构建参数，取值按各仓库实际构建入口填写。公开配置仅包含版本、准确宿主来源和业务 API 地址。客户端 secret、数据库 URL、平台 session 不进入 HTML、JS、镜像公开层或 URL。
 

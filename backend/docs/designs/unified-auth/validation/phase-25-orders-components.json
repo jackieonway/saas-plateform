@@ -1,0 +1,873 @@
+{
+  "contractVersion": "unified-auth-phase25-component-suite/1",
+  "phase": 25,
+  "service": "orders",
+  "snapshot": "phase25-apps-r3",
+  "exactTestSelector": null,
+  "integrationTestTarget": null,
+  "fullServiceSuiteClaimed": true,
+  "snapshotSha256": "a078317efaaa94abeb8cf2d96c37077dee5d5eb438f64351e837f75982dbbe49",
+  "manifestSha256": "34bd324452cce2a89ba32cf4c36ee43aa082add59d1bd4d3b975d3f573a52920",
+  "sourceInputs": {
+    "saas-work-orders/backend/.dockerignore": "2e52feccf6b4f6126c1edb2bdc5fa2f9144cda83d6197fdfebe952983c60eff9",
+    "saas-work-orders/backend/Cargo.lock": "83ae54cb035ee60cbddf33f4cc5c00fa2955ca82f6c55a939f027cd27faf82ac",
+    "saas-work-orders/backend/Cargo.toml": "772d4e6fbacba2a8becf6ee3398c50d5ea2692afb0ae16cafe81a222ef3e8e91",
+    "saas-work-orders/backend/Dockerfile": "68bd423dddba74f6dd672f0baa04046e3c94685c7bec58c3d9916cc07f1542ec",
+    "saas-work-orders/backend/compose.env.example": "51b8c068b0ea12b01498dbdffc4fbb120cb837bfee2786703a13b073226ab887",
+    "saas-work-orders/backend/compose.yml": "b8dade3d491c21f0f2a5f1fb3e86656ba33fd19b88fb9f8bc325d64882a52411",
+    "saas-work-orders/backend/dependencies.lock.json": "4e97d1f12fc7f4912433e93de222c19fccf67b35c1c048923f7127e04af17740",
+    "saas-work-orders/backend/manifests/bootstrap.manifest.json": "c131c7b9d36b93821d3b65d22e9312b1db30e156c093a8763382d3ffdbe275ec",
+    "saas-work-orders/backend/manifests/grants.manifest.example.json": "d281fa3a0cc107eb51e33e56fda0c8f2b101c9c6c89a76db15dde89bda6d2e63",
+    "saas-work-orders/backend/migrations/0001_work_orders.sql": "91d5e3c0d2255524fcaadbe5661fc641974ac6046b11b2d2d2f86335a28c074a",
+    "saas-work-orders/backend/rust-toolchain.toml": "174a086284d57e79557b62bc627e96257893375dfd37239e3c3e830ce2629b95",
+    "saas-work-orders/backend/src/authorization/client.rs": "f371ea4697ad375f53526351d26f683c91e0630c523e60b066784f3baa433bef",
+    "saas-work-orders/backend/src/authorization/node_fixture.rs": "b5ab7879e19a09dacca9b7d667d1e11a1d27914bcd8bbb1655e8581d307ee2fb",
+    "saas-work-orders/backend/src/authorization/policy/resource/tests.rs": "d55e73e635e0e5b27781c0c2d531ce30a43654ec3d0ef44941973c625590f8d7",
+    "saas-work-orders/backend/src/authorization/policy/resource.rs": "451a29239fd1ab8d5415568b6d066dd872d1d543c04b99b7fed176ebb9345d88",
+    "saas-work-orders/backend/src/authorization/policy.rs": "bb30cd68484700d2a58c48bd7704a84ffb60cd2cbe704ed7bbb1b4abdf3f6d8c",
+    "saas-work-orders/backend/src/authorization/reminder_tests.rs": "3dcaed8e5797c078fd5a250ff2ac8260f6b5b1eaca8d49a14dcc035c05bdee6b",
+    "saas-work-orders/backend/src/authorization/tests.rs": "bdbabb773eb4b17032cc2ef78dbcd3e9792561794dbaa4536da22ca8aeb0c81d",
+    "saas-work-orders/backend/src/authorization.rs": "a6465160d63371d69179c39ee049f6baedb7ece1cfaf966f8a2c696a4f9777a5",
+    "saas-work-orders/backend/src/bin/work-orders-migrate.rs": "d4f20cc82efab611980a7129c0373317347a1d941e98b7574a8cb8f9a9d9f3c1",
+    "saas-work-orders/backend/src/config.rs": "922489a897de62de67d66fdbfe5c27e53909b170f437c42ef26bff19871c57a4",
+    "saas-work-orders/backend/src/directory/query.rs": "03ae1aecb2cdccd272bc7e3829962c40f78fa945180559cf3548367752052ed4",
+    "saas-work-orders/backend/src/directory/tests.rs": "de4cbbf9030513fab0059cb55c9bb1a25253e9f2a8dfe5cfb288449df2be9047",
+    "saas-work-orders/backend/src/directory.rs": "702d12e2c8329c45e77fc9f7e304b3d9b2053c5df1d080aa68f5f56dc1304c97",
+    "saas-work-orders/backend/src/error.rs": "a10406e1dd4d39807db86a2f7752472f4dde523338148eddae1a6f5d04e67782",
+    "saas-work-orders/backend/src/http.rs": "b34cff59f487eb830d93db069800404fdf4612789a653b6d035f8f011db9be18",
+    "saas-work-orders/backend/src/imported.rs": "426c00f02cd2dbe454e10c51d53adc8c36da38ec7d5e441934b830b12a67c8e9",
+    "saas-work-orders/backend/src/imported_schema.sql": "204b5d744b099f2eda02fa363f5c54d3379da75753ae4673474017e6fb51ade2",
+    "saas-work-orders/backend/src/lib.rs": "fd7cd3b7cbfc5b4f92d50040d62c874c3e68b73d8bbbf842d660714a6cfdd26a",
+    "saas-work-orders/backend/src/main.rs": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb",
+    "saas-work-orders/backend/src/migration_cli.rs": "c9152658e98a97d3576132e30e362fc43e9436464ca27f22f477f9dba4081de1",
+    "saas-work-orders/backend/src/migrations.rs": "f2c2ea8573dad8978d2ca693c5844850f6d26bfb8a8cb2ef7ae5bfba59187a59",
+    "saas-work-orders/backend/src/reads/csv.rs": "b91a00eafdf3ac13a91235f22fc1321378fb495565b4cd711a8b7563ac1d9b9c",
+    "saas-work-orders/backend/src/reads/query.rs": "d8ecc4c7f4c89777f129ae695583b48838b8e3084c476a9cdf56ba0086ee079e",
+    "saas-work-orders/backend/src/reads.rs": "1b402f09ab5f3f6ee099ed2ddda08b2e499ad0957ef8b1ea0ba86ed9d48ef3b6",
+    "saas-work-orders/backend/src/reminders/dto.rs": "165cde258b2fc9ba77219f5572345d87fdd60449d84ba22536164eab90674b36",
+    "saas-work-orders/backend/src/reminders/store.rs": "10410e1f3604049f9e0516e8ff353e6fc556b44e1b0ef87b974398e3baf95a50",
+    "saas-work-orders/backend/src/reminders.rs": "113867b1b84ca231b13e6ff223ddd6c9541db9a25759395e3cd4dc234835f659",
+    "saas-work-orders/backend/src/telemetry.rs": "de2c91a4e07bddd1f6dfe04592a5ed011f327274799cfadea339fbc0f2cc5b25",
+    "saas-work-orders/backend/src/uuid_v7.rs": "97bcce2b679deb28a2625d196494fcb3df9ae58e56313c10ec8977cf628111cb",
+    "saas-work-orders/backend/src/writes/dto.rs": "0db17b590ed9ccf93fa001387df3e170c20eef49148811cca8773dfc3d59b103",
+    "saas-work-orders/backend/src/writes.rs": "944d4807a6e55ee82c845099c8c807743c37b50241896d3ad2f5c78380898b23",
+    "saas-work-orders/backend/tests/imported_startup.rs": "62e9e815f4e52f0050397afa6dc7d570242458372e0a90942e64f6cdddef5091",
+    "saas-work-orders/backend/tests/member_contracts.rs": "17974b31367f730989826964cb6ca609ecc9904b988af2ad27e866e9de471bc5",
+    "saas-work-orders/backend/tests/migration_command.rs": "8530656f46670dda1500b6e549c04eaa32e2ac87cd1b97218a3b6226a680533b",
+    "saas-work-orders/backend/tests/migrations.rs": "8d8a87cbe6b8f866a3595b26222c83ca5d6ba7ea1d2294323052316e61777f84",
+    "saas-work-orders/backend/tests/read_contracts.rs": "70a63064b57bde78dec87d934757960a75ba24521e15ba6682c018a27fd836fa",
+    "saas-work-orders/backend/tests/reminder_contracts.rs": "f9625d7d19aa23c2c227b4fe65ee7c106273ff4848fc139767c944069095214a",
+    "saas-work-orders/backend/tests/write_contracts.rs": "76e45e9880f06a8b3013ea7e956bc6aca628a4381cd8f587dc9e7e395cd66c86",
+    "saas-work-orders/backend/vendor/operational-telemetry/Cargo.lock": "2e3b612bc2ba42434b7ddbc32446442657356364a6083b951a3c5f16ae4cdf9a",
+    "saas-work-orders/backend/vendor/operational-telemetry/Cargo.toml": "9f3b14ff00778e84b66b085ba9aa1b56f97b742f68c6c5a00ef15cf9722b5818",
+    "saas-work-orders/backend/vendor/operational-telemetry/src/lib.rs": "ae4fa26581d616e9301a5ed167dcea1a56c50a224e29a6c068a4248b7ec3900c"
+  },
+  "startedAtUtc": "2026-10-29T12:11:14.154773+00:00",
+  "status": "PASS",
+  "runnerSha256": "bc91041e17a4a9149af3495a0086afb164467836e78a5aa002439bc39da3f318",
+  "allSnapshotInputsVerified": 1558,
+  "auxiliaryBinaries": {
+    "saas-platform-admin": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/bin/saas-platform-admin",
+      "sha256": "35a780c58992cfca85a426c6fbb309b1e36d525cea50c03f77accdb24e872532"
+    },
+    "saas-notification-ws": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/bin/saas-notification-ws",
+      "sha256": "d2524777d3e8f0e461b5e595b5c9a1c2ab854485050bcddc8fefdc783daacd3c"
+    },
+    "node": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/phase21-node-runtime/bin/node",
+      "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+      "attestationSha256": "6166a4852f44ede83518ab89e35b0f5781d4121ce9d36563552f07e38e63c91f"
+    }
+  },
+  "buildAttestationSha256": "7ee36cf1f0d846592fd9c67a43ee6e2266a9e5ed4b85cda2e4421f4d728dd8f3",
+  "layers": [
+    "RUST_COMPONENT",
+    "EXPLICIT_TASK_OWNED_POSTGRESQL_ROUTER"
+  ],
+  "clusterSystemIdentifier": "7701992637128815755",
+  "clusterBindingSha256": "81efbc1c1be5f03145d6a5ef150a22b38919285a20e05be1f43e056eba2d7aaa",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "hbaWrites": 0,
+  "runs": [
+    {
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "-j2",
+        "--all-targets",
+        "--",
+        "--include-ignored",
+        "--test-threads=1"
+      ],
+      "startedAtUtc": "2026-10-29T12:11:14.159331+00:00",
+      "returnCode": 0,
+      "durationSeconds": 70.48,
+      "rawOutputSha256": "33c39f3e0374e54607fa17a3430ece82ed0bb71f515c1b2e6be7196836ffc7b4",
+      "cases": [
+        {
+          "name": "authorization::client::directory_tests::directory_response_cannot_renew_the_original_pre_http_window",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::client::directory_tests::private_directory_wrapper_rejects_wrong_contract_kind_shape_and_deadline",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::client::notification_tests::notification_wrapper_cannot_extend_the_original_window_or_weaken_the_publication",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::policy::resource::tests::external_reminder_requires_separate_scope_permission_and_data_grant",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::policy::resource::tests::machine_has_no_person_and_only_current_explicit_non_self_scope",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::policy::resource::tests::opaque_subject_uses_private_principal_and_exact_deployed_scope_binding",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::policy::resource::tests::original_authority_recheck_never_substitutes_a_changed_binding",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::reminder_tests::notification_missing_ceiling_fails_closed_and_explicit_null_is_preserved",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::reminder_tests::notification_scopes_intersect_hard_ceiling_without_expanding_ticket_self",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::reminder_tests::reminder_requires_both_operations_and_independent_identity_bound_grants",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::combined_authorization_keeps_independent_policy_and_never_caches",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::context_binds_identity_contract_version_expiry_and_display_fields",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::creation_and_assignment_targets_obey_scope_and_organization_ceiling",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::four_scopes_validate_organization_membership_and_parameterize_all_identities",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::fresh_private_authorization_never_uses_legacy_fallback_or_positive_cache",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::organization_ceiling_is_fail_closed_and_only_explicit_null_is_unbounded",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::permissions_and_single_identity_bound_grants_are_independent",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::protected_application_requires_platform_configuration",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::resource_introspection_rejects_wrong_audience_activity_type_identity_and_expiry",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::shared_authorization_budget_and_concurrency_bound_do_not_queue_requests",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::upstream_status_body_redirect_json_and_capacity_fail_closed",
+          "result": "OK"
+        },
+        {
+          "name": "authorization::tests::write_actions_require_their_own_grant_and_trusted_creation_snapshots",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::canonical_identity_issuer_and_explicit_scope_bindings_are_unambiguous",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::database_tls_policy_is_explicit_and_independent_from_production_http",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::explicit_business_url_only_and_no_platform_credentials",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::origins_require_exact_https_or_development_loopback_http",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::platform_settings_are_optional_only_as_a_complete_absence",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::private_metrics_are_opt_in_bounded_independent_and_redacted",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::rejects_malformed_or_ambiguous_database_urls_without_echoing_them",
+          "result": "OK"
+        },
+        {
+          "name": "config::tests::validates_all_numeric_budgets_and_bind_address",
+          "result": "OK"
+        },
+        {
+          "name": "directory::query::tests::non_v7_organization_is_rejected_without_widening_directory_scope",
+          "result": "OK"
+        },
+        {
+          "name": "directory::query::tests::strict_fields_and_pagination_match_directory_contract",
+          "result": "OK"
+        },
+        {
+          "name": "directory::query::tests::unicode_bound_is_applied_before_javascript_compatible_trim",
+          "result": "OK"
+        },
+        {
+          "name": "directory::tests::malformed_or_wrong_target_member_data_fails_closed",
+          "result": "OK"
+        },
+        {
+          "name": "directory::tests::member_witness_binds_every_identity_action_and_target_without_renewing_ttl",
+          "result": "OK"
+        },
+        {
+          "name": "directory::tests::platform_list_is_projected_to_minimal_normalized_business_members",
+          "result": "OK"
+        },
+        {
+          "name": "directory::tests::upstream_pagination_and_total_must_be_exact_bounded_integers",
+          "result": "OK"
+        },
+        {
+          "name": "error::tests::lifecycle_error_preserves_source_but_never_formats_driver_detail",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::approved_host_still_requires_an_application_bearer_token",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::baseline_router_without_a_browser_allowlist_rejects_host_and_null_origins",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::bearer_rejects_duplicate_ambiguous_and_unbounded_credentials",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::create_preflight_allows_the_stable_key_without_authorization_or_database",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::duplicate_or_noncanonical_ids_are_replaced",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::host_preflight_does_not_require_database_or_authorization",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::live_is_independent_and_business_routes_are_explicitly_unavailable",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::preflight_and_origin_denials_preserve_safe_metadata",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::readiness_failure_is_bounded_and_sanitized",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::request_id_is_canonical_and_untrusted_paths_do_not_enter_error_text",
+          "result": "OK"
+        },
+        {
+          "name": "http::tests::wrong_health_method_uses_json_contract",
+          "result": "OK"
+        },
+        {
+          "name": "imported::tests::complete_schema_material_has_a_canonical_known_hash_and_no_lossy_filtering",
+          "result": "OK"
+        },
+        {
+          "name": "imported::tests::configured_target_is_the_decoded_database_and_rejects_control_injection",
+          "result": "OK"
+        },
+        {
+          "name": "imported::tests::modes_require_a_complete_exclusive_canonical_receipt",
+          "result": "OK"
+        },
+        {
+          "name": "imported::tests::proof_rejects_wrong_target_receipt_identity_privileges_and_transaction_mode",
+          "result": "OK"
+        },
+        {
+          "name": "migration_cli::tests::ambient_driver_settings_and_invalid_urls_fail_with_sanitized_categories",
+          "result": "OK"
+        },
+        {
+          "name": "migration_cli::tests::database_configuration_reads_only_the_dedicated_url_and_pins_the_port",
+          "result": "OK"
+        },
+        {
+          "name": "migration_cli::tests::default_pgpass_is_never_a_migration_credential_source",
+          "result": "OK"
+        },
+        {
+          "name": "migration_cli::tests::local_peer_delegation_preserves_the_socket_and_exact_startup_role",
+          "result": "OK"
+        },
+        {
+          "name": "migration_cli::tests::migration_arguments_have_no_implicit_seed_or_import_operation",
+          "result": "OK"
+        },
+        {
+          "name": "migration_cli::tests::non_unicode_arguments_are_rejected_without_panicking",
+          "result": "OK"
+        },
+        {
+          "name": "migration_cli::tests::url_components_are_decoded_without_driver_fallback_or_query_logging",
+          "result": "OK"
+        },
+        {
+          "name": "migrations::tests::only_fresh_uuid7_baseline_is_embedded",
+          "result": "OK"
+        },
+        {
+          "name": "reads::csv::tests::encoding_keeps_bom_crlf_and_quotes_embedded_csv_syntax",
+          "result": "OK"
+        },
+        {
+          "name": "reads::csv::tests::exact_limit_counts_utf8_bom_quote_expansion_and_line_endings",
+          "result": "OK"
+        },
+        {
+          "name": "reads::csv::tests::formula_and_control_prefixes_are_neutralized_inside_csv_quotes",
+          "result": "OK"
+        },
+        {
+          "name": "reads::csv::tests::human_columns_translate_enums_and_neutralize_every_text_snapshot",
+          "result": "OK"
+        },
+        {
+          "name": "reads::query::tests::identities_unknown_duplicate_and_malformed_fields_fail_closed",
+          "result": "OK"
+        },
+        {
+          "name": "reads::query::tests::numeric_bounds_reject_overflow_and_keep_largest_offset_exact",
+          "result": "OK"
+        },
+        {
+          "name": "reads::query::tests::unicode_and_literal_search_preserve_meaning",
+          "result": "OK"
+        },
+        {
+          "name": "reminders::dto::tests::event_input_rejects_sequences_duplicates_overrides_and_invalid_keys",
+          "result": "OK"
+        },
+        {
+          "name": "reminders::dto::tests::fixed_event_template_and_owner_fallback_bind_the_persisted_target",
+          "result": "OK"
+        },
+        {
+          "name": "reminders::dto::tests::publication_projection_rejects_duplicate_required_fields_and_noninteger_counts",
+          "result": "OK"
+        },
+        {
+          "name": "uuid_v7::tests::generator_and_strict_parser_share_the_same_policy",
+          "result": "OK"
+        },
+        {
+          "name": "writes::dto::tests::assignment_uuid_normalization_preserves_create_identity_and_patch_presence",
+          "result": "OK"
+        },
+        {
+          "name": "writes::dto::tests::bodies_reject_unknown_duplicate_null_and_malformed_member_fields",
+          "result": "OK"
+        },
+        {
+          "name": "writes::dto::tests::create_hash_uses_normalized_fields_not_json_spelling_or_field_order",
+          "result": "OK"
+        },
+        {
+          "name": "writes::dto::tests::key_and_uuid_boundaries_are_explicit",
+          "result": "OK"
+        },
+        {
+          "name": "writes::dto::tests::transitions_preserve_exact_old_state_machine",
+          "result": "OK"
+        },
+        {
+          "name": "writes::dto::tests::unicode_limits_count_characters_and_body_limit_counts_bytes",
+          "result": "OK"
+        },
+        {
+          "name": "writes::dto::tests::versions_accept_json_integer_semantics_without_allowing_increment_overflow",
+          "result": "OK"
+        },
+        {
+          "name": "non_unicode_mode_cannot_become_default_seed",
+          "result": "OK"
+        },
+        {
+          "name": "normal_binary_rejects_import_or_orphan_receipts_before_runtime_configuration",
+          "result": "OK"
+        },
+        {
+          "name": "public_config_requires_the_complete_receipt_and_exact_decoded_database",
+          "result": "OK"
+        },
+        {
+          "name": "assigned_create_and_idempotent_replay",
+          "result": "OK"
+        },
+        {
+          "name": "assignment_scope_does_not_expand_self_access",
+          "result": "OK"
+        },
+        {
+          "name": "canonical_machine_cannot_enter_person_directory_or_assignment",
+          "result": "OK"
+        },
+        {
+          "name": "current_grant_or_membership_revocation_next_request",
+          "result": "OK"
+        },
+        {
+          "name": "directory_authorization_and_scope_matrix",
+          "result": "OK"
+        },
+        {
+          "name": "directory_input_and_upstream_shape_rejection",
+          "result": "OK"
+        },
+        {
+          "name": "directory_search_pagination_contract",
+          "result": "OK"
+        },
+        {
+          "name": "employee_candidate_contract_binds_current_actor_and_target_identity",
+          "result": "OK"
+        },
+        {
+          "name": "explicit_same_assignment_revalidates_and_preserves_snapshot",
+          "result": "OK"
+        },
+        {
+          "name": "invalid_disabled_and_indirect_members_rejected",
+          "result": "OK"
+        },
+        {
+          "name": "member_prevalidation_version_race_and_expiry_rollback",
+          "result": "OK"
+        },
+        {
+          "name": "member_transport_errors_are_bounded_and_secret_safe",
+          "result": "OK"
+        },
+        {
+          "name": "member_wait_holds_no_ticket_lock_or_pool_connection",
+          "result": "OK"
+        },
+        {
+          "name": "pre_read_organization_change_rejected",
+          "result": "OK"
+        },
+        {
+          "name": "default_and_import_require_only_the_dedicated_url_without_fallback",
+          "result": "OK"
+        },
+        {
+          "name": "environment_files_in_the_working_directory_are_not_loaded",
+          "result": "OK"
+        },
+        {
+          "name": "pg_environment_options_are_rejected_before_connecting",
+          "result": "OK"
+        },
+        {
+          "name": "unsupported_conflicting_unknown_and_repeated_arguments_fail_before_url_validation",
+          "result": "OK"
+        },
+        {
+          "name": "fresh_baseline_enforces_uuid7_and_immutable_work_order_identity",
+          "result": "OK"
+        },
+        {
+          "name": "fresh_baseline_restarts_and_rejects_history_or_schema_drift",
+          "result": "OK"
+        },
+        {
+          "name": "historical_or_untracked_database_is_rejected_without_adoption",
+          "result": "OK"
+        },
+        {
+          "name": "authorization_is_fresh_on_every_request",
+          "result": "OK"
+        },
+        {
+          "name": "canonical_machine_read_export_respect_only_explicit_delegation",
+          "result": "OK"
+        },
+        {
+          "name": "canonical_user_requires_explicit_scope_binding_and_private_principal",
+          "result": "OK"
+        },
+        {
+          "name": "cors_preflight_and_error_responses",
+          "result": "OK"
+        },
+        {
+          "name": "csv_byte_capacity",
+          "result": "OK"
+        },
+        {
+          "name": "csv_encoding_formula_and_scope",
+          "result": "OK"
+        },
+        {
+          "name": "csv_row_capacity",
+          "result": "OK"
+        },
+        {
+          "name": "filters_literal_count_and_export_agree",
+          "result": "OK"
+        },
+        {
+          "name": "grant_and_permission_denials",
+          "result": "OK"
+        },
+        {
+          "name": "invalid_token_and_context_contracts",
+          "result": "OK"
+        },
+        {
+          "name": "pagination_boundaries_and_stable_order",
+          "result": "OK"
+        },
+        {
+          "name": "representative_query_plan_baseline",
+          "result": "OK"
+        },
+        {
+          "name": "scope_all_four_and_organization_ceiling",
+          "result": "OK"
+        },
+        {
+          "name": "tenant_and_hierarchy_invisibility",
+          "result": "OK"
+        },
+        {
+          "name": "upstream_failures_are_bounded_and_secret_safe",
+          "result": "OK"
+        },
+        {
+          "name": "authorization_revocation_and_context_expiry_cannot_replay_cached_success",
+          "result": "OK"
+        },
+        {
+          "name": "canonical_external_user_and_machine_cannot_masquerade_as_internal_publisher",
+          "result": "OK"
+        },
+        {
+          "name": "durable_intent_survives_restart_and_recipient_or_ticket_changes_conflict",
+          "result": "OK"
+        },
+        {
+          "name": "notification_scope_and_ticket_visibility_enforce_organization_ceiling",
+          "result": "OK"
+        },
+        {
+          "name": "phase18_external_user_publish_scope_and_original_source_are_mandatory",
+          "result": "OK"
+        },
+        {
+          "name": "phase18_unknown_private_result_never_becomes_a_publish_retry",
+          "result": "OK"
+        },
+        {
+          "name": "post_persistence_response_loss_and_timeout_recover_same_event",
+          "result": "OK"
+        },
+        {
+          "name": "preparation_commit_failure_and_concurrent_event_conflicts_fail_closed",
+          "result": "OK"
+        },
+        {
+          "name": "publication_http_releases_the_business_pool_and_ticket_row_lock",
+          "result": "OK"
+        },
+        {
+          "name": "recipient_selection_and_title_edits_preserve_event_body",
+          "result": "OK"
+        },
+        {
+          "name": "reminder_input_is_strict_and_keys_are_body_events",
+          "result": "OK"
+        },
+        {
+          "name": "stable_event_payload_single_publication_and_unchanged_ticket",
+          "result": "OK"
+        },
+        {
+          "name": "successful_publication_response_is_bounded_validated_and_projected",
+          "result": "OK"
+        },
+        {
+          "name": "ticket_and_notification_authorizations_are_independent",
+          "result": "OK"
+        },
+        {
+          "name": "upstream_failures_do_not_retry_or_leak_and_preserve_ticket",
+          "result": "OK"
+        },
+        {
+          "name": "authorization_wait_holds_no_pool_connection_or_row_lock",
+          "result": "OK"
+        },
+        {
+          "name": "canonical_machine_and_unbound_user_cannot_create_person_audits",
+          "result": "OK"
+        },
+        {
+          "name": "committed_response_loss_replays_original_result",
+          "result": "OK"
+        },
+        {
+          "name": "concurrent_create_replays_once_and_conflicting_body",
+          "result": "OK"
+        },
+        {
+          "name": "create_requires_valid_header_and_canonical_body",
+          "result": "OK"
+        },
+        {
+          "name": "database_acquire_timeout_is_bounded",
+          "result": "OK"
+        },
+        {
+          "name": "database_lock_timeout_rolls_back",
+          "result": "OK"
+        },
+        {
+          "name": "database_statement_timeout_rolls_back",
+          "result": "OK"
+        },
+        {
+          "name": "expired_authorization_during_row_wait_rolls_back",
+          "result": "OK"
+        },
+        {
+          "name": "nonempty_assignee_requires_available_validated_directory",
+          "result": "OK"
+        },
+        {
+          "name": "patch_delete_version_race_and_deleted_visibility",
+          "result": "OK"
+        },
+        {
+          "name": "patch_version_race_and_status_transitions",
+          "result": "OK"
+        },
+        {
+          "name": "receipt_identity_domains_and_revocation",
+          "result": "OK"
+        },
+        {
+          "name": "request_deadline_cancels_wait_without_late_commit",
+          "result": "OK"
+        },
+        {
+          "name": "second_canonical_authorization_rejects_revoked_or_unavailable_source_before_write",
+          "result": "OK"
+        },
+        {
+          "name": "write_validation_preserves_identity_and_rejects_duplicate_json",
+          "result": "OK"
+        }
+      ],
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": 79,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ],
+      "testExecutables": [
+        {
+          "pathRelativeToTarget": "debug/deps/work_orders_api-0caae0af27603f40",
+          "sha256": "7b90f74df4a5d30d608b2697fd2b12f25fa9c36783becaa26e44d869b3f4ce28"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/work_orders_api-35224e9024cb6394",
+          "sha256": "85939c6065335c6b5a2e3ed013e951736be0e7b8bab58e140acdd43698669f40"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/work_orders_migrate-2c7d65c78f4a10d2",
+          "sha256": "b93589289cb331997379df3562709297ea3970582e542414a87ee8564095df57"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/imported_startup-72867c3032d7376d",
+          "sha256": "56391392b3c01b59a8664ba4a2dbb378abd81a225dab91cbc8c9d17b2c35fac1"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/member_contracts-b559e332021f9ff4",
+          "sha256": "fb4974af82f8399ef3bc08f52dd1e9e92fd3833efe4fc2cc2fa927caa35c94f3"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/migration_command-56caf0a43df41e12",
+          "sha256": "c3ed554a94468311231ee00df5980661ecd98248fc413e10642db47bac57aa02"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/migrations-fa3c2a4e26da7883",
+          "sha256": "17540870b7c95d4f24433846caccfae17864d0500d9a57e7cfe533b7f89479b4"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/read_contracts-fb4c6059ee05585d",
+          "sha256": "8cd2c1372e3298f36884a98efcf50bb66df6d18b8e7d457f91daf89219f1a06b"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/reminder_contracts-a7bf2f6ad7aedcb3",
+          "sha256": "ccaad28e2a2c78c4e75107589e88e69ab7fe0f6420281912d487c042fbb8607c"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/write_contracts-5f8e4faeb91d6b34",
+          "sha256": "86a8132aa386f1e306554c013eb7e027548160f7754a647d225cc4c532070c39"
+        }
+      ],
+      "processCleanup": {
+        "status": "PASS",
+        "originalProcessesSignalled": 0,
+        "activeProcessesRemaining": 0,
+        "processGroup": 42910,
+        "processStartTickFloor": 1605127,
+        "interrupted": false
+      },
+      "timedOut": false,
+      "compilerErrorCodes": []
+    }
+  ],
+  "limits": [
+    "No browser, external client, actual service HTTPS or release acceptance claim.",
+    "Any ignored, skipped or failed test remains explicit. Test PostgreSQL schemas may be narrow fixtures."
+  ],
+  "resourceObservation": {
+    "databases": {
+      "added": [],
+      "removed": []
+    },
+    "roles": {
+      "added": [],
+      "removed": []
+    }
+  },
+  "sourceMismatchAfter": [],
+  "auxiliaryMismatchAfter": [],
+  "finishedAtUtc": "2026-10-29T12:12:25.700129+00:00",
+  "totals": {
+    "passed": 149,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0
+  },
+  "cleanup": {
+    "rawLogsRetained": 0,
+    "temporaryDirectoriesCreatedByRunner": 1,
+    "temporaryRuntimeDirectory": "/tmp/rust-saas-unified-auth-20261028/phase25-component-orders-c3ba653d20fb478f9d5e4219eab12c10",
+    "temporaryRuntimeDirectoryRemoved": true,
+    "remainingTemporaryFilesRemoved": 0,
+    "remainingTemporaryLogicalBytesRemoved": 0,
+    "testFixturesSelfClean": true,
+    "componentFixtureResiduals": {
+      "databases": [],
+      "roles": []
+    },
+    "globalObservationMayIncludeConcurrentRootFixtures": true,
+    "databaseDeletionByThisRunner": false
+  }
+}

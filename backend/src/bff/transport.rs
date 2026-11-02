@@ -2,6 +2,7 @@
 
 use crate::{config::Config, error::AppError, state::AppState};
 use std::{future::Future, pin::Pin, sync::Arc};
+use uuid::Uuid;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Endpoint {
@@ -9,33 +10,50 @@ pub(crate) enum Endpoint {
     Jwks,
     Token,
     UserInfo,
-    Introspect,
+    AccountProof,
+    #[cfg(test)]
     Revoke,
     GlobalLogout,
+    LogoutOperation(Uuid),
     ContextInteractions,
 }
 impl Endpoint {
-    pub(crate) fn path(self) -> &'static str {
+    pub(crate) fn path(self) -> String {
         match self {
-            Self::Discovery => "/.well-known/openid-configuration",
-            Self::Jwks => "/oidc/jwks",
-            Self::Token => "/oidc/token",
-            Self::UserInfo => "/oidc/userinfo",
-            Self::Introspect => "/oidc/introspect",
-            Self::Revoke => "/oidc/revoke",
-            Self::GlobalLogout => "/oidc/account/logout",
-            Self::ContextInteractions => "/oidc/context-interactions",
+            Self::Discovery => "/.well-known/openid-configuration".into(),
+            Self::Jwks => "/oauth/jwks".into(),
+            Self::Token => "/oauth/token".into(),
+            Self::UserInfo => "/oauth/userinfo".into(),
+            Self::AccountProof => "/internal/identity/auth/account-proof".into(),
+            #[cfg(test)]
+            Self::Revoke => "/oauth/revoke".into(),
+            Self::GlobalLogout => "/oauth/logout".into(),
+            Self::LogoutOperation(operation) => format!("/oauth/logout/operations/{operation}"),
+            Self::ContextInteractions => "/internal/identity/auth/context-interactions".into(),
         }
     }
     pub(crate) fn is_post(self) -> bool {
         matches!(
             self,
             Self::Token
-                | Self::Introspect
-                | Self::Revoke
+                | Self::AccountProof
                 | Self::GlobalLogout
+                | Self::LogoutOperation(_)
                 | Self::ContextInteractions
-        )
+        ) || self.is_legacy_revoke()
+    }
+
+    #[cfg(test)]
+    fn is_legacy_revoke(self) -> bool {
+        matches!(self, Self::Revoke)
+    }
+    #[cfg(not(test))]
+    fn is_legacy_revoke(self) -> bool {
+        false
+    }
+
+    fn is_private(self) -> bool {
+        matches!(self, Self::AccountProof | Self::ContextInteractions)
     }
 }
 
@@ -59,11 +77,15 @@ pub(crate) trait OidcTransport: Send + Sync {
 struct HttpTransport {
     client: Option<reqwest::Client>,
     issuer: Option<String>,
+    private_client: Option<reqwest::Client>,
+    private_origin: Option<String>,
 }
 pub(crate) fn configured(config: &Config) -> Arc<dyn OidcTransport> {
     Arc::new(HttpTransport {
         client: config.bff_http_client.clone(),
         issuer: config.bff_oidc_issuer.clone(),
+        private_client: config.identity_http_client.clone(),
+        private_origin: config.identity_service_url.clone(),
     })
 }
 
@@ -82,9 +104,14 @@ pub(crate) fn encode_form(parameters: &[(String, String)]) -> String {
 impl OidcTransport for HttpTransport {
     fn send<'a>(&'a self, request: OidcRequest) -> OidcFuture<'a> {
         Box::pin(async move {
-            let client = self.client.as_ref().ok_or(AppError::Unavailable)?;
-            let issuer = self.issuer.as_deref().ok_or(AppError::Unavailable)?;
-            let url = format!("{issuer}{}", request.endpoint.path());
+            let (client, origin) = if request.endpoint.is_private() {
+                (self.private_client.as_ref(), self.private_origin.as_deref())
+            } else {
+                (self.client.as_ref(), self.issuer.as_deref())
+            };
+            let client = client.ok_or(AppError::Unavailable)?;
+            let origin = origin.ok_or(AppError::Unavailable)?;
+            let url = format!("{origin}{}", request.endpoint.path());
             let mut outgoing = if let Some(body) = request.json {
                 client
                     .post(url)
@@ -145,5 +172,29 @@ impl<'a> Chain<'a> {
         tokio::time::timeout_at(self.deadline, self.state.bff_transport.send(request))
             .await
             .map_err(|_| AppError::Unavailable)?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Endpoint;
+
+    #[test]
+    fn account_proof_and_context_interaction_use_only_the_private_identity_origin() {
+        for endpoint in [Endpoint::AccountProof, Endpoint::ContextInteractions] {
+            assert!(endpoint.is_private());
+            assert!(endpoint.path().starts_with("/internal/identity/auth/"));
+            assert!(endpoint.is_post());
+        }
+        for endpoint in [
+            Endpoint::Discovery,
+            Endpoint::Jwks,
+            Endpoint::Token,
+            Endpoint::UserInfo,
+            Endpoint::Revoke,
+        ] {
+            assert!(!endpoint.is_private());
+            assert!(!endpoint.path().starts_with("/oidc/"));
+        }
     }
 }

@@ -1,0 +1,78 @@
+{
+  "contractVersion": "unified-auth-phase22-self-check/1",
+  "status": "PASS",
+  "phase": 22,
+  "ledgerOwnedByRoot": true,
+  "acceptanceCriteria": [
+    {
+      "result": "PASS",
+      "criterion": "Deterministic dependency, queue, timeout and pool semantics"
+    },
+    {
+      "criterion": "Code refresh and revocation use database authority across independent states",
+      "result": "PASS",
+      "actualDeployedIdentityProcessesConcurrent": 1,
+      "independentIdentityStatesInOneTestProcess": 2
+    },
+    {
+      "criterion": "Bounded dedicated capacity with measured success and constraints",
+      "result": "PASS",
+      "q9TargetsEstablished": false
+    },
+    {
+      "criterion": "Secret-free operational evidence and permanent failure alerts",
+      "result": "PASS",
+      "collectorNotificationsReceived": 6,
+      "terminalSource": "OWNER_SEEDED_CANONICAL_FIXTURE_NOT_WORKER_EXECUTION",
+      "terminalRemainsInDatabase": true
+    }
+  ],
+  "tests": {
+    "libraryExplicitPgIgnored": 54,
+    "nodeLoadPassed": 15,
+    "runtimeChecksPassed": 8,
+    "cleanupMockReplayPassed": 4,
+    "observabilityPgPassed": 2,
+    "binaryPassed": 1,
+    "independentStatePgPassed": 6,
+    "nodeAlertPassed": 11,
+    "countsMustNotBeSummedAcrossOverlappingSuites": true,
+    "libraryPassed": 87
+  },
+  "capacityEvidence": {
+    "runtimeUsesPriorCompletedComponent": true,
+    "separateOwnedFixture": true,
+    "file": "phase-22-capacity.json",
+    "thirtyMinuteSoakClaimed": false,
+    "binaryShaVerified": true
+  },
+  "cleanup": {
+    "dockerCreated": 0,
+    "result": "PASS",
+    "roles": 0,
+    "leases": 0,
+    "databases": 0,
+    "errors": 0,
+    "dockerReused": 0,
+    "ownedPythonCachesRemoved": 1,
+    "processes": 0,
+    "activity": 0,
+    "sharedPostgresOwnerPublicToolsSnapshotsAndCacheRetainedForLaterGoalPhases": true
+  },
+  "logs": {
+    "passwordWarningObserved": true,
+    "defaultInfoObserved": true,
+    "faultFiles": 6,
+    "leaks": 0,
+    "capacityCanariesCompared": 2436,
+    "faultBytes": 4673,
+    "faultCanariesCompared": 35
+  },
+  "relativeLinks": {
+    "files": 7,
+    "status": "PASS",
+    "missing": [],
+    "checked": 43
+  },
+  "sourceAttestationSha256": "9fb3439c4fe8b42da2213bb05f82a3b64b2ac3024e38a008aaadd98535c16512"
+}

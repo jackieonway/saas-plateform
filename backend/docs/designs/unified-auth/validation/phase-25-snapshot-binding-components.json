@@ -1,0 +1,74 @@
+{
+  "contractVersion": "unified-auth-phase25-snapshot-binding-components/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T11:21:54.266094+00:00",
+  "scope": "Snapshot inventory guard and exact build/tools binding only; no application or protocol runtime acceptance is claimed.",
+  "initialActualFailure": {
+    "label": "phase25-tools-r1",
+    "snapshotSha256": "d26543136925b6717203ad26cfc7b0e23de32da43f65acade96af8d26d7c4e62",
+    "code": "PHASE23_ENV_RP_SNAPSHOT_INPUTS_INVALID",
+    "actualRpInputs": 18,
+    "requiredByOldGuard": 14,
+    "compiledApplicationInputMapsEqual": true,
+    "disposition": "Preserved as failed/intermediate input; not selected for runtime."
+  },
+  "change": "Phase25 requires exactly fourteen production RP files plus the four fixed RP test files; Phase23 keeps its original fourteen-file inventory. compiled_input is unchanged.",
+  "inputs": {
+    "saas-plateform/backend/tests/unified-auth-https/phase23-environment.py": "7d70ef966e3e41ceda8d48f93fd4438b6f64bd40f6e7f161027a0c6eac302fcc",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase25_snapshot_binding.py": "a73af6d81a80710b056fb4b205027cbf7044bb6cc2941df665a4b5a6ba473966"
+  },
+  "checks": [
+    {
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "saas-plateform/backend/tests/unified-auth-https",
+        "-p",
+        "test_phase25_snapshot_binding.py",
+        "-v"
+      ],
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 0.097,
+      "evidence": "Real temporary private files and manifests; mocks only replace task root and omit Task constructor. Rejects missing production/test RP files, arbitrary additional program, source/frontend drift, and business binary drift; allows ops-only changes and original Phase23 contract."
+    },
+    {
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "saas-plateform/backend/tests/unified-auth-https",
+        "-p",
+        "test_phase23_environment_*.py",
+        "-v"
+      ],
+      "tests": 39,
+      "passed": 38,
+      "failed": 0,
+      "skipped": 1,
+      "durationSeconds": 5.495,
+      "skip": "root is required to make an alien-owner fixture",
+      "evidence": "Existing mocked environment tests and real short-lived Python process group cleanup regressions."
+    }
+  ],
+  "resources": {
+    "servicesStarted": 0,
+    "databasesCreated": 0,
+    "containersCreated": 0,
+    "temporaryTestDirectoriesRemovedByTemporaryDirectory": true,
+    "rootOwnsTaskSnapshotCleanup": true,
+    "retainedTaskSnapshots": [
+      "source-snapshot-phase25-tools-r1",
+      "snapshot-phase25-tools-r1.json"
+    ]
+  }
+}

@@ -23,7 +23,6 @@ import {
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -43,7 +42,7 @@ import { usePermissionsQuery } from "@/hooks/use-auth-data"
 import { authApi } from "@/api/auth"
 import { formatDateTime, formatRelative, GENDER_LABELS } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { LoginHistoryRecord, MySessionRecord } from "@/api/types"
+import type { LoginHistoryRecord } from "@/api/types"
 
 const passwordSchema = z
   .object({
@@ -120,7 +119,6 @@ export default function ProfilePage() {
     staleTime: 30_000,
     retry: 1,
   })
-  const mySessions = sessionsQuery.data?.sessions ?? []
   const platformSessions = sessionsQuery.data?.platformSessions ?? []
   const revokeSessionMutation = useMutation({
     mutationFn: authApi.revokeSession,
@@ -130,8 +128,6 @@ export default function ProfilePage() {
     },
     onError: (e: Error) => toast.error(e.message || "撤销失败"),
   })
-  const activeSessionCount = mySessions.filter((s) => s.activeAccess + s.activeRefresh > 0).length
-  const revokedTotal = sessionsQuery.data?.revokedTotal ?? 0
 
   /* ---------- 安全操作:锚点滚动到改密卡片 + 一次性 ring 脉冲 ---------- */
   const [pwPulse, setPwPulse] = React.useState(false)
@@ -337,9 +333,9 @@ export default function ProfilePage() {
                   <div className="mb-3 flex items-center gap-2">
                     <MonitorSmartphone className="size-4 text-primary/80" />
                     <h3 className="text-[13px] font-semibold text-foreground/90">我的活跃会话</h3>
-                    {!sessionsQuery.isLoading && !sessionsQuery.isError && (mySessions.length > 0 || platformSessions.length > 0) && (
+                    {!sessionsQuery.isLoading && !sessionsQuery.isError && platformSessions.length > 0 && (
                       <span className="ml-auto text-[11px] tabular-nums text-muted-foreground/70">
-                        活跃 {activeSessionCount + platformSessions.filter((s) => s.active).length}/{mySessions.length + platformSessions.length}
+                        活跃 {platformSessions.filter((s) => s.active).length}/{platformSessions.length}
                       </span>
                     )}
                   </div>
@@ -383,32 +379,9 @@ export default function ProfilePage() {
                       message={sessionsQuery.error instanceof Error ? sessionsQuery.error.message : undefined}
                       onRetry={() => sessionsQuery.refetch()}
                     />
-                  ) : mySessions.length === 0 ? (
-                    <div>
-                      <EmptyState
-                        className="py-5"
-                        icon={<MonitorSmartphone className="size-7" />}
-                        title="当前没有第三方会话"
-                        description="OAuth 客户端获得授权后,将在此显示其活跃令牌"
-                      />
-                      {revokedTotal > 0 && (
-                        <p className="text-center text-[11px] text-muted-foreground/70">
-                          已吊销 <b className="tabular-nums">{revokedTotal}</b> 个历史令牌
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="max-h-[24rem] space-y-2.5 overflow-y-auto scroll-area pr-1">
-                      {mySessions.map((s) => (
-                        <MySessionCard key={s.clientId} session={s} />
-                      ))}
-                      {revokedTotal > 0 && (
-                        <p className="pt-0.5 text-[11px] text-muted-foreground/70">
-                          已吊销 <b className="tabular-nums">{revokedTotal}</b> 个历史令牌
-                        </p>
-                      )}
-                    </div>
-                  )}
+                  ) : platformSessions.length === 0 ? (
+                    <EmptyState className="py-5" icon={<MonitorSmartphone className="size-7" />} title="当前没有平台会话" description="后台登录设备将在此显示。" />
+                  ) : null}
                 </section>
 
                 <section aria-label="安全操作">
@@ -562,88 +535,5 @@ function LoginTimelineItem({ record }: { record: LoginHistoryRecord }) {
         </p>
       )}
     </li>
-  )
-}
-
-/* ============ 活跃会话迷你卡 ============ */
-
-function MySessionCard({ session }: { session: MySessionRecord }) {
-  /* active=0:整卡 muted(虚线边框+降不透明度), 计数徽章转灰并附「已失效」小徽章 */
-  const active = session.activeAccess + session.activeRefresh > 0
-  const countBadge = "border-muted-foreground/20 bg-muted/60 text-[10px] text-muted-foreground"
-  return (
-    <div
-      className={cn(
-        "rounded-lg border p-3 shadow-sm transition-all",
-        active
-          ? "border-solid bg-background/70 hover:shadow-md"
-          : "border-dashed border-muted-foreground/25 bg-muted/25 opacity-70 hover:opacity-95"
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
-        <code
-          className={cn(
-            "rounded-md px-1.5 py-0.5 font-mono text-xs font-medium",
-            active ? "bg-muted text-foreground/90" : "bg-muted/70 text-muted-foreground"
-          )}
-        >
-          {session.clientId}
-        </code>
-        <span className="flex items-center gap-1.5">
-          {active ? (
-            <>
-              <Badge
-                variant="outline"
-                className="border-teal-500/30 bg-teal-500/10 text-[10px] text-teal-700 dark:text-teal-300"
-              >
-                访问 {session.activeAccess}
-              </Badge>
-              <Badge
-                variant="outline"
-                className="border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-600 dark:text-emerald-400"
-              >
-                刷新 {session.activeRefresh}
-              </Badge>
-            </>
-          ) : (
-            <>
-              <Badge variant="outline" className={countBadge}>
-                访问 {session.activeAccess}
-              </Badge>
-              <Badge variant="outline" className={countBadge}>
-                刷新 {session.activeRefresh}
-              </Badge>
-              <Badge
-                variant="outline"
-                className="border-muted-foreground/30 bg-muted/50 text-[10px] text-muted-foreground"
-              >
-                已失效
-              </Badge>
-            </>
-          )}
-        </span>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-        {active ? (
-          session.lastExpiresAt ? (
-            <span title={formatDateTime(session.lastExpiresAt)}>
-              过期 {formatRelative(session.lastExpiresAt)}
-            </span>
-          ) : (
-            <span>暂无过期时间</span>
-          )
-        ) : (
-          <span>令牌已全部失效</span>
-        )}
-        {session.scope && (
-          <span
-            className="max-w-full truncate font-mono text-muted-foreground/60"
-            title={session.scope}
-          >
-            {session.scope}
-          </span>
-        )}
-      </div>
-    </div>
   )
 }

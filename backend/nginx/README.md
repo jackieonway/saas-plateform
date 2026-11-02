@@ -21,7 +21,6 @@ docker build -t saas-platform-gateway:local nginx
 | `publicOrigin` | 无路径和尾部斜线的准确 HTTPS 来源 |
 | `backend`、`frontend` | 默认 `backend:3001`、`frontend-web:8080` |
 | `notification`、`workOrders`、`stores` | 可选通知、工单、门店上游，关闭时保持 404 |
-| `oauthPlayground`、`oauthPlaygroundStatic` | 独立 OAuth 演练 API 和静态服务 |
 | `zipStatic` | ZIP 静态上游，保留 `/sub-apps/` 完整路径 |
 | `versionRoutes` | `app`、`version`、`upstream` 组成的精确版本路由 |
 | `allowedServices`、`allowedUpstreamIps` | 私网 DNS 服务名及额外准确 IP；提供数组会替换默认集合 |
@@ -37,7 +36,7 @@ docker build -t saas-platform-gateway:local nginx
 
 | 公开路径 | 行为 |
 | --- | --- |
-| `/auth`、`/api`、`/oauth` | 保留路径转平台 API；`/auth` 属于平台 BFF Cookie owner，不能交给静态宿主 |
+| `/auth`、`/api` | 保留路径转平台 API；`/auth` 属于平台 BFF Cookie owner，不能交给静态宿主 |
 | `/micro-proxy/` | 保留完整 URL 转平台 API，关闭升级；由后端核对已登记静态入口 |
 | `/micro/<code>` | 宿主 SPA 导航 |
 | `/sub-apps/<app>/versions/<version>/` | 匹配 `versionRoutes` 后剥离前缀转静态服务 |
@@ -72,13 +71,9 @@ docker build -t saas-platform-gateway:local nginx
 
 受管镜像 worker 写出 location include 并检查、reload Nginx。网关必须显式挂载路由目录并在正确的 HTTPS `server` 中 include；基础 Compose 和渲染器不会自动完成。手写 `versionRoutes` 与 worker 不能重复管理同一前缀，见[部署代理](../tools/deployment-agent/README.md)。
 
-## OAuth 演练
+## 认证权威与退役路径
 
-可选 API 将 `/oauth-playground-api/*` 改写到 `/api/*`，保留查询、Origin 和上游 Set-Cookie，仅发送 `oauth_playground`、`__Host-oauth_playground` Cookie，清空 Authorization 和升级头。`internal`、`metrics` 固定 404。
-
-`/callback` 仅 GET/HEAD 加载 `callback.html`，保留查询、禁止缓存并关闭访问日志；`/sub/oauth-playground` 补尾斜线后跳转，其子路径剥离前缀提供静态资源。静态请求不发送 Cookie 或 Authorization；未配置时对应路径保持 404。
-
-回调资源使用 `/sub/oauth-playground/assets/*`，qiankun 入口为公开来源加 `/sub/oauth-playground/`。API `OAUTH_PUBLIC_ORIGIN`、平台注册 `/callback` 和网关来源一致。网关不启动演练服务或创建平台注册记录。
+认证中心的独立 HTTPS issuer 负责唯一公开 `/oauth/*`。本平台网关对旧 `/oauth`、`/oidc`、`/api/oauth`、`/api/oidc`、旧演练、callback、device 和 consent 入口固定返回 404；相关旧配置字段被拒绝。标准第三方 RP 在自己的 HTTPS 来源运行，见[独立示例](../../../saas-examples/oidc-rp/README.md)。
 
 ## 检查
 
@@ -94,6 +89,12 @@ Linux 已安装 Nginx/OpenSSL 时可增加临时真实 HTTPS 验证：
 PLATFORM_TEST_NGINX=/usr/sbin/nginx PLATFORM_TEST_OPENSSL=/usr/bin/openssl node --test tests/nginx-render-policy.mjs
 ```
 
-该验证从实际网关样例开始，仅替换自有随机监听、证书和测试上游。它检查真实宿主 HTTPS CSP、上游旧策略替换和 OAuth 转发/凭据隔离。若已安装 Playwright 及其 Chromium，额外设置 `PLATFORM_TEST_BROWSER_PACKAGE` 为 Playwright `index.mjs` 的绝对路径、`PLAYWRIGHT_BROWSERS_PATH` 为已准备的浏览器目录，即可运行嵌套的真实 qiankun HTML/UMD 挂载、更新和卸载测试；测试还检查未批准来源被 `connect-src` 拒绝。
+便携 Nginx 可用 `PLATFORM_TEST_NGINX_MIME_TYPES` 指定已存在的 `mime.types` 绝对路径，无需安装系统包或启动系统服务。测试使用自有随机回环端口；PID、临时目录和启动日志都位于测试目录。
+
+该验证从实际网关样例开始，仅替换自有随机监听、证书和测试上游。Node 请求显式信任临时证书并验证 `localhost` 主机名，另以缺少该信任和错误主机名两个负对照确认 TLS 在请求到达上游前拒绝。验证还检查真实宿主 HTTPS CSP、上游旧策略替换、BFF Cookie/来源代理、回调日志脱敏、公开应用 context 转发，以及旧签发和私有服务入口拒绝。
+
+嵌套浏览器测试由 `PLATFORM_TEST_BROWSER_PACKAGE` 指向 Playwright `index.mjs` 的绝对路径启用，`PLAYWRIGHT_BROWSERS_PATH` 指向已准备的 Chromium。浏览器必须具备对该次临时证书的有效信任；Node 的显式 CA 设置不会传给浏览器。当前自签名夹具不会自动建立浏览器信任，且没有 TLS 绕过选项，因此仅提供浏览器包不足以形成浏览器通过证据。未准备受信任的浏览器环境时，保持该项未运行并单独报告；不要为此修改用户全局信任库。该测试检查真实 qiankun HTML/UMD 挂载、更新和卸载，以及未批准来源被 `connect-src` 拒绝。
 
 可选测试使用临时证书与回环上游，不连接部署服务器；进程和文件在结束后清理。上线前仍须在实际镜像执行 `nginx -t`，用真实域名验收 TLS、最终 CSP、qiankun 生命周期、API、MIME、缺资源 404 和 Cookie 隔离。具体部署见[平台部署](../docs/deployment.md)和[已有 Nginx](../docs/existing-nginx.md)。
+
+私有 `POST /api/apps/{code}/authorize` 由独立 APP_RESOURCE 服务调用，公开网关固定返回 404；浏览器 `/api/apps/session-token` 和应用 context 继续转发。业务 API 的 `PLATFORM_API_ORIGIN` 与通知服务的 `PLATFORM_API_BASE_URL` 必须使用另行配置的私有 HTTPS listener，且证书主机名、CA 和精确路径可达性经过核对。当前公开网关模板不创建该私有 listener；配置缺口属于发布前置，不能改用公开 origin 绕过隔离。

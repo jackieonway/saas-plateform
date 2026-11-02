@@ -1,0 +1,40 @@
+{
+  "contractVersion": "unified-auth-phase25-legacy-native-log-cleanup/1",
+  "status": "PASS_WITH_LIMITED_CANARY_COVERAGE",
+  "recordedAtUtc": "2026-10-29T12:19:42.374698+00:00",
+  "scope": "Exact root-authorized cleanup of the independently audited 163-byte r1/r2 native stores log. Historical core cleanup results remain unchanged but their native-log inventory limitation is corrected in the linked report.",
+  "correctionReport": {
+    "path": "phase-25-r1-r2-native-log-correction.json",
+    "sha256": "4b48944aa65d42240f5d83911a7db18689c081898fd19a5bedf3c3975e088efc"
+  },
+  "result": {
+    "status": "PHASE25_BUSINESS_STOPPED",
+    "servicesRemaining": 0,
+    "nativeLogAudit": {
+      "status": "PASS_WITH_LIMITED_CANARY_COVERAGE",
+      "nativeLogsFound": 1,
+      "nativeLogsRemoved": 1,
+      "nativeLogBytesRemoved": 163,
+      "canaryScanComplete": false,
+      "canaryCoverage": "UNAVAILABLE_ENVIRONMENT_ABSENT",
+      "privateCandidateCount": 0,
+      "candidateFindings": null,
+      "rawLogContentsPersisted": false,
+      "logs": [
+        {
+          "service": "stores",
+          "name": "phase25-business-stores.log",
+          "bytes": 163,
+          "sha256": "a14f31cba34ca2284f89eb40b9319ce11267a2cd5fe94ccb1d11e30f06ba387d",
+          "safeAppFailureCode": "PHASE25_APP_DATABASE_BASELINE_VERIFICATION"
+        }
+      ]
+    }
+  },
+  "remainingExactNativeLogs": [],
+  "canaryScanComplete": false,
+  "canaryLimitation": "Original protected business ENV/secrets were already removed. Only fixed production category and byte hash are retained; no complete retrospective zero-leak claim.",
+  "applicationServicesStarted": 0,
+  "databasesCreated": 0,
+  "containersCreated": 0
+}

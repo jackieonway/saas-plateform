@@ -1,0 +1,106 @@
+{
+  "contractVersion": "unified-auth-phase25-readonly-service/1",
+  "result": "PASS",
+  "kind": "stores",
+  "evidenceLayer": "ACTUAL_POSTGRESQL_LOGIN_ROLE_AND_NATIVE_HTTP",
+  "startedAtEpoch": 1793275323.3145056,
+  "binarySha256": "2b9ba4cd215f354e54e6f983359bd70f8acbd2065d534f2e09b2b75ce0647203",
+  "migratorSha256": "1bc0fda8db25b9dfc2b777174ce1bd6ba289b7a4d0964e50011b234bde0a194a",
+  "compileInputs": {
+    "Cargo.lock": "8bc0331b685a4cbd8d6d4af95cce32ac30c78ca1a7524566de313bfd0f13c368",
+    "Cargo.toml": "e45169ecd6abb1d858924712612dc4ed9e1650ec85c90095140da3348aba2bf3",
+    "migrations/0001_stores.sql": "10a77286392debc5049f17e28f722763b493f8148ad972e40b35983910dd6d26",
+    "src/authorization/client.rs": "6086f91e4d3d50f890b48cd1e19a089cc05da1904c59020efe99d8ea38931bbc",
+    "src/authorization/client_tests.rs": "db5986bcc9be6fa8ec87cd716fe104c4ef85584d2107027eaa62b1468b360316",
+    "src/authorization/organizations.rs": "4fddaf3babcb63bf9a351403829edf643d43113ae2179705d7b38b2a941b32cf",
+    "src/authorization/organizations_tests.rs": "fedd59d6428644dba95f8dc323b0e975cb22dcedf21eb80785e5fdc1e224b741",
+    "src/authorization/policy.rs": "2ec1b5f91c5e659972945d3c107e79fe7a2f397e9b69e6b2190a90349fe187e8",
+    "src/authorization/test_http.rs": "24782c52a74f73016c7f91bb98dd9321172347fb5b8a563693f38b4a72582c09",
+    "src/authorization/tests.rs": "e708cd46dd56078f431fff7b811f83db6820a06ddf3bd481ab97559ed9a49716",
+    "src/authorization/witness_tests.rs": "cd4b8fd852e176f20710b1cbbbc43475e6939cc8b5c8cfc2af1903b68275e5b7",
+    "src/authorization.rs": "ca36a025d6605f61dea3d1d433c8d4c4cb2782091b9147c123b4767e38800826",
+    "src/bin/stores-migrate.rs": "f6f497e07bd75aae28bdf53e4b87ab32897225e36cbb56a056ef76ca2ca71c2b",
+    "src/config.rs": "e4dc10a478d42bebaaea23afa789d9e4b00914830205a1dea84dd04eb2006b18",
+    "src/directory.rs": "c41150f315282be9c1e150eb35753491295c823acdd60841b335194f1bea3cb6",
+    "src/domain.rs": "5e4dfd8cce1e412ea64ad4b6f2701a38df05ec180f3e506fa0bd6e9097ae0ee0",
+    "src/error.rs": "a1d57a764e46cb12b2b531997bce46fb99d3c5cf7ed19ef9626c026f56af9438",
+    "src/http.rs": "f5cb127a1e59cae87637cab3b1ac582e7bc0261808221733a0a7bbe954721932",
+    "src/imported_database.rs": "6c3442155cc7fbb918fb2312a6eebd575a26ed565ced0aba799279052bbf5000",
+    "src/imported_schema.sql": "204b5d744b099f2eda02fa363f5c54d3379da75753ae4673474017e6fb51ade2",
+    "src/lib.rs": "642f37066738e2afa1f9263f2a5d2e558a1123fba280b468a9a0f760f693cc0b",
+    "src/main.rs": "a695f86dc57c3798f00c7f44784e6c2c7d5fafe483057e72e9212eb92befe7b3",
+    "src/migration_cli.rs": "a78367def93aac3cbe42ede18c2e397ad321cf55c8bef6d5b86fc6713ccbe66e",
+    "src/migrations.rs": "8fd9a46c2e8e4a406873e53296cd993bd2ccab2626fa30a348ef8cc4565f5e18",
+    "src/reports.rs": "c0daf8f35503b4513d74f912300e996e094238894ffec6aed83ef58a8bbb87b4",
+    "src/staff.rs": "ec8520d148e3f38ae4cb3698b23b30f8872894d98f12f5eacc9ff9c9f491c3d9",
+    "src/stores.rs": "46f7f553c8dabe8b4b7d8d381d36feb8d08e5988ceed53b94694fd108eceee52",
+    "src/telemetry.rs": "93a6a6db0a9fbf41450a3defe97dddaf03ad8ed805e8d03054c51a840830336e",
+    "vendor/operational-telemetry/Cargo.lock": "2e3b612bc2ba42434b7ddbc32446442657356364a6083b951a3c5f16ae4cdf9a",
+    "vendor/operational-telemetry/Cargo.toml": "9f3b14ff00778e84b66b085ba9aa1b56f97b742f68c6c5a00ef15cf9722b5818",
+    "vendor/operational-telemetry/src/lib.rs": "ae4fa26581d616e9301a5ed167dcea1a56c50a224e29a6c068a4248b7ec3900c"
+  },
+  "checks": {
+    "emptyDatabase": {
+      "expectedReady": false,
+      "readinessObserved": false,
+      "rejectedWithNonzeroExit": true,
+      "childStoppedAndReaped": true,
+      "privateLogBytesScanned": 163,
+      "secretFindings": 0,
+      "schemaObjectsCreated": 0
+    },
+    "offlineMigrator": {
+      "exitCode": 0,
+      "actualOwnerDelegation": true
+    },
+    "currentBaseline": {
+      "expectedReady": true,
+      "readinessObserved": true,
+      "childStoppedAndReaped": true,
+      "privateLogBytesScanned": 129,
+      "secretFindings": 0
+    },
+    "wrongChecksum": {
+      "expectedReady": false,
+      "readinessObserved": false,
+      "rejectedWithNonzeroExit": true,
+      "childStoppedAndReaped": true,
+      "privateLogBytesScanned": 163,
+      "secretFindings": 0
+    },
+    "wrongFingerprint": {
+      "expectedReady": false,
+      "readinessObserved": false,
+      "rejectedWithNonzeroExit": true,
+      "childStoppedAndReaped": true,
+      "privateLogBytesScanned": 163,
+      "secretFindings": 0
+    },
+    "missingHistory": {
+      "expectedReady": false,
+      "readinessObserved": false,
+      "rejectedWithNonzeroExit": true,
+      "childStoppedAndReaped": true,
+      "privateLogBytesScanned": 163,
+      "secretFindings": 0,
+      "historyRecreated": false
+    }
+  },
+  "dockerContainersCreated": 0,
+  "dockerContainersReused": 0,
+  "dedicatedDatabasesCreated": 1,
+  "dedicatedRolesCreated": 2,
+  "formalOrSharedApplicationDatabasesModified": false,
+  "httpsOrWholeCandidateAcceptanceClaimed": false,
+  "stage": "MISSING_HISTORY_MUST_FAIL_WITHOUT_RECREATE",
+  "actualRestrictedLoginVerified": true,
+  "cleanup": {
+    "databases": 0,
+    "roles": 0,
+    "failures": [],
+    "runtimePrivateFilesCreated": 0,
+    "logsRetained": false,
+    "sharedPostgresRetained": true
+  },
+  "finishedAtEpoch": 1793275324.9440327
+}

@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::platform_accounts::{
     AccountCredential, AccountFuture, AccountMutationTx, AccountSnapshot, CreatedAccount,
-    CredentialHash, LoginIdentifier, NewAccount, PreparedPassword,
+    CredentialHash, NewAccount, PreparedPassword,
 };
 
 #[derive(sqlx::FromRow)]
@@ -30,38 +30,6 @@ impl From<CredentialRow> for AccountCredential {
             CredentialHash::new(row.password_hash),
         )
     }
-}
-
-pub(super) async fn candidates(
-    pool: &PgPool,
-    identifier: LoginIdentifier<'_>,
-) -> Result<Vec<AccountCredential>, AppError> {
-    let rows: Vec<CredentialRow> = sqlx::query_as(
-        "SELECT id, username, password_hash, status, session_version, COALESCE(real_name,'') AS real_name \
-         FROM users WHERE username=$1 OR ($2<>'' AND regexp_replace(phone, '[[:space:]()\\-]', '', 'g')=$2) \
-         OR ($3<>'' AND lower(email)=$3) ORDER BY id LIMIT 65",
-    )
-    .bind(identifier.identifier)
-    .bind(identifier.phone)
-    .bind(identifier.email)
-    .fetch_all(pool)
-    .await
-    .map_err(|_| AppError::Unavailable)?;
-    Ok(rows.into_iter().map(AccountCredential::from).collect())
-}
-
-pub(super) async fn by_username(
-    pool: &PgPool,
-    username: &str,
-) -> Result<Option<AccountCredential>, AppError> {
-    let row: Option<CredentialRow> = sqlx::query_as(
-        "SELECT id, username, password_hash, status, session_version, COALESCE(real_name,'') AS real_name \
-         FROM users WHERE username=$1",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await?;
-    Ok(row.map(AccountCredential::from))
 }
 
 pub(super) async fn by_user_id(pool: &PgPool, id: Uuid) -> Result<AccountCredential, AppError> {
@@ -122,6 +90,7 @@ impl AccountMutationTx for PostgresAccountTransaction<'_> {
         })
     }
 
+    #[cfg(test)]
     fn credential_matches<'a>(
         &'a mut self,
         credential: &'a AccountCredential,
@@ -239,22 +208,6 @@ async fn revoke_account(
     if updated == 0 {
         return Err(AppError::not_found("用户不存在"));
     }
-    sqlx::query("UPDATE oauth_tokens SET revoked=true WHERE user_id=$1 AND revoked=false")
-        .bind(id)
-        .execute(&mut *connection)
-        .await?;
-    sqlx::query(
-        "UPDATE oauth_authorization_codes SET consumed=true WHERE user_id=$1 AND consumed=false",
-    )
-    .bind(id)
-    .execute(&mut *connection)
-    .await?;
-    sqlx::query(
-        "UPDATE oauth_device_codes SET status='EXPIRED' WHERE user_id=$1 AND status IN ('PENDING','APPROVED')",
-    )
-    .bind(id)
-    .execute(&mut *connection)
-    .await?;
     Ok(revoked)
 }
 

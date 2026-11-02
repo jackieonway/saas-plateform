@@ -1,0 +1,61 @@
+{
+  "baseSnapshot": "phase24-final-r1",
+  "baseSnapshotSha256": "5f191160608a118298727e3027304f05cf710e88ea403a853a063c696b029df0",
+  "currentSnapshot": "phase24-final-r2",
+  "currentSnapshotSha256": "e1f3e17d31a3b96e548115559127308aa594f40f1e737268907c5523fa474926",
+  "changedCompiledInputs": {
+    "saas-plateform/backend/src/authentication_boundary_tests.rs": {
+      "before": "38343dcffd02f6ce39076f4ce293fe7cbf459b032aecd81d797f373690ca4f00",
+      "after": "8d5305e349604ca94bfdda50f7f6163102f3ed94a3fb702f6ac931a8055239fa"
+    },
+    "saas-plateform/backend/src/bff_tests/canonical.rs": {
+      "before": "7368c6d5ba8de2d99f5573367b878d90580b6a27733c3025c1901c7a856c47aa",
+      "after": "9ab306f62f55054fe3ac5616861b11fcd1818e0d8f40cedf0dbd234c62b98af6"
+    },
+    "saas-plateform/backend/src/management_audit_tests.rs": {
+      "before": "643cd70202e1ef54c41f469353d97a2500ea669200169168dac6019775773dd1",
+      "after": "f112e99deb8f4d6d3f05499463abe549344ab63a7d8e36fb82252aa08e22e8da"
+    },
+    "saas-plateform/backend/src/release_tests/database_upgrade.rs": {
+      "before": "08722cc954d65de621b130a81451353a2a8c4caff121ebb0139c1fed77a92810",
+      "after": "ea7238649b307fbfed19bcf3dd82b5160789a09fdf5c1dc4d50efca10dc3f881"
+    },
+    "saas-plateform/backend/src/routes/department_organization_tests.rs": {
+      "before": "251921eefcdae4e2f31719e6c691b3b04c3832e762bb3dc186199de8ec347de7",
+      "after": "45d8272bd9b731e4bfb29a145700f2a295a16e22eeb063bdb7e03b7d794ec46c"
+    }
+  },
+  "unchangedCompiledInputCount": 217,
+  "unchangedCompiledInputSetSha256": "b9a3d8b02d897463d72de49075220d0647eced5198c336c5eeeed7284e05dc7e",
+  "onlyFiveTestFilesChanged": true,
+  "otherPlatformValidationInputsChanged": [
+    "saas-plateform/backend/.env.test.example",
+    "saas-plateform/backend/compose.env.example",
+    "saas-plateform/backend/compose.host-nginx.env.example",
+    "saas-plateform/backend/compose.host-nginx.notification.yml",
+    "saas-plateform/backend/compose.host-nginx.yml",
+    "saas-plateform/backend/compose.monitoring.yml",
+    "saas-plateform/backend/compose.notification-ca.yml",
+    "saas-plateform/backend/compose.notification.env.example",
+    "saas-plateform/backend/compose.notification.yml",
+    "saas-plateform/backend/compose.yml",
+    "saas-plateform/backend/docs/examples/host-nginx.conf.example",
+    "saas-plateform/backend/nginx/Dockerfile",
+    "saas-plateform/backend/nginx/Dockerfile.micro-static",
+    "saas-plateform/backend/nginx/README.md",
+    "saas-plateform/backend/nginx/config.example.json",
+    "saas-plateform/backend/nginx/micro-static.example.json",
+    "saas-plateform/backend/nginx/policy.mjs",
+    "saas-plateform/backend/nginx/render.mjs",
+    "saas-plateform/backend/nginx/zip-distribution.conf.example",
+    "saas-plateform/backend/ops/recovery/Cargo.lock",
+    "saas-plateform/backend/ops/recovery/Cargo.toml",
+    "saas-plateform/backend/ops/recovery/catalog.sql",
+    "saas-plateform/backend/ops/recovery/config.example.json",
+    "saas-plateform/backend/ops/recovery/tests/restore_refusal.rs",
+    "saas-plateform/backend/tests/nginx-render-policy.mjs",
+    "saas-plateform/backend/tests/unified-auth-https/gateway.py",
+    "saas-plateform/backend/tests/unified-auth-https/snapshot-build.py",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase23_gateway_instances.py"
+  ]
+}

@@ -1,0 +1,293 @@
+{
+  "contractVersion": "unified-auth-phase25-protocol-decoded-audit/1",
+  "reviewedAtUtc": "2026-10-29T13:05:45.674126+00:00",
+  "rawReport": {
+    "file": "phase-25-protocol-current-r4.json",
+    "sha256": "bcb4cdd5b44cec1a0e2cdc009cf263a705399553f7f6cd72e9a693e034770101",
+    "sizeBytes": 120926,
+    "preservedUnmodified": true
+  },
+  "formatFinding": {
+    "nulPrefixBytes": 113363,
+    "extraction": "Verify every prefix byte is NUL; decode exactly one JSON document from the first non-NUL byte; require whitespace-only suffix. Original file is not rewritten.",
+    "cause": "ftruncate does not reset descriptor offset; subsequent positionless write starts at the previous offset."
+  },
+  "verdictFinding": {
+    "originalStringPassChecks": 15,
+    "originalNumeric400Checks": 7,
+    "originalNumericStatusesPreserved": true,
+    "cause": "HTTP facts status overwrote the PASS verdict in object spread. Numeric statuses are not rewritten to PASS."
+  },
+  "scopeFinding": {
+    "failedStep": "REFRESH_SCOPE_SHRINK_AND_NO_REEXPANSION",
+    "failureCode": "PHASE25_PROTOCOL_REFRESH_SCOPE_EXPANSION_ACCEPTED",
+    "productionIssue": false,
+    "cause": "openid profile was already authorized by the original grant. Choosing a narrower access-token scope did not permanently remove original grant authorization.",
+    "currentContract": "implementation-contract.md:118; oauth.rs:2199,2219,2575-2599; auth_protocol.rs:2763-2794",
+    "correctNegative": "openid offline_access is outside this online original grant and must return 400 invalid_grant."
+  },
+  "acceptance": "The original r4 suite remains FAIL; decoded passed subfacts can only be used after individual assertion review and source binding.",
+  "decodedReport": {
+    "contractVersion": "unified-auth-phase25-current-protocol/1",
+    "startedAtUtc": "2026-10-29T12:51:16.839Z",
+    "result": "FAIL",
+    "snapshot": "phase25-tools-r6",
+    "checks": [
+      {
+        "stage": "OWNED_PREFLIGHT",
+        "status": "PASS",
+        "scenarioIds": [],
+        "sourceClusterBound": true,
+        "zeroMemberships": true,
+        "sharedCanonicalRegistry": true,
+        "machineClientsSameApplication": true
+      },
+      {
+        "stage": "CANONICAL_DISCOVERY_AND_RETIRED_ENTRYPOINTS",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C01-S04"
+        ],
+        "exactIssuer": true,
+        "s256Only": true,
+        "oldIdentityRoutes404": 2
+      },
+      {
+        "stage": "ACTUAL_STANDARD_CLAIMS_PRIMARY_AUTH_TIME_AND_ZERO_MEMBERSHIP",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C02-S01",
+          "P25-C02-S02",
+          "P25-C03-S01",
+          "P25-C03-S02",
+          "P25-C03-S03",
+          "P25-C03-S04",
+          "P25-C03-S05",
+          "P25-C03-S06",
+          "P25-C03-S10"
+        ],
+        "issuerExact": true,
+        "audienceExact": true,
+        "opaqueSubject": true,
+        "nonceExact": true,
+        "authTimeWithinActualPrimaryWindow": true,
+        "idTokenUserInfoSubjectExact": true,
+        "signedTokenWrongExpectedIssuerRejected": true,
+        "signedTokenWrongExpectedAudienceRejected": true,
+        "hasRefresh": true
+      },
+      {
+        "stage": "ACTUAL_CODE_REPLAY_DENIED",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C05-S05"
+        ],
+        "rejected": true,
+        "sdkCode": "OAUTH_RESPONSE_BODY_ERROR",
+        "upstreamStatus": 400
+      },
+      {
+        "stage": "SAME_SECTOR_STABLE_SUBJECT",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C04-S01"
+        ],
+        "repeatedSameClientSubjectStable": true,
+        "crossClientSectorNotClaimed": true
+      },
+      {
+        "stage": "STANDARD_NEGATIVE_STATE",
+        "status": "PASS",
+        "scenarioIds": [],
+        "rejected": true,
+        "sdkCode": "OAUTH_INVALID_RESPONSE",
+        "upstreamStatus": 0
+      },
+      {
+        "stage": "STANDARD_NEGATIVE_ISSUER",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C03-S08"
+        ],
+        "rejected": true,
+        "sdkCode": "OAUTH_INVALID_RESPONSE",
+        "upstreamStatus": 0
+      },
+      {
+        "stage": "STANDARD_NEGATIVE_NONCE",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C03-S09"
+        ],
+        "rejected": true,
+        "sdkCode": "OAUTH_JWT_CLAIM_COMPARISON_FAILED",
+        "upstreamStatus": 200
+      },
+      {
+        "stage": "STANDARD_NEGATIVE_VERIFIER",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C05-S04"
+        ],
+        "rejected": true,
+        "sdkCode": "OAUTH_RESPONSE_BODY_ERROR",
+        "upstreamStatus": 400
+      },
+      {
+        "stage": "STANDARD_NEGATIVE_CLIENT",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C03-S07"
+        ],
+        "rejected": true,
+        "sdkCode": "OAUTH_RESPONSE_BODY_ERROR",
+        "upstreamStatus": 400
+      },
+      {
+        "stage": "STANDARD_NEGATIVE_REDIRECT",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C05-S01"
+        ],
+        "rejected": true,
+        "sdkCode": "OAUTH_RESPONSE_BODY_ERROR",
+        "upstreamStatus": 400
+      },
+      {
+        "stage": "AUTH_TIME_STALE_STANDARD_SDK_DENIAL",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C03-S05"
+        ],
+        "rejected": true,
+        "sdkCode": "OAUTH_JWT_TIMESTAMP_CHECK_FAILED",
+        "upstreamStatus": 200
+      },
+      {
+        "stage": "AUTHORIZE_NEGATIVE_PLAIN",
+        "status": 400,
+        "scenarioIds": [
+          "P25-C05-S02"
+        ],
+        "denied": true
+      },
+      {
+        "stage": "AUTHORIZE_NEGATIVE_MISSING",
+        "status": 400,
+        "scenarioIds": [
+          "P25-C05-S03"
+        ],
+        "denied": true
+      },
+      {
+        "stage": "AUTHORIZE_NEGATIVE_SHORT",
+        "status": 400,
+        "scenarioIds": [
+          "P25-C05-S03"
+        ],
+        "denied": true
+      },
+      {
+        "stage": "AUTHORIZE_NEGATIVE_LONG",
+        "status": 400,
+        "scenarioIds": [
+          "P25-C05-S03"
+        ],
+        "denied": true
+      },
+      {
+        "stage": "AUTHORIZE_NEGATIVE_SYNTAX",
+        "status": 400,
+        "scenarioIds": [
+          "P25-C05-S03"
+        ],
+        "denied": true
+      },
+      {
+        "stage": "AUTHORIZE_NEGATIVE_REDIRECT",
+        "status": 400,
+        "scenarioIds": [
+          "P25-C05-S01"
+        ],
+        "denied": true
+      },
+      {
+        "stage": "AUTHORIZE_NEGATIVE_SCOPE",
+        "status": 400,
+        "scenarioIds": [],
+        "denied": true
+      },
+      {
+        "stage": "TWO_INDEPENDENT_PROCESS_CODE_EXCHANGE",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C05-S06"
+        ],
+        "independentProcesses": true,
+        "successfulExchanges": 1,
+        "rejectedExchanges": 1,
+        "invalidGrant": true
+      },
+      {
+        "stage": "REFRESH_ROTATION_WITH_SOURCE_AND_SCOPE_PRESERVED",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C06-S01"
+        ],
+        "rotated": true,
+        "subjectAndSidPreserved": true,
+        "scopeNotExpanded": true
+      },
+      {
+        "stage": "REFRESH_REUSE_CLOSES_CURRENT_FAMILY",
+        "status": "PASS",
+        "scenarioIds": [
+          "P25-C06-S03"
+        ],
+        "originalRejected": true,
+        "rotatedCurrentRejected": true
+      }
+    ],
+    "tlsErrorsIgnored": false,
+    "issuerResponsesIntercepted": false,
+    "callbackNavigationCapturedBeforeRP": true,
+    "rawCarriersPersisted": false,
+    "driverHasDatabaseAccess": false,
+    "coverageLimitations": [
+      "Scenario IDs identify related evidence, not automatic whole-row completion. Other matrix assertions remain separately required.",
+      "Wrong ID Token audience uses the actual signed identity response with a deliberately different expected audience in jose; no issuer response is forged or intercepted.",
+      "Subject stability repeats the same client. Same-sector different-client and different-partner/environment subject comparisons are not claimed.",
+      "Retired-entry checks cover two actual identity /oidc routes. Other retired registry/API paths require their own evidence.",
+      "Callback navigation is captured before the RP handler only. Authorization, token, JWKS and UserInfo responses come from the actual current services."
+    ],
+    "unverifiedScenarios": [
+      "PUBLIC_CLIENT_NO_SECRET",
+      "PUBLIC_CLIENT_TOKEN_AUTH_NEGATIVES",
+      "ACCOUNT_RENAME_AND_RETIREMENT",
+      "TEST_PRODUCTION_SUBJECT_ISOLATION",
+      "CLIENT_CREDENTIAL_ROTATION_AND_EMERGENCY_REVOCATION",
+      "REFRESH_ABSOLUTE_EXPIRY"
+    ],
+    "snapshotSha256": "c795b314a63ad9ed0200ead36eeb790112862e7b5fdf939ded964cf1e813b2e0",
+    "sourceSha256": {
+      "phase25-protocol-browser.mjs": "581e2ae8814328896c44cb1c9f51ea137a32f6baf2716908702c68e0d40f3836",
+      "phase25-protocol-driver.mjs": "555646f42d3636c7c9ca93ceaed0477f59dcfd3188b0283aaf574c4b1f17d96a",
+      "phase25-protocol-cases.mjs": "184630e610ed524ac645eb735974fbc0597cc022864144cef62c648abe42086a",
+      "phase25-business-http.mjs": "71f74a3deb5725d95c707275b74631532b5187efdafc51c4d280a408a93d2489",
+      "phase23-protocol.mjs": "ad84dd67dda418c4eb42bdb01827fc3d1ca70fd57f6fdfea9a75ba250b50c9d4",
+      "phase23-protocol-diagnostics.mjs": "4b9755c1c6108dc6ada97f362fe986e0447001474f52366c500f7d8608beec89"
+    },
+    "standardClient": "openid-client@6.8.8",
+    "jwtLibrary": "jose@6.2.13",
+    "browserVersion": "156.0.8078.4",
+    "failedStep": "REFRESH_SCOPE_SHRINK_AND_NO_REEXPANSION",
+    "failureCode": "PHASE25_PROTOCOL_REFRESH_SCOPE_EXPANSION_ACCEPTED",
+    "driverClosed": true,
+    "cleanup": {
+      "contextsClosed": true,
+      "browserClosed": true,
+      "failures": 0
+    },
+    "finishedAtUtc": "2026-10-29T12:51:31.720Z"
+  }
+}

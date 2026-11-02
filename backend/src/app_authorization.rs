@@ -40,8 +40,13 @@ async fn read(
     token: &str,
     caller: Option<Uuid>,
 ) -> Result<Snapshot<RequestContext>, AppError> {
-    let claims = jwt::verify(token, &state.config.jwt_secret)
-        .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
+    let claims = jwt::verify_internal(
+        token,
+        &state.config.jwt_secret,
+        jwt::InternalUse::AppSession,
+        Some(app_code),
+    )
+    .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
     let binding = app_token::inspect_authorized(state, token, &claims)
         .await?
         .ok_or_else(|| AppError::unauthorized("应用令牌无效或未获授权"))?;
@@ -60,7 +65,9 @@ async fn read(
     if binding.member_type != "EMPLOYEE" {
         return Err(AppError::forbidden("当前应用授权入口仅允许员工身份"));
     }
-    let data = store::load(&state.pool, &binding, &state.config.application_environment).await?;
+    let mut data =
+        store::load(&state.pool, &binding, &state.config.application_environment).await?;
+    apply_policy(state, &binding, &mut data);
     let version = revision(&data, &binding)?;
     let context = render(binding.clone(), data)?;
     Ok(Snapshot {
@@ -82,8 +89,13 @@ async fn fresh(
     caller: Option<Uuid>,
 ) -> Result<Snapshot<RequestContext>, AppError> {
     let result = read(state, app_code, token, caller).await?;
-    let claims = jwt::verify(token, &state.config.jwt_secret)
-        .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
+    let claims = jwt::verify_internal(
+        token,
+        &state.config.jwt_secret,
+        jwt::InternalUse::AppSession,
+        Some(app_code),
+    )
+    .map_err(|_| AppError::unauthorized("应用令牌无效或已过期"))?;
     let binding = app_token::inspect_authorized(state, token, &claims)
         .await?
         .ok_or_else(|| AppError::unauthorized("应用令牌已在上下文计算期间撤销"))?;
@@ -182,6 +194,7 @@ fn render(binding: app_token::AppTokenInfo, data: store::ContextRows) -> Result<
         return Err(AppError::forbidden("客户身份不能消费员工角色和数据授权"));
     }
     let store::ContextRows {
+        business_expires_at,
         identity,
         menu_rows,
         roles,
@@ -245,6 +258,10 @@ fn render(binding: app_token::AppTokenInfo, data: store::ContextRows) -> Result<
         binding.expires_at,
         Utc::now() + chrono::Duration::seconds(30),
     );
+    let expires_at = business_expires_at.map_or(expires_at, |end| end.min(expires_at));
+    if expires_at <= Utc::now() {
+        return Err(AppError::unauthorized("应用业务范围已过期"));
+    }
     let context = AppAuthorizationContext {
         contract_version: ContextContractVersion::V1Dot0,
         context_version: version,
@@ -305,4 +322,50 @@ fn render(binding: app_token::AppTokenInfo, data: store::ContextRows) -> Result<
     };
     context.validate().map_err(anyhow::Error::from)?;
     Ok(serde_json::to_value(context).map_err(anyhow::Error::from)?)
+}
+
+pub(crate) async fn external_context(
+    state: &AppState,
+    proof: &crate::resource_authority::Proof,
+    resource: &crate::resource_authority::Resource,
+) -> Result<RequestContext, AppError> {
+    let binding = crate::resource_authority::user_binding(state, proof, resource).await?;
+    local_resource_context(state, binding, false).await
+}
+
+pub(crate) async fn local_resource_context(
+    state: &AppState,
+    binding: app_token::AppTokenInfo,
+    platform_session: bool,
+) -> Result<RequestContext, AppError> {
+    let mut data = if platform_session {
+        store::load(&state.pool, &binding, &state.config.application_environment).await?
+    } else {
+        store::load_resource(&state.pool, &binding, &state.config.application_environment).await?
+    };
+    apply_policy(state, &binding, &mut data);
+    let revision = revision(&data, &binding)?;
+    let context = render(binding.clone(), data)?;
+    Ok(RequestContext {
+        context,
+        revision,
+        binding,
+    })
+}
+
+fn apply_policy(
+    state: &AppState,
+    binding: &app_token::AppTokenInfo,
+    data: &mut store::ContextRows,
+) {
+    data.grants.retain(|(resource, action, scope)| {
+        state
+            .config
+            .data_grant_policy
+            .operation(binding.application_id, resource, action)
+            .is_some_and(|capability| {
+                crate::data_grants::policy::GrantScope::from_str_value(scope)
+                    .is_some_and(|scope| capability.scopes.contains(&scope))
+            })
+    });
 }

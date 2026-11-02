@@ -1,0 +1,921 @@
+{
+  "contractVersion": "unified-auth-phase24-platform-cleanup/1",
+  "status": "PASS",
+  "startedUtc": "2026-10-29T09:33:08.889531+00:00",
+  "sourceFinalReport": {
+    "path": "phase-24-platform-final.json",
+    "sha256": "54a65552380f363f3fe13b49b1aa81aee6457530467e7a9494b93e6307184383",
+    "preservedUnchanged": true
+  },
+  "authorization": "Root consumed the formal result and authorized exact owned private directories and the historical diagnostic executable; unexpected files stop that individual item.",
+  "clusterId": "7701992637128815755",
+  "clusterIdVerifiedBeforeCleanup": true,
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "directories": [
+    {
+      "directory": "/home/jackie/.cache/rust-saas-unified-auth-20261029/phase24-platform-r2-historical-users-diagnostic-private",
+      "directoryUid": 1000,
+      "directoryMode": "0o700",
+      "ownerSha256": "571d58936dfaf5390f1ef7a6f4f6b3b9c3c453e6bd98b93e70c8341ca351725c",
+      "files": [
+        {
+          "relative": "OWNER",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 85,
+          "sha256": "571d58936dfaf5390f1ef7a6f4f6b3b9c3c453e6bd98b93e70c8341ca351725c",
+          "category": "ownerMarkers"
+        },
+        {
+          "relative": "account_command_acknowledgements_reject_trigger_suppressed_writes.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 17494,
+          "sha256": "6c8fc4934bb7a1fc508c77f7df18e4fbd735e5dc9bc23cc31bc5bda6973c2f18",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "catalog-after.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 38,
+          "sha256": "c6f64e9755a95bdeac57619230245ba505f67ff612fde4532b1552cb912e52ae",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "catalog-before.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 38,
+          "sha256": "c6f64e9755a95bdeac57619230245ba505f67ff612fde4532b1552cb912e52ae",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "delayed_account_followup_does_not_revoke_new_generation_and_is_idempotent.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 17443,
+          "sha256": "02746e85cbfde008d5a0c4b5e68484aea26d7c6985762f9c2beddadca7103b57",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 2088,
+          "sha256": "76c0512c05e5def59ec5979d4a40ab90291431c7604ed4595ff5e98465054bd0",
+          "category": "temporaryState"
+        }
+      ],
+      "emptySubdirectories": [],
+      "status": "REMOVED"
+    },
+    {
+      "directory": "/home/jackie/.cache/rust-saas-unified-auth-20261029/phase24-platform-final-r2-validation-private",
+      "directoryUid": 1000,
+      "directoryMode": "0o700",
+      "ownerSha256": "c61c1dd8d0c7f4624e5894a1e7fc314c63df3412a94eec9e49c8661808dd8199",
+      "files": [
+        {
+          "relative": "00-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 677,
+          "sha256": "b2f8056017d0695fa97e3752ff7ed87f8508d6a3124dc1aeeec73e8ced8dd4ad",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "01-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 1214,
+          "sha256": "8bb9f7ec2617893b6e5b3e216a75331ebbbada880889b7f1ac9b58c7594e62c5",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "02-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 981,
+          "sha256": "ffa9c3d74ce2f1ff0d2c354305ca9f0e26f6a026fa9ac0fb0d92e6949b77aae9",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "03-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 566,
+          "sha256": "6b5faa184042d98ee4a1829aff242bf52a12bf60dd5a3e1734d6aa6515d567fe",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "04-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 199,
+          "sha256": "3735c1aa798d85e5b39d960f5bb1fc61315081cc36c8c0e4a0225aa468b2594c",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "OWNER",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 81,
+          "sha256": "c61c1dd8d0c7f4624e5894a1e7fc314c63df3412a94eec9e49c8661808dd8199",
+          "category": "ownerMarkers"
+        },
+        {
+          "relative": "build-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 55308,
+          "sha256": "19254c61535663447aa59724da87904e48079bfd4b2efd19fa091d7a589466e0",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "build.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 302688,
+          "sha256": "fdca2546e4338e086bfd8e2a5677dc5eb1fb990ba0483d6ec5a3ee1f80b8b0f8",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "build.py",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 3681,
+          "sha256": "2472b55eea77cd338b03476cf441b98492306db8dd72e6ca7b680512b20c7bf0",
+          "category": "runners"
+        },
+        {
+          "relative": "catalog-after.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 534,
+          "sha256": "0396cc3b21df6f600d774ba56599e736f26a1a483117bab1ad3052025edf4555",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "catalog-before.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 534,
+          "sha256": "0396cc3b21df6f600d774ba56599e736f26a1a483117bab1ad3052025edf4555",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "clippy.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 387113,
+          "sha256": "935dc764263acdaebea1ce3025a7aa6ce187d8d79e169bd2c17dd9dc44b8c3f7",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "equivalence-proof.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 3360,
+          "sha256": "948b1ec63df9846452c8e35241dbc3f227db3a9ff4a01b4a2b11f02b91afe7af",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "fmt-0.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "fmt-1.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "fmt-2.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "fmt-3.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "fmt-4.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "fmt-all-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 508,
+          "sha256": "5de5ec484140259e8bf8fb6894ca263ee02e8c67f171e6d9735c7c151deeb0dc",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "fmt-all.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 1335,
+          "sha256": "886b67a928820cd9bbb421c4df0b7615f5c6af29d916b421727e1e2134eb3130",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "source-manifest.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 250607,
+          "sha256": "d13a84e5699d4fe33781be40b58e61eba4250bc245a643ffd130301506645bb1",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "static-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 9544,
+          "sha256": "decfa8234084c5e83ed30c661359abb71ca61d63b0671943b10ffeaa246e786e",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "test-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 64676,
+          "sha256": "a89c36c5fad05bb5ea50edbd07a5f68d09ef59771c660a3ca346506b944b713b",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "test.py",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 7138,
+          "sha256": "7079b4989541fe21fe9be85f577b4fef788f1909c17d8ab723dd11bf10470e04",
+          "category": "runners"
+        }
+      ],
+      "emptySubdirectories": [
+        "tmp"
+      ],
+      "status": "REMOVED"
+    },
+    {
+      "directory": "/home/jackie/.cache/rust-saas-unified-auth-20261029/phase24-platform-final-r3-validation-private",
+      "directoryUid": 1000,
+      "directoryMode": "0o700",
+      "ownerSha256": "0aabd2275f4a34b9230e6d9d58ff01356e2dc25344d3645862e58d265ea5541a",
+      "files": [
+        {
+          "relative": "00-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 677,
+          "sha256": "c6cd046addd24c88a135b036cb1a545e86a47859aad69605f6d3ec3ea962dcee",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "01-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 1214,
+          "sha256": "53a490deb04be572f503727fdcd287dfce4cbfe30594939611c00e72ffa18b9e",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "02-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 981,
+          "sha256": "4edbe66d14f5de9c8f019f9af3b68f8a980b4721bcdfcbac531aed8508af63f7",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "03-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 566,
+          "sha256": "9cb9c9ca743bf73fe90922bfa509bd8c25974db151b16f7943400389a327edd3",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "04-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 199,
+          "sha256": "9395e5ec405d1c7345d7139f9d14d76fafccf1bfd8d7ef5ac18c3550b75b8a2e",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "05-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 2386,
+          "sha256": "ceba0b88446febf502d5b7224ae53564b7bda1f001cc4b218b7d3a85ac9ab0de",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "06-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 315,
+          "sha256": "822883662da23843ae327c557df073b826981ef5835e4e5f7401cdf34e17ebe3",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "OWNER",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 86,
+          "sha256": "0aabd2275f4a34b9230e6d9d58ff01356e2dc25344d3645862e58d265ea5541a",
+          "category": "ownerMarkers"
+        },
+        {
+          "relative": "build-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 55309,
+          "sha256": "7a89aa5ead4f48d91c31bf37efbc240a9c5f874000229edce26eda4f61ab3b2b",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "build.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 302688,
+          "sha256": "e45182214d50b13526ddfbaba74b99b1537869570607b8652d6567a60f87b98d",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "build.py",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 3681,
+          "sha256": "118ac51e019a109382a587b39f1efe1ce392f3cf26ccc9d35ce8e38c4182247f",
+          "category": "runners"
+        },
+        {
+          "relative": "catalog-after.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 534,
+          "sha256": "0396cc3b21df6f600d774ba56599e736f26a1a483117bab1ad3052025edf4555",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "catalog-before.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 534,
+          "sha256": "0396cc3b21df6f600d774ba56599e736f26a1a483117bab1ad3052025edf4555",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "clippy.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 343209,
+          "sha256": "fd722c8bf5bb8e8664ebd033b3a49f871a3e907f5a313799e1f21f13dd97c531",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "current-preflight-fmt.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "equivalence-proof.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 4345,
+          "sha256": "c90c87c113a1c8f0c11673a60d314e1061691575ca1c43ca61cf13ff9142e640",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "final-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 300488,
+          "sha256": "54a65552380f363f3fe13b49b1aa81aee6457530467e7a9494b93e6307184383",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "fmt-all-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 444,
+          "sha256": "e007bb7a4d16e7688fd5fa285bbb572baa2fa0ccf3305c244185f478f044a07d",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "fmt-all.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "source-manifest.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 250607,
+          "sha256": "c726d2211c1df09c100778d5d9a021b211df8a9dd98a671ac196387e8a234039",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "static-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 1451,
+          "sha256": "68848ac955edcf40864189e352faeeb8d8c25f66fc5ef65ed0c1749287c035b9",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "test-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 71388,
+          "sha256": "896a2145a90ad3b61f34f76272a58f602fbb145b04dc5c077e42cb0a056812a5",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "test.py",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 7215,
+          "sha256": "9c1403c18f87ed4898c8f7048428ca12ab355c69c219cd197f67c00875793373",
+          "category": "runners"
+        }
+      ],
+      "emptySubdirectories": [
+        "tmp"
+      ],
+      "status": "REMOVED"
+    },
+    {
+      "directory": "/home/jackie/.cache/rust-saas-unified-auth-20261029/phase24-platform-final-r1-validation-private",
+      "directoryUid": 1000,
+      "directoryMode": "0o700",
+      "ownerSha256": "a4ac5c1ea2a0d7fc2025b5c10afd32f3a22cc233c997cc5bf6f2e3fe86324589",
+      "files": [
+        {
+          "relative": "00-bin-platform-migrate.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 113,
+          "sha256": "df166913f47ff1f04202cae9b31df67ed272d692d99a0023a8117dc3029100dd",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "01-lib-saas_platform_backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 897,
+          "sha256": "194615b68ae4b282ebe878bd49176acadab5f4d43da4ff20bf677f855538cfe2",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "02-test-authorization_policy.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 375,
+          "sha256": "61b2ea8f4c4e8758bcd144078709ec947e826f10974cc887ef7236f56360c0c7",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "03-test-context_selection.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 765,
+          "sha256": "04118ebaf17632fea22579dfc7dd9c87d6b5340eca146cec15f41068e30c4aa9",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "04-test-context_selection_database.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 180,
+          "sha256": "80c4f0a7d254a7db45e8eff86deaadb750db6a4ee65952e6c0f025a096fafb10",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "05-test-migration_command.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 662,
+          "sha256": "530b26e88b5eb43ffe1e9036faff45093f66816e5fe6cf320989e1961c0069e7",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "06-test-retention.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 280,
+          "sha256": "6ad91765b7ad8be0de7410651864d456ee8f7faabd68af7c22449e2f3f6f9a52",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "07-bin-saas-platform-backend.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 105192,
+          "sha256": "2262e9db23c66f0391abc853757b8cfae81d8431ff6d4f5fbec224e1677cb209",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "OWNER",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 81,
+          "sha256": "a4ac5c1ea2a0d7fc2025b5c10afd32f3a22cc233c997cc5bf6f2e3fe86324589",
+          "category": "ownerMarkers"
+        },
+        {
+          "relative": "auth-boundary-current-probe.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 17319,
+          "sha256": "a637f176a8ee6eb9f2dca0930f9486f0ce780f10bb37c0251fa0d0f005ed197b",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "bff-late-current-probe.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 25732,
+          "sha256": "7dd293db8343b8a5c747043309c9d1246c66ba9c1f3ceb947618ff96ad0f5d4c",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "build-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 52335,
+          "sha256": "c0607b91cf9bbe518fa33f53e4d2a3311233841b3bede510da48a65ea7dcb020",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "build.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 302411,
+          "sha256": "61156cd5c106e6d2ae290a0f70788186ec8d20ab1bd8f5825e8ea50d1df71c54",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "build.py",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 3681,
+          "sha256": "2f7710cccd3512a53830aa317332caf9a194c47eeb0af24154fe7f2ea5351f68",
+          "category": "runners"
+        },
+        {
+          "relative": "catalog-after.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 534,
+          "sha256": "0396cc3b21df6f600d774ba56599e736f26a1a483117bab1ad3052025edf4555",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "catalog-before.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 534,
+          "sha256": "0396cc3b21df6f600d774ba56599e736f26a1a483117bab1ad3052025edf4555",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "department-current-probe.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 17506,
+          "sha256": "43f27800730d61ae356c93c0bfde381a51adaffef7cdd8a55d03c7cad01dab62",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "management-current-probe.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 19503,
+          "sha256": "36ae799a76b25e13e67324e751377542c4e6f60f13f39691882de69a55678a1d",
+          "category": "rawLogs"
+        },
+        {
+          "relative": "source-manifest.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 247521,
+          "sha256": "5786557632ddfed099d49b6794587f8e31a41be49bb96f5429a6a8d562d0d6d9",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "test-report.json",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 150927,
+          "sha256": "539ba643c13223f67e1df5a4fefc1266b1720e71e371fe9fb34ef89c3f0d48be",
+          "category": "temporaryState"
+        },
+        {
+          "relative": "test.py",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 6988,
+          "sha256": "b3ea07965f7465d889b1179cd048c28a7e30c5debae53526d899014fbc4bdbb1",
+          "category": "runners"
+        },
+        {
+          "relative": "uuid-current-probe.log",
+          "uid": 1000,
+          "mode": "0o600",
+          "bytes": 40354,
+          "sha256": "def3740a2581e151305fe9fc3690998502dedcc0ec4f604b9ee03ade5099a7a8",
+          "category": "rawLogs"
+        }
+      ],
+      "emptySubdirectories": [
+        "tmp"
+      ],
+      "status": "REMOVED",
+      "additionalProbeAuthorization": {
+        "source": "Root explicitly confirmed the five probe logs were consumed diagnostics for the seven remediated historical failures and authorized their deletion.",
+        "basenames": [
+          "auth-boundary-current-probe.log",
+          "bff-late-current-probe.log",
+          "department-current-probe.log",
+          "management-current-probe.log",
+          "uuid-current-probe.log"
+        ]
+      }
+    }
+  ],
+  "historicalDiagnosticBinary": {
+    "path": "/tmp/rust-saas-unified-auth-20261028/bin/phase24-platform-r2-diagnostic-tests/main",
+    "relative": "main",
+    "uid": 1000,
+    "mode": "0o700",
+    "bytes": 305978840,
+    "sha256": "4eaaf052339dd64682ae50a3541d3a1b67fc76353d4a24e092c9ed8f2b76c7f6",
+    "category": "historicalDiagnosticBinary",
+    "status": "REMOVED"
+  },
+  "deferredItems": [],
+  "activeOwnedProcessesBeforeCleanup": [],
+  "catalogBeforeEqualsFinalR3Baseline": true,
+  "preservedFormalReportSha256": {
+    "completed-phase-review-2026-10-28.md": "99107ae76d98b122113ea74b305a215586066247bd7cc54817fff2df66e0a33d",
+    "completed-phase-review-browser.json": "aef610bd06b720b4387b8a02c9bb822b13e1f3b67b7f3b94d092229f2c0a4567",
+    "local-target-inventory.json": "68e9264fd41f33af69daaefeaf0b3ced5e9a7f1e0ace1e55b1583115b417edd0",
+    "native-build-cache-migration.json": "4d00692f7d4d14b654a8f55e58535cdc308147b6b120ee2f9688333df9b8af4a",
+    "phase-01.md": "9c276d264b38b9571cbcf7cc1a30cb3a91d2a9441c69adb0670426fe57383f8c",
+    "phase-02.md": "b3fe114ebb9d1a7c64f020612c0977957e6f0d6244682e73e518141263f3586c",
+    "phase-03.md": "006eb6465270c626ce7c443bd8f10b0c7b58a1e0ef0ff73048ad1bd0c24c7360",
+    "phase-04.md": "13fdd1ea402544f09b645c36f04cef6c7d191caad73739cc7678fb701ef741de",
+    "phase-05.md": "3efe595962958725c1fc69d40cb190a1c3b2018fd16fd8a069c47bf1f1a2ffe8",
+    "phase-06.md": "d1313c7f5ae44589c819e81800414ae900b8e641ccce8882747cb5896e9ea8ae",
+    "phase-07.md": "16aa1150fd3f2fd01ed073c554b16a17a48df3cfdb3efc7c6b2c932556e5d96a",
+    "phase-08.md": "6e642ab414e8ef89fc26fc623c08acf6137ef72e8a26a9904c3d25ade59f35c8",
+    "phase-09.md": "4e559b484298bf83e405674e4881731e847bc9e3d826fff63fffb59a046ea1af",
+    "phase-10.md": "1e2411806e507571198e97bd6b8977665b353161cdbaf38e37fa9eb920e8dd56",
+    "phase-11.md": "2e146c334108eac0e8039853353a12933c470364f7007f9f2a6a3b436f0064e8",
+    "phase-12.md": "72caf8c4a312b85cb8ae17773c6d615aa6fadd6a4203e56f6d58accd2e40babb",
+    "phase-13-build-attestation.json": "28579cc8016924d10c8e9204ed9503412465017b5c2c530d9cc060f817984b18",
+    "phase-13-https-browser-concurrent-harness-red.json": "bbb2b2ac1f17cf41565965434d8920b392d2805020f2f9a015dabea39751050c",
+    "phase-13-https-browser-fixture-permission-red.json": "6705bb9ebcd18811707cbcb93c6f0331deaa588e4302e3e4e0ac092b9d07ce49",
+    "phase-13-https-browser-fixture-reset-red.json": "c562f4cf5b104403296e53815ca7dabbab64ac0c20ace4f760174cd6eb718abe",
+    "phase-13-https-browser-red.json": "4b50c0134819fc6ae88ddabfba2706897c6ec3f00621730eae68c40ced7cda9a",
+    "phase-13-https-browser-runtime-acl-red.json": "9e5878da471938dcadbab7dedf2edec8b60c60e00c2c35e74b1ea5674b1c20cd",
+    "phase-13-https-browser.json": "b81f050143d33863794703a9a325d8e547fedf1af241c484aa58a9b56b5c92e3",
+    "phase-13.md": "a7a5b74420c167cf6ea1e75dc9da2d61a72cce9155ee3a7194999bcdd43bcfdc",
+    "phase-14-build-attestation.json": "398dedcc67255ceb05266370a0eac5f5208f4b3b341027013b1d6dae2e9f6f36",
+    "phase-14-https-browser-red-lock.json": "f8b927d9dd864e7ec30bc7fdca2fa2673af9b2bad8b08c0340686fbc1ebd44a8",
+    "phase-14-https-browser-red-renewal.json": "e0abd3e8df73106b93dc3041d3ed903db4fc92c27a747c185162ab8a79bab8cb",
+    "phase-14-https-browser.json": "b3af8b9fae6dcddde319715032059d36f3b2833e78542034497874ce88b48a89",
+    "phase-14-renewal-association.patch": "0cefed842cbedebb60d499888b032735a7ef22114e4ebb9870ca1986ce81195d",
+    "phase-14.md": "43ed017236458d5f0f56c8f8e1972a2bf649cc73da6e18c74f7b1d8906a19c79",
+    "phase-15-components.json": "b8cc763fe90245f40bbe728fb2dfa67c119f253f452e85e0c271043130dbe644",
+    "phase-15.md": "9ff3b798fa655b5e3b4c04b590a16b23a3ae59c5130e8091d67df7921ff3f332",
+    "phase-16.md": "1b32a6175abf3273cae50f4db27c3cf4c9cebc5840b09462b1621e319e138d2e",
+    "phase-17-component-validation.json": "b1b68bcc43a3801978d2cfabbe9b12bd4bdd6a769f61577f15939e0f04e2a0ff",
+    "phase-17.md": "44587296c358a540920f53d374f00ac1e058761268c7f914b14b3cc248ecb035",
+    "phase-18-components.json": "1095cd09c3b90dc0dbcd24d0e22721cfbe66fd8266dad6caeff30121456a7775",
+    "phase-18-initial-source-manifest.json": "0b3d92c5b40f9d5a981e4f2e5d6c044a0cfd003064915c9f34ce9ba7dfa78729",
+    "phase-18.md": "bbdc0b7abe65e69f4898dd97ca836d68d5fdd4337737947e958ef4d1a28639be",
+    "phase-19-build-attestation.json": "b485276661a471a7e296406ffab1d4f8cd5393f2c1a4ce88ab9b47c50a693b90",
+    "phase-19-cleanup.json": "7019ce17099ba5804c5f5fbf8a17dc934a054e24e3ead7bd5c3395b8e353447b",
+    "phase-19-https-browser-red-consent-race.json": "91494795fb7537375db00a2d57b0f13b0ea3416fd45f6a34556eee414f73a1e1",
+    "phase-19-https-browser-red-networkidle.json": "b65e3dc37dbfc1014b026a66e3bd81840f9df45e097daabb9c432b713d4d363d",
+    "phase-19-https-browser-red-reviewer-wait.json": "d24d0f4946d0640d8ff0d77cc28dc054dbde12f7ed2e3398cc156669c44e8b77",
+    "phase-19-https-browser.json": "33d10f080c887354d4aba4a8834614994c802bd014cdbbe8712db6250d22ae8d",
+    "phase-19-identity-update-attestation.json": "f85c2dc1b9696bcf1a573f5ee8f4158dae9d7ae6353e19219d59ff1603aba584",
+    "phase-19-runtime-attestation.json": "46d5bbb4ee9f0ae92b32e034934f46ee219d755f83cbabe98c4ed0bfb9239784",
+    "phase-19.md": "fec2d6b36f45c00f382eb737df92ca5241a94f1d25d09e63c5bf03f7072bf4e4",
+    "phase-20-build-attestation.json": "0b6e39c7433c90d06d13001008db852e7e5d48280abbf3c0802db29ebf0c3dfd",
+    "phase-20-cleanup.json": "9b3599d715ba48bfb39a8b727daf374b235f99b578c2cc2ed39464fd8092a93c",
+    "phase-20-https-browser-logging.json": "b2755e6f024d14d185910fdc91c4a17d31f8be7eaf1a95a42c4a01c617d30dbb",
+    "phase-20-https-browser.json": "d8dd312ddec29a9afc69ee822edf889884b99299ef9e26bb5c5a332b5e434a1a",
+    "phase-20-identity-components.json": "a153c99a81fc566097a5e826ce7246f3083cb6b15f26210863b8e6eef78fb8de",
+    "phase-20-identity-update-attestation.json": "cef038ffddf589f9abc3748e7ad84bc1679a59a689dad6a396af4dd2bfac4dd6",
+    "phase-20-identity.md": "580ed716431fc19bf9b0984d87538d24ca635fa28170763216d2dbb3f19e1087",
+    "phase-20-log-redaction-before-info.json": "1c61e7bb55916d0a3c467dbe839f05dd85040af98b4fc102fa51b673713b0603",
+    "phase-20-log-redaction.json": "f01db1173ff723bec9c5e8c83d72124cced586a12cd69dc9bd9260ba7dfdf867",
+    "phase-20-platform-bff-components.json": "3963d85db3ac1c4965b554aa5c66214ab3ebae41bdc600a817ab35539832c646",
+    "phase-20-platform-bff.md": "47c78a6f6102747a6dfb84a0a3ca42b8db10cf61faee35e34dc5d7c7fe166de7",
+    "phase-20-portal-components.json": "2d0caf80b137fb982cf90f99d4c8d76c48af7811e4a9a62746c37f9eb152ca8f",
+    "phase-20-portal.md": "188d90a47d55daa1947516865e07c6031c2ab2135ef8cb0b301c02f34a3191de",
+    "phase-20-preparation.md": "f72ed159a6a70cb0e71ddf2214f134d4af03aa19036e36ec443b3a32e7a0d99a",
+    "phase-20-registration.md": "41d345e12fa3d120651fb0ecf5bc83bdc950ab949c575b42ff434d22b6cb4531",
+    "phase-20-runtime-attestation.json": "ea587ebe1a704853f46e0386a5109ae0be9e40b61b44f6a31cba475a8c2e2985",
+    "phase-20-schema.md": "fc3f2791d8218632ea70b24b753adaa0377e9947767254f42de01171b49ce2a9",
+    "phase-20.md": "cbba58e4fe14cc9cf5d0f87a36462f8f4a8861c26fd13cbe2efe36e31e393e32",
+    "phase-21-capacity-cleanup.json": "db632dbbd7451b961b6a813267df21362f3bc2ca8afc0a1d7a800cd6692edf64",
+    "phase-21-capacity-components.json": "c4c846d9824140d878ca3d0de2961ae58907fcde20e6cb1069cbc255b253a606",
+    "phase-21-capacity-https-browser-red-deadline.json": "d34f586106194e3663bda127f036248195d8d6af200df0a97d8bfcf27d74c69d",
+    "phase-21-capacity-https-browser.json": "9d804a473d7ea26b6016e8b8b8bb22f8dfe61991b6706698d6996d050d5bda95",
+    "phase-21-capacity-log-redaction.json": "21389909e13a3b078288519709ae787fe13d22f6c2f0d560b1c640d591b2cb41",
+    "phase-21-capacity-production.patch": "9346783eaaf5f93d597ba6e564881c147d79b7bc05836c82ee773e135fffc37b",
+    "phase-21-capacity-rp-desktop.png": "16711a1f456a28407c5f5844db4c92cdfcbd02efc5e694fd24608d430ed18367",
+    "phase-21-capacity-rp-mobile.png": "d7aead4143761a13729b4fc657d6629a9827fc112924a63a650c47e73bad5113",
+    "phase-21-capacity-runtime-attestation.json": "f78c78041d0ced6235e59df5eac5ea23ff03d82274cf083ff8c20ef8e43493f4",
+    "phase-21-cleanup.json": "58ee16f9b7c83fd25f45ecc9621df664ff0e92e84941b07a1ca48fca8d41a6d3",
+    "phase-21-https-browser-red-1.json": "22fe681a4b5fb8b33c7aed69c182f0dc325dd9be6d8f75b043ebd3d920671bfe",
+    "phase-21-https-browser-red-2.json": "17b096d530636d00ef4b9db9521ab40518f20df4cd0a9eac6b93451c50a2a184",
+    "phase-21-https-browser-red-3.json": "7a6c65f17f36b1423de43fd98b8dcfdaa3292178e3af70953e11f0c812d0f8c7",
+    "phase-21-https-browser-red-4.json": "633d8bab7639ab03d576150431cdc739698e5d251d721731e5af093cc99e4aae",
+    "phase-21-https-browser-red-5.json": "93209354e95f14863a3c810c7d8c581527d94a1894dd2628dfccff137d2777bd",
+    "phase-21-https-browser.json": "c18fac53077962e5a9da200159ddae22b8d6e9f4f58b33cbd19317115a47e471",
+    "phase-21-log-redaction.json": "a930d485e00f332656466a164eb6a506c6fdca5e3aff5164f74410e5a56b6d4b",
+    "phase-21-rp-desktop.png": "16711a1f456a28407c5f5844db4c92cdfcbd02efc5e694fd24608d430ed18367",
+    "phase-21-rp-mobile.png": "d7aead4143761a13729b4fc657d6629a9827fc112924a63a650c47e73bad5113",
+    "phase-21-rp-r1-attestation.json": "db9113939f3b08b310f18f6c8b4a0c27d4eb557bdb2b6211f9821d852e5b482d",
+    "phase-21-runtime-attestation.json": "20f39c286e47f193d8a8aa338827491e34f96a8b4cd9b384b6af04f5b1923495",
+    "phase-21-worktree-inputs.json": "eb7416445c91296232f443be5ef0c06ab7af947839e852c16ec2fc2e167208d4",
+    "phase-21.md": "f5b2c241d0bc9bf05b900e4827a2b728a638bf203e7b4ff802aa98e6be483841",
+    "phase-22-build-attestation.json": "327ad0032787c90f8e56ffb423547b718b08a1e48cfa1413d07c572e8238a0b5",
+    "phase-22-capacity-final-cleanup.json": "9f3b82122524874c9b9ab901bad9712e8ed8f0fe72f4951292b4774d294c6cd9",
+    "phase-22-capacity-first-cleanup.json": "acea2883e89ab080ffc3dc8cf15fd51cf29d5285a89c8e49d4ccb05cfb53f8e7",
+    "phase-22-capacity.json": "9cc9af37de563020d119e460b48ce0e17abcaa372dcd114e16b93eef277b5d7e",
+    "phase-22-cleanup.json": "198730dd96f67ad378f3603f4a635e4c7faf2fe1f116c5e7aa16eade4e88be23",
+    "phase-22-fault-before-cookie-scope-fix.json": "6bfa69d79089da7b48b9554d11aad4bebf0d1393c544ee6f8e58c62940a5bff1",
+    "phase-22-fault-normal-password-budget-failure.json": "a2da88a224e3f6a3ac6548326712128ffb20c16821cf3d5e365da5f8d3191d54",
+    "phase-22-harness-selftests.json": "d5a42fa1d87d5852015aa3126daf625b1aa254f52423a202b6b07edc58424253",
+    "phase-22-harness-selftests.md": "66ba3e36f76d55abdd58a0229b72b1a41e495bb4c942bfc164626a1c1ea2e299",
+    "phase-22-independent-state.json": "424e35663c69bd68933cf1c9ab402a487acf8a324a2b050f695c59ca721292b6",
+    "phase-22-independent-state.md": "aa71f150f8442246405d97afd2d0861e32daaa3038229227ee5f554d1c7d0efe",
+    "phase-22-platform-probe-failure-cleanup.json": "a92e18c73f5f9e2370f118d8bb7ba90f7ab49581d431fc4adc52e8984ff1247b",
+    "phase-22-prepare-path-failure-cleanup.json": "b7a9f57fd7df37ea4be367df736b2e82b2c1cb0515e02b25b602fa99f92a7f90",
+    "phase-22-runtime-attestation.json": "9fb3439c4fe8b42da2213bb05f82a3b64b2ac3024e38a008aaadd98535c16512",
+    "phase-22-runtime-before-cookie-fix.json": "d57516f0ec584327d86ec17fa1151ac7a4b8f1f2bb57a34323345ffaa9f1a16d",
+    "phase-22-runtime-before-deadline-fix.json": "913612176b3c8385c6cd57489a62876ed9c119533213e65cff877e89af0d5ddc",
+    "phase-22-runtime.json": "eed3a0fb1a6baa6c542f18e8511d751cd739f6d3625e7e2dbb65fc12fe443bd9",
+    "phase-22-self-check.json": "3780aaaa38db9cfd29192affb5ef383b11c7425eaa547fcd822ab0472e6ac0b4",
+    "phase-22-startup-path-failure-cleanup.json": "16dc8ea6b05caf69787bc7745a0fec724ea45d337f7d29e7a54cf42556d7cab4",
+    "phase-22.md": "016a0d8617d1b86c3b698a8153e68dd1f4ba1040095cde1ed643cee780554e10",
+    "phase-23-acceleration-acceptance-map.md": "40cdc4fbf08cf354f20d5424ff37cd02870648d10f28bd28fbc0892a78607a6e",
+    "phase-23-acceleration-carrier-audit.md": "0c53e207ef20ec30e1c3352cd1918dd2cdf566f60eee678d2f93c6782b4ddb12",
+    "phase-23-acceleration-components.json": "08064924237f8be3e07f0385a0a9951ced1525c7b878d1d8a7b845d15f0d1d45",
+    "phase-23-acceleration-freeze.json": "ee797b221662c10b8333f70e57633a4970c814c75a7038c16007137d49f1726a",
+    "phase-23-acceleration-recovery-probe.json": "2aff43fe6b264a19d636c8f7faabe1fe86c79f757e0f9eee655900fafe922e6b",
+    "phase-23-cleanup.json": "dbdf06cfdbe8797cdfc966a3137384b0253c3820a104524d2321aa5ef3f9c2d6",
+    "phase-23-consent-regression.json": "3c36bfb14c4cad0f73b0dd3eecf659b7614328e9b537bec45c04ef4e587260c8",
+    "phase-23-current-build-attestation.json": "dea40fed62dec4af9f97887008a9a2ae71c52e40dd2395fe0ff987797039ea23",
+    "phase-23-current-components.json": "282d90865e12fc73692c48a1ceff2db82957487459b79425bf61e07d2b2e6f4d",
+    "phase-23-current-freeze.json": "ec127df8f7f97dac90d26ca2fa658c7a3a760b5ba5a4c1f1227ce1f4d437588e",
+    "phase-23-current-frontend-build.json": "79cce70f7200ee4c664139187444c97ac632e06fae4529a859b74724052d618a",
+    "phase-23-current-hba-preflight.json": "39ddf1743e7821ee4923cae294499ac8f9042ec3505b0d0cfeaf183eb293e1f2",
+    "phase-23-execution-handoff.md": "fdf61dfccc577dad2c09c2ca71d33713e2f31cfcc1b6dbbb256d4b5cc3650e80",
+    "phase-23-file-negative-evidence.json": "cdac2a1264d9cdff66fbd21eb34ddccda4332b63146f635ea74c8cbb43947ba7",
+    "phase-23-file-negative-probe-r21.json": "376cff1a695b3ae66452c1414617975ef8b6ab7b6978b8045f9d94113017e3ce",
+    "phase-23-final-resource-audit.json": "8b864b9d6047018634b9e9c94a803b27b3477b1341b296e96df7d528d60f703f",
+    "phase-23-frontend-build.json": "f34a794d83a57db8385e0512821eb9371028bd8221d57b60d17abf7a75d45577",
+    "phase-23-frontend-inputs-before.json": "4654aac78b55b72ad7f16ce8bafc22143d8a7cdc02c8cc95222ba4c317eaa28c",
+    "phase-23-harness-components.json": "40b1936192f5e72fdac0817586f6429b3d24c345e9d81ad3f2b4e10f360c76e6",
+    "phase-23-hba-preflight.json": "775d7d59d1be9cb1f6dc7e5111c3828e081bce041e5c7e40effa297cfc8f18f5",
+    "phase-23-hba-restoration.json": "7ffa4525d1ea463a67307c8e06e78a344dad9bec2906d4379ffaf765ff8ff996",
+    "phase-23-integration.json": "8e93c1b72fabe0308e316ca55a1c8c8e58965a5535ea7668fa7ead400684206d",
+    "phase-23-keys.md": "18e131e0ec2ceed60d1fd4539c0a683a49f15339360a3445897278d328b0a508",
+    "phase-23-marker-isolation.patch": "77509e69987abc6414a22fd0bfaa1cd1ad022775c27c816ba671a5754f55ded0",
+    "phase-23-preparation.md": "b42ba8b9baea0f9726c51d4e396bf1effd244ab1919f8de5df1f952fe0b56bdf",
+    "phase-23-r17-cleanup.json": "6f005f1a8494a7039cfda162a83cec9276d1c856014ada6988f2a58df5927b2b",
+    "phase-23-r17-components.json": "c2ad50f9538d1c6bcfb6c815e08c17ab799664a58a22207b51b6c13139b998d1",
+    "phase-23-r17-hba-restoration.json": "dd21a86881aa07b045bd7a2fb47237635d469284a8de809fd329c7199d4a3c8e",
+    "phase-23-r17-integration.json": "3cf631217c2b166ce5ca33b274b30d985afa15fe992846ae79010001ef37d4d7",
+    "phase-23-r18-cleanup.json": "fdf31269e6d64748c0048370d889eef3cf4f9882d3a002b27b372ff9ce1feb9d",
+    "phase-23-r18-components.json": "301d31a6926e86708641cfff42b4b16cc0ed2209b4081bf68066247071da83e3",
+    "phase-23-r18-hba-restoration.json": "78427aafae764317172030c093afb2df4186411b9d2b510561cfee6c0fb2d446",
+    "phase-23-r18-integration.json": "1dcaec4c634a53fbe04e7219d494c53810c4361e9f1be8d68fbf00d15d2e07f4",
+    "phase-23-r19-cleanup.json": "fdc79c3cd03535a4a6a74dcc2bf49939bc451ec27e710ab87cace8b4764ed540",
+    "phase-23-r19-components.json": "758cf361b15d005477eb836e05bb3a0fdce6d872fe0992f36045fe202e946f46",
+    "phase-23-r19-hba-restoration.json": "71c7dc60485ae14d3e203bb1460f435d38a6dabf5255a5481e7597a557fee2f0",
+    "phase-23-r19-integration.json": "c89a737a66aaf14a475a79a08dcf5db09457838c42ad15a72a29df8a98f69a2d",
+    "phase-23-r20-cleanup.json": "e531f2fbec0082e8383f5d92923d4c0514d731b13a214647a48211ac51a6594e",
+    "phase-23-r20-components.json": "eb44ae95f8c4b448f4ff66ff58fc5a88d5e87cebb173cb6ff225b0279a6d064f",
+    "phase-23-r20-hba-restoration.json": "727824eb2465218f9a9075d03993bc01cced154cc8646051cb32776c2a7b4734",
+    "phase-23-r20-integration.json": "1475fd8afe8e8a660b7c64799efe0e7aab8b1bccd4917c259973dfc876c792ba",
+    "phase-23-receipt-acl-probe.json": "fd778549809d71a1022d5e92b2389000a7b9d8f98743e7e1ad44b793eef8f93f",
+    "phase-23-recovery-components.json": "b9ce45f6a2f06beff64060a061c05528a3172361290bb17f71edcb5bdeeb5e6a",
+    "phase-23-recovery-components.md": "49860dbc8e57123bbbbfb37f36fe516d81e9a09b45807dfdbfbf8702e8cec6f0",
+    "phase-23-service-secret-http-todo.md": "f728cd3add26a2f4195d24342e433015fc71d0052e1e4be682974d44eb059666",
+    "phase-23-snapshot-cleanup.json": "14b069ca18e128e9f2c7cf669452c67340c6473e34d73956e0798bf18beb397e",
+    "phase-23-static-freeze.json": "6ef3e2d6456dd8382d46e457d9d3ecd41ab3586bdbccc30ce233fbdfd704d0fc",
+    "phase-23-static-resource-check.json": "70e568be4caa7ee8c6fbcbc00c0e70164e9fef45969b2a9f60cc7ae08a25e7b5",
+    "phase-23.md": "29ff82c041ef29b02284a3614e8b6c7eb4595bb64d1e5b5fd109dd70393e208a",
+    "phase-24-consumer-components.json": "492b295de6a0d58c066a827773f2cbe85b6a821a5a6dd7c614ab5cdab8f6afa0",
+    "phase-24-empty-database-final.json": "a2b06a69e33e87491cd35683fb5f4352beae5e835c828bd9033f838b1f4a7c6e",
+    "phase-24-empty-database-r1.json": "f9232ee23be65624057efe7df82ff1c8af8594118eec17b5c1bf2cab970456b2",
+    "phase-24-empty-database-r2.json": "d8523fc93d1c8ddf0e55bf0024ebbf87d09f19d07e6e0f9f9b072a727c341e9d",
+    "phase-24-empty-database-r3.json": "99082a1accf94c8d60de8d19d371bbcdb1ced502124488d7a3d384d79731cd04",
+    "phase-24-empty-database.json": "93fc7707bb212a5272b5ff4203f5d572ff33f5f8458aaff53765594bb2d40feb",
+    "phase-24-environment-restart.json": "3af87cdff7cf31f06ee324b285105e97dbadb0d52c1d87fa0eb1e6657bf1928e",
+    "phase-24-identity-components.json": "455f7c897b8e32ab4d34c44d52bf2e2939e1776496cb5f85d05c6c208395af5f",
+    "phase-24-identity-final.json": "1c5334a2dcf74b2ce553f7e1fa7443bb55325dda93e76a28d19d287ad2c95ca9",
+    "phase-24-platform-components.json": "539ba643c13223f67e1df5a4fefc1266b1720e71e371fe9fb34ef89c3f0d48be",
+    "phase-24-platform-final-input-audit.json": "8a0246ccdbc5e9023895068c2ab959af6d51832c26437318db3f7f253f921f8b",
+    "phase-24-platform-final-r1-build.json": "c0607b91cf9bbe518fa33f53e4d2a3311233841b3bede510da48a65ea7dcb020",
+    "phase-24-platform-final-r1-components.json": "539ba643c13223f67e1df5a4fefc1266b1720e71e371fe9fb34ef89c3f0d48be",
+    "phase-24-platform-final-r2-build.json": "19254c61535663447aa59724da87904e48079bfd4b2efd19fa091d7a589466e0",
+    "phase-24-platform-final-r2-equivalence.json": "948b1ec63df9846452c8e35241dbc3f227db3a9ff4a01b4a2b11f02b91afe7af",
+    "phase-24-platform-final-r2-fmt.json": "5de5ec484140259e8bf8fb6894ca263ee02e8c67f171e6d9735c7c151deeb0dc",
+    "phase-24-platform-final-r2-static.json": "decfa8234084c5e83ed30c661359abb71ca61d63b0671943b10ffeaa246e786e",
+    "phase-24-platform-final-r2-targeted.json": "a89c36c5fad05bb5ea50edbd07a5f68d09ef59771c660a3ca346506b944b713b",
+    "phase-24-platform-final-r3-build.json": "7a89aa5ead4f48d91c31bf37efbc240a9c5f874000229edce26eda4f61ab3b2b",
+    "phase-24-platform-final-r3-equivalence.json": "c90c87c113a1c8f0c11673a60d314e1061691575ca1c43ca61cf13ff9142e640",
+    "phase-24-platform-final-r3-fmt.json": "e007bb7a4d16e7688fd5fa285bbb572baa2fa0ccf3305c244185f478f044a07d",
+    "phase-24-platform-final-r3-static.json": "68848ac955edcf40864189e352faeeb8d8c25f66fc5ef65ed0c1749287c035b9",
+    "phase-24-platform-final-r3-targeted.json": "896a2145a90ad3b61f34f76272a58f602fbb145b04dc5c077e42cb0a056812a5",
+    "phase-24-platform-final.json": "54a65552380f363f3fe13b49b1aa81aee6457530467e7a9494b93e6307184383",
+    "phase-24-platform-r2-checkpoint.json": "172790c1cb61f2287ff6e121d5623d0966136a54902d7074846b88f7d4118116",
+    "phase-24-platform-r2-users-remote-diagnostic.json": "76c0512c05e5def59ec5979d4a40ab90291431c7604ed4595ff5e98465054bd0",
+    "phase-24-preparation.md": "a6edd5139eb92562664522f5bd66b5984355de97a06dd6dfcd27320123c15180",
+    "phase-24-recovery-retirement.json": "e8b5d59768093cea0004ca0438a507d3150c65dfda4490a3b7ddc4a3d63b748a",
+    "phase-24.md": "a0d1e388b9a5839ab235343a8691b4573bd9e03805b8dae8de4b87c4535a6ccd",
+    "phase-25-preparation.md": "44ad21a3f57037f81e5e007c53f07e67768157e12abe108ae667a78d5c6e0ded",
+    "phase-25-resource-preflight.md": "9fe076084a114433fcd6358344b9433398f2a9b2aa5d692b901888bac2ea569e"
+  },
+  "retainedSharedResources": {
+    "nativePostgres": "Retained for subsequent authorized phases; not stopped or modified.",
+    "cargoHome": "/home/jackie/.cache/rust-saas-unified-auth-20261029/cargo-home",
+    "sharedTarget": "/home/jackie/.cache/rust-saas-unified-auth-20261029/target-linux",
+    "sourceSnapshotsAndTaskDirectory": "Retained under root ownership for subsequent phases."
+  },
+  "windowsVhdxReclamationClaimed": false,
+  "finishedUtc": "2026-10-29T09:35:12.859434+00:00",
+  "removedDirectoryCount": 8,
+  "filesRemoved": 76,
+  "logicalBytesRemoved": 309448977,
+  "categories": {
+    "ownerMarkers": {
+      "filesRemoved": 4,
+      "logicalBytesRemoved": 333
+    },
+    "rawLogs": {
+      "filesRemoved": 40,
+      "logicalBytesRemoved": 1913234
+    },
+    "temporaryState": {
+      "filesRemoved": 25,
+      "logicalBytesRemoved": 1524186
+    },
+    "runners": {
+      "filesRemoved": 6,
+      "logicalBytesRemoved": 32384
+    },
+    "historicalDiagnosticBinary": {
+      "filesRemoved": 1,
+      "logicalBytesRemoved": 305978840
+    }
+  },
+  "removedPathsAbsentAfterCleanup": true,
+  "activeOwnedProcessesAfterCleanup": [],
+  "newDatabasesComparedWithFinalR3Baseline": [],
+  "newRolesComparedWithFinalR3Baseline": [],
+  "runtimeTmpRemainingFilesInRemovedItems": [],
+  "formalReportsUnchangedAfterCleanup": true,
+  "clusterIdVerifiedAfterCleanup": true,
+  "additionalAuthorizationUtc": "2026-10-29T09:35:11.281723+00:00",
+  "runtimeTmpRemainingFiles": [],
+  "privateRawAndRunnerAndStateCleanupComplete": true,
+  "remainingOwnedItemsInThisCleanupScope": [],
+  "logicalBytesNote": "Logical file byte counts only; no claim of physical Windows VHDX shrink or deletion of shared caches/source snapshots/native PostgreSQL."
+}

@@ -139,7 +139,7 @@ export default function AppLayout() {
   React.useEffect(() => {
     // 登录 / 设备 / 同意页不在 AppLayout 内,此为兜底防御;
     // /embed 为外链嵌入页, 不写入最近访问(避免高频访问出现长 URL 条目)
-    if (["/login", "/device", "/consent", "/embed"].some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    if (["/login", "/embed"].some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       return
     }
     if (recordedPathRef.current === pathname) return

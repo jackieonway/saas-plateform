@@ -1,0 +1,69 @@
+{
+  "contractVersion": "unified-auth-phase25-business-recovery-independent-review/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T12:35:16.9755973Z",
+  "reviewer": "/root/runtime_matrix_plan",
+  "status": "PASS_STATIC",
+  "scope": "Read-only source review and seven independently rerun pure regressions. Actual PostgreSQL dump/restore and TLS business acceptance remains root-owned.",
+  "reviewedFiles": {
+    "saas-plateform/backend/tests/unified-auth-https/phase25-business-recovery.py": "b902679649144916f0421dbafff9e934611407f077e94331965af4a356a62689",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-resource-browser.mjs": "a3faa11a85c6ef968a37747c23f33a105a2269c68eaee7f25aa940e18034b7f1",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-resource-control.py": "d8f7f5154dc46c417a0c00a0ca543f05a35758f9dccfd1d15e72ec0c9699fae9",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase25_business_recovery.py": "51ff9b2fec9af235a35f2c2c638bb65ec31c9ad712993845772616cf50cd4429"
+  },
+  "findings": [],
+  "resolvedFindings": [
+    {
+      "id": "P25-BDR-01",
+      "priority": 2,
+      "problem": "native orphan cleanup lacked post-pidfd-open identity comparison",
+      "sourceReviewVerified": true,
+      "resolution": "Owner added second identity comparison before signaling and lease compare-and-set before deletion"
+    },
+    {
+      "resolution": "exists or is_symlink now invokes ownership guard; actual Linux dangling-link regressions retain links/journal and return FAIL",
+      "problem": "dangling backup/log links could bypass exists-only cleanup guards",
+      "sourceReviewVerified": true,
+      "priority": 2,
+      "id": "P25-BDR-02"
+    },
+    {
+      "resolution": "DR-only utility uses direct-exec setpriv with controlled environment and bounded subprocess.run kill/wait; base.spawn_signals converts TERM to cleanup path and defers interruption during final teardown",
+      "problem": "runuser wrapper timeout could leave a forked PG tool",
+      "sourceReviewVerified": true,
+      "priority": 2,
+      "id": "P25-BDR-03"
+    }
+  ],
+  "verifiedProperties": [
+    "independent JOURNAL state_path reuses bounded Task spawn without modifying core state",
+    "default pg_dump/pg_restore owner and object ACL handling preserved; no no-owner/no-acl/remap flags",
+    "database ACL reconstruction refuses unknown grantors and preserves owner grantor plus grant options",
+    "target database names and owner/marker guards are distinct from source; source roles are reused without mutation",
+    "quiescent two-database fixture scope and original source/target data-history-schema-owner/ACL comparisons are explicit",
+    "original source-issued carrier must perform actual restored business HTTPS read with matching response digest and remaining validity",
+    "formal reports contain no raw credentials; raw carrier handoff is explicitly owner-only and assigned to DR finally cleanup",
+    "RTO measurement scope explicitly excludes capture/stopping/preflight/journal setup/final cleanup"
+  ],
+  "independentComponents": {
+    "command": "wsl.exe -d Ubuntu -u jackie --exec python3 -B -m unittest discover -s /mnt/d/WorkSpace/rust/rust-saas/saas-plateform/backend/tests/unified-auth-https -p test_phase25_business_recovery.py -v",
+    "skipped": 0,
+    "passed": 9,
+    "failed": 0,
+    "windowsAttempt": {
+      "skippedSubtests": 2,
+      "reason": "Windows symlink privilege unavailable; complete Linux run replaced the skipped coverage",
+      "testsRun": 9
+    }
+  },
+  "actualRecoveryExecutedByReviewer": false,
+  "resourcesCreated": {
+    "databases": 0,
+    "services": 0,
+    "pureTestTemporaryDirectoriesRemoved": true,
+    "containers": 0
+  },
+  "formalReportNoRawCredentialsVerified": true,
+  "privateRawCarrierHandoffFactVerified": true,
+  "readyForFrozenActualRecoveryExecution": true
+}

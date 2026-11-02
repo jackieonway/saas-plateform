@@ -26,28 +26,6 @@ const mapProxyHeaders = { "User-Agent": "SaaSPlatform/1.0 map-resource-proxy" };
 const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || "http://127.0.0.1:3001";
 const workOrdersProxyTarget = process.env.WORK_ORDERS_DEV_PROXY_TARGET || "http://127.0.0.1:3004";
 const storesProxyTarget = process.env.STORES_DEV_PROXY_TARGET || "http://127.0.0.1:3031";
-const oauthPlaygroundProxyTarget = process.env.OAUTH_PLAYGROUND_DEV_PROXY_TARGET || "http://127.0.0.1:3011";
-const oauthPlaygroundStaticProxyTarget = process.env.OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET || "http://127.0.0.1:3010";
-for (const [name, target] of [["OAUTH_PLAYGROUND_DEV_PROXY_TARGET", oauthPlaygroundProxyTarget], ["OAUTH_PLAYGROUND_STATIC_DEV_PROXY_TARGET", oauthPlaygroundStaticProxyTarget]]) {
-  const url = new URL(target);
-  if (!["http:", "https:"].includes(url.protocol) || url.origin !== target || url.username || url.password) {
-    throw new Error(`${name} must be an exact HTTP(S) origin without credentials or a path`);
-  }
-}
-const oauthPlaygroundCookies = (cookie: string | undefined) => (cookie || "").split(";").map(value => value.trim())
-  .filter(value => /^(?:oauth_playground|__Host-oauth_playground)=[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*$/.test(value)).join("; ");
-const isolateOAuthPlaygroundCredentials = (request: ClientRequest, incoming: { headers: { cookie?: string } }) => {
-  request.removeHeader("authorization");
-  const cookies = oauthPlaygroundCookies(incoming.headers.cookie);
-  if (cookies) request.setHeader("cookie", cookies);
-  else request.removeHeader("cookie");
-  request.removeHeader("upgrade");
-  request.removeHeader("connection");
-};
-const stripOAuthStaticCredentials = (request: ClientRequest) => {
-  request.removeHeader("authorization");
-  request.removeHeader("cookie");
-};
 const additionalAllowedHosts = [...new Set((process.env.DEV_ALLOWED_HOSTS || "")
   .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean))];
 if (additionalAllowedHosts.some((host) => host.length > 253 || host.split(".").some((label) =>
@@ -91,31 +69,7 @@ export default defineConfig({
         });
       },
     },
-    {
-      name: "oauth-playground-route-boundaries",
-      configureServer(server) {
-        server.middlewares.use((req, res, next) => {
-          const pathname = req.url?.split("?", 1)[0] || "";
-          let decoded: string;
-          try { decoded = decodeURIComponent(pathname); } catch { decoded = pathname; }
-          if (/^\/oauth-playground-api\/(?:internal|metrics)(?:\/|$)/.test(decoded)) {
-            res.statusCode = 404; res.setHeader("Cache-Control", "no-store"); res.end(); return;
-          }
-          const callback = pathname === "/callback";
-          const staticEntry = pathname === "/sub/oauth-playground" || pathname.startsWith("/sub/oauth-playground/");
-          if (!callback && !staticEntry) { next(); return; }
-          if (!["GET", "HEAD"].includes(req.method || "")) {
-            res.statusCode = 405; res.setHeader("Allow", "GET, HEAD"); res.setHeader("Cache-Control", "no-store"); res.end(); return;
-          }
-          if (pathname === "/sub/oauth-playground") {
-            res.statusCode = 308;
-            res.setHeader("Location", `/sub/oauth-playground/${req.url?.slice(pathname.length) || ""}`);
-            res.end(); return;
-          }
-          next();
-        });
-      },
-    },
+
   ],
   resolve: {
     alias: {
@@ -168,33 +122,6 @@ export default defineConfig({
       "^/auth(?:/|\\?|$)": {
         target: backendProxyTarget,
         changeOrigin: false,
-      },
-      // Independent OAuth exercise API. It must precede /oauth and must never
-      // receive platform bearer tokens or any other platform session cookies.
-      "^/oauth-playground-api(?:/|\\?|$)": {
-        target: oauthPlaygroundProxyTarget,
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/oauth-playground-api(?=\/|\?|$)/, "/api"),
-        configure: (proxy) => proxy.on("proxyReq", isolateOAuthPlaygroundCredentials),
-      },
-      "^/callback(?:\\?|$)": {
-        target: oauthPlaygroundStaticProxyTarget,
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/callback(?=\?|$)/, "/callback.html"),
-        configure: (proxy) => {
-          proxy.on("proxyReq", stripOAuthStaticCredentials);
-          proxy.on("proxyRes", response => { response.headers["cache-control"] = "no-store"; });
-        },
-      },
-      "^/sub/oauth-playground/": {
-        target: oauthPlaygroundStaticProxyTarget,
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/sub\/oauth-playground/, ""),
-        configure: (proxy) => proxy.on("proxyReq", stripOAuthStaticCredentials),
-      },
-      "/oauth": {
-        target: backendProxyTarget,
-        changeOrigin: true,
       },
       // Registered URL resources are resolved by Rust; /micro/* remains host SPA navigation.
       "/micro-proxy": {

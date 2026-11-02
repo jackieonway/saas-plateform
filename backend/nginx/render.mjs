@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import {
   absolutePath, apiLocations, commonHttp, configuration, contentSecurityPolicy, exactOrigin, knownFields, listener,
-  oauthPlaygroundLocations, oauthPlaygroundMaps, origins, privateLocations, proxyHeaders, quote, staticHeaders, staticMaps, token,
+  origins, privateLocations, proxyHeaders, quote, staticHeaders, staticMaps, token,
   upstreamPolicy, validateTrustedProxyIps, version, zipLocations,
 } from './policy.mjs'
 
@@ -13,7 +13,7 @@ export { validateTrustedProxyIps } from './policy.mjs'
  * proxying is deliberately unavailable. Cross-host/untrusted transport needs a
  * separately reviewed HTTPS-upstream deployment rather than disabling TLS. */
 export function renderGateway(input) {
-  knownFields(input, ['publicOrigin', 'listener', 'httpListener', 'certificate', 'certificateKey', 'mimeTypes', 'backend', 'frontend', 'notification', 'workOrders', 'stores', 'oauthPlayground', 'oauthPlaygroundStatic', 'zipStatic', 'allowedServices', 'allowedUpstreamIps', 'trustedProxyIps', 'versionRoutes', 'applicationOrigins', 'imageOrigins', 'trustedHtmlEval'])
+  knownFields(input, ['publicOrigin', 'listener', 'httpListener', 'certificate', 'certificateKey', 'mimeTypes', 'backend', 'frontend', 'notification', 'workOrders', 'stores', 'zipStatic', 'allowedServices', 'allowedUpstreamIps', 'trustedProxyIps', 'versionRoutes', 'applicationOrigins', 'imageOrigins', 'trustedHtmlEval'])
   const origin = exactOrigin(input.publicOrigin)
   const upstream = upstreamPolicy(input)
   const backend = upstream(input.backend ?? 'backend:3001')
@@ -21,8 +21,6 @@ export function renderGateway(input) {
   const notification = input.notification == null ? null : upstream(input.notification)
   const workOrders = input.workOrders == null ? null : upstream(input.workOrders)
   const stores = input.stores == null ? null : upstream(input.stores)
-  const oauthPlayground = input.oauthPlayground == null ? null : upstream(input.oauthPlayground)
-  const oauthPlaygroundStatic = input.oauthPlaygroundStatic == null ? null : upstream(input.oauthPlaygroundStatic)
   const zipStatic = input.zipStatic == null ? null : upstream(input.zipStatic)
   const trusted = validateTrustedProxyIps(input.trustedProxyIps)
   const hostCsp = contentSecurityPolicy({ origin, applicationOrigins: input.applicationOrigins, imageOrigins: input.imageOrigins, trustedHtmlEval: input.trustedHtmlEval })
@@ -52,7 +50,7 @@ ${proxyHeaders(origin)}            proxy_pass http://$zip_static$request_uri;
             add_header X-Content-Type-Options "nosniff" always;
         }
 ` : '        location /sub-apps/ { return 404; }\n'
-  return configuration(commonHttp(input) + oauthPlaygroundMaps({ api: oauthPlayground, assets: oauthPlaygroundStatic }) + `    # Variables force fresh Docker service lookup after the resolver TTL.
+  return configuration(commonHttp(input) + `    # Variables force fresh Docker service lookup after the resolver TTL.
     resolver 127.0.0.11 valid=5s ipv6=off;
     resolver_timeout 3s;
     server {
@@ -73,7 +71,7 @@ ${proxyHeaders(origin)}            proxy_pass http://$zip_static$request_uri;
         add_header X-Content-Type-Options "nosniff" always;
         if ($host != ${quote(origin.hostname)}) { return 421; }
 ${trusted.map((ip) => `        set_real_ip_from ${ip};\n`).join('')}${trusted.length ? '        real_ip_header X-Forwarded-For;\n        real_ip_recursive off;\n' : ''}
-${privateLocations()}${oauthPlaygroundLocations(origin, { api: oauthPlayground, assets: oauthPlaygroundStatic })}${apiLocations(origin, { backend: { name: 'platform', address: backend }, notification: notification && { name: 'notification', address: notification }, workOrders: workOrders && { name: 'work_orders', address: workOrders }, stores: stores && { name: 'stores', address: stores } })}        location = /sub-apps { return 404; }
+${privateLocations()}${apiLocations(origin, { backend: { name: 'platform', address: backend }, notification: notification && { name: 'notification', address: notification }, workOrders: workOrders && { name: 'work_orders', address: workOrders }, stores: stores && { name: 'stores', address: stores } })}        location = /sub-apps { return 404; }
 ${versionLocations}${zip}        # URL applications use the backend's allowlisted static proxy, never host SPA fallback.
         location = /micro-proxy { return 404; }
         location ^~ /micro-proxy/ {

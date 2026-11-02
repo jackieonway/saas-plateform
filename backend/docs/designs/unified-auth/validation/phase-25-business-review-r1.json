@@ -1,0 +1,53 @@
+{
+  "contractVersion": "unified-auth-phase25-business-independent-review/1",
+  "recordedAtUtc": "2026-10-29T10:30:59.5553415Z",
+  "reviewer": "/root/phase25_frontend",
+  "status": "CHANGES_REQUESTED",
+  "scope": "Read-only review of Phase25 actual business browser, business TLS routing listener, and Phase25 execution hooks; no dynamic service or database execution.",
+  "reviewedFiles": {
+    "backend/tests/unified-auth-https/phase23-execute.ps1": "0d6a12e5a128f1905e0f1ac05f55d6267ede67ad07ab4ea47ca9fc43364131ff",
+    "backend/tests/unified-auth-https/phase25-business-browser.mjs": "6431ac603a8983b13ec02d619d634abc7bb9eb43276ba5f71a74b37411c9b58f",
+    "backend/tests/unified-auth-https/phase25-business-gateway.py": "26583d3dc7543e1d50c38f97e0a58552b7a2eb45a2127aa744d55115f91bdf4c"
+  },
+  "findings": [
+    {
+      "file": "backend/tests/unified-auth-https/phase25-business-browser.mjs",
+      "id": "P25-REVIEW-01",
+      "requestedFix": "Pass a stable valid explicit idempotency key; validate the same request/key recovers the same ticket without another write.",
+      "problem": "Actual ticket creation omits the mandatory Idempotency-Key header. The current work-orders route rejects it before writing, so the real write/durable-result case cannot pass.",
+      "line": 172,
+      "evidence": "saas-work-orders/backend/src/http.rs:264-268 requires one nonempty idempotency-key header; json() currently exposes no option for it.",
+      "priority": 2
+    },
+    {
+      "file": "backend/tests/unified-auth-https/phase25-business-browser.mjs",
+      "id": "P25-REVIEW-02",
+      "requestedFix": "Perform readiness as a same-origin browser navigation/read, then return to Console before socket requests so the exact allowed Origin remains intact; or use an explicitly declared owner readiness probe.",
+      "problem": "Notification readiness is fetched from another port in the browser, but the health response has no CORS header. A valid healthy response is blocked by Chromium and the notification case fails before connecting.",
+      "line": 179,
+      "evidence": "saas-notification/src/server.rs:429-550 adds Access-Control-Allow-Origin only to socket paths; the non-socket branch starts at552. The routing gateway does not add CORS.",
+      "priority": 2
+    },
+    {
+      "file": "backend/tests/unified-auth-https/phase25-business-browser.mjs",
+      "id": "P25-REVIEW-03",
+      "requestedFix": "Check actual context/browser closure; preserve a failed cleanup result and nonzero exit if any remains connected.",
+      "problem": "The finally block suppresses browser.close failure and then unconditionally reports browserClosed=true, allowing false cleanup success.",
+      "line": 209,
+      "evidence": "The same block suppresses each context close failure and never verifies browser.isConnected().",
+      "priority": 2
+    }
+  ],
+  "boundaryChecks": {
+    "nativeProcessesAndFixtureCleanupAttemptedInExecutorFinally": true,
+    "noAuthenticationClaimsGeneratedByGateway": true,
+    "rawProtocolResponsesNotPersistedByBrowser": true,
+    "privateRoutesExplicitlyExcluded": true,
+    "uiAndBusinessRunBeforeMfaRecovery": true,
+    "fixedErrorCodeSanitizer": true
+  },
+  "limitations": [
+    "No dynamic PASS or complete cleanup claim is made by this review.",
+    "The root owner may update the reviewed files after these recorded hashes; fixes require current-source re-review or dynamic evidence."
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "status": "FAILED_VALIDATION_ENVIRONMENT_LOST_AFTER_RUN",
+  "phase": 24,
+  "snapshot": "phase24-platform-r2",
+  "snapshotSha256": "7c77991ca6e3e74d5289bae8cc4849536f432331f544981fb3c200ce8613c027",
+  "platformInputCount": 366,
+  "inputVerification": "All 366 platform frozen inputs matched current source before execution; all 32 CLI inputs matched cli-r2.",
+  "oldClusterId": "7701881991704683791",
+  "oldTaskRoot": "/tmp/rust-saas-unified-auth-20261028",
+  "executionUser": "jackie",
+  "docker": {
+    "created": 0,
+    "reused": 0
+  },
+  "stages": [
+    {
+      "name": "regular-all-targets",
+      "exitCode": 0,
+      "durationSeconds": 199.2,
+      "passed": 240,
+      "failed": 0,
+      "explicitlyIgnored": 191,
+      "rawLogSha256": "4afd6aa7374f435791a75cf0576434cd1f1e51c469bd2ce02441c61229f2adbe",
+      "rawAvailable": false
+    },
+    {
+      "name": "canonical-bff-postgresql",
+      "exitCode": 101,
+      "durationSeconds": 183.307,
+      "passed": 6,
+      "failed": 3,
+      "explicitlyIgnored": 0,
+      "rawLogSha256": "396304715cef7c917ef02b7bc9172ed8cb901ac82ce9cf98980f4d4c17f9529f",
+      "rawAvailable": false,
+      "failedCases": [
+        "bff_tests::canonical::canonical_backchannel_original_deadline_rolls_back_after_source_lock_wait",
+        "bff_tests::canonical::canonical_cookie_reload_recovers_only_original_unknown_logout",
+        "bff_tests::canonical::canonical_late_logout_cannot_erase_new_account_cookie"
+      ]
+    },
+    {
+      "name": "remaining-binary-ignored",
+      "exitCode": 101,
+      "durationSeconds": 810.324,
+      "passed": 148,
+      "failed": 33,
+      "explicitlyIgnored": 0,
+      "rawLogSha256": "23bb951701a8074300640f590c7647ea82f938f69100730750897091a860dafb",
+      "rawAvailable": false,
+      "failedCases": [
+        "authentication_boundary_tests::canonical_account_administration_failure_keeps_original_transactions",
+        "authentication_boundary_tests::canonical_account_reset_preserves_members_and_revokes_exact_subject",
+        "authentication_boundary_tests::canonical_account_status_does_not_restore_old_member_sessions",
+        "employee_isolation_tests::employee_isolation_phase03_bulk_preserves_other_identities_and_role_support",
+        "employee_isolation_tests::employee_isolation_phase03_bulk_self_departure_preserves_customer_and_rechecks_after_credential_wait",
+        "employee_isolation_tests::employee_isolation_phase03_fresh_identity_precedes_cached_administrator_flag",
+        "employee_isolation_tests::employee_isolation_phase03_permanent_delete_and_replace_keep_supported_roles",
+        "identity_binding_tests::identity_binding_canonical_exact_member_revocation",
+        "identity_deployment_tests::phase12_narrow_projections_and_command_fences_hold_exact_original_bindings",
+        "identity_ui_tests::phase05_capabilities_reflect_server_gates_and_customer_console_access_stays_closed",
+        "identity_ui_tests::user_directory_member_type_filter_binds_type_and_organization_to_the_same_relationship",
+        "management_audit_tests::user_security_password_and_platform_settings_mutations_are_audited_atomically",
+        "membership_lifecycle_tests::membership_lifecycle_phase01_contract_matrix",
+        "notification_identity_tests::notification_identity_phase04_actual_platform_and_external_socketio_keep_receipt_identity",
+        "notification_identity_tests::notification_identity_phase04_local_departure_and_replacement_preserve_other_receipts",
+        "notification_tests::app_members_authorization_and_next_request_revocation",
+        "notification_tests::notification_tenant_grants_obey_selected_organization_subtree",
+        "oidc::remote_admin::pg_tests::phase05_browser_operation_intent_is_idempotent_and_absence_cannot_race_late_accept",
+        "oidc::remote_admin::pg_tests::phase12_remote_admin_pg_ack_commits_and_suppressed_audit_is_an_error",
+        "oidc::remote_admin::pg_tests::phase12_remote_admin_pg_suppressed_intent_or_accept_audit_rolls_back_without_dispatch",
+        "platform_admin_cli_tests::real_cli_platform_round_trip",
+        "release_tests::database_upgrade::uuid_v7_target_enforces_versions_variants_and_application_generated_ids",
+        "release_tests::qiankun_only::qiankun_only_unifies_builtin_metadata_and_ignores_archived_builtin_release",
+        "release_tests::release_qiankun_defaults_and_reconfiguration_preserve_authorization",
+        "routes::admission_policy_tests::admission_policy_api_contracts_and_versions",
+        "routes::admission_policy_tests::admission_policy_audit_atomicity_and_concurrent_conflicts",
+        "routes::departments::organization_tests::department_organization_choices",
+        "routes::users::remote::tests::account_command_acknowledgements_reject_trigger_suppressed_writes",
+        "routes::users::remote::tests::delayed_account_followup_does_not_revoke_new_generation_and_is_idempotent",
+        "sso_session_tests::canonical_account_generation_invalidates_all_own_contexts_but_preserves_other_accounts",
+        "sso_session_tests::canonical_member_departure_preserves_sibling_context_customer_identity_and_global_sources",
+        "sso_session_tests::canonical_personal_session_listing_and_revocation_are_exactly_owner_scoped",
+        "sso_session_tests::canonical_unavailable_source_is_503_without_changing_local_session_or_cookie"
+      ]
+    }
+  ],
+  "pendingExecution": [
+    "context_selection_database integration ignored test was not reached after the failed binary target",
+    "All current fixes require a new freeze and fresh-cluster validation"
+  ],
+  "binaries": {
+    "mainTestSha256": "4eaaf052339dd64682ae50a3541d3a1b67fc76353d4a24e092c9ed8f2b76c7f6",
+    "cliSha256": "551be58cd6cbba2092acce745fdf9c1d4f020fb51d0d8483ad6c9569520f1e11",
+    "currentAvailability": "Not verified after loss of the tmpfs task root; the persistent external Cargo target may survive."
+  },
+  "knownFailureClasses": [
+    "Fixture source guards required an embedded URL password; owners replaced this with explicit cluster ownership verification.",
+    "BFF fixture logout source facts omitted auth_rp_sessions; strict source constraint reported 23514. The notification expiry fixture did not preserve the required 120-second original lifetime.",
+    "Canonical account generation starts at 1; several fixtures still assumed 0.",
+    "platform_app_capabilities membership FK used NO ACTION and blocked member deletion; root changed only this derived-capability FK to ON DELETE CASCADE.",
+    "The retired revoke_application_policy_credentials function still had a production caller; the caller now revokes only platform-owned derived capabilities.",
+    "Legacy audit action names remained in key-command tests after canonical audit naming.",
+    "A tuple integer inferred i32 for a bigint SQL argument and caused the fixed PostgreSQL protocol error insufficient data left in message.",
+    "Some fixtures omitted current fine management permissions, bound TOTP facts or explicit data-grant capabilities.",
+    "Historical schema counts, migration assumptions, retired route expectations and CLI permission indices required current-contract test updates.",
+    "The actual external notification Socket.IO case lacked an explicit current notification executable.",
+    "Two users::remote follow-up cases still require fresh diagnostic execution; their raw failure details were lost."
+  ],
+  "environmentLoss": {
+    "observedUtc": "2026-10-29T07:36:52.415434+00:00",
+    "observedProcUptimeSeconds": 10.45,
+    "facts": [
+      "The entire old task root was absent",
+      "admin-url and all source snapshots were absent",
+      "The task target-linux symlink was absent",
+      "No shutdown or terminate was issued by this agent"
+    ],
+    "conclusion": "WSL instance restart or recreation is evidenced; its cause is not established by this checkpoint.",
+    "rawEvidenceLimitation": "Private raw logs, source manifests and catalogs lived on tmpfs and are no longer readable. SHA values and sanitized summaries here were retained from prior tool output, not regenerated from lost files."
+  },
+  "cleanup": {
+    "bffAuditBeforeLoss": {
+      "newDatabases": 0,
+      "newRoles": 0,
+      "newTmpEntries": 0
+    },
+    "finalRemainingPgAudit": "UNVERIFIED: its before/after catalogs were lost before final inspection.",
+    "statement": "Environment disappearance is not claimed as directed resource cleanup or Windows disk recovery. Root owns reconstruction and subsequent final cleanup."
+  }
+}

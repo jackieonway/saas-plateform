@@ -1,10 +1,5 @@
 //! HTTP regressions on explicitly configured, loopback-only disposable databases.
-use crate::{
-    config::Config,
-    entity_creation_tests::Database,
-    state::AppState,
-    util::{hash, jwt},
-};
+use crate::{config::Config, entity_creation_tests::Database};
 use anyhow::{ensure, Result};
 use axum::{
     body::{to_bytes, Body},
@@ -44,7 +39,12 @@ fn router(pool: &PgPool, policy: &Value) -> Result<Router> {
         ("JWT_SECRET".into(), SECRET.into()),
         ("DATA_GRANT_POLICY".into(), policy.to_string()),
     ]))?;
-    Ok(crate::routes::api_router().with_state(AppState::new(pool.clone(), Arc::new(config))))
+    Ok(
+        crate::routes::api_router().with_state(crate::sso_test_fixture::state(
+            pool.clone(),
+            Arc::new(config),
+        )),
+    )
 }
 
 async fn org(
@@ -109,36 +109,16 @@ impl Harness {
             .execute(pool)
             .await?;
         sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) VALUES($1,$2,'store','read','ORG_SUBTREE',$3)").bind(membership).bind(application).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
-        let session = crate::util::uuid7::new_uuid();
-        sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-         SELECT $1,$2,$3,$4,now()+interval '1 hour',u.session_version,m.id,m.member_type,m.identity_version,'urn:saas:legacy-platform','platform-console-legacy',c.access_policy_version \
-         FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$4 AND m.member_type='EMPLOYEE' \
-         JOIN oauth_clients c ON c.client_id='platform-console-legacy' WHERE u.id=$2").bind(session).bind(user).bind(tenant).bind(hq).execute(pool).await?;
-        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_type,client_secret_hash,application_id,id) VALUES('stores-directory','Stores directory','CONFIDENTIAL',$1,$2,$3)").bind(hash::sha256_hex("directory-secret")).bind(application).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
-        let now = Utc::now().timestamp();
-        let jti = crate::util::uuid7::new_uuid();
-        let token = jwt::sign(
-            &jwt::Claims {
-                sub: user.to_string(),
-                typ: "access".into(),
-                tenant: Some(tenant.to_string()),
-                org: Some(hq.to_string()),
-                cid: Some("stores-directory".into()),
-                scope: Some(String::new()),
-                sid: None,
-                ver: None,
-                aud: Some("stores".into()),
-                jti: Some(jti.to_string()),
-                exp: now + 300,
-                iat: now,
-            },
+        let token = crate::sso_test_fixture::app_capability(
+            pool,
+            user,
+            tenant,
+            hq,
+            application,
+            "stores",
             SECRET,
-        )?;
-        sqlx::query("INSERT INTO oauth_tokens(token_hash,token_type,user_id,client_id,tenant_id,organization_id,scope,expires_at,token_use,audience,jti,application_id,platform_session_id,id,account_version,membership_id,member_type,identity_version,client_policy_version,application_policy_version,origin_issuer,origin_client_ref,origin_client_policy_version,application_service_client_ref) \
-            SELECT $1,'access',$2,c.client_id,$3,$4,'',now()+interval '5 minutes','app','stores',$5,$6,$7,$8,s.account_version,s.membership_id,s.member_type,s.identity_version,c.access_policy_version,a.access_policy_version,s.origin_issuer,s.origin_client_ref,s.origin_client_policy_version,c.client_id \
-            FROM platform_sessions s JOIN oauth_clients c ON c.client_id='stores-directory' JOIN applications a ON a.id=$6 \
-            WHERE s.id=$7 AND s.user_id=$2 AND s.tenant_id=$3 AND s.organization_id=$4 AND platform_session_active(s.id)")
-            .bind(hash::sha256_hex(&token)).bind(user).bind(tenant).bind(hq).bind(jti).bind(application).bind(session).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
+        )
+        .await?;
         let policy = json!({"applications":[{"applicationId":application,"capabilities":[{"resource":"store","action":"read","scopes":["SELF","ORG_SUBTREE"]}],"organizationLookups":[{"resource":"store","action":"read","organizationType":"STORE"}]}],"managementScopes":[]});
         Ok(Self {
             pool: pool.clone(),

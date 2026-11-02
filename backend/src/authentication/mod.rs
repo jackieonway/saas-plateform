@@ -17,8 +17,7 @@ use crate::config::Config;
 use crate::error::AppError;
 use crate::platform_accounts::{
     AccountAdministrationPort, AccountCredential, AccountFuture, AccountMutationTx,
-    AuthenticationPort, CreatedAccount, LoginIdentifier, NewAccount, PasswordChange,
-    PreparedPassword,
+    AuthenticationPort, CreatedAccount, NewAccount, PasswordChange, PreparedPassword,
 };
 use crate::util::password::{self, PasswordService};
 
@@ -53,20 +52,6 @@ pub(crate) fn new(pool: PgPool, passwords: PasswordService, config: Arc<Config>)
 }
 
 impl AuthenticationPort for AccountService {
-    fn candidates<'a>(
-        &'a self,
-        identifier: LoginIdentifier<'a>,
-    ) -> AccountFuture<'a, Vec<AccountCredential>> {
-        Box::pin(async move { postgres::candidates(&self.pool, identifier).await })
-    }
-
-    fn by_username<'a>(
-        &'a self,
-        username: &'a str,
-    ) -> AccountFuture<'a, Option<AccountCredential>> {
-        Box::pin(async move { postgres::by_username(&self.pool, username).await })
-    }
-
     fn by_user_id(&self, id: Uuid) -> AccountFuture<'_, AccountCredential> {
         Box::pin(async move { postgres::by_user_id(&self.pool, id).await })
     }
@@ -83,6 +68,7 @@ impl AuthenticationPort for AccountService {
         })
     }
 
+    #[cfg(test)]
     fn credential_matches<'a>(
         &'a self,
         tx: &'a mut dyn AccountMutationTx,
@@ -151,13 +137,5 @@ impl AccountAdministrationPort for AccountService {
         status: &'a str,
     ) -> AccountFuture<'a, bool> {
         tx.set_status(id, status)
-    }
-
-    fn revoke_all<'a>(
-        &'a self,
-        tx: &'a mut dyn AccountMutationTx,
-        id: Uuid,
-    ) -> AccountFuture<'a, u64> {
-        tx.revoke_all(id, None)
     }
 }

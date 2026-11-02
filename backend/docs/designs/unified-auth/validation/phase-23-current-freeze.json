@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "toolsSnapshot": "phase23-tools-r21",
+  "toolsSnapshotSha256": "0b7fee81ac40653f82e57da6447a416190e35b8504d266816db63da95900528f",
+  "buildSnapshot": "phase23-apps-r3",
+  "buildSnapshotSha256": "51b024e351c3ec842b30a6588a6f37ff5647afb3d989474e4bdd8420ba99fe1e",
+  "compiledInputCount": 844,
+  "inputCount": 941,
+  "binariesChecked": 6,
+  "inputProvenance": {
+    "compiledInputsFrom": "phase23-apps-r3",
+    "compiledSnapshotSha256": "51b024e351c3ec842b30a6588a6f37ff5647afb3d989474e4bdd8420ba99fe1e",
+    "toolInputsFrom": "current workspace noncompiled inputs only",
+    "changedToolInputs": [
+      "saas-plateform/backend/ops/identity-recovery/README.md",
+      "saas-plateform/backend/ops/identity-recovery/core.py",
+      "saas-plateform/backend/ops/identity-recovery/reconcile.py",
+      "saas-plateform/backend/ops/identity-recovery/test_core.py",
+      "saas-plateform/backend/ops/identity-recovery/test_reconcile.py",
+      "saas-plateform/backend/tests/unified-auth-https/README.md",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-browser.mjs",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-execute.ps1",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-file-negative-evidence.mjs",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-file-negative-evidence.test.mjs",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-fixture-selftest.py",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-fixture.py",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-identity-driver.mjs",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-identity-driver.test.mjs",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-invariant-cases.py",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-files.py",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-key-cases.mjs",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-key-cases.test.mjs",
+      "saas-plateform/backend/tests/unified-auth-https/phase23-recovery-probe.py",
+      "saas-plateform/backend/tests/unified-auth-https/test_phase23_invariant_cases.py",
+      "saas-plateform/backend/tests/unified-auth-https/test_phase23_recovery_files.py",
+      "saas-plateform/backend/tests/unified-auth-https/test_phase23_recovery_probe.py"
+    ]
+  }
+}

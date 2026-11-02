@@ -1,0 +1,308 @@
+{
+  "contractVersion": "unified-auth-phase25-component-suite/1",
+  "phase": 25,
+  "service": "portal",
+  "snapshot": "phase25-apps-r2",
+  "exactTestSelector": null,
+  "integrationTestTarget": null,
+  "fullServiceSuiteClaimed": true,
+  "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+  "manifestSha256": "bc6cac8f2ea794b7b8a39b50e4f21fb8b77301f9fd6f4a86a752a1cce8d452b1",
+  "sourceInputs": {
+    "saas-customer-portal/backend/Cargo.lock": "4a998608b602e485ae4fa3bf01e401c20a8a51621df37c4a2f86f626a7d0f8de",
+    "saas-customer-portal/backend/Cargo.toml": "20170c43d1028d27acbd9d6c70b7128f5417dd4e30aae28cc599f4d9322a2e91",
+    "saas-customer-portal/backend/migrations/0001_customer_portal.sql": "c047c0c37f2a5da1dddc2233e9fdb63935ce5cc29ecb510777c3281e7a0ea4d4",
+    "saas-customer-portal/backend/src/backchannel/test_key.rs": "b8d4971c810a334e9b4d65be2c15062d37c599d72399c66dda2fc81695c5bf5b",
+    "saas-customer-portal/backend/src/backchannel/tests.rs": "d5fdababa6cae31606fb1a017db9f0bf501b683cfc20448cee8142ed2db37fcf",
+    "saas-customer-portal/backend/src/backchannel.rs": "fc808f0e0f9aed96001ce8711dfc6a456f85277dadfc81111fa6f859a716be56",
+    "saas-customer-portal/backend/src/bin/portal-migrate.rs": "2f79b8d3f90da4cff261554eea9dcaeeec1cfca899770b6a370d251ca565320c",
+    "saas-customer-portal/backend/src/boundary.rs": "29e86dfd8b7f3d4af3757a4df70112f53816f99d2660bd97495d241db7bf3258",
+    "saas-customer-portal/backend/src/config.rs": "5ee6b939bbf4ae80f416c5886f24b0bcd765ed6e5f2fef463ec6955184a80db1",
+    "saas-customer-portal/backend/src/crypto.rs": "362c8d3f6eadd593b9710c3ee0738a34510c482112d750f07dd850ccccd5a179",
+    "saas-customer-portal/backend/src/error.rs": "62fae52e44f1bab08b363d1e6cefdc7c4e2c1a92c7777391c7d4110cf27b38e7",
+    "saas-customer-portal/backend/src/lib.rs": "7ef1140b8abd09fa1386fa5a4534272a522b086e664558be0eede20444ba1992",
+    "saas-customer-portal/backend/src/main.rs": "f5885d638d77c26d59125b4d828a1f5d0596d364bd04ad6a3cf874ba38bca80c",
+    "saas-customer-portal/backend/src/protocol.rs": "0fa27c5650e2640f9a061d3ee557a58d914994b79aa0e17783b501d1d0bae01a",
+    "saas-customer-portal/backend/src/resource.rs": "fb77f0e03a754316e7cd2a3e68fb96790e364bd5fef6b13746081ab7334efaa3",
+    "saas-customer-portal/backend/src/routes.rs": "9b6194d30874eea67723cc9382f146e9f655d6d4b00cb915402b2375f06be2dc",
+    "saas-customer-portal/backend/src/schema_readiness.rs": "e5f434c7dc7c3725489f55b2414c48dbe9568512816108b036c8808750f38979",
+    "saas-customer-portal/backend/src/selection.rs": "810e7a83de1571692aef027e8dd46de216245b01a3fcd7c0773de1b5c36ed8b9",
+    "saas-customer-portal/backend/src/store.rs": "1afad06a451e7510d4e1ff67b4f7b9217e1b0d4aff480e7fd1d4205d07cc0aa6",
+    "saas-customer-portal/backend/src/tests/pg.rs": "795182f5951f044f60091ed0a6efed1bc0c95d18ff76335292b7b71f55b9decc",
+    "saas-customer-portal/backend/src/tests/schema_roles.rs": "5737d6836aa4cf7abcb210ef208b9b0a9b76d12c0718d3bc8d281e58721d98d5",
+    "saas-customer-portal/backend/src/tests.rs": "92dd7504ae969c55b90b37f58364364d5d92e38056eb5b0e1a854662fee5a989",
+    "saas-customer-portal/backend/src/transport.rs": "1485736adbe530c6b292b1b0438c4d0899919bf77cc7a3abb0a062ec2c10e856",
+    "saas-customer-portal/backend/src/usecases.rs": "a81e1634e243f658769730e6af4c574187ae955196e7e2c7350cafb16dde333c"
+  },
+  "startedAtUtc": "2026-10-29T11:55:17.973502+00:00",
+  "status": "PASS",
+  "runnerSha256": "bc91041e17a4a9149af3495a0086afb164467836e78a5aa002439bc39da3f318",
+  "allSnapshotInputsVerified": 1527,
+  "auxiliaryBinaries": {
+    "saas-platform-admin": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/bin/saas-platform-admin",
+      "sha256": "3e79b86c9eca51121f42afd9fdc91d29550fc904ede7e5b7a5f7219f802e694d"
+    },
+    "saas-notification-ws": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/bin/saas-notification-ws",
+      "sha256": "c867668b96b073d8836c4f988cfed75ddc195a4c140fd160345fb3e6394b3237"
+    },
+    "node": {
+      "path": "/tmp/rust-saas-unified-auth-20261028/phase21-node-runtime/bin/node",
+      "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+      "attestationSha256": "6166a4852f44ede83518ab89e35b0f5781d4121ce9d36563552f07e38e63c91f"
+    }
+  },
+  "buildAttestationSha256": "2fc3250ce7a11b902e1724209a177753916549cb95aceb4efe95419e64f0f600",
+  "layers": [
+    "RUST_COMPONENT",
+    "EXPLICIT_TASK_OWNED_POSTGRESQL_ROUTER"
+  ],
+  "clusterSystemIdentifier": "7701992637128815755",
+  "clusterBindingSha256": "81efbc1c1be5f03145d6a5ef150a22b38919285a20e05be1f43e056eba2d7aaa",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "hbaWrites": 0,
+  "runs": [
+    {
+      "command": [
+        "/home/jackie/.local/rust-1.97/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "-j2",
+        "--all-targets",
+        "--",
+        "--include-ignored",
+        "--test-threads=1"
+      ],
+      "startedAtUtc": "2026-10-29T11:55:17.977738+00:00",
+      "returnCode": 0,
+      "durationSeconds": 18.98,
+      "rawOutputSha256": "eb8c72d4ae07d6a638b7615dacf139360f2c17ebd91ed03e3fd84a2a4c6188b6",
+      "cases": [
+        {
+          "name": "backchannel::tests::logout_structs_reject_duplicate_claims_and_borrowed_oidc_token_shapes",
+          "result": "OK"
+        },
+        {
+          "name": "backchannel::tests::signed_logout_requires_exact_event_subject_audience_and_short_original_time",
+          "result": "OK"
+        },
+        {
+          "name": "tests::aead_rejects_record_client_issuer_kind_and_ciphertext_substitution",
+          "result": "OK"
+        },
+        {
+          "name": "tests::backchannel_concurrency_is_bounded_and_does_not_queue_authority_work",
+          "result": "OK"
+        },
+        {
+          "name": "tests::backchannel_rejects_query_duplicate_fields_and_browser_token_substitution",
+          "result": "OK"
+        },
+        {
+          "name": "tests::canonical_code_exchange_requires_id_token_and_never_accepts_offline_scope",
+          "result": "OK"
+        },
+        {
+          "name": "tests::canonical_identifiers_and_generations_do_not_normalize_untrusted_input",
+          "result": "OK"
+        },
+        {
+          "name": "tests::canonical_logout_recovers_same_original_operation_before_any_revoke_attempt",
+          "result": "OK"
+        },
+        {
+          "name": "tests::canonical_refresh_uses_access_proof_and_accepts_response_without_id_token",
+          "result": "OK"
+        },
+        {
+          "name": "tests::cookies_are_host_only_and_credentials_are_independently_bound",
+          "result": "OK"
+        },
+        {
+          "name": "tests::disabled_default_never_loads_provisioned_secret_files",
+          "result": "OK"
+        },
+        {
+          "name": "tests::exact_customer_purpose_is_required_before_userinfo",
+          "result": "OK"
+        },
+        {
+          "name": "tests::id_token_binds_opaque_public_session_and_refresh_cannot_replace_it",
+          "result": "OK"
+        },
+        {
+          "name": "tests::invalid_rp_credentials_are_unavailable_infrastructure_not_a_repaired_user_session",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::centralized_pending_commit_recovers_after_local_save_failure_without_reissuing",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase11_pg_context_returning_snapshot_does_not_adopt_later_tab_selection",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase11_pg_every_uuid_has_its_own_v7_guard_and_no_authority_tables",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase11_pg_expired_refresh_lease_is_uncertain_and_never_replayed",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase11_pg_invalid_session_cannot_block_explicit_anonymous_login_bootstrap",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase11_pg_refresh_returning_snapshot_does_not_adopt_later_tab_selection",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase14_pg_pending_recovery_cannot_adopt_later_version_or_reconsume_denial",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase14_pg_refresh_preserves_and_shrinks_original_absolute_limit",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase20_pg_late_notification_and_pending_logout_preserve_new_browser_source",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase20_pg_logout_expiring_while_waiting_rolls_back_replay_and_revocation",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase20_pg_signed_logout_is_precise_replay_safe_and_independent_of_access_proof",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::phase20_pg_unknown_source_notification_fences_already_verified_callback",
+          "result": "OK"
+        },
+        {
+          "name": "tests::pg::schema_roles::phase20_pg_real_login_enforces_portal_schema_and_replay_boundaries",
+          "result": "OK"
+        },
+        {
+          "name": "tests::private_customer_proof_rejects_wrong_client_scope_versions_and_deadlines",
+          "result": "OK"
+        },
+        {
+          "name": "tests::redirect_and_callback_parser_reject_duplicates_open_redirects_and_controls",
+          "result": "OK"
+        },
+        {
+          "name": "tests::resource_cpc_capability_and_phase6_projection_are_accepted_without_exposing_opaque",
+          "result": "OK"
+        },
+        {
+          "name": "tests::resource_rejects_employee_foreign_member_and_source_generation_changes",
+          "result": "OK"
+        },
+        {
+          "name": "tests::resource_revocation_requires_an_unambiguous_positive_receipt",
+          "result": "OK"
+        },
+        {
+          "name": "tests::source_subject_grant_and_userinfo_cannot_adopt_a_different_account",
+          "result": "OK"
+        },
+        {
+          "name": "tests::static_routes_are_minimal_and_all_responses_prohibit_storage",
+          "result": "OK"
+        }
+      ],
+      "summaries": [
+        {
+          "result": "ok",
+          "passed": 34,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        },
+        {
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ],
+      "testExecutables": [
+        {
+          "pathRelativeToTarget": "debug/deps/saas_customer_portal_backend-066eacb2b9fdde22",
+          "sha256": "ee47f71ce9db6f9360be2907989b9b8d4fccd9ba9fe3d0c00a81dd0398f4999a"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/portal_migrate-53d21de603a2e71f",
+          "sha256": "4c140ca0cbf7fc8f1d5327f37fdae0438da7a61370695fb46248db223e97a6b5"
+        },
+        {
+          "pathRelativeToTarget": "debug/deps/saas_customer_portal_backend-d576dc1fc5e8417c",
+          "sha256": "78c035116806a52eb1cc21357613e0cd15bdcb3b622ebfc0cc8e69dd7abf655b"
+        }
+      ],
+      "processCleanup": {
+        "status": "PASS",
+        "originalProcessesSignalled": 0,
+        "activeProcessesRemaining": 0,
+        "processGroup": 35836,
+        "processStartTickFloor": 1509509,
+        "interrupted": false
+      },
+      "timedOut": false,
+      "compilerErrorCodes": []
+    }
+  ],
+  "limits": [
+    "No browser, external client, actual service HTTPS or release acceptance claim.",
+    "Any ignored, skipped or failed test remains explicit. Test PostgreSQL schemas may be narrow fixtures."
+  ],
+  "resourceObservation": {
+    "databases": {
+      "added": [],
+      "removed": []
+    },
+    "roles": {
+      "added": [],
+      "removed": []
+    }
+  },
+  "sourceMismatchAfter": [],
+  "auxiliaryMismatchAfter": [],
+  "finishedAtUtc": "2026-10-29T11:55:37.905586+00:00",
+  "totals": {
+    "passed": 34,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0
+  },
+  "cleanup": {
+    "rawLogsRetained": 0,
+    "temporaryDirectoriesCreatedByRunner": 1,
+    "temporaryRuntimeDirectory": "/tmp/rust-saas-unified-auth-20261028/phase25-component-portal-e9b04220eb41464b8c4ba389e835e2ed",
+    "temporaryRuntimeDirectoryRemoved": true,
+    "remainingTemporaryFilesRemoved": 0,
+    "remainingTemporaryLogicalBytesRemoved": 0,
+    "testFixturesSelfClean": true,
+    "componentFixtureResiduals": {
+      "databases": [],
+      "roles": []
+    },
+    "globalObservationMayIncludeConcurrentRootFixtures": true,
+    "databaseDeletionByThisRunner": false
+  }
+}

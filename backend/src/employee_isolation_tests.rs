@@ -18,13 +18,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::state::AppState;
 use crate::util::{hash, jwt, uuid7::new_uuid};
 
 const SECRET: &str = "owned-phase03-employee-isolation-fixture-only";
 const CODE: &str = "phase03-employees";
-const ORIGIN: &str = "phase03-owned-human";
-const SERVICE: &str = "phase03-owned-service";
 const REASON: &str = "Owned Phase 3 employee isolation contract mutation";
 
 struct Database {
@@ -76,16 +73,21 @@ impl Database {
             let _ = db.finish(Ok(())).await;
             return Err(error.into());
         }
-        // This is exclusively target-schema test preparation, not a published
-        // Phase 6 contraction migration and never touches the default schema.
-        if let Err(error) = sqlx::query(
-            "ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_user_id_organization_id_key",
-        )
-        .execute(&db.pool)
-        .await
-        {
+        // Every fixture uses the current fresh baseline; it must not repair a
+        // historical single-membership schema before testing identity isolation.
+        let baseline = async {
+            let current: bool = sqlx::query_scalar(
+                "SELECT NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass AND conname='memberships_user_id_organization_id_key') AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.memberships'::regclass AND conname='memberships_user_organization_type_key' AND contype='u' AND pg_get_constraintdef(oid)='UNIQUE (user_id, organization_id, member_type)')",
+            )
+            .fetch_one(&db.pool)
+            .await?;
+            ensure!(current, "employee fixture requires the current canonical membership baseline");
+            Ok::<(), anyhow::Error>(())
+        }
+        .await;
+        if let Err(error) = baseline {
             let _ = db.finish(Ok(())).await;
-            return Err(error.into());
+            return Err(error);
         }
         Ok(db)
     }
@@ -265,94 +267,130 @@ async fn has_role(pool: &PgPool, subject: Uuid, role: Uuid) -> Result<bool> {
     .await?)
 }
 
-async fn active(pool: &PgPool, sid: Uuid) -> Result<bool> {
-    Ok(sqlx::query_scalar("SELECT platform_session_active($1)")
-        .bind(sid)
-        .fetch_one(pool)
-        .await?)
+// Customer-shaped rows are deliberately rejected by the employee authority.
+// Their stored member source remains useful to prove employee mutations do not
+// revoke another concrete membership. Actual portal source acceptance is tested
+// by the canonical customer portal suite.
+async fn source_record_live(pool: &PgPool, sid: Uuid) -> Result<bool> {
+    Ok(sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM platform_sessions s WHERE s.id=$1 AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() AND identity_binding_active(s.user_id,s.tenant_id,s.organization_id,s.account_version,s.membership_id,s.member_type,s.identity_version) AND (s.member_type='CUSTOMER' OR platform_session_active(s.id)))")
+        .bind(sid).fetch_one(pool).await?)
 }
 
-async fn platform_refresh(pool: &PgPool, sid: Uuid) -> Result<String> {
-    let mut tx = pool.begin().await?;
-    let token = crate::session::issue_refresh_in_tx(
-        &mut tx,
-        sid,
-        0,
-        chrono::Utc::now() + chrono::Duration::hours(1),
-    )
-    .await?;
-    tx.commit().await?;
+// Owned opaque descendant rows exercise the invalidation and real lock-wait
+// closure. No retired public refresh endpoint or successful refresh is modeled.
+async fn credential_descendant(pool: &PgPool, sid: Uuid) -> Result<String> {
+    let token = new_uuid().to_string();
+    sqlx::query("INSERT INTO platform_session_refresh_tokens(id,session_id,token_hash,session_version,expires_at) SELECT $1,id,$2,account_version,expires_at FROM platform_sessions WHERE id=$3")
+        .bind(new_uuid()).bind(hash::sha256_hex(&token)).bind(sid).execute(pool).await?;
     Ok(token)
 }
 
-async fn refresh_session(app: &Router, token: &str) -> Result<Reply> {
-    let request = Request::builder()
-        .method(Method::POST)
-        .uri("/oauth/token")
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header("x-request-id", new_uuid().to_string())
-        .extension(ConnectInfo("192.0.2.43:30043".parse::<SocketAddr>()?))
-        .body(Body::from(format!(
-            "grant_type=refresh_token&refresh_token={}",
-            percent_encoding::utf8_percent_encode(token, percent_encoding::NON_ALPHANUMERIC)
-        )))?;
-    let response = tokio::time::timeout(Duration::from_secs(25), app.clone().oneshot(request))
-        .await
-        .map_err(|_| anyhow!("owned Phase 3 platform refresh timed out"))??;
-    let status = response.status();
-    let bytes = to_bytes(response.into_body(), 1024 * 1024).await?;
-    Ok(Reply {
-        status,
-        body: serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-    })
+async fn descendant_available(pool: &PgPool, token: &str) -> Result<bool> {
+    Ok(sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM platform_session_refresh_tokens WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>clock_timestamp())")
+        .bind(hash::sha256_hex(token)).fetch_one(pool).await?)
 }
 
 async fn credentials(pool: &PgPool, member: &Member, application: Uuid) -> Result<Credentials> {
-    let sid = new_uuid();
-    sqlx::query("INSERT INTO platform_sessions(id,user_id,tenant_id,organization_id,expires_at,account_version,membership_id,member_type,identity_version,origin_issuer,origin_client_ref,origin_client_policy_version) \
-        VALUES($1,$2,$3,$4,now()+interval '1 hour',0,$5,$6,$7,'urn:saas:legacy-platform',$8,1)")
-        .bind(sid).bind(member.user).bind(member.tenant).bind(member.org).bind(member.id).bind(member.kind).bind(member.version).bind(ORIGIN).execute(pool).await?;
+    let sid = crate::sso_test_fixture::session_for_member(
+        pool,
+        member.user,
+        member.tenant,
+        member.org,
+        member.kind,
+    )
+    .await?;
+    let version: i64 =
+        sqlx::query_scalar("SELECT account_version FROM platform_sessions WHERE id=$1")
+            .bind(sid)
+            .fetch_one(pool)
+            .await?;
     let now = chrono::Utc::now().timestamp();
-    let session = jwt::sign(
+    let session = jwt::sign_internal(
         &jwt::Claims {
             sub: member.user.to_string(),
-            typ: "session".into(),
+            typ: "platform_session".into(),
             tenant: Some(member.tenant.to_string()),
             org: Some(member.org.to_string()),
             sid: Some(sid.to_string()),
-            ver: Some(0),
+            ver: Some(version),
             cid: None,
             scope: None,
-            aud: None,
+            aud: Some(jwt::PLATFORM_API_AUDIENCE.into()),
             jti: None,
             iat: now,
             exp: now + 3600,
         },
+        jwt::InternalUse::PlatformSession,
         SECRET,
     )?;
     let jti = new_uuid();
-    let app = jwt::sign(
+    let app = jwt::sign_internal(
         &jwt::Claims {
             sub: member.user.to_string(),
-            typ: "access".into(),
+            typ: "app_session".into(),
             tenant: Some(member.tenant.to_string()),
             org: Some(member.org.to_string()),
-            sid: None,
-            ver: None,
-            cid: Some(SERVICE.into()),
-            scope: Some("profile".into()),
+            sid: Some(sid.to_string()),
+            ver: Some(version),
+            cid: Some(CODE.into()),
+            scope: Some("app:access".into()),
             aud: Some(CODE.into()),
             jti: Some(jti.to_string()),
             iat: now,
             exp: now + 300,
         },
+        jwt::InternalUse::AppSession,
         SECRET,
     )?;
-    sqlx::query("INSERT INTO oauth_tokens(id,token_hash,token_type,user_id,client_id,tenant_id,organization_id,expires_at,token_use,audience,jti,application_id,platform_session_id,storage_version,account_version,membership_id,member_type,identity_version,client_policy_version,application_policy_version,origin_issuer,origin_client_ref,origin_client_policy_version,application_service_client_ref) \
-        VALUES($1,$2,'access',$3,$4,$5,$6,now()+interval '5 minutes','app',$7,$8,$9,$10,2,0,$11,$12,$13,1,1,'urn:saas:legacy-platform',$14,1,$4)")
-        .bind(new_uuid()).bind(hash::sha256_hex(&app)).bind(member.user).bind(SERVICE).bind(member.tenant).bind(member.org)
-        .bind(CODE).bind(jti).bind(application).bind(sid).bind(member.id).bind(member.kind).bind(member.version).bind(ORIGIN).execute(pool).await?;
+    sqlx::query("INSERT INTO platform_app_capabilities(id,jti,token_hash,user_id,tenant_id,organization_id,application_id,audience,scope,platform_session_id,membership_id,member_type,identity_version,account_version,application_policy_version,origin_issuer,origin_client_ref,origin_client_policy_version,issued_at,expires_at) SELECT $1,$1,$2,s.user_id,s.tenant_id,s.organization_id,a.id,a.code,'app:access',s.id,s.membership_id,s.member_type,s.identity_version,s.account_version,a.access_policy_version,s.origin_issuer,s.origin_client_ref,s.origin_client_policy_version,$5,$6 FROM platform_sessions s JOIN applications a ON a.id=$4 WHERE s.id=$3")
+        .bind(jti).bind(hash::sha256_hex(&app)).bind(sid).bind(application)
+        .bind(chrono::DateTime::from_timestamp(now,0)).bind(chrono::DateTime::from_timestamp(now+300,0)).execute(pool).await?;
     Ok(Credentials { sid, session, app })
+}
+
+/// Verify that the signed test capability and its persisted jti bind the exact
+/// member/session before testing lifecycle cleanup; never pre-delete it.
+async fn signed_capability_stored(
+    pool: &PgPool,
+    member: Uuid,
+    credentials: &Credentials,
+) -> Result<bool> {
+    let claims = jwt::verify_internal(
+        &credentials.app,
+        SECRET,
+        jwt::InternalUse::AppSession,
+        Some(CODE),
+    )?;
+    let jti = claims
+        .jti
+        .as_deref()
+        .ok_or_else(|| anyhow!("signed member capability lacks jti"))?;
+    let jti = crate::util::uuid7::parse_uuid(jti)
+        .map_err(|_| anyhow!("signed member capability has invalid jti"))?;
+    Ok(sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM platform_app_capabilities WHERE id=$1 AND jti=$1 AND membership_id=$2 AND platform_session_id=$3 AND token_hash=$4 AND NOT revoked)")
+        .bind(jti).bind(member).bind(credentials.sid).bind(hash::sha256_hex(&credentials.app)).fetch_one(pool).await?)
+}
+async fn member_capability_count(pool: &PgPool, member: Uuid) -> Result<i64> {
+    Ok(
+        sqlx::query_scalar("SELECT count(*) FROM platform_app_capabilities WHERE membership_id=$1")
+            .bind(member)
+            .fetch_one(pool)
+            .await?,
+    )
+}
+async fn retired_capability_rejected(app: &Router, credentials: &Credentials) -> Result<()> {
+    expect(
+        &call(
+            app,
+            &credentials.app,
+            Method::GET,
+            &format!("/api/apps/{CODE}/context"),
+            Value::Null,
+        )
+        .await?,
+        StatusCode::UNAUTHORIZED,
+        "departed member signed capability is rejected",
+    )
 }
 
 struct Harness {
@@ -420,10 +458,6 @@ impl Harness {
                 .await?;
             }
         }
-        sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,grant_types,subject_mode,allowed_member_types) VALUES($1,$2,'Owned Phase 3 human','PUBLIC','authorization_code','USER',ARRAY['EMPLOYEE','CUSTOMER']::text[])")
-            .bind(new_uuid()).bind(ORIGIN).execute(pool).await?;
-        sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,client_secret_hash,grant_types,subject_mode,allowed_member_types,application_id) VALUES($1,$2,'Owned Phase 3 service','CONFIDENTIAL',$3,'client_credentials','MACHINE',ARRAY[]::text[],$4)")
-            .bind(new_uuid()).bind(SERVICE).bind(hash::sha256_hex("owned-phase03-service-secret")).bind(application).execute(pool).await?;
         let manager = user(pool, "phase03-manager", true).await?;
         let manager = member(pool, manager, tenant, root, "EMPLOYEE", "ENABLED").await?;
         let admin = credentials(pool, &manager, application).await?;
@@ -443,9 +477,8 @@ impl Harness {
             ("DUAL_MEMBERSHIPS_ENABLED".into(), "true".into()),
             ("DATA_GRANT_POLICY".into(), policy.to_string()),
         ]))?;
-        let state = AppState::new(pool.clone(), Arc::new(config));
+        let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config));
         let app = crate::routes::api_router()
-            .nest("/oauth", crate::routes::oauth2::oauth_router())
             .layer(middleware::from_fn_with_state(
                 state.clone(),
                 crate::observability::observe,
@@ -543,15 +576,20 @@ async fn employee_isolation_phase03_customer_actor_and_directory_targets() -> Re
         let employee_token = credentials(&h.pool, &employee, h.application).await?;
         let customer_token = credentials(&h.pool, &customer, h.application).await?;
         ensure!(
-            active(&h.pool, customer_token.sid).await?,
-            "customer denial fixture is not a valid bound session"
+            source_record_live(&h.pool, customer_token.sid).await?,
+            "customer negative fixture lost its separate stored member source"
         );
-        let customer_claims = jwt::verify(&customer_token.app, SECRET)?;
+        let customer_claims = jwt::verify_internal(
+            &customer_token.app,
+            SECRET,
+            jwt::InternalUse::AppSession,
+            Some(CODE),
+        )?;
         ensure!(
             crate::app_token::inspect(&h.pool, &customer_token.app, &customer_claims)
                 .await?
-                .is_some(),
-            "customer denial fixture is not a valid admitted app token"
+                .is_none(),
+            "customer-shaped capability unexpectedly entered employee authority"
         );
         let customer_only = h
             .person(
@@ -641,12 +679,12 @@ async fn employee_isolation_phase03_customer_actor_and_directory_targets() -> Re
                 Value::Null,
             )
             .await?,
-            StatusCode::FORBIDDEN,
+            StatusCode::UNAUTHORIZED,
             "customer app context cannot inherit super/ancestor employee authorization",
         )?;
         expect(
             &call(&h.app, &customer_token.app, Method::GET, &list, Value::Null).await?,
-            StatusCode::FORBIDDEN,
+            StatusCode::UNAUTHORIZED,
             "customer cannot call employee member directory",
         )?;
         expect(
@@ -708,7 +746,7 @@ async fn employee_isolation_phase03_customer_actor_and_directory_targets() -> Re
             )?;
             expect(
                 &call(&h.app, &customer_token.app, Method::GET, &path, Value::Null).await?,
-                StatusCode::FORBIDDEN,
+                StatusCode::UNAUTHORIZED,
                 "customer caller cannot bypass directory using a direct target ID",
             )?;
         }
@@ -796,16 +834,20 @@ async fn employee_isolation_phase03_bulk_preserves_other_identities_and_role_sup
     let result=async {
         let h=Harness::create(&db.pool).await?;
         let employee=h.person("phase03-bulk-dual",h.child,"EMPLOYEE","ENABLED",false).await?;
+        let account_version_before:i64=sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1").bind(employee.user).fetch_one(&h.pool).await?;
         let customer=member(&h.pool,employee.user,h.tenant,h.child,"CUSTOMER","ENABLED").await?;
         let other=member(&h.pool,employee.user,h.tenant,h.sibling,"EMPLOYEE","ENABLED").await?;
         attach_role(&h.pool,employee.user,h.ancestor_role,h.root).await?;
         let employee_credentials=credentials(&h.pool,&employee,h.application).await?;
         let customer_credentials=credentials(&h.pool,&customer,h.application).await?;
         let other_credentials=credentials(&h.pool,&other,h.application).await?;
+        for (member, credential) in [(&employee,&employee_credentials),(&customer,&customer_credentials),(&other,&other_credentials)] {
+            ensure!(signed_capability_stored(&h.pool,member.id,credential).await?,"bulk lifecycle requires a real signed capability for every member");
+        }
         expect(&h.status(&employee,"DISABLED").await?,StatusCode::OK,"temporary employee disable")?;
         ensure!(has_role(&h.pool,employee.user,h.ancestor_role).await?,"temporary disable deleted preserved role configuration");
         expect(&call(&h.app,&employee_credentials.session,Method::GET,"/api/auth/permissions",Value::Null).await?,StatusCode::UNAUTHORIZED,"disabled employee cannot use preserved roles")?;
-        ensure!(active(&h.pool,customer_credentials.sid).await?&&active(&h.pool,other_credentials.sid).await?,"temporary employee disable crossed identity boundary");
+        ensure!(source_record_live(&h.pool,customer_credentials.sid).await?&&source_record_live(&h.pool,other_credentials.sid).await?,"temporary employee disable crossed identity boundary");
         expect(&h.bulk(employee.user,&[h.child,h.sibling]).await?,StatusCode::OK,"old bulk preserves disabled employee row")?;
         let state:(Uuid,String,i64)=sqlx::query_as("SELECT id,status,identity_version FROM memberships WHERE id=$1").bind(employee.id).fetch_one(&h.pool).await?;
         ensure!(state==(employee.id,"DISABLED".into(),2),"old bulk implicitly enabled or replaced disabled employee");
@@ -823,13 +865,20 @@ async fn employee_isolation_phase03_bulk_preserves_other_identities_and_role_sup
         let retained:Uuid=sqlx::query_scalar("SELECT id FROM memberships WHERE user_id=$1").bind(added.user).fetch_one(&h.pool).await?;
         ensure!(retained==added.id,"bulk removal changed customer identity");
         expect(&h.bulk(employee.user,&[h.sibling]).await?,StatusCode::OK,"bulk removes only one employee")?;
+        ensure!(member_capability_count(&h.pool,employee.id).await?==0,"bulk departure retained capabilities referencing the removed member");
+        retired_capability_rejected(&h.app,&employee_credentials).await?;
+        ensure!(signed_capability_stored(&h.pool,customer.id,&customer_credentials).await? && signed_capability_stored(&h.pool,other.id,&other_credentials).await?,
+            "bulk departure removed or revoked a customer/sibling capability");
         ensure!(has_role(&h.pool,employee.user,h.ancestor_role).await?,"bulk removed ancestor role still supported by another active employee");
-        ensure!(active(&h.pool,customer_credentials.sid).await?&&active(&h.pool,other_credentials.sid).await?,"bulk removal revoked retained member session");
+        ensure!(source_record_live(&h.pool,customer_credentials.sid).await?&&source_record_live(&h.pool,other_credentials.sid).await?,"bulk removal revoked retained member session");
         expect(&h.bulk(employee.user,&[]).await?,StatusCode::OK,"bulk removes final employee")?;
+        ensure!(member_capability_count(&h.pool,other.id).await?==0,"final bulk departure retained the removed sibling capability");
+        retired_capability_rejected(&h.app,&other_credentials).await?;
+        ensure!(signed_capability_stored(&h.pool,customer.id,&customer_credentials).await?,"final bulk departure revoked the independent customer capability");
         ensure!(!has_role(&h.pool,employee.user,h.ancestor_role).await?,"bulk left unsupported ancestor role configuration");
-        ensure!(active(&h.pool,customer_credentials.sid).await?&&!active(&h.pool,other_credentials.sid).await?,"bulk final employee removal did not retain customer independently");
+        ensure!(source_record_live(&h.pool,customer_credentials.sid).await?&&!source_record_live(&h.pool,other_credentials.sid).await?,"bulk final employee removal did not retain customer independently");
         let version:i64=sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1").bind(employee.user).fetch_one(&h.pool).await?;
-        ensure!(version==0,"local bulk employee maintenance performed global account revocation");
+        ensure!(version==account_version_before,"local bulk employee maintenance performed global account revocation");
         Ok(())
     }.await;
     db.finish(result).await
@@ -852,6 +901,9 @@ async fn employee_isolation_phase03_permanent_delete_and_replace_keep_supported_
             let employee_credentials=credentials(&h.pool,&employee,h.application).await?;
             let customer_credentials=credentials(&h.pool,&customer,h.application).await?;
             let other_credentials=credentials(&h.pool,&other,h.application).await?;
+            for (member, credential) in [(&employee,&employee_credentials),(&customer,&customer_credentials),(&other,&other_credentials)] {
+                ensure!(signed_capability_stored(&h.pool,member.id,credential).await?,"permanent lifecycle requires a real signed capability for every member");
+            }
             let changed=if replacing {
                 h.api(Method::POST,&format!("/api/memberships/{}/replace-identity",employee.id),json!({"memberType":"CUSTOMER","expectedIdentityVersion":1,"expectedTargetIdentityVersion":1,
                     "accountBindingConfirmed":true,"bindingSource":"Owned Phase 3 existing-account confirmation","reason":REASON})).await?
@@ -859,13 +911,22 @@ async fn employee_isolation_phase03_permanent_delete_and_replace_keep_supported_
                 h.api(Method::DELETE,&format!("/api/memberships/{}",employee.id),json!({"expectedIdentityVersion":1,"reason":REASON})).await?
             };
             expect(&changed,StatusCode::OK,"permanent employee departure")?;
+            if !replacing {
+                ensure!(member_capability_count(&h.pool,employee.id).await?==0,"permanent departure retained capabilities referencing the deleted member");
+            }
+            retired_capability_rejected(&h.app,&employee_credentials).await?;
+            ensure!(signed_capability_stored(&h.pool,customer.id,&customer_credentials).await? && signed_capability_stored(&h.pool,other.id,&other_credentials).await?,
+                "permanent departure removed or revoked an independent customer/sibling capability");
             ensure!(!has_role(&h.pool,employee.user,child_role).await?,"permanent departure retained unsupported direct employee role");
             ensure!(has_role(&h.pool,employee.user,h.ancestor_role).await?,"permanent departure removed ancestor role supported by sibling employee");
-            ensure!(!active(&h.pool,employee_credentials.sid).await?&&active(&h.pool,customer_credentials.sid).await?&&active(&h.pool,other_credentials.sid).await?,"permanent departure crossed member session boundary");
+            ensure!(!source_record_live(&h.pool,employee_credentials.sid).await?&&source_record_live(&h.pool,customer_credentials.sid).await?&&source_record_live(&h.pool,other_credentials.sid).await?,"permanent departure crossed member session boundary");
             expect(&call(&h.app,&other_credentials.session,Method::GET,"/api/auth/permissions",Value::Null).await?,StatusCode::OK,"sibling employee still uses ancestor role")?;
             expect(&h.api(Method::DELETE,&format!("/api/memberships/{}",other.id),json!({"expectedIdentityVersion":1,"reason":REASON})).await?,StatusCode::OK,"remove final supporting employee")?;
+            ensure!(member_capability_count(&h.pool,other.id).await?==0,"final permanent departure retained the deleted sibling capability");
+            retired_capability_rejected(&h.app,&other_credentials).await?;
+            ensure!(signed_capability_stored(&h.pool,customer.id,&customer_credentials).await?,"final employee departure removed the customer capability");
             ensure!(!has_role(&h.pool,employee.user,h.ancestor_role).await?,"final departure retained unsupported ancestor role");
-            ensure!(active(&h.pool,customer_credentials.sid).await?,"final employee departure revoked remaining customer");
+            ensure!(source_record_live(&h.pool,customer_credentials.sid).await?,"final employee departure revoked remaining customer");
         }
         Ok(())
     }.await;
@@ -907,7 +968,7 @@ async fn employee_isolation_phase03_fresh_identity_precedes_cached_administrator
             ),
             ("JWT_SECRET".into(), SECRET.into()),
         ]))?;
-        let state = AppState::new(h.pool.clone(), Arc::new(config));
+        let state = crate::sso_test_fixture::state(h.pool.clone(), Arc::new(config));
         let mut actor = crate::extractors::CurrentUser {
             user_id: employee.user,
             username: "phase03-stale-super-flag".into(),
@@ -939,7 +1000,7 @@ async fn employee_isolation_phase03_fresh_identity_precedes_cached_administrator
         ensure!(
             matches!(
                 state.require(&actor, "system:user").await,
-                Err(crate::error::AppError::Forbidden(_))
+                Err(crate::error::AppError::Unauthorized(_) | crate::error::AppError::Forbidden(_))
             ),
             "customer context inherited live administrator privileges from its account"
         );
@@ -989,6 +1050,7 @@ async fn subject_snapshot(pool: &PgPool, subject: Uuid) -> Result<Value> {
          'members',(SELECT COALESCE(jsonb_agg(to_jsonb(m) ORDER BY m.id),'[]'::jsonb) FROM memberships m WHERE m.user_id=$1), \
          'roles',(SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY r.role_id,r.organization_id),'[]'::jsonb) FROM user_roles r WHERE r.user_id=$1), \
          'sessions',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',s.id,'member',s.membership_id,'identityVersion',s.identity_version,'revoked',s.revoked_at) ORDER BY s.id),'[]'::jsonb) FROM platform_sessions s WHERE s.user_id=$1), \
+         'capabilities',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'jti',c.jti,'member',c.membership_id,'revoked',c.revoked) ORDER BY c.id),'[]'::jsonb) FROM platform_app_capabilities c WHERE c.user_id=$1), \
          'audits',(SELECT count(*) FROM audit_logs))")
         .bind(subject).fetch_one(pool).await?)
 }
@@ -1039,7 +1101,7 @@ async fn employee_isolation_phase03_scope_rechecked_after_real_account_lock_wait
             ensure!(matches!(reply.status,StatusCode::FORBIDDEN|StatusCode::NOT_FOUND|StatusCode::CONFLICT),
                 "{scenario} reused cached scope after target left the subtree: {}",reply.status);
             ensure!(subject_snapshot(&h.pool,target.user).await?==before,"{scenario} committed member, role, session or audit changes after scope was lost");
-            ensure!(active(&h.pool,target_credentials.sid).await?&&active(&h.pool,customer_credentials.sid).await?,"scope rejection revoked valid target employee/customer contexts");
+            ensure!(source_record_live(&h.pool,target_credentials.sid).await?&&source_record_live(&h.pool,customer_credentials.sid).await?,"scope rejection revoked valid target employee/customer contexts");
             ensure!(has_role(&h.pool,target.user,old_role).await?&&!has_role(&h.pool,target.user,selected_role).await?,"scope rejection changed role bindings");
         }
         Ok(())
@@ -1131,8 +1193,8 @@ async fn employee_isolation_phase03_publisher_rechecked_after_late_foreign_key_w
             ensure!(matches!(reply.status,StatusCode::UNAUTHORIZED|StatusCode::FORBIDDEN),
                 "publisher committed after {scenario} revocation during the late FK wait: {}",reply.status);
             ensure!(publication_counts(&h.pool).await?==before,"publisher revocation left publication, delivery or success audit rows");
-            ensure!(!active(&h.pool,actor_credentials.sid).await?,"revoked publisher employee session remained active");
-            ensure!(active(&h.pool,customer_credentials.sid).await?==(scenario=="membership"),"publisher revocation affected an incorrect identity scope");
+            ensure!(!source_record_live(&h.pool,actor_credentials.sid).await?,"revoked publisher employee session remained active");
+            ensure!(source_record_live(&h.pool,customer_credentials.sid).await?==(scenario=="membership"),"publisher revocation affected an incorrect identity scope");
         }
         Ok(())
     }.await;
@@ -1263,8 +1325,13 @@ async fn employee_isolation_phase03_bulk_self_departure_preserves_customer_and_r
         let customer = member(&h.pool, actor.user, h.tenant, h.root, "CUSTOMER", "ENABLED").await?;
         let actor_credentials = credentials(&h.pool, &actor, h.application).await?;
         let customer_credentials = credentials(&h.pool, &customer, h.application).await?;
-        let actor_refresh = platform_refresh(&h.pool, actor_credentials.sid).await?;
-        let customer_refresh = platform_refresh(&h.pool, customer_credentials.sid).await?;
+        ensure!(
+            signed_capability_stored(&h.pool, actor.id, &actor_credentials).await?
+                && signed_capability_stored(&h.pool, customer.id, &customer_credentials).await?,
+            "self-departure requires independent persisted signed employee/customer capabilities"
+        );
+        let actor_refresh = credential_descendant(&h.pool, actor_credentials.sid).await?;
+        let customer_refresh = credential_descendant(&h.pool, customer_credentials.sid).await?;
         let actor_role = role(
             &h.pool,
             h.tenant,
@@ -1275,9 +1342,9 @@ async fn employee_isolation_phase03_bulk_self_departure_preserves_customer_and_r
         .await?;
         attach_role(&h.pool, actor.user, actor_role, h.root).await?;
         ensure!(
-            active(&h.pool, actor_credentials.sid).await?
-                && active(&h.pool, customer_credentials.sid).await?,
-            "self-departure requires independently active employee and customer fixtures"
+            source_record_live(&h.pool, actor_credentials.sid).await?
+                && source_record_live(&h.pool, customer_credentials.sid).await?,
+            "self-departure requires independent stored employee and customer sources"
         );
         expect(
             &call(
@@ -1291,6 +1358,15 @@ async fn employee_isolation_phase03_bulk_self_departure_preserves_customer_and_r
             StatusCode::OK,
             "legacy bulk permits authorized root employee self-departure",
         )?;
+        ensure!(
+            member_capability_count(&h.pool, actor.id).await? == 0,
+            "self-departure retained capabilities referencing the deleted employee"
+        );
+        retired_capability_rejected(&h.app, &actor_credentials).await?;
+        ensure!(
+            signed_capability_stored(&h.pool, customer.id, &customer_credentials).await?,
+            "self-departure removed or revoked the customer capability"
+        );
         let remaining: Vec<(Uuid, String)> =
             sqlx::query_as("SELECT id,member_type FROM memberships WHERE user_id=$1 ORDER BY id")
                 .bind(actor.user)
@@ -1316,21 +1392,19 @@ async fn employee_isolation_phase03_bulk_self_departure_preserves_customer_and_r
             StatusCode::UNAUTHORIZED,
             "self-departed employee session is invalid",
         )?;
-        expect(
-            &refresh_session(&h.app, &actor_refresh).await?,
-            StatusCode::BAD_REQUEST,
-            "self-departed employee platform refresh is invalid",
-        )?;
         ensure!(
-            !active(&h.pool, actor_credentials.sid).await?
-                && active(&h.pool, customer_credentials.sid).await?,
+            !descendant_available(&h.pool, &actor_refresh).await?,
+            "self-departed employee credential descendant is invalid"
+        );
+        ensure!(
+            !source_record_live(&h.pool, actor_credentials.sid).await?
+                && source_record_live(&h.pool, customer_credentials.sid).await?,
             "self-departure revoked the wrong concrete identity context"
         );
-        expect(
-            &refresh_session(&h.app, &customer_refresh).await?,
-            StatusCode::OK,
-            "same-organization customer platform refresh survives employee self-departure",
-        )?;
+        ensure!(
+            descendant_available(&h.pool, &customer_refresh).await?,
+            "same-organization customer credential descendant survives employee self-departure"
+        );
 
         // A successful self-departure must validate while its source membership
         // still exists. It must still close any real wait before that final
@@ -1349,8 +1423,8 @@ async fn employee_isolation_phase03_bulk_self_departure_preserves_customer_and_r
                 member(&h.pool, actor.user, h.tenant, h.root, "CUSTOMER", "ENABLED").await?;
             let actor_credentials = credentials(&h.pool, &actor, h.application).await?;
             let customer_credentials = credentials(&h.pool, &customer, h.application).await?;
-            let actor_refresh = platform_refresh(&h.pool, actor_credentials.sid).await?;
-            let customer_refresh = platform_refresh(&h.pool, customer_credentials.sid).await?;
+            let actor_refresh = credential_descendant(&h.pool, actor_credentials.sid).await?;
+            let customer_refresh = credential_descendant(&h.pool, customer_credentials.sid).await?;
             let actor_role = role(
                 &h.pool,
                 h.tenant,
@@ -1427,21 +1501,19 @@ async fn employee_isolation_phase03_bulk_self_departure_preserves_customer_and_r
                 "rejected self-departure changed membership, roles, sessions or success audits"
             );
             ensure!(
-                active(&h.pool, actor_credentials.sid).await?
-                    && active(&h.pool, customer_credentials.sid).await?
+                source_record_live(&h.pool, actor_credentials.sid).await?
+                    && source_record_live(&h.pool, customer_credentials.sid).await?
                     && has_role(&h.pool, actor.user, actor_role).await?,
                 "rejected self-departure removed employee/customer context or retained role"
             );
-            expect(
-                &refresh_session(&h.app, &actor_refresh).await?,
-                StatusCode::OK,
-                "rejected self-departure preserves employee platform refresh",
-            )?;
-            expect(
-                &refresh_session(&h.app, &customer_refresh).await?,
-                StatusCode::OK,
-                "rejected self-departure preserves customer platform refresh",
-            )?;
+            ensure!(
+                descendant_available(&h.pool, &actor_refresh).await?,
+                "rejected self-departure preserves employee credential descendant"
+            );
+            ensure!(
+                descendant_available(&h.pool, &customer_refresh).await?,
+                "rejected self-departure preserves customer credential descendant"
+            );
         }
         Ok(())
     }

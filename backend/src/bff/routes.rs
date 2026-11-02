@@ -3,7 +3,7 @@
 use super::{context, protocol, store, transport::Chain};
 use crate::{error::AppError, extractors::ApiJson, state::AppState, util::audit};
 use axum::{
-    extract::{RawQuery, Request, State},
+    extract::{DefaultBodyLimit, RawQuery, Request, State},
     http::{header, HeaderMap, HeaderValue},
     middleware::{self, Next},
     response::{IntoResponse, Redirect, Response},
@@ -21,11 +21,16 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/auth/config", get(configuration))
         .route("/auth/login", get(login))
+        .route("/auth/step-up", get(step_up))
         .route("/auth/callback", get(callback))
         .route("/auth/session", get(session))
         .route("/auth/context-token", post(context_token))
         .route("/auth/context-switch", post(context_switch))
         .route("/auth/logout", post(logout))
+        .route(
+            "/auth/backchannel-logout",
+            post(super::backchannel::endpoint).layer(DefaultBodyLimit::max(16 * 1024)),
+        )
         .route_layer(middleware::from_fn(protected_headers))
 }
 async fn protected_headers(request: Request, next: Next) -> Response {
@@ -171,13 +176,30 @@ async fn login(
     headers: HeaderMap,
     RawQuery(raw): RawQuery,
 ) -> Result<Response, AppError> {
+    login_with_policy(state, headers, raw, false).await
+}
+
+async fn step_up(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    RawQuery(raw): RawQuery,
+) -> Result<Response, AppError> {
+    login_with_policy(state, headers, raw, true).await
+}
+
+async fn login_with_policy(
+    state: AppState,
+    headers: HeaderMap,
+    raw: Option<String>,
+    force_primary: bool,
+) -> Result<Response, AppError> {
     navigation(&state, &headers)?;
     let parameters = parameters(raw)?;
     if parameters.keys().any(|name| name != "return") {
         return Err(bad());
     }
     let return_path = return_path(parameters.get("return").map(String::as_str).unwrap_or("/"))?;
-    begin_login(state, headers, return_path, None).await
+    begin_login(state, headers, return_path, None, force_primary).await
 }
 
 async fn selection_enabled(state: &AppState) -> Result<bool, AppError> {
@@ -214,6 +236,7 @@ async fn context_switch(
         headers,
         return_path(&body.return_path)?,
         Some(checked),
+        false,
     )
     .await?;
     let target = result
@@ -236,6 +259,7 @@ async fn begin_login(
     headers: HeaderMap,
     return_path: String,
     switching: Option<store::Session>,
+    force_primary: bool,
 ) -> Result<Response, AppError> {
     if let Some(retry) = state.login_limits.admit_source(&audit::client_ip(&headers)) {
         return Err(AppError::RateLimited(retry));
@@ -304,7 +328,7 @@ async fn begin_login(
     sqlx::query("UPDATE console_login_flows SET context_selection_required=$2,switch_session_id=$3,switch_version=$4 WHERE id=$1")
         .bind(flow_id).bind(selection_required).bind(switching.as_ref().map(|s|s.id)).bind(switching.as_ref().map(|s|s.version)).execute(&mut *tx).await?;
     tx.commit().await?;
-    let mut target = reqwest::Url::parse(&format!("{issuer}/oidc/authorize"))
+    let mut target = reqwest::Url::parse(&format!("{issuer}/oauth/authorize"))
         .map_err(|_| AppError::Unavailable)?;
     target
         .query_pairs_mut()
@@ -318,11 +342,19 @@ async fn begin_login(
                 .as_deref()
                 .ok_or(AppError::Unavailable)?,
         )
-        .append_pair("scope", "openid profile offline_access")
+        .append_pair("scope", "openid profile")
         .append_pair("state", &state_secret)
         .append_pair("nonce", &nonce)
         .append_pair("code_challenge_method", "S256")
         .append_pair("code_challenge", &challenge);
+    if force_primary {
+        // A new login flow creates a new source-bound BFF session. Never copy
+        // recent authentication from another SSO session into the old grant.
+        target
+            .query_pairs_mut()
+            .append_pair("prompt", "login")
+            .append_pair("max_age", "0");
+    }
     if let Some(reference) = context_request {
         target
             .query_pairs_mut()
@@ -445,6 +477,7 @@ async fn callback(
         .begin()
         .await
         .map_err(|_| AppError::Unavailable)?;
+    super::backchannel::reject_revoked(&mut tx, issuer, client, &verified.public_sid).await?;
     store::lock_user(&mut tx, verified.proof.user_id).await?;
     store::lock_client(&mut tx, client, issuer).await?;
     store::proof(&mut tx, &verified.proof, issuer).await?;
@@ -472,12 +505,13 @@ async fn callback(
         store::revoke(&mut tx, previous).await?;
     }
     let expires = verified.absolute_expires_at;
-    sqlx::query("INSERT INTO bff_sessions(id,browser_id,token_hash,csrf_hash,user_id,account_version,global_session_id,oidc_client_id,oidc_grant_id,oidc_client_policy_version,issuer,auth_time,nonce_hash,access_ciphertext,refresh_ciphertext,access_expires_at,version,created_at,expires_at) \
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,1,clock_timestamp(),$17)")
+    sqlx::query("INSERT INTO bff_sessions(id,browser_id,token_hash,csrf_hash,user_id,account_version,global_session_id,oidc_client_id,oidc_grant_id,oidc_client_policy_version,issuer,auth_time,nonce_hash,access_ciphertext,refresh_ciphertext,access_expires_at,version,created_at,expires_at,oidc_public_sid,oidc_public_sub) \
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,1,clock_timestamp(),$17,$18,$19)")
         .bind(id).bind(current.id).bind(super::digest(&cookie)).bind(super::digest(&csrf)).bind(verified.proof.user_id)
         .bind(verified.proof.account_version).bind(verified.proof.global_session_id).bind(client).bind(verified.proof.grant_id)
         .bind(verified.proof.client_policy_version).bind(issuer).bind(verified.proof.auth_time).bind(&flow.nonce_hash)
-        .bind(access).bind(refresh).bind(verified.proof.expires_at).bind(expires).execute(&mut *tx).await?;
+        .bind(access).bind(refresh).bind(verified.proof.expires_at).bind(expires)
+        .bind(&verified.public_sid).bind(&verified.proof.subject).execute(&mut *tx).await?;
     sqlx::query("UPDATE console_browsers SET generation=generation+1,current_session_id=$2,expires_at=GREATEST(expires_at,$3) WHERE id=$1")
         .bind(current.id).bind(id).bind(expires).execute(&mut *tx).await?;
     if let (Some(_), Some(proof)) = (&verified.selection, &selection_source) {
@@ -505,12 +539,7 @@ async fn callback(
     store::proof(&mut tx, &verified.proof, issuer).await?;
     store::deadline(
         &mut tx,
-        verified
-            .proof
-            .expires_at
-            .min(verified.id_expires_at)
-            .min(expires)
-            .min(flow.expires_at),
+        verified.proof.expires_at.min(expires).min(flow.expires_at),
     )
     .await?;
     tx.commit().await?;
@@ -629,6 +658,22 @@ async fn logout(
     if original.version != version {
         return Err(AppError::conflict("平台会话版本已变化"));
     }
+    if original.logout_confirmed_at.is_some() {
+        if original.logout_scope.as_deref() != Some(body.scope.as_str()) {
+            return Err(AppError::conflict("原注销范围不可改变"));
+        }
+        let pointer: Option<Uuid> =
+            sqlx::query_scalar("SELECT current_session_id FROM console_browsers WHERE id=$1")
+                .bind(original.browser_id)
+                .fetch_one(&state.pool)
+                .await?;
+        if pointer.is_some_and(|id| id != original.id) {
+            return Err(AppError::conflict(
+                "其他标签页已建立新会话，本次注销不能清除其 Cookie",
+            ));
+        }
+        return Ok(Json(json!({"redirectTo":"/login?signedOut=1"})).into_response());
+    }
     let chain = Chain::new(&state)?;
     let pending = if let Some(request) = original.logout_request_id {
         if original.logout_scope.as_deref() != Some(body.scope.as_str()) {
@@ -696,11 +741,7 @@ async fn logout(
             .await
             .map_err(|_| AppError::Unavailable)?;
     let (_, browser_session) = browser.ok_or(AppError::Unavailable)?;
-    if browser_session != Some(current.id) {
-        return Err(AppError::conflict(
-            "其他标签页已建立新会话，本次注销不能清除其 Cookie",
-        ));
-    }
+    let superseded = browser_session.is_some() && browser_session != Some(current.id);
     let closing = store::session_id(&mut *tx, current.id, true)
         .await?
         .ok_or(AppError::Unavailable)?;
@@ -710,7 +751,17 @@ async fn logout(
     {
         return Err(AppError::conflict("注销会话已变化"));
     }
+    if closing.logout_confirmed_at.is_some() {
+        if superseded {
+            return Err(AppError::conflict(
+                "其他标签页已建立新会话，本次注销不能清除其 Cookie",
+            ));
+        }
+        return Ok(Json(json!({"redirectTo":"/login?signedOut=1"})).into_response());
+    }
     store::revoke(&mut tx, closing.id).await?;
+    sqlx::query("UPDATE bff_sessions SET logout_confirmed_at=clock_timestamp() WHERE id=$1 AND logout_confirmed_at IS NULL")
+        .bind(closing.id).execute(&mut *tx).await?;
     sqlx::query("UPDATE console_browsers SET generation=generation+1,current_session_id=NULL WHERE id=$1 AND current_session_id=$2")
         .bind(closing.browser_id).bind(closing.id).execute(&mut *tx).await?;
     let username: String = sqlx::query_scalar("SELECT username FROM users WHERE id=$1")
@@ -734,6 +785,13 @@ async fn logout(
     )
     .await?;
     tx.commit().await?;
+    if superseded {
+        // The original remote result is now durable locally. Its late response
+        // still cannot describe a newer browser source as logged out.
+        return Err(AppError::conflict(
+            "其他标签页已建立新会话，本次注销不能清除其 Cookie",
+        ));
+    }
     // A fixed-name expiry may arrive after a newer callback and delete its
     // cookie. This old value is already non-authorizing on the server; login
     // replaces it and its original absolute Max-Age bounds natural retention.

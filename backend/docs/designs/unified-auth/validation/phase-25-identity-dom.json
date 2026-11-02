@@ -1,0 +1,162 @@
+{
+  "contractVersion": "unified-auth-phase25-identity-dom/1",
+  "phase": 25,
+  "result": "PASS",
+  "startedAtUtc": "2026-10-29T11:47:30.2768226Z",
+  "finishedAtUtc": "2026-10-29T11:48:49.8135661Z",
+  "evidenceLayer": "REAL_CHROMIUM_CURRENT_DOM_EXPLICIT_HTTP_FIXTURE",
+  "snapshot": "phase25-apps-r2",
+  "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+  "sourceSha256": {
+    "saas-identity/tests/context-selection-ui.mjs": "a675c1e29474a5cbbaa24686b1cfc9f59cc119d78fbfab25db10a364a2143c89",
+    "saas-identity/static/identity/applications.css": "63e6717819cf40b9b344e2d0d5a81b46baa6f4a9efeb9373ef483974ff5095d7",
+    "saas-identity/static/identity/applications.html": "c9062f507073f0b36419d9f557dfda7f5d5c7c2605dfea62727d45b2fa1a2987",
+    "saas-identity/static/identity/applications.js": "19acd367e6e7fdd8f5e5ba3f491633c049b6b4254f77683332325a02c4f191fe",
+    "saas-identity/static/identity/identity.css": "07db16d3da5a70098452e05660f3e72bdd0fb09926fc37009f38ec2f90a2f3c2",
+    "saas-identity/static/identity/identity.js": "a00dc2e4e04ef7700a5513ce7b10705470d32e5c4357a3422af9586bf239027b",
+    "saas-identity/static/identity/invitation.html": "7a0986e1e36d04296636a28fd1d32a01829fd5c1f8e06c6a0bb2dfe81ca1e199",
+    "saas-identity/static/identity/invitation.js": "64cea6a2e44c3a11b626fed9283d4bbe4f62915ee5e91f31cce844a0fb6dc8ce",
+    "saas-identity/static/identity/login.html": "0ab799e16f7b0b7a458bb66531281c4f5fc6bed72e8e0c245850d9f4f2bf40e2",
+    "saas-identity/static/identity/security.html": "3197e710a53c59498be50a76b645bde10d42b898160f04a62e599975b6a21cea",
+    "saas-identity/static/identity/security.js": "03b4fed93512b7e337467dca7e96d5139e7aec9cae7ab2f89f51aa6c71d8d444"
+  },
+  "sourceInputsMatchCandidateBeforeAndAfter": true,
+  "execution": {
+    "browserVersion": "156.0.8078.4",
+    "passed": 13,
+    "failed": 0,
+    "exactTestScriptBytes": true,
+    "testsRun": 13,
+    "nodeVersion": "v24.22.1",
+    "exitCode": 0,
+    "command": "IDENTITY_TEST_BROWSER_EXECUTABLE=<existing Chromium> node <owned-copy>/tests/context-selection-ui.mjs",
+    "actualFixtureReport": {
+      "status": "passed",
+      "backend": "Explicit HTTP fixtures; real persistence checked separately",
+      "browser": "156.0.8078.4",
+      "checks": [
+        {
+          "name": "sso-login-alias-uses-canonical-interactions",
+          "status": "passed"
+        },
+        {
+          "name": "restart-follows-canonical-login-path",
+          "status": "passed"
+        },
+        {
+          "name": "single-tenant-skips-tenant-step",
+          "status": "passed"
+        },
+        {
+          "name": "single-organization-enters-after-first-consent",
+          "status": "passed"
+        },
+        {
+          "name": "remembered-single-identity-needs-no-clicks",
+          "status": "passed"
+        },
+        {
+          "name": "remembered-approval-survives-reload-search-does-not-auto-select",
+          "status": "passed"
+        },
+        {
+          "name": "tenant-with-one-organization-enters-directly",
+          "status": "passed"
+        },
+        {
+          "name": "multiple-tenants-and-organizations-require-choice",
+          "status": "passed"
+        },
+        {
+          "name": "no-members-never-auto-approves",
+          "status": "passed"
+        },
+        {
+          "name": "customer-and-hostile-names-render-as-text",
+          "status": "passed"
+        },
+        {
+          "name": "mobile-single-tenant-multiple-organizations",
+          "status": "passed"
+        },
+        {
+          "name": "application-manager-confirmation-and-revoked-history",
+          "status": "passed"
+        },
+        {
+          "name": "revoked-record-delete-cancel-confirm-empty-state",
+          "status": "passed"
+        }
+      ]
+    },
+    "playwrightCoreVersion": "1.64.1",
+    "skipped": 0
+  },
+  "scenarioAssertions": {
+    "P25-C16-S07": [
+      "customer-and-hostile-names-render-as-text"
+    ],
+    "P25-C11-S07": [
+      "remembered-approval-survives-reload-search-does-not-auto-select"
+    ],
+    "P25-C11-S03": [
+      "multiple-tenants-and-organizations-require-choice"
+    ],
+    "P25-C11-S02": [
+      "single-tenant-skips-tenant-step"
+    ],
+    "P25-C16-S02": [
+      "mobile-single-tenant-multiple-organizations"
+    ],
+    "P25-C11-S05": [
+      "single-tenant-skips-tenant-step",
+      "multiple-tenants-and-organizations-require-choice"
+    ],
+    "P25-C11-S04": [
+      "single-organization-enters-after-first-consent",
+      "tenant-with-one-organization-enters-directly"
+    ],
+    "P25-C11-S01": [
+      "no-members-never-auto-approves"
+    ],
+    "P25-C11-S06": [
+      "remembered-single-identity-needs-no-clicks"
+    ]
+  },
+  "limitations": [
+    "Authentication and selection responses are explicit loopback HTTP fixtures; actual current SaaS HTTPS remains separate.",
+    "Current production identity assets and test script were copied byte-for-byte to the owned directory. No source or official dist was overwritten.",
+    "This test establishes U-level DOM behavior. Candidate zero-membership eligibility, backend tuple and permission checks require their separately cited PG evidence.",
+    "13 test cases are observed; earlier preparation estimates of 12 are not used as the actual count."
+  ],
+  "cleanup": {
+    "databaseOperations": 0,
+    "status": "AUTOMATIC_APPROVAL_REJECTED",
+    "dockerReused": 0,
+    "nodeModulesLink": "node_modules",
+    "sourceApplicationProcessesStarted": 0,
+    "owner": "rust-saas-phase25-identity-dom-895200f789be4dcbb6d01c7eec7d29e0",
+    "scriptFinallyCompleted": true,
+    "sharedDependencyTargetDeleted": false,
+    "browserCloseAwaited": true,
+    "scratch": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-identity-dom-895200f789be4dcbb6d01c7eec7d29e0",
+    "sharedDependencyTarget": "D:\\WorkSpace\\rust\\rust-saas\\saas-plateform\\frontend\\tests\\browser\\node_modules",
+    "localHttpListenerCloseAwaited": true,
+    "dockerCreated": 0,
+    "rejectionReason": "blocked by policy",
+    "rejectedBeforeCommandStarted": true,
+    "removedFiles": 0,
+    "retainedRegularFiles": 17,
+    "retainedLogicalBytes": 382558.0,
+    "retainedDirectories": 5,
+    "retainedDependencyJunctions": [
+      {
+        "FullName": "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-identity-dom-895200f789be4dcbb6d01c7eec7d29e0\\node_modules",
+        "LinkType": "Junction",
+        "Target": "D:\\WorkSpace\\rust\\rust-saas\\saas-plateform\\frontend\\tests\\browser\\node_modules"
+      }
+    ],
+    "noCleanupWorkaroundAttempted": true,
+    "rejectedAction": "Native PowerShell exact OWNER and absolute Temp path check; remove exactly the dependency junction link preserving target, verify no other reparse point; recursively remove only the verified task directory"
+  }
+}

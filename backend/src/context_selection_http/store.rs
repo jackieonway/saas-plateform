@@ -78,7 +78,7 @@ pub(super) async fn authenticate_as(
     purpose: &'static str,
 ) -> Result<Principal, AppError> {
     let (id, digest) = basic(headers)?;
-    let hash:Option<String>=sqlx::query_scalar("SELECT s.secret_hash FROM context_selection_services s WHERE s.id=$1 AND s.status='ENABLED' AND s.purpose=$3 AND $2=ANY(s.allowed_oidc_clients) AND NOT EXISTS(SELECT 1 FROM oauth_clients c WHERE c.client_secret_hash=s.secret_hash)")
+    let hash:Option<String>=sqlx::query_scalar("SELECT s.secret_hash FROM context_selection_services s WHERE s.id=$1 AND s.status='ENABLED' AND s.purpose=$3 AND $2=ANY(s.allowed_auth_clients) AND NOT EXISTS(SELECT 1 FROM platform_resource_services resource_service WHERE resource_service.secret_hash=s.secret_hash) AND NOT identity_credential_digest_in_use(s.secret_hash)")
         .bind(id.uuid()).bind(client.uuid()).bind(purpose).fetch_optional(pool).await?;
     if !hash.as_ref().is_some_and(|v| equal(v, &digest)) {
         return Err(AppError::forbidden("选择服务用途或 RP 范围无效"));
@@ -95,7 +95,7 @@ pub(super) async fn revalidate(
     principal: &Principal,
     client: Id,
 ) -> Result<(), AppError> {
-    let current:Option<String>=sqlx::query_scalar("SELECT s.secret_hash FROM context_selection_services s WHERE s.id=$1 AND s.status='ENABLED' AND s.purpose=$3 AND $2=ANY(s.allowed_oidc_clients) AND NOT EXISTS(SELECT 1 FROM oauth_clients c WHERE c.client_secret_hash=s.secret_hash) FOR SHARE OF s")
+    let current:Option<String>=sqlx::query_scalar("SELECT s.secret_hash FROM context_selection_services s WHERE s.id=$1 AND s.status='ENABLED' AND s.purpose=$3 AND $2=ANY(s.allowed_auth_clients) AND NOT EXISTS(SELECT 1 FROM platform_resource_services resource_service WHERE resource_service.secret_hash=s.secret_hash) AND NOT identity_credential_digest_in_use(s.secret_hash) FOR SHARE OF s")
         .bind(principal.id).bind(client.uuid()).bind(principal.purpose).fetch_optional(&mut **tx).await?;
     if !current
         .as_ref()
@@ -108,6 +108,7 @@ pub(super) async fn revalidate(
 
 #[derive(sqlx::FromRow)]
 pub(super) struct Rp {
+    client_registry: String,
     client_id: Uuid,
     client_policy_version: i64,
     member_type: String,
@@ -136,17 +137,16 @@ pub(super) async fn registration(
     tx: &mut Transaction<'_, Postgres>,
     proof: &SourceProof,
 ) -> Result<Rp, AppError> {
-    let row:Rp=sqlx::query_as("SELECT client_id,client_policy_version,member_type,application_id,application_policy_version,consumer_service_id FROM context_selection_registrations WHERE client_id=$1 AND enabled FOR SHARE")
+    let row:Rp=sqlx::query_as("SELECT client_registry,client_id,client_policy_version,member_type,application_id,application_policy_version,consumer_service_id FROM context_selection_registrations WHERE client_id=$1 AND enabled FOR SHARE")
         .bind(proof.client.id.uuid()).fetch_optional(&mut **tx).await?.ok_or_else(||AppError::forbidden("RP 未登记身份选择用途"))?;
-    let purpose = match row.member_type.as_str() {
-        "EMPLOYEE" => "PLATFORM_CONSOLE",
-        "CUSTOMER" => "CUSTOMER_PORTAL",
-        _ => return Err(AppError::Unavailable),
-    };
-    if row.client_policy_version != proof.client.policy_version.value()
-        || proof.client.purpose != purpose
-        || proof.client.allowed_member_types != [row.member_type.clone()]
-    {
+    let client_matches = row.client_registry == "AUTH"
+        && proof.client.client_registry.as_deref() == Some("AUTH")
+        && proof.client.subject_mode.as_deref() == Some("USER")
+        && proof.client.context_mode.as_deref() == Some("PLATFORM_CONTEXT")
+        && proof.client.application_id.map(|id| id.uuid()) == row.application_id
+        && row.application_id.is_some()
+        && proof.client.allowed_member_types == [row.member_type.clone()];
+    if row.client_policy_version != proof.client.policy_version.value() || !client_matches {
         return Err(AppError::forbidden("RP 策略或成员用途不匹配"));
     }
     if let Some(application) = row.application_id {
@@ -159,7 +159,7 @@ pub(super) async fn registration(
         return Err(AppError::forbidden("此用途必须登记目标应用"));
     }
     if let Some(service) = row.consumer_service_id {
-        let valid:Option<Uuid>=sqlx::query_scalar("SELECT id FROM context_selection_services WHERE id=$1 AND purpose='CONTEXT_SELECTION_CONSUMER' AND status='ENABLED' AND $2=ANY(allowed_oidc_clients) FOR SHARE")
+        let valid:Option<Uuid>=sqlx::query_scalar("SELECT id FROM context_selection_services WHERE id=$1 AND purpose='CONTEXT_SELECTION_CONSUMER' AND status='ENABLED' AND $2=ANY(allowed_auth_clients) FOR SHARE")
             .bind(service).bind(row.client_id).fetch_optional(&mut **tx).await?;
         if valid.is_none() {
             return Err(AppError::forbidden("选择消费方已失效"));

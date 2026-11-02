@@ -1,0 +1,73 @@
+{
+  "contractVersion": "unified-auth-phase25-protocol-review-fixes/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T13:05:45.674126+00:00",
+  "status": "COMPONENT_PASS_REAL_ISSUER_RERUN_PENDING",
+  "sourceSha256": {
+    "saas-plateform/backend/tests/unified-auth-https/phase25-protocol-browser.mjs": "c501602d028b3cb2bca07aa526904dc5509a0ce8273aed950d760b79e6682f69",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-protocol-driver.mjs": "555646f42d3636c7c9ca93ceaed0477f59dcfd3188b0283aaf574c4b1f17d96a",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-protocol-cases.mjs": "828d655e3c2474fa62dbee0238ca9a4e79b08a587a956c77eaf25b7f57e917cc",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-protocol-report.mjs": "cf89e21af0c8028c906dc1f5cd17b64c8a9c86f56568af8e0c9e0dedb3a6fa5e",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-protocol-cases.test.mjs": "e9961101899f11da9d5f7db016afd69a9d0dd374d6934ca087ee91e1e642327a",
+    "saas-plateform/backend/tests/unified-auth-https/phase25-protocol-report.test.mjs": "57ec73076fbfaabccbf7a2859e0559e8a0dc87c9f3e269ce165e6b68d2b03d81"
+  },
+  "changes": [
+    "Explicit report byte offsets replace previous content without NUL holes; short writes are handled.",
+    "Completed verdict fields are reserved; HTTP status is recorded as httpStatus.",
+    "A narrower access response can reselect original grant scopes, while unapproved offline_access is rejected.",
+    "Scope restoration rejects duplicate names and shrink/restoration require nonempty access and refresh carriers.",
+    "New report helper is checked against both frozen snapshot bytes and live Windows execution bytes."
+  ],
+  "validation": {
+    "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-protocol-cases.test.mjs saas-plateform/backend/tests/unified-auth-https/phase25-protocol-report.test.mjs",
+    "testsRun": 11,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "durationMilliseconds": 2597.2858,
+    "node": "v24.22.1",
+    "syntaxChecks": 6,
+    "syntaxResult": "PASS",
+    "standardClient": "openid-client@6.8.8",
+    "jwtLibrary": "jose@6.2.13",
+    "caseGroups": {
+      "existingTrustedTLSIssuerAndSdkOrMutationChecks": 6,
+      "explicitControlledRefreshScopePortChecks": 3,
+      "reportPersistenceAndVerdictUnitChecks": 2
+    },
+    "evidenceLayer": "STANDARD_SDK_CA_VALIDATED_TLS_FIXTURE_WITH_EXPLICIT_CONTROLLED_SCOPE_PORT_AND_REPORT_UNIT_CHECKS"
+  },
+  "independentReview": {
+    "reviewer": "/root/matrix_audit/protocol_fix_review",
+    "result": "PASS",
+    "findingsFixed": [
+      "Reject duplicate restoration scope or empty token carriers",
+      "Check new helper live Windows bytes against frozen digest"
+    ],
+    "reviewSyntaxChecks": [
+      "phase25-protocol-browser.mjs",
+      "phase25-protocol-report.mjs"
+    ]
+  },
+  "originalRuntimeFailure": {
+    "rawReport": "phase-25-protocol-current-r4.json",
+    "sha256": "bcb4cdd5b44cec1a0e2cdc009cf263a705399553f7f6cd72e9a693e034770101",
+    "result": "FAIL",
+    "decodedAudit": "phase-25-protocol-r4-decoded-audit.json",
+    "rewritten": false
+  },
+  "limitations": [
+    "Scope-policy component checks explicitly substitute a controlled fetch port because the shared TLS issuer fixture does not implement requested scope; these checks prove harness judgement only.",
+    "No current Identity service, database, actual dual-process code exchange or native recovery was run by this component check. A newly frozen real issuer rerun remains required.",
+    "Original r4 HTTP numeric400 verdict fields and NUL prefix remain intact; current fixes do not promote the old suite to PASS."
+  ],
+  "operations": {
+    "containersCreated": 0,
+    "containersReused": 0,
+    "databasesCreated": 0,
+    "nativeApplicationServicesStarted": 0,
+    "fixtureServersClosedInFinally": true,
+    "reportUnitTempFileAndDirectoryRemovedInFinally": true,
+    "privateMaterialPersisted": false
+  }
+}

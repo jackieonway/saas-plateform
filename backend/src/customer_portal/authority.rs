@@ -61,7 +61,7 @@ impl AccountProof {
             ]
             .into_iter()
             .all(uuid7::is_uuid_v7)
-            || source.account_version < 0
+            || source.account_version < 1
             || source.client_policy_version < 1
             || source.auth_time <= 0
             || source.auth_time > Utc::now().timestamp() + 60
@@ -81,4 +81,12 @@ pub(crate) type ProofFuture<'a> =
 /// cache, refresh-token acceptance, membership or organization is part of it.
 pub(crate) trait AccountProofPort: Send + Sync {
     fn verify_access<'a>(&'a self, access: &'a str, expected_client: Uuid) -> ProofFuture<'a>;
+}
+
+/// Missing identity configuration never enables a same-process provider.
+pub(crate) struct UnavailableAuthority;
+impl AccountProofPort for UnavailableAuthority {
+    fn verify_access<'a>(&'a self, _access: &'a str, _expected_client: Uuid) -> ProofFuture<'a> {
+        Box::pin(async { Err(AppError::Unavailable) })
+    }
 }

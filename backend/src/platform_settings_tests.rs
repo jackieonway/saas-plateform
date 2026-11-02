@@ -18,7 +18,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::routes;
-use crate::util::jwt;
 
 const SECRET: &str = "platform-settings-isolated-tests-only";
 
@@ -228,29 +227,7 @@ async fn identity(pool: &PgPool, tenant: Uuid, name: &str) -> Result<(Uuid, Uuid
 }
 
 async fn session(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid) -> Result<String> {
-    let version: i64 = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let id = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(id.to_string()),
-            ver: Some(version),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 async fn grant(

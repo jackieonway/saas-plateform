@@ -1,0 +1,62 @@
+{
+  "contractVersion": "unified-auth-phase25-rp-audience-components/1",
+  "phase": 25,
+  "startedAtUtc": "2026-10-29T12:09:30.603Z",
+  "result": "FAIL",
+  "evidenceLayer": "STANDARD_SDK_ACTUAL_TLS_FIXTURE_CONTROLLED_SIGNED_TOKEN_AT_TRANSPORT_PORT",
+  "scope": "Actual independent RP application callback and session store. The issuer token response is deliberately replaced at the standard SDK customFetch port with a same-key signed ID Token. This is not real identity interoperability.",
+  "sourceSha256": {
+    "saas-plateform/backend/tests/unified-auth-https/phase25-rp-audience.test.mjs": "1f07c53a0d21eb7c09b79774d062e0a03cdab5c6944a2f5586621f92772404db",
+    "saas-examples/oidc-rp/package.json": "5add1eacc24926b54e576bdd44cd6e2f8736b2ea12f1aa0172a280d4a5c69d0b",
+    "saas-examples/oidc-rp/package-lock.json": "21c07d7780538f611551a5d248c41a87893dc7dffe36b92acec592c4852c26ce",
+    "saas-examples/oidc-rp/src/app.mjs": "621129fc0838b3adc80204c2e03f29666e55dbaa85a19edc8c3b5dbb013e0109",
+    "saas-examples/oidc-rp/src/oidc.mjs": "dc87ba55094f841f8fb515d6b9904d98a7b7e2a28c98d9f434c6c19df43c2506",
+    "saas-examples/oidc-rp/src/transport.mjs": "20ec3360ad0e354afd57479d437731a270755087f58eb55ef12fae51a1441b05",
+    "saas-examples/oidc-rp/src/config.mjs": "05d80f16c20ad27aae2b7ba069698c05186b544664e2a4b119bd7c7ae453a7ee",
+    "saas-examples/oidc-rp/src/store.mjs": "0ea97aa7378c2ae368084acff4d100c63ccfb2ff783e5f011f018bc79aa06e70",
+    "saas-examples/oidc-rp/tests/support.mjs": "a20422dc999042a57b1b2bf689eed2b2200ae46c46d7883c24e73a0ce474bc82"
+  },
+  "versions": {
+    "node": "v24.22.1",
+    "standardClient": "openid-client@6.8.8",
+    "jwtLibrary": "jose@6.2.13"
+  },
+  "command": "node --test saas-plateform/backend/tests/unified-auth-https/phase25-rp-audience.test.mjs",
+  "checks": [
+    {
+      "name": "incorrect-audience-valid-signature-no-session",
+      "status": "FAIL",
+      "wrongAudience": true,
+      "failureCode": "PHASE25_AUDIENCE_COMPONENT_FAILED"
+    },
+    {
+      "name": "expected-audience-same-other-claims-session-established",
+      "status": "FAIL",
+      "wrongAudience": false,
+      "failureCode": "PHASE25_AUDIENCE_COMPONENT_FAILED"
+    }
+  ],
+  "rawCarriersPersisted": false,
+  "tlsErrorsIgnored": false,
+  "cleanup": {
+    "ownedFixtureGroupsOpened": 2,
+    "ownedFixtureGroupsClosed": 2,
+    "databasesCreated": 0,
+    "dockerCreated": 0,
+    "dockerReused": 0,
+    "actualSaasProcessesStarted": 0,
+    "temporaryCertificatesRemovedByFixtureTrap": true,
+    "status": "PASS"
+  },
+  "limitations": [
+    "The signed response substitution is explicit at the SDK transport port; it must not be reported as a real identity server returning an incorrect audience.",
+    "The same fixture signs both controls with identical claims except aud; the RP callback and session code is the delivered current source.",
+    "No application process, database, issuer configuration or pre-existing service is changed."
+  ],
+  "finishedAtUtc": "2026-10-29T12:09:31.301Z",
+  "sourceInputsUnchangedAfter": true,
+  "testsRun": 2,
+  "passed": 0,
+  "failed": 2,
+  "skipped": 0
+}

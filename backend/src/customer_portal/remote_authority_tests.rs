@@ -11,9 +11,9 @@ use std::{
 fn wire(client: Uuid) -> Value {
     let user = Uuid::now_v7();
     json!({"contractVersion":"customer-access-proof/1","tokenType":"access_token",
-        "clientPurpose":"CUSTOMER_PORTAL","allowedMemberTypes":["CUSTOMER"],"scope":["openid","profile","offline_access"],
+        "clientPurpose":"CUSTOMER_PORTAL","allowedMemberTypes":["CUSTOMER"],"scope":["openid","profile"],
         "source":{"issuer":"https://auth.saas.test","clientId":client,"grantId":Uuid::now_v7(),"globalSessionId":Uuid::now_v7(),
-            "userId":user,"accountVersion":"0","clientPolicyVersion":"1","authTime":Utc::now().timestamp()-5,
+            "userId":user,"accountVersion":"1","clientPolicyVersion":"1","authTime":Utc::now().timestamp()-5,
             "expiresAt":Utc::now()+chrono::Duration::seconds(45)},
         "account":{"id":user,"username":"owned-phase12","realName":"Owned fixture","avatar":""}})
 }
@@ -105,7 +105,7 @@ fn phase12_customer_authority_accepts_only_exact_access_customer_rp_proofs() {
         client,
     )
     .unwrap();
-    assert_eq!(proof.source.account_version, 0);
+    assert_eq!(proof.source.account_version, 1);
     assert_eq!(proof.source.client_id, client);
     assert_eq!(proof.account.id, proof.source.user_id);
     for (field, replacement) in [
@@ -124,6 +124,7 @@ fn phase12_customer_authority_accepts_only_exact_access_customer_rp_proofs() {
         ("issuer", json!("https://another.saas.test")),
         ("clientId", json!(Uuid::now_v7())),
         ("accountVersion", json!("-1")),
+        ("accountVersion", json!("0")),
         ("clientPolicyVersion", json!("0")),
         ("authTime", json!(Utc::now().timestamp() + 61)),
         (

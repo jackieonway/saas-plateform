@@ -218,24 +218,40 @@ async fn session(
         .bind((now + database_ttl) as f64)
         .execute(pool)
         .await?;
-    let token = jwt::sign(
+    let token = jwt::sign_internal(
         &jwt::Claims {
             sub: user.to_string(),
-            typ: "session".into(),
+            typ: "platform_session".into(),
             tenant: Some(tenant.to_string()),
             org: Some(org.to_string()),
             cid: None,
             scope: None,
             sid: Some(id.to_string()),
             ver: Some(version),
-            aud: None,
+            aud: Some(jwt::PLATFORM_API_AUDIENCE.into()),
             jti: None,
             iat: now,
             exp: now + jwt_ttl,
         },
+        jwt::InternalUse::PlatformSession,
         SECRET,
     )?;
     Ok(Session { token, id })
+}
+
+async fn short_capability(pool: &PgPool, original: &str, expires_at: i64) -> Result<String> {
+    let mut claims = jwt::verify_internal(original, SECRET, jwt::InternalUse::AppSession, None)?;
+    let id = crate::util::uuid7::new_uuid();
+    claims.jti = Some(id.to_string());
+    claims.exp = expires_at;
+    let token = jwt::sign_internal(&claims, jwt::InternalUse::AppSession, SECRET)?;
+    let inserted=sqlx::query("INSERT INTO platform_app_capabilities(id,jti,token_hash,user_id,tenant_id,organization_id,application_id,audience,scope,platform_session_id,membership_id,member_type,identity_version,account_version,application_policy_version,origin_issuer,origin_client_ref,origin_client_policy_version,issued_at,expires_at) SELECT $1,$1,$2,user_id,tenant_id,organization_id,application_id,audience,scope,platform_session_id,membership_id,member_type,identity_version,account_version,application_policy_version,origin_issuer,origin_client_ref,origin_client_policy_version,issued_at,to_timestamp($3) FROM platform_app_capabilities WHERE token_hash=$4")
+        .bind(id).bind(hash::sha256_hex(&token)).bind(expires_at as f64).bind(hash::sha256_hex(original)).execute(pool).await?.rows_affected();
+    ensure!(
+        inserted == 1,
+        "short capability did not copy an exact owned source"
+    );
+    Ok(token)
 }
 
 async fn tenant(pool: &PgPool, name: &str, platform: bool) -> Result<Uuid> {
@@ -396,8 +412,6 @@ impl Harness {
                 .bind(code).bind(format!("/micro/{code}")).bind(format!("/sub-apps/{code}/index.html")).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
             let menu: Uuid = sqlx::query_scalar("INSERT INTO menus(application_id,type,title,permission,id) VALUES($1,'BUTTON','Publish','notification:publish',$2) RETURNING id")
                 .bind(app).bind(crate::util::uuid7::new_uuid()).fetch_one(pool).await?;
-            sqlx::query("INSERT INTO oauth_clients(client_id,client_secret_hash,client_name,client_type,subject_mode,allowed_member_types,grant_types,scopes,access_token_validity,application_id,id) VALUES($1,$2,$1,'CONFIDENTIAL','MACHINE',ARRAY[]::text[],'client_credentials','profile',300,$3,$4)")
-                .bind(code).bind(hash::sha256_hex("notification-test-client-secret-only")).bind(app).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
             for (tid, org) in [
                 (tenant_a, root),
                 (tenant_a, child),
@@ -492,8 +506,11 @@ impl Harness {
         config.data_grant_policy = crate::data_grants::policy::Policy::from_json(&json!({
             "applications":[{"applicationId":applications[0],"capabilities":[
                 {"resource":"ticket","action":"create","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]},
-                {"resource":"ticket","action":"update","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]}],
-                "memberLookups":[{"resource":"ticket","action":"create"},{"resource":"ticket","action":"update"}]}],
+                {"resource":"ticket","action":"update","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]},
+                {"resource":"notification","action":"publish","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]}],
+                "memberLookups":[{"resource":"ticket","action":"create"},{"resource":"ticket","action":"update"}]},
+                {"applicationId":applications[1],"capabilities":[
+                {"resource":"notification","action":"publish","scopes":["SELF","ORG","ORG_SUBTREE","TENANT"]}]}],
             "managementScopes":[]
         }).to_string())?;
         let router = routes::api_router().with_state(crate::sso_test_fixture::state(
@@ -550,7 +567,7 @@ impl Harness {
         let (status, response) = call(
             &self.router,
             Method::POST,
-            "/api/oauth/session-token",
+            "/api/apps/session-token",
             session,
             Some(json!({"appCode":code})),
         )
@@ -704,11 +721,11 @@ async fn notification_application_authorization_and_four_scopes() -> Result<()> 
             rejected(&h.router,Method::POST,&path,&forged,Some(body(&format!("wrong-type:{typ}"),user_target(h.publisher,h.root))),&[StatusCode::UNAUTHORIZED]).await?;
         }
         let mut expired=jwt::verify(&token,SECRET)?;expired.exp=Utc::now().timestamp()-60;
-        rejected(&h.router,Method::POST,&path,&jwt::sign(&expired,SECRET)?,Some(body("expired-token",user_target(h.publisher,h.root))),&[StatusCode::UNAUTHORIZED]).await?;
+        rejected(&h.router,Method::POST,&path,&jwt::sign_internal(&expired,jwt::InternalUse::AppSession,SECRET)?,Some(body("expired-token",user_target(h.publisher,h.root))),&[StatusCode::UNAUTHORIZED]).await?;
         let mut admin_body = body("admin-adapter",user_target(h.recipient,h.root)); admin_body["applicationId"]=json!(h.main_app);
         let admin = ok(&h.router,Method::POST,"/api/notifications",&h.publisher_session.token,Some(admin_body)).await?;
         ensure!(admin["sent"]==admin["recipientCount"] && admin["sent"]==1, "session adapter returned incorrect sent count");
-        sqlx::query("UPDATE oauth_tokens SET revoked=true WHERE application_id=$1 AND user_id=$2").bind(h.main_app).bind(h.publisher).execute(&db.pool).await?;
+        sqlx::query("UPDATE platform_app_capabilities SET revoked=true WHERE application_id=$1 AND user_id=$2").bind(h.main_app).bind(h.publisher).execute(&db.pool).await?;
         rejected(&h.router,Method::POST,&path,&token,Some(body("revoked-token",user_target(h.recipient,h.root))),&[StatusCode::UNAUTHORIZED]).await?;
         Ok(())
     }.await;
@@ -1006,12 +1023,10 @@ async fn notification_idempotency_namespaces_concurrency_and_transaction_failure
                 ("/api/notifications".to_string(),short.token,Some(expiry))
             } else {
                 let fresh=h.app_token(&h.publisher_session.token,APP_CODE).await?;
-                let expiry=if case=="queued-app-expiry" {
+                let (fresh,expiry)=if case=="queued-app-expiry" {
                     let expiry=Utc::now().timestamp()+3;
-                    sqlx::query("UPDATE oauth_tokens SET expires_at=to_timestamp($2) WHERE token_hash=$1")
-                        .bind(hash::sha256_hex(&fresh)).bind(expiry as f64).execute(&db.pool).await?;
-                    Some(expiry)
-                } else { None };
+                    (short_capability(&db.pool,&fresh,expiry).await?,Some(expiry))
+                } else { (fresh,None) };
                 (format!("/api/apps/{APP_CODE}/notifications"),fresh,expiry)
             };
             let (publisher_membership,_,publisher_version)=employee_proof(&db.pool,h.publisher,h.root).await?;
@@ -1030,7 +1045,7 @@ async fn notification_idempotency_namespaces_concurrency_and_transaction_failure
             if let Some(expiry)=expiry {
                 while Utc::now().timestamp()<=expiry {tokio::time::sleep(Duration::from_millis(50)).await;}
             } else {
-                sqlx::query("UPDATE oauth_tokens SET revoked=true WHERE token_hash=$1").bind(hash::sha256_hex(&queued_token)).execute(&db.pool).await?;
+                sqlx::query("UPDATE platform_app_capabilities SET revoked=true WHERE token_hash=$1").bind(hash::sha256_hex(&queued_token)).execute(&db.pool).await?;
             }
             blocker.rollback().await?;
             let (status,_)=queued.await??;
@@ -1170,13 +1185,13 @@ async fn notification_socket_context_validates_live_session_and_delivery_visibil
         rejected(&h.router,Method::GET,path,&token,None,&[StatusCode::UNAUTHORIZED]).await?;
         rejected(&h.router,Method::GET,proof_path,&token,None,&[StatusCode::UNAUTHORIZED]).await?;
         let mut missing_sid=jwt::verify(&h.publisher_session.token,SECRET)?; missing_sid.sid=None;
-        rejected(&h.router,Method::GET,path,&jwt::sign(&missing_sid,SECRET)?,None,&[StatusCode::UNAUTHORIZED]).await?;
+        rejected(&h.router,Method::GET,path,&jwt::sign_internal(&missing_sid,jwt::InternalUse::PlatformSession,SECRET)?,None,&[StatusCode::UNAUTHORIZED]).await?;
         let mut wrong_binding=jwt::verify(&h.publisher_session.token,SECRET)?;wrong_binding.org=Some(h.child.to_string());
-        rejected(&h.router,Method::GET,path,&jwt::sign(&wrong_binding,SECRET)?,None,&[StatusCode::UNAUTHORIZED]).await?;
+        rejected(&h.router,Method::GET,path,&jwt::sign_internal(&wrong_binding,jwt::InternalUse::PlatformSession,SECRET)?,None,&[StatusCode::UNAUTHORIZED]).await?;
         let expired=session(&db.pool,h.recipient,h.tenant_a,h.root,-120,3600).await?;
         rejected(&h.router,Method::GET,path,&expired.token,None,&[StatusCode::UNAUTHORIZED]).await?;
         let mut just_expired=jwt::verify(&h.publisher_session.token,SECRET)?;just_expired.exp=Utc::now().timestamp()-1;
-        rejected(&h.router,Method::GET,path,&jwt::sign(&just_expired,SECRET)?,None,&[StatusCode::UNAUTHORIZED]).await?;
+        rejected(&h.router,Method::GET,path,&jwt::sign_internal(&just_expired,jwt::InternalUse::PlatformSession,SECRET)?,None,&[StatusCode::UNAUTHORIZED]).await?;
         let password_session=session(&db.pool,h.second_publisher,h.tenant_a,h.root,3600,3600).await?;
         crate::session::revoke_all(&db.pool,h.second_publisher,None).await?;
         rejected(&h.router,Method::GET,path,&password_session.token,None,&[StatusCode::UNAUTHORIZED]).await?;
@@ -1352,15 +1367,7 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
         let reset_path=format!("/api/users/{uid}/reset-password");
         let roles_path=format!("/api/users/{}/roles",h.recipient);
         let role_body=json!({"items":[{"roleId":h.root_role,"organizationId":h.root}]});
-        // Device approval is a human flow; the application backend's MACHINE
-        // registration cannot stand in for this separate USER registration.
-        let device_client = "notification-user-device";
-        sqlx::query("INSERT INTO oauth_clients(id,client_id,client_name,client_type,subject_mode,allowed_member_types,grant_types,scopes,application_id) VALUES($1,$2,'Notification device fixture','PUBLIC','USER',ARRAY['EMPLOYEE']::text[],'urn:ietf:params:oauth:grant-type:device_code','profile',$3)")
-            .bind(crate::util::uuid7::new_uuid()).bind(device_client).bind(h.main_app).execute(&db.pool).await?;
-        let device:Uuid=sqlx::query_scalar("INSERT INTO oauth_device_codes(device_code_hash,user_code,client_id,scope,expires_at,id,client_policy_version,application_id,application_policy_version) \
-            SELECT $1,'NOTIFY-DEVICE',$2,'profile',now()+interval '10 minutes',$3,c.access_policy_version,c.application_id,a.access_policy_version \
-            FROM oauth_clients c LEFT JOIN applications a ON a.id=c.application_id WHERE c.client_id=$2 RETURNING id")
-            .bind(hash::sha256_hex("notification-device-fixture")).bind(device_client).bind(crate::util::uuid7::new_uuid()).fetch_one(&db.pool).await?;
+        // Device-code issuance and its SYSTEM side effect retired with the old provider.
         sqlx::query("CREATE FUNCTION notification_system_test_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected SYSTEM failure'; END $$").execute(&db.pool).await?;
         sqlx::query("CREATE TRIGGER notification_system_test_failure BEFORE INSERT ON notifications FOR EACH ROW WHEN(NEW.source_kind='SYSTEM') EXECUTE FUNCTION notification_system_test_fail()").execute(&db.pool).await?;
         rejected(&h.router,Method::POST,"/api/users",&h.publisher_session.token,Some(json!({"username":"notification-rollback-created","password":"initial-test-password"})),&[StatusCode::INTERNAL_SERVER_ERROR]).await?;
@@ -1373,9 +1380,6 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
         rejected(&h.router,Method::PUT,&roles_path,&h.platform_session.token,Some(role_body.clone()),&[StatusCode::INTERNAL_SERVER_ERROR]).await?;
         let partial_role:i64=sqlx::query_scalar("SELECT count(*) FROM user_roles WHERE user_id=$1").bind(h.recipient).fetch_one(&db.pool).await?;
         ensure!(partial_role==0,"SYSTEM failure committed role mutation");
-        rejected(&h.router,Method::POST,"/api/device/NOTIFY-DEVICE/decision",&h.publisher_session.token,Some(json!({"approve":true})),&[StatusCode::INTERNAL_SERVER_ERROR]).await?;
-        let pending:(String,Option<Uuid>)=sqlx::query_as("SELECT status,user_id FROM oauth_device_codes WHERE id=$1").bind(device).fetch_one(&db.pool).await?;
-        ensure!(pending==("PENDING".to_string(),None),"SYSTEM failure committed device approval");
         sqlx::query("DROP TRIGGER notification_system_test_failure ON notifications").execute(&db.pool).await?;
         sqlx::query("DROP FUNCTION notification_system_test_fail()").execute(&db.pool).await?;
         ok(&h.router,Method::POST,&reset_path,&h.publisher_session.token,Some(json!({"newPassword":"changed-test-password"}))).await?;
@@ -1383,9 +1387,6 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
         let revoked:bool=sqlx::query_scalar("SELECT revoked_at IS NOT NULL FROM platform_sessions WHERE id=$1").bind(reset_session.id).fetch_one(&db.pool).await?;
         ensure!(changed.0!=before.0 && changed.1==before.1+1 && revoked,"successful reset retry was not atomic");
         ok(&h.router,Method::PUT,&roles_path,&h.platform_session.token,Some(role_body)).await?;
-        ok(&h.router,Method::POST,"/api/device/NOTIFY-DEVICE/decision",&h.publisher_session.token,Some(json!({"approve":true}))).await?;
-        let approved:String=sqlx::query_scalar("SELECT status FROM oauth_device_codes WHERE id=$1").bind(device).fetch_one(&db.pool).await?;
-        ensure!(approved=="APPROVED","device retry did not commit");
         sqlx::query("UPDATE organizations SET expires_at=now()-interval '1 hour' WHERE id=$1").bind(h.child).execute(&db.pool).await?;
         sqlx::query("UPDATE tenants SET status='DISABLED' WHERE id=$1").bind(h.tenant_b).execute(&db.pool).await?;
         ok(&h.router,Method::POST,&format!("/api/users/{}/reset-password",h.recipient),&h.platform_session.token,Some(json!({"newPassword":"global-changed-password"}))).await?;
@@ -1539,7 +1540,9 @@ async fn app_members_authorization_and_next_request_revocation() -> Result<()> {
         ok(&h.router,Method::GET,&path,&token,None).await?;
         rejected(&h.router,Method::GET,&path,&h.publisher_session.token,None,&[StatusCode::UNAUTHORIZED]).await?;
         let wrong=h.app_token(&h.publisher_session.token,OTHER_CODE).await?;
-        rejected(&h.router,Method::GET,&path,&wrong,None,&[StatusCode::FORBIDDEN]).await?;
+        // The audience validator rejects a capability for another application
+        // before the member-directory permission check.
+        rejected(&h.router,Method::GET,&path,&wrong,None,&[StatusCode::UNAUTHORIZED]).await?;
         for extra in ["&size=51","&page=0","&tenantId=forged","&userId=forged"] {
             rejected(&h.router,Method::GET,&format!("{path}{extra}"),&token,None,&[StatusCode::BAD_REQUEST]).await?;
         }

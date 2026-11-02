@@ -1,0 +1,40 @@
+{
+  "contractVersion": "unified-auth-phase25-frontend-cleanup-retry/1",
+  "status": "AUTOMATIC_APPROVAL_REJECTED",
+  "observedAtUtc": "2026-10-29T11:21:15Z",
+  "priorReport": "phase-25-frontend-cleanup.json",
+  "priorAutomaticRejectionPreserved": true,
+  "commandExecuted": false,
+  "removedResources": 0,
+  "rejectionReason": "blocked by policy",
+  "rejectedAction": "Native PowerShell directed cleanup of four exact OWNER-guarded Temp directories after non-recursive removal of all 30 recorded dependency junctions, verification that every original dependency target remains present, and a second absolute-path, OWNER and no-reparse-point check before recursive removal of each exact temporary directory.",
+  "preflightExecutedSeparately": {
+    "fourExactTemporaryRootsPresent": true,
+    "rootDirectoriesAreNotReparsePoints": true,
+    "ownerMarkersMatchExpectedSingleLine": true,
+    "recordedDependencyJunctions": 30,
+    "recordedJunctionTypesAndTargetsMatch": true,
+    "allOriginalDependencyTargetsPresent": true,
+    "completeDescendantInventoryExecuted": false
+  },
+  "remainingTemporaryRoots": [
+    "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-l5jzNo",
+    "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-S1ycwE",
+    "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-frontends-bKN81U",
+    "C:\\Users\\MECHREVO\\AppData\\Local\\Temp\\rust-saas-phase25-npm-0WZPX8"
+  ],
+  "priorReportedRemainingTotals": {
+    "regularFiles": 4706,
+    "logicalBytes": 61607240,
+    "directories": 917,
+    "dependencyJunctions": 30,
+    "recountedByRejectedCommand": false
+  },
+  "existingDependencyRootsPreserved": true,
+  "existingLiveDistChanged": false,
+  "furtherCleanupAttemptsStopped": true,
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "wslEnvironmentTouched": false,
+  "windowsVhdxReclamationClaimed": false
+}

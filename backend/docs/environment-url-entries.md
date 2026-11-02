@@ -68,7 +68,7 @@ PUT 只接受：
 
 开启代理时，browserEntryUrl 为 `/micro-proxy/{appCode}/{revision}/`，上游 query 会保留。代理只根据当前环境已登记、已启用且符合 qiankun 元数据的记录选上游；URL 中不能指定其他 host。revision 变化后旧地址不继续解析当前配置。
 
-代理是匿名静态资源通道，不转发平台或业务身份，不承担业务 API、cookie 或 WebSocket 代理。关闭代理时浏览器直接访问 entryUrl，微应用部署需要自行满足跨域资源加载和网络访问条件。无论采用哪种方式，应用身份都通过 SDK 2.0 和应用专用令牌传递，不能塞进 URL。
+代理是匿名静态资源通道，不转发平台或业务身份，不承担业务 API、cookie 或 WebSocket 代理。关闭代理时浏览器直接访问 entryUrl，微应用部署需要自行满足跨域资源加载和网络访问条件。无论采用哪种方式，应用身份都通过 SDK 3.0.0 和应用专用令牌传递，不能塞进 URL。
 
 有效应用上下文的 `application.entryUrl` 是浏览器可用入口。URL entry 对应 `deploymentVersion=null`、`entryVersionId=revision`；固定 release 则返回相应版本和 release ID。入口 revision 用于识别配置变化，不证明上游内容不可变。
 

@@ -102,6 +102,25 @@ test('membership replacement cannot submit before cached assignments initialize 
   assert.equal(button(tree, '保存成员关系').props.disabled, true)
 })
 
+test('reopened employee and role editors initialize from refreshed assignments instead of stale cache', () => {
+  const f = userPageFixture(['MembershipDialog'])
+  f.queries.set('user-memberships', { ...success([{ organizationId: 'org-a', departmentId: null, position: 'Old' }]), isFetching: true })
+  let tree = f.render('MembershipDialog', props({ user, allOrgTree: [] }))
+  assert.equal(button(tree, '保存成员关系').props.disabled, true)
+  f.queries.set('user-memberships', { ...success([{ organizationId: 'org-a', departmentId: null, position: 'Saved' }]), isFetching: false })
+  tree = f.render('MembershipDialog', props({ user, allOrgTree: [] }))
+  assert.equal(elements(tree, item => item.type?.name === 'MembershipRowEditor')[0].props.row.position, 'Saved')
+
+  const roles = userPageFixture(['RoleAssignDialog'])
+  roles.queries.set('roles', success([role]))
+  roles.queries.set('user-roles', { ...success([{ roleId: role.id, organizationId: role.organizationId }]), isFetching: true })
+  tree = roles.render('RoleAssignDialog', props({ user }))
+  assert.equal(button(tree, '保存角色分配').props.disabled, true)
+  roles.queries.set('user-roles', { ...success([]), isFetching: false })
+  tree = roles.render('RoleAssignDialog', props({ user }))
+  assert.equal(elements(tree, item => item.type === 'Checkbox')[0].props.checked, false)
+})
+
 test('employee role candidates exclude customer and disabled employee organization projections', async () => {
   const seen = []
   const f = userPageFixture(['RoleAssignDialog'], {

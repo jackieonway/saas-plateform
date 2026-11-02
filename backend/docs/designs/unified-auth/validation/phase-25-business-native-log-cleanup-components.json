@@ -1,0 +1,55 @@
+{
+  "contractVersion": "unified-auth-phase25-native-log-cleanup-components/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T12:20:49.598140+00:00",
+  "scope": "Business native-log cleanup and in-memory real-environment canary coverage. Actual all-service TLS/runtime remains separate acceptance.",
+  "inputs": {
+    "phase25-business-runtime.py": "83ab3a6edabbbe46ae1df14b48108c414ab235ef76f54f0c9bbef3dba188158b",
+    "test_phase25_business_runtime.py": "7db19e2c610241854895f9258a31f2de8e1596efabd132a997ec468990778723"
+  },
+  "change": "After all owned business children are stopped, scan exactly phase25-business-{stores,orders,notification}.log against protected actual business ENV values. Full DB URL, encoded and decoded password, metrics tokens, client secrets and encoded Basic credentials stay in memory. All logs must pass before exact deletion; SHA drift/invalid ownership refuses deletion. No ENV and no logs is an idempotent no-op; no ENV with logs requires separately authorized legacy cleanup and records incomplete coverage. App failure category is captured before stop removes the log.",
+  "validation": {
+    "command": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "saas-plateform/backend/tests/unified-auth-https",
+      "-p",
+      "test_phase25_business_runtime.py",
+      "-q"
+    ],
+    "tests": 59,
+    "passed": 59,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 0.445,
+    "realFilesystemCases": "Protected temporary ENV/log files use actual Task.read/checked/digest/unlink; temporary directories removed by finally. Actual services, DB, Docker and namespace are not started.",
+    "negativeCases": [
+      "Complete URL and percent-encoded/decoded DB password",
+      "Metrics/client secret and Basic credential leakage",
+      "Any finding prevents all log deletions",
+      "Digest changed after scan",
+      "Malformed ENV or non-private log mode",
+      "Missing original ENV refuses ordinary deletion",
+      "Failed process cleanup never reaches log scan/delete",
+      "Idempotent repeated stop and unrelated log preservation"
+    ]
+  },
+  "legacyEvidence": {
+    "correction": "phase-25-r1-r2-native-log-correction.json",
+    "cleanup": "phase-25-r1-r2-native-log-cleanup.json",
+    "oldNativeLogBytesRemoved": 163,
+    "remainingExactNativeLogs": 0,
+    "retrospectiveCanaryScanComplete": false,
+    "note": "Old business ENV had already been removed; historical PASS reports are unchanged and are not reinterpreted as full native-log secret scans."
+  },
+  "resources": {
+    "applicationServicesStarted": 0,
+    "databasesCreated": 0,
+    "containersCreated": 0,
+    "temporaryNativeTestDirectoriesRemoved": true
+  }
+}

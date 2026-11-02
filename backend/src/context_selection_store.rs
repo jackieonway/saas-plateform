@@ -7,6 +7,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
+use uuid::Uuid;
 
 use crate::context_selection::{
     Binding, Credential, Id, Member, MemberType, Selection, SelectionError, Version,
@@ -80,10 +81,88 @@ struct Row {
     result: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct IssuedSelection {
+    /// Original selection and deadline, never reconstructed with a later time.
+    pub selection: Selection,
+    /// Persisted digest used to check the encrypted recoverable credential.
+    pub credential_hash: String,
+    /// AEAD ciphertext; only the private platform authority adapter opens it.
+    pub credential_ciphertext: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct IssuedRow {
+    selection: String,
+    client_id: Uuid,
+    consumer_service_id: Option<Uuid>,
+    credential_hash: String,
+    credential_ciphertext: Option<String>,
+    expires_at: DateTime<Utc>,
+    consumed_at: Option<DateTime<Utc>>,
+}
+
 async fn clock(tx: &mut Transaction<'_, Postgres>) -> Result<DateTime<Utc>, StoreError> {
     Ok(sqlx::query_scalar("SELECT clock_timestamp()")
         .fetch_one(&mut **tx)
         .await?)
+}
+
+/// Serialize selection capacity decisions and same-transaction recovery.
+pub async fn lock_issue_capacity(tx: &mut Transaction<'_, Postgres>) -> Result<(), StoreError> {
+    sqlx::query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('context-selection-capacity-v1',0))",
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Recover an unconsumed credential only for the same original binding,
+/// selected membership, RP and service while every original deadline is live.
+pub async fn recover_issued(
+    tx: &mut Transaction<'_, Postgres>,
+    transaction_id: Id,
+    binding: &Binding,
+    member: &Member,
+    consumer: Consumer,
+    current_deadline: DateTime<Utc>,
+) -> Result<Option<IssuedSelection>, StoreError> {
+    let existing: Option<IssuedRow> = sqlx::query_as(
+        "SELECT selection::text,client_id,consumer_service_id,credential_hash, \
+         credential_ciphertext,expires_at,consumed_at FROM context_selections \
+         WHERE transaction_id=$1 FOR UPDATE",
+    )
+    .bind(transaction_id.uuid())
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(IssuedRow {
+        selection: raw,
+        client_id,
+        consumer_service_id: service_id,
+        credential_hash,
+        credential_ciphertext,
+        expires_at,
+        consumed_at,
+    }) = existing
+    else {
+        return Ok(None);
+    };
+    let selection: Selection = serde_json::from_str(&raw).map_err(|_| StoreError::Inconsistent)?;
+    if client_id != consumer.client_id.uuid()
+        || service_id != consumer.service_id.map(Id::uuid)
+        || selection.expires_at != expires_at
+        || expires_at > current_deadline
+    {
+        return Err(SelectionError::Changed.into());
+    }
+    selection.check_consumption(binding, member, clock(tx).await?, consumed_at.is_some())?;
+    let credential_ciphertext = credential_ciphertext.ok_or(StoreError::Inconsistent)?;
+    Ok(Some(IssuedSelection {
+        selection,
+        credential_hash,
+        credential_ciphertext,
+    }))
 }
 
 /// Save a newly confirmed selection under a bounded global capacity lock.
@@ -94,9 +173,10 @@ pub async fn issue(
     tx: &mut Transaction<'_, Postgres>,
     selection: &Selection,
     credential: &Credential,
+    credential_ciphertext: &str,
     consumer: Consumer,
     capacity: u32,
-) -> Result<(), StoreError> {
+) -> Result<Selection, StoreError> {
     let now = clock(tx).await?;
     if capacity == 0 || consumer.client_id != selection.binding.registration.client_id {
         return Err(SelectionError::Invalid.into());
@@ -108,15 +188,29 @@ pub async fn issue(
     if selection.expires_at > selection.created_at + chrono::Duration::seconds(120) {
         return Err(SelectionError::Invalid.into());
     }
-    sqlx::query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('context-selection-capacity-v1',0))",
-    )
-    .execute(&mut **tx)
-    .await?;
-    // Keep committed results through their original recovery deadline. Never
-    // delete live consumed records merely to make capacity for a new operation.
-    sqlx::query("DELETE FROM context_selections WHERE transaction_id IN (SELECT transaction_id FROM context_selections WHERE expires_at<=clock_timestamp() ORDER BY expires_at LIMIT 256)")
+    lock_issue_capacity(tx).await?;
+    // A consumed result is a durable source/member fact and switch fence, even
+    // after the one-time credential's recovery deadline. Only abandoned flows
+    // are removed here; active-capacity accounting remains deadline bounded.
+    sqlx::query("DELETE FROM context_selections WHERE transaction_id IN (SELECT transaction_id FROM context_selections WHERE consumed_at IS NULL AND expires_at<=clock_timestamp() ORDER BY expires_at LIMIT 256)")
         .execute(&mut **tx).await?;
+    if let Some(existing) = recover_issued(
+        tx,
+        selection.binding.transaction_id,
+        &selection.binding,
+        &selection.member,
+        consumer,
+        selection.expires_at,
+    )
+    .await?
+    {
+        if existing.credential_hash == credential.digest()
+            && existing.credential_ciphertext == credential_ciphertext
+        {
+            return Ok(existing.selection);
+        }
+        return Err(SelectionError::Changed.into());
+    }
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM context_selections")
         .fetch_one(&mut **tx)
         .await?;
@@ -124,17 +218,18 @@ pub async fn issue(
         return Err(StoreError::Capacity);
     }
     let encoded = serde_json::to_string(selection).map_err(|_| StoreError::Inconsistent)?;
-    sqlx::query("INSERT INTO context_selections(transaction_id,interaction_id,client_id,consumer_service_id,credential_hash,selection,created_at,expires_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8)")
+    sqlx::query("INSERT INTO context_selections(transaction_id,interaction_id,client_id,consumer_service_id,credential_hash,credential_ciphertext,selection,created_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)")
         .bind(selection.binding.transaction_id.uuid())
         .bind(selection.binding.source.interaction_id.uuid())
         .bind(consumer.client_id.uuid())
         .bind(consumer.service_id.map(Id::uuid))
         .bind(credential.digest())
+        .bind(credential_ciphertext)
         .bind(encoded)
         .bind(selection.created_at)
         .bind(selection.expires_at)
         .execute(&mut **tx).await?;
-    Ok(())
+    Ok(selection.clone())
 }
 
 async fn load(
@@ -164,6 +259,7 @@ pub async fn consume(
     binding: &Binding,
     member: &Member,
     result: &ContextResult,
+    result_ciphertext: Option<&str>,
 ) -> Result<(), StoreError> {
     let (selection, row) = load(tx, credential, consumer).await?;
     let now = clock(tx).await?;
@@ -172,8 +268,8 @@ pub async fn consume(
         return Err(SelectionError::Changed.into());
     }
     let result = serde_json::to_string(result).map_err(|_| StoreError::Inconsistent)?;
-    let changed = sqlx::query("UPDATE context_selections SET consumed_at=clock_timestamp(),result=$2::jsonb WHERE credential_hash=$1 AND consumed_at IS NULL AND expires_at>clock_timestamp()")
-        .bind(credential.digest()).bind(result).execute(&mut **tx).await?.rows_affected();
+    let changed = sqlx::query("UPDATE context_selections SET consumed_at=clock_timestamp(),result=$2::jsonb,result_ciphertext=$3,credential_ciphertext=NULL WHERE credential_hash=$1 AND consumed_at IS NULL AND expires_at>clock_timestamp()")
+        .bind(credential.digest()).bind(result).bind(result_ciphertext).execute(&mut **tx).await?.rows_affected();
     if changed != 1 {
         return Err(SelectionError::Expired.into());
     }

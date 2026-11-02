@@ -1,146 +1,185 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { componentFixture, elements, success, pending, button } from './helpers/component-fixture.mjs'
+import { componentFixture } from './helpers/component-fixture.mjs'
 
-function deferred() {
-  let resolve, reject
-  const promise = new Promise((yes, no) => { resolve = yes; reject = no })
-  return { promise, resolve, reject }
+const uuid = '01962345-6789-7abc-8def-000000000001'
+const fixture = componentFixture('src/pages/system/oauth/UnifiedClientsPage.tsx', ['clientFormSchema', 'clientTypeFor', 'tokenMethodFor'], {
+  '@/lib/uuid': { isUuidV7: value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) },
+})
+const { clientFormSchema, clientTypeFor, tokenMethodFor } = fixture.exports
+class FixtureApiError extends Error {
+  constructor(message, code, status, requestId, operationId) { super(message); Object.assign(this, { code, status, requestId, operationId }) }
 }
+const user = (overrides = {}) => ({
+  applicationId: uuid,
+  environment: 'test',
+  displayName: 'CRM Web',
+  subjectMode: 'USER',
+  runtimeKind: 'WEB_BFF',
+  contextMode: 'ACCOUNT_ONLY',
+  allowedMemberTypes: [],
+  refreshToken: false,
+  redirectUrisText: 'https://client.example.test/callback',
+  postLogoutRedirectUrisText: '',
+  logoutMode: 'SHORT_SESSION_ONLINE_CHECK',
+  backchannelLogoutUri: '',
+  backchannelTargetId: '',
+  status: 'DISABLED',
+  consentGroupId: '',
+  permissions: [{ resourceKey: 'userinfo', scopesText: 'openid, profile' }],
+  ...overrides,
+})
 
-const client = { id: '01962345-6789-7abc-8def-000000000001', clientId: 'public-a', clientName: 'Public A', clientType: 'PUBLIC', requirePkce: false,
-  subjectMode: 'USER', allowedMemberTypes: ['EMPLOYEE'], accessPolicyVersion: 1,
-  grantTypes: ['authorization_code'], scopes: ['profile'], redirectUris: ['https://client.test/callback'] }
-
-function fixture(api, clients = []) {
-  let values
-  const messages = []
-  const form = {
-    control: {},
-    reset: next => { values = { ...next } },
-    watch: key => values?.[key],
-    setValue: (key, value) => { values[key] = value },
-    handleSubmit: callback => () => callback({ ...values }),
-  }
-  const f = componentFixture('src/pages/system/oauth/ClientsPage.tsx', ['OAuthClientsPage'], {
-    'react-hook-form': { useForm: options => { values ??= { ...options.defaultValues }; return form } },
-    '@/lib/form': { zResolver: () => undefined },
-    '@/lib/format': { GRANT_TYPE_LABELS: {}, formatNumber: String },
-    '@/api/oauth': { oauthApi: api },
-    './OidcClientsPanel': { OidcClientsPanel: 'OidcClientsPanel' },
-    sonner: { toast: { success: message => messages.push(message), error: message => messages.push(message) } },
+test('unified client form accepts supported USER, browser, native and MACHINE contracts', () => {
+  assert.equal(clientFormSchema.safeParse(user()).success, true)
+  assert.equal(clientFormSchema.safeParse(user({ runtimeKind: 'SPA' })).success, true)
+  assert.equal(clientFormSchema.safeParse(user({ runtimeKind: 'NATIVE' })).success, true)
+  assert.equal(clientTypeFor('USER', 'WEB_BFF'), 'CONFIDENTIAL')
+  assert.equal(clientTypeFor('USER', 'SPA'), 'PUBLIC')
+  assert.equal(clientTypeFor('USER', 'NATIVE'), 'PUBLIC')
+  assert.equal(tokenMethodFor('USER', 'WEB_BFF'), 'client_secret_basic')
+  assert.equal(tokenMethodFor('USER', 'SPA'), 'none')
+  const machine = user({
+    subjectMode: 'MACHINE', runtimeKind: 'SERVICE', contextMode: 'NONE', refreshToken: false,
+    redirectUrisText: '', postLogoutRedirectUrisText: '',
+    permissions: [{ resourceKey: 'sync-api', scopesText: 'records.read' }],
   })
-  f.queries.set('oauth-clients', success({ records: clients, total: clients.length, page: 1, size: 10 }))
-  f.queries.set('applications', success([]))
-  return { ...f, messages, values: () => values, field(tree, name) {
-    const field = elements(tree, item => item.type === 'FormField' && item.props.name === name)[0]
-    return field.props.render({ field: { value: values[name], onChange: value => { values[name] = value } } })
-  } }
+  assert.equal(clientFormSchema.safeParse(machine).success, true)
+  assert.equal(clientTypeFor('MACHINE', 'SERVICE'), 'CONFIDENTIAL')
+  assert.equal(tokenMethodFor('MACHINE', 'SERVICE'), 'client_secret_basic')
+})
+
+test('back-channel form requires a confidential user, exact HTTPS endpoint and an owner reference', () => {
+  const registered = { logoutMode: 'BACK_CHANNEL', backchannelLogoutUri: 'https://client.example.test/auth/backchannel-logout', backchannelTargetId: uuid }
+  assert.equal(clientFormSchema.safeParse(user(registered)).success, true)
+  for (const patch of [{ runtimeKind: 'SPA' }, { subjectMode: 'MACHINE' }, { backchannelTargetId: '' }, { backchannelLogoutUri: 'https://client.example.test/logout?token=bad' }, { backchannelLogoutUri: 'http://client.example.test/logout' }, { logoutMode: 'SHORT_SESSION_ONLINE_CHECK' }]) assert.equal(clientFormSchema.safeParse(user({ ...registered, ...patch })).success, false)
+})
+
+test('unified client form rejects illegal subject/runtime/context combinations', () => {
+  assert.equal(clientFormSchema.safeParse(user({ runtimeKind: 'SERVICE' })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({ contextMode: 'PLATFORM_CONTEXT' })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({ contextMode: 'PLATFORM_CONTEXT', allowedMemberTypes: ['EMPLOYEE', 'CUSTOMER'] })).success, false)
+  for (const runtimeKind of ['SPA', 'NATIVE']) {
+    assert.equal(clientFormSchema.safeParse(user({ runtimeKind, contextMode: 'PLATFORM_CONTEXT', allowedMemberTypes: ['EMPLOYEE'] })).success, false)
+  }
+  assert.equal(clientFormSchema.safeParse(user({ contextMode: 'PLATFORM_CONTEXT', allowedMemberTypes: ['EMPLOYEE'] })).success, true)
+  assert.equal(clientFormSchema.safeParse(user({ allowedMemberTypes: ['EMPLOYEE'] })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({ permissions: [{ resourceKey: 'userinfo', scopesText: 'profile' }] })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({
+    subjectMode: 'MACHINE', runtimeKind: 'SERVICE', contextMode: 'ACCOUNT_ONLY',
+    permissions: [{ resourceKey: 'sync-api', scopesText: 'records.read' }],
+  })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({
+    subjectMode: 'MACHINE', runtimeKind: 'SERVICE', contextMode: 'NONE', refreshToken: true,
+    redirectUrisText: '', permissions: [{ resourceKey: 'sync-api', scopesText: 'records.read' }],
+  })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({
+    subjectMode: 'MACHINE', runtimeKind: 'SERVICE', contextMode: 'NONE',
+    redirectUrisText: '', permissions: [{ resourceKey: 'userinfo', scopesText: 'openid' }],
+  })).success, false)
+})
+
+test('unified client form enforces exact HTTPS callback and scope/resource syntax', () => {
+  assert.equal(clientFormSchema.safeParse(user({ redirectUrisText: 'http://client.example.test/callback' })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({ redirectUrisText: 'https://*.example.test/callback' })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({ redirectUrisText: 'https://client.example.test/callback\nhttps://client.example.test/callback' })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({ permissions: [{ resourceKey: 'Bad Resource', scopesText: 'openid' }] })).success, false)
+  assert.equal(clientFormSchema.safeParse(user({ permissions: [{ resourceKey: 'userinfo', scopesText: 'openid, openid' }] })).success, false)
+})
+
+test('identity writes keep their browser operation handle when the complete HTTP response is lost', async () => {
+  const writes = [], operationId = '01962345-6789-7abc-8def-000000000002'
+  const requests = componentFixture('src/api/identity-clients.ts', ['identityClientsApi'], {
+    '@/lib/uuid': { newUuid: () => operationId },
+    '@/lib/identity-operation-recovery': { beginIdentityOperation: () => ({ operationId, contextKey: 'owned-context' }), finishIdentityOperation() {} },
+    '@/lib/api': { ApiError: FixtureApiError, qs: () => '', api: {
+      post: async (path, body, options) => { writes.push({ path, body, options }); throw new FixtureApiError('connection lost', 'NETWORK_ERROR', 0) },
+    } },
+  }).exports.identityClientsApi
+  await assert.rejects(requests.rotateCredential(uuid, 2), error =>
+    error.code === 'OIDC_REMOTE_RESULT_UNKNOWN' && error.operationId === operationId)
+  assert.deepEqual(writes, [{ path: `/api/identity/clients/${uuid}/credentials`, body: { expectedVersion: 2 }, options: { operationId } }])
+})
+
+test('identity writes preserve definite version conflicts rather than treating them as unknown commits', async () => {
+  const conflict = new FixtureApiError('version changed', 'version_conflict', 409)
+  const requests = componentFixture('src/api/identity-clients.ts', ['identityClientsApi'], {
+    '@/lib/uuid': { newUuid: () => uuid },
+    '@/lib/identity-operation-recovery': { beginIdentityOperation: () => ({ operationId: uuid, contextKey: 'owned-context' }), finishIdentityOperation() {} },
+    '@/lib/api': { ApiError: FixtureApiError, qs: () => '', api: { patch: async () => { throw conflict } } },
+  }).exports.identityClientsApi
+  await assert.rejects(requests.update(uuid, {}), error => error === conflict)
+})
+
+function recoveryFixture() {
+  const values = new Map()
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) }
+  let owner = { accountId: uuid, sessionId: 'owned-session:1', contextKey: JSON.stringify([uuid, 'member-generation-1']) }
+  const factory = componentFixture('src/lib/identity-operation-recovery.ts', ['createIdentityOperationRecovery'], {
+    '@/lib/api': { ApiError: FixtureApiError },
+    '@/lib/uuid': { newUuid: () => '01962345-6789-7abc-8def-000000000003', isUuidV7: value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) },
+    '@/stores/auth': { authStore: { getState: () => ({}) } },
+  }).exports.createIdentityOperationRecovery
+  const recovery = factory(() => storage, () => owner)
+  return { values, storage, recovery, reload: () => factory(() => storage, () => owner), switchOwner: value => { owner = value }, owner: () => owner }
 }
 
-function newClient(f) {
-  const tree = f.render('OAuthClientsPage')
-  const actions = elements(tree, item => item.type === 'PageHeader')[0].props.actions
-  button(actions, '新建客户端').props.onClick()
-  return f.render('OAuthClientsPage')
-}
-
-test('new clients use type-specific PKCE defaults and submit explicit migration overrides', async () => {
-  const writes = []
-  const f = fixture({ createClient: async payload => { writes.push(payload); return {} } })
-  let tree = newClient(f)
-  assert.equal(f.values().requirePkce, false)
-  elements(f.field(tree, 'clientType'), item => item.type === 'Select')[0].props.onValueChange('PUBLIC')
-  assert.equal(f.values().requirePkce, true)
-  tree = f.render('OAuthClientsPage')
-  elements(f.field(tree, 'requirePkce'), item => item.type === 'Checkbox')[0].props.onCheckedChange(false)
-  elements(tree, item => item.type === 'form')[0].props.onSubmit()
-  await f.mutations[0].promise
-  assert.equal(writes[0].clientType, 'PUBLIC')
-  assert.equal(writes[0].requirePkce, false)
-  assert.equal(writes[0].subjectMode, 'USER')
-  assert.deepEqual(writes[0].allowedMemberTypes, ['EMPLOYEE'])
-  assert.equal(f.messages.at(-1), '客户端创建成功')
+test('pending recovery survives reload using only whitelisted metadata and isolates account contexts', () => {
+  const f = recoveryFixture()
+  const pending = f.recovery.begin('create', 'Owned client')
+  const encoded = [...f.values.values()][0]
+  assert.deepEqual(Object.keys(JSON.parse(encoded)).sort(), ['accountId', 'action', 'clientLabel', 'contextKey', 'operationId', 'schema', 'sessionId'])
+  assert.deepEqual(f.reload().read(), pending)
+  assert.throws(() => f.reload().begin('create', 'Duplicate'), error => error.operationId === pending.operationId)
+  const original = f.owner()
+  f.switchOwner({ ...original, accountId: '01962345-6789-7abc-8def-000000000004', contextKey: 'different-proven-account-context' })
+  assert.equal(f.reload().read(), null)
+  f.switchOwner({ ...original, sessionId: 'different-authorized-session:1' })
+  assert.equal(f.reload().read().sessionId, original.sessionId, 'Keep the original session for explicit server ownership rejection')
+  assert.throws(() => f.reload().begin('rotate', 'Duplicate'), error => error.operationId === pending.operationId)
+  f.recovery.finish('01962345-6789-7abc-8def-000000000005')
+  assert.equal(f.values.size, 1, 'A different operation cannot discard pending recovery')
+  f.recovery.finish(pending.operationId)
+  assert.equal(f.values.size, 0)
 })
 
-test('editing a legacy PUBLIC client preserves compatibility until the administrator enables S256', async () => {
-  const writes = []
-  const f = fixture({ updateClient: async (...args) => writes.push(args) }, [client])
-  let tree = f.render('OAuthClientsPage')
-  elements(tree, item => item.type === 'Button' && item.props['aria-label'] === '编辑')[0].props.onClick()
-  tree = f.render('OAuthClientsPage')
-  assert.equal(f.values().requirePkce, false)
-  const policy = f.field(tree, 'requirePkce')
-  assert.match(JSON.stringify(policy), /已有接入方请先完成 S256 配置再开启/)
-  elements(policy, item => item.type === 'Checkbox')[0].props.onCheckedChange(true)
-  elements(tree, item => item.type === 'form')[0].props.onSubmit()
-  await f.mutations[0].promise
-  assert.equal(writes[0][0], client.id)
-  assert.equal(writes[0][1].requirePkce, true)
-  assert.equal('allowedMemberTypes' in writes[0][1], false, 'Ordinary client editing must not submit an unversioned admission change')
-  assert.equal('subjectMode' in writes[0][1], false, 'PKCE compatibility editing preserves the registered subject purpose')
+test('identity API persists before dispatch, retains unknown and aborted results, and clears definite terminal results', async () => {
+  const f = recoveryFixture()
+  let fail = new FixtureApiError('lost entire HTTP response', 'NETWORK_ERROR', 0), writes = 0
+  const requests = componentFixture('src/api/identity-clients.ts', ['identityClientsApi'], {
+    '@/lib/identity-operation-recovery': { beginIdentityOperation: f.recovery.begin, finishIdentityOperation: f.recovery.finish },
+    '@/lib/api': { ApiError: FixtureApiError, qs: () => '', api: { post: async (_path, _body, options) => {
+      writes++
+      assert.equal(f.reload().read().operationId, options.operationId, 'Persist the recovery handle before the HTTP mutation starts')
+      if (fail) throw fail
+      return { id: uuid }
+    } } },
+  }).exports.identityClientsApi
+  const body = { displayName: 'Owned client' }
+  await assert.rejects(requests.create(body), error => error.code === 'OIDC_REMOTE_RESULT_UNKNOWN')
+  assert.equal(f.values.size, 1)
+  await assert.rejects(requests.create(body), error => error.code === 'OIDC_REMOTE_RESULT_UNKNOWN')
+  assert.equal(writes, 1)
+  f.recovery.finish(f.recovery.read().operationId)
+  fail = new DOMException('context changed after dispatch', 'AbortError')
+  await assert.rejects(requests.create(body), error => error.name === 'AbortError')
+  assert.equal(f.values.size, 1, 'Navigation or context abort cannot prove non-application')
+  f.recovery.finish(f.recovery.read().operationId)
+  fail = new FixtureApiError('definite version conflict', 'version_conflict', 409)
+  await assert.rejects(requests.create(body), error => error.status === 409)
+  assert.equal(f.values.size, 0)
+  fail = null
+  await requests.create(body)
+  assert.equal(f.values.size, 0)
 })
 
-test('client records show whether authorization-code requests require S256', () => {
-  const f = fixture({}, [client, { ...client, id: '01962345-6789-7abc-8def-000000000002', requirePkce: true }])
-  const tree = f.render('OAuthClientsPage')
-  assert.match(JSON.stringify(tree), /PKCE · 兼容模式/)
-  assert.match(JSON.stringify(tree), /PKCE · 强制 S256/)
-})
-
-test('secret regeneration rejects same-frame duplicate rotations and ignores unmounted results', async () => {
-  const response = deferred(), writes = []
-  const f = fixture({ regenerateSecret: id => { writes.push(id); return response.promise } }, [client])
-  const tree = f.render('OAuthClientsPage')
-  const rotate = elements(tree, item => item.type === 'Button' && item.props['aria-label'] === '重新生成 Secret')[0].props.onClick
-  rotate(); rotate()
-  await Promise.resolve()
-  assert.deepEqual(writes, [client.id])
-  f.unmount()
-  response.resolve({ clientSecret: 'retired-secret' })
-  await f.mutations[1].promise
-  assert.deepEqual(f.messages, [])
-})
-
-test('a pending client save cannot close or replace its dialog and failed saves can retry', async () => {
-  const response = deferred()
-  let attempts = 0
-  const f = fixture({ createClient: () => { attempts++; return response.promise } })
-  let tree = newClient(f)
-  const submit = elements(tree, item => item.type === 'form')[0].props.onSubmit
-  submit(); submit()
-  tree = f.render('OAuthClientsPage')
-  elements(tree, item => item.type === 'Dialog')[0].props.onOpenChange(false)
-  const actions = elements(tree, item => item.type === 'PageHeader')[0].props.actions
-  button(actions, '新建客户端').props.onClick()
-  tree = f.render('OAuthClientsPage')
-  assert.equal(elements(tree, item => item.type === 'Dialog')[0].props.open, true)
-  await Promise.resolve()
-  assert.equal(attempts, 1)
-  response.reject(new Error('temporary failure'))
-  await f.mutations[0].promise
-  tree = f.render('OAuthClientsPage')
-  assert.equal(elements(tree, item => item.type === 'Dialog')[0].props.open, true)
-  assert.equal(button(tree, '创建并生成密钥').props.disabled, false)
-})
-
-test('client paging requests server pages, resets size, and recovers a deleted last page without resetting during loading', () => {
-  const f = fixture({})
-  f.queries.set('oauth-clients', success({ records: [client], total: 25, page: 1, size: 10 }))
-  let tree = f.render('OAuthClientsPage')
-  let pagination = elements(tree, item => item.type === 'DataPagination')[0]
-  assert.equal(pagination.props.total, 25)
-  pagination.props.onPageChange(3)
-  tree = f.render('OAuthClientsPage')
-  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 3, 10])
-  elements(tree, item => item.type === 'DataPagination')[0].props.onSizeChange(20)
-  tree = f.render('OAuthClientsPage')
-  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 1, 20])
-  elements(tree, item => item.type === 'DataPagination')[0].props.onPageChange(2)
-  f.queries.set('oauth-clients', pending())
-  f.render('OAuthClientsPage')
-  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 2, 20])
-  f.queries.set('oauth-clients', success({ records: [], total: 20, page: 2, size: 20 }))
-  f.render('OAuthClientsPage')
-  assert.deepEqual(f.queryOptions.get('oauth-clients').queryKey, ['oauth-clients', 1, 20])
+test('unavailable or malformed recovery storage blocks HTTP mutations', async () => {
+  const f = recoveryFixture()
+  f.storage.setItem = () => { throw new Error('quota unavailable') }
+  assert.throws(() => f.recovery.begin('create', 'Owned client'), error => error.code === 'OPERATION_STORAGE_UNAVAILABLE')
+  const other = recoveryFixture()
+  const pending = other.recovery.begin('create', 'Owned client')
+  other.values.set([...other.values.keys()][0], JSON.stringify({ ...pending, body: { secret: 'forbidden-field' } }))
+  assert.equal(other.recovery.read(), null)
+  assert.throws(() => other.recovery.begin('create', 'Duplicate'), error => error.code === 'OPERATION_STORAGE_INVALID')
 })

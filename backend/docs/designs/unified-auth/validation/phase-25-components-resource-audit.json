@@ -1,0 +1,49 @@
+{
+  "contractVersion": "unified-auth-phase25-component-resource-audit/1",
+  "phase": 25,
+  "recordedAtUtc": "2026-10-29T12:14:45.010751+00:00",
+  "status": "PASS",
+  "auditedServices": [
+    "identity",
+    "platform",
+    "portal",
+    "notification",
+    "stores",
+    "orders"
+  ],
+  "clusterMatchedProtectedBinding": true,
+  "clusterSystemIdentifier": "7701992637128815755",
+  "componentFixtureResourcesRemaining": {
+    "databases": [],
+    "roles": []
+  },
+  "ownedRunnerTemporaryDirectoriesRemaining": [],
+  "oldDefaultTmpKnownFixturePrefixesRemaining": [],
+  "remainingComponentRunnerPids": [],
+  "snapshots": {
+    "phase25-apps-r2": {
+      "snapshotSha256": "e1d4706a6ecb0cabfc988327a43d9e4d75e5cad3b9cac3ef204bfd1b2516ac1d",
+      "manifestSha256": "bc6cac8f2ea794b7b8a39b50e4f21fb8b77301f9fd6f4a86a752a1cce8d452b1",
+      "verifiedInputs": 1527,
+      "mismatches": []
+    },
+    "phase25-apps-r3": {
+      "snapshotSha256": "a078317efaaa94abeb8cf2d96c37077dee5d5eb438f64351e837f75982dbbe49",
+      "manifestSha256": "34bd324452cce2a89ba32cf4c36ee43aa082add59d1bd4d3b975d3f573a52920",
+      "verifiedInputs": 1558,
+      "mismatches": []
+    }
+  },
+  "dockerContext": "default",
+  "dockerSystemDfAfter": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          0         0         0B        0B\nContainers      0         0         0B        0B\nLocal Volumes   0         0         0B        0B\nBuild Cache     0         0         0B        0B\n",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "databaseDeletionByAudit": false,
+  "filesDeletedByAudit": false,
+  "retainedSharedPostgresCargoCacheAndCandidateInputs": true,
+  "windowsVdiskCompactionClaimed": false,
+  "limits": [
+    "Post-run independent audit only; not retroactive interruption/failure-cleanup testing of the earlier runner.",
+    "Other root or business-agent resources use different prefixes and are excluded."
+  ]
+}

@@ -14,18 +14,16 @@ pub mod auth;
 mod contact;
 mod data_grants;
 pub mod departments;
-pub mod device;
 pub mod external;
 pub mod maps;
 pub mod menus;
 pub mod monitor;
 pub mod notifications;
-pub mod oauth2;
-pub mod oauth_admin;
 mod onboarding;
 pub mod organizations;
 mod platform_settings;
 pub mod regions;
+mod resource_directories;
 mod retention;
 pub mod roles;
 pub mod search;
@@ -47,20 +45,22 @@ pub fn api_router() -> Router<AppState> {
 }
 
 pub fn api_router_for_deployment(identity_remote: bool) -> Router<AppState> {
-    let identity_routes = if identity_remote {
-        crate::oidc::remote_admin_routes()
-    } else {
-        crate::sso::routes().merge(crate::oidc::routes())
-    };
+    let _ = identity_remote;
+    let identity_routes = crate::oidc::remote_admin_routes();
     Router::new()
         .route("/api/health", get(health))
+        .route(
+            "/api/apps/session-token",
+            axum::routing::post(crate::app_capabilities::issue),
+        )
         .merge(app_authorize::routes())
+        .merge(resource_directories::routes())
         .merge(crate::observability::routes())
         .merge(auth::routes())
         .merge(identity_routes)
+        .merge(crate::auth_review::routes())
         .merge(crate::bff::routes())
         .merge(crate::context_selection_http::routes())
-        .merge(crate::customer_identity::routes())
         .merge(crate::customer_portal::routes())
         .merge(tenants::routes())
         .merge(applications::routes())
@@ -84,10 +84,7 @@ pub fn api_router_for_deployment(identity_remote: bool) -> Router<AppState> {
         .merge(roles::routes())
         .merge(regions::routes())
         .merge(search::routes())
-        .merge(oauth_admin::routes())
         .merge(external::routes())
-        .merge(oauth2::consent_routes())
-        .merge(device::routes())
         .merge(notifications::routes())
         .merge(platform_settings::routes())
         .merge(monitor::routes())

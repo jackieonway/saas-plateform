@@ -6,11 +6,9 @@ import {
   ArrowUpWideNarrow,
   BarChart3,
   BookmarkCheck,
-  Copy,
   Crown,
   Database,
   Download,
-  FileJson,
   Globe,
   KeyRound,
   Landmark,
@@ -46,31 +44,13 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { StatusBadge } from "@/components/StatusBadge"
 import { CardGridSkeleton, EmptyState, ErrorState, StatSkeleton } from "@/components/states"
 import { monitorApi, type TenantInsight } from "@/api/monitor"
-import { oauthApi } from "@/api/oauth"
 import { usePermissionsQuery } from "@/hooks/use-auth-data"
 import { useAuthStore } from "@/stores/auth"
 import { hasPlatformContext } from "@/lib/platform-context"
-import { GRANT_TYPE_LABELS, copyText, durationHuman, formatBytes, formatDateTime, formatNumber } from "@/lib/format"
+import { durationHuman, formatBytes, formatDateTime, formatNumber } from "@/lib/format"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import type { MonitorSystemInfo, OAuthDiscovery } from "@/api/types"
-
-const ENDPOINTS: { method: string; path: string; name: string; desc: string }[] = [
-  { method: "GET", path: "/oauth/authorize", name: "授权端点", desc: "授权码 + PKCE 流程入口,302 至前端同意页" },
-  { method: "POST", path: "/oauth/token", name: "令牌端点", desc: "换取 / 刷新 access_token 与 refresh_token" },
-  { method: "GET", path: "/oauth/userinfo", name: "用户信息", desc: "携带 access_token 获取当前用户与上下文" },
-  { method: "POST", path: "/oauth/device/authorization", name: "设备授权", desc: "RFC 8628 设备码签发(verification_uri → /device)" },
-  { method: "POST", path: "/oauth/introspect", name: "令牌内省", desc: "RFC 7662 校验令牌有效性(客户端认证)" },
-  { method: "POST", path: "/oauth/revoke", name: "令牌吊销", desc: "RFC 7009 主动吊销访问 / 刷新令牌" },
-]
-
-const GRANT_MATRIX: { grant: string; desc: string; client: string; note: string }[] = [
-  { grant: "authorization_code", desc: "授权码 + PKCE(S256/plain)", client: "Web / 机密客户端", note: "经 /consent 同意页确认" },
-  { grant: "refresh_token", desc: "刷新令牌轮换", client: "所有持有 refresh_token 的客户端", note: "旧刷新令牌失效" },
-  { grant: "client_credentials", desc: "客户端凭证", client: "服务间调用", note: "仅 client 主体,无用户上下文" },
-  { grant: "password", desc: "资源密码模式", client: "受信任的第一方应用", note: "默认取第一个 membership 作为上下文" },
-  { grant: "urn:ietf:params:oauth:grant-type:device_code", desc: "设备码(RFC 8628)", client: "电视 / IoT 等输入受限设备", note: "/device 页面批准或拒绝" },
-]
+import type { MonitorSystemInfo } from "@/api/types"
 
 export default function MonitorPage() {
   const isPlatformContext = useAuthStore((s) => hasPlatformContext(s.profile))
@@ -78,7 +58,7 @@ export default function MonitorPage() {
     <div className="space-y-6">
       <PageHeader
         title="平台监控"
-        description={isPlatformContext ? "后端服务健康状态、数据库连通性、OAuth 2.0 对外能力与租户级洞察" : "当前组织及下级组织范围内的数据洞察"}
+        description={isPlatformContext ? "后端服务健康状态、数据库连通性与租户级洞察" : "当前组织及下级组织范围内的数据洞察"}
         icon={<Activity className="size-5" />}
       />
 
@@ -112,12 +92,6 @@ function PlatformStatusTab() {
     queryFn: () => monitorApi.health(),
     refetchInterval: 30_000,
     retry: 1,
-  })
-  const discoveryQuery = useQuery({
-    queryKey: ["oauth-discovery"],
-    queryFn: async () => (await oauthApi.discovery()) as OAuthDiscovery,
-    retry: 1,
-    staleTime: 60_000,
   })
   /* 平台监控系统信息(服务进程/数据库, 权限 system:monitor): 旧后端 404 时卡片静默展示错误态, 不阻塞其余内容 */
   const systemQuery = useQuery({
@@ -185,129 +159,7 @@ function PlatformStatusTab() {
         />
       </div>
 
-      {/* 发现文档 */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileJson className="size-4 text-primary" />
-              OAuth 2.0 发现文档
-            </CardTitle>
-            <CardDescription>GET /oauth/.well-known/openid-configuration · 实时拉取</CardDescription>
-          </div>
-          {discoveryQuery.data && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="复制发现文档"
-                  className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  onClick={async () => {
-                    if (await copyText(JSON.stringify(discoveryQuery.data, null, 2))) toast.success("已复制发现文档 JSON")
-                  }}
-                >
-                  <Copy className="size-3.5" />
-                  复制 JSON
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>复制完整发现文档</TooltipContent>
-            </Tooltip>
-          )}
-        </CardHeader>
-        <CardContent>
-          {discoveryQuery.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-4" style={{ width: `${90 - i * 8}%` }} />
-              ))}
-            </div>
-          ) : discoveryQuery.isError ? (
-            <ErrorState
-              className="border-0 bg-transparent"
-              message={discoveryQuery.error instanceof Error ? discoveryQuery.error.message : undefined}
-              onRetry={() => discoveryQuery.refetch()}
-            />
-          ) : (
-            <JsonBlock data={discoveryQuery.data ?? {}} />
-          )}
-        </CardContent>
-      </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* 标准端点 */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">标准端点说明</CardTitle>
-            <CardDescription>平台对外暴露的 OAuth 2.0 / OIDC 端点</CardDescription>
-          </CardHeader>
-          <CardContent className="px-0 pb-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">端点</TableHead>
-                  <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">路径</TableHead>
-                  <TableHead className="pr-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">用途</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ENDPOINTS.map((e) => (
-                  <TableRow key={e.path}>
-                    <TableCell className="pl-6">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "font-mono text-[10px]",
-                          e.method === "GET" ? "border-primary/30 bg-primary/10 text-primary" : "border-chart-5/30 bg-chart-5/10 text-chart-5"
-                        )}
-                      >
-                        {e.method}
-                      </Badge>
-                      <span className="ml-2 text-sm font-medium">{e.name}</span>
-                    </TableCell>
-                    <TableCell>
-                      <code className="font-mono text-xs">{e.path}</code>
-                    </TableCell>
-                    <TableCell className="pr-6 text-xs text-muted-foreground">{e.desc}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        {/* 对外能力 */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">对外能力 · 授权模式矩阵</CardTitle>
-            <CardDescription>支持的 grant_types 及适用场景</CardDescription>
-          </CardHeader>
-          <CardContent className="px-0 pb-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">模式</TableHead>
-                  <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">适用客户端</TableHead>
-                  <TableHead className="pr-6 text-xs font-medium uppercase tracking-wider text-muted-foreground">说明</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {GRANT_MATRIX.map((g) => (
-                  <TableRow key={g.grant}>
-                    <TableCell className="pl-6">
-                      <p className="text-sm font-medium">{GRANT_TYPE_LABELS[g.grant] ?? g.grant}</p>
-                      <code className="font-mono text-[10px] text-muted-foreground">
-                        {g.grant === "urn:ietf:params:oauth:grant-type:device_code" ? "device_code" : g.grant}
-                      </code>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{g.client}</TableCell>
-                    <TableCell className="pr-6 text-xs text-muted-foreground">{g.note}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }
@@ -570,7 +422,7 @@ function TenantInsightsTab({ platformContext }: { platformContext: boolean }) {
       tenants: insights.length,
       users: insights.reduce((s, t) => s + (t.users || 0), 0),
       logins7d: insights.reduce((s, t) => s + (t.logins7d || 0), 0),
-      activeTokens: insights.reduce((s, t) => s + (t.activeTokens || 0), 0),
+      activePlatformSessions: insights.reduce((s, t) => s + (t.activePlatformSessions || 0), 0),
     }
   }, [insights])
 
@@ -580,7 +432,7 @@ function TenantInsightsTab({ platformContext }: { platformContext: boolean }) {
     { key: "users", label: "用户总数", value: totals.users, icon: Users, hint: "按成员关系归属去重" },
     { key: "logins", label: "近 7 天登录", value: totals.logins7d, icon: LogIn,
       hint: platformContext ? "全部租户登录次数" : "当前组织及下级组织登录次数" },
-    { key: "tokens", label: "活跃令牌", value: totals.activeTokens, icon: KeyRound, hint: "未吊销未过期的访问令牌" },
+    { key: "tokens", label: "活跃平台会话", value: totals.activePlatformSessions, icon: KeyRound, hint: "未撤销且未过期的后台登录会话" },
   ]
 
   return (
@@ -590,8 +442,8 @@ function TenantInsightsTab({ platformContext }: { platformContext: boolean }) {
         <div>
           <h3 className="text-sm font-semibold">规模与活跃度总览</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">{platformContext
-            ? "各租户用户 / 组织 / 角色 / 近 7 天登录与活跃令牌汇总"
-            : "当前组织及下级组织的用户、角色、近 7 天登录与活跃令牌汇总"}</p>
+            ? "各租户用户 / 组织 / 角色 / 近 7 天登录与活跃平台会话汇总"
+            : "当前组织及下级组织的用户、角色、近 7 天登录与活跃平台会话汇总"}</p>
         </div>
         {canExport && (
           <Tooltip>
@@ -679,7 +531,7 @@ function TenantInsightsTab({ platformContext }: { platformContext: boolean }) {
 /* ============ 租户间横向对比 (维度切换 + 水平条形图) ============ */
 
 /** 对比维度 key (均为 TenantInsight 数值字段) */
-type CompareDim = "users" | "organizations" | "roles" | "logins7d" | "activeTokens"
+type CompareDim = "users" | "organizations" | "roles" | "logins7d" | "activePlatformSessions"
 
 /** 维度元信息: 每个维度固定专属配色 (沿用项目 chart-1~5 色板) */
 interface CompareDimMeta {
@@ -697,7 +549,7 @@ const COMPARE_DIMS: CompareDimMeta[] = [
   { key: "organizations", label: "组织数", icon: Network, color: "var(--chart-2)", chip: "border-chart-2/40 bg-chart-2/10 text-chart-2" },
   { key: "roles", label: "角色数", icon: ShieldCheck, color: "var(--chart-3)", chip: "border-chart-3/40 bg-chart-3/10 text-chart-3" },
   { key: "logins7d", label: "近 7 天登录", icon: LogIn, color: "var(--chart-4)", chip: "border-chart-4/40 bg-chart-4/10 text-chart-4" },
-  { key: "activeTokens", label: "活跃令牌", icon: KeyRound, color: "var(--chart-5)", chip: "border-chart-5/40 bg-chart-5/10 text-chart-5" },
+  { key: "activePlatformSessions", label: "活跃平台会话", icon: KeyRound, color: "var(--chart-5)", chip: "border-chart-5/40 bg-chart-5/10 text-chart-5" },
 ]
 
 /* ---- 维度与排序偏好记忆(localStorage) ---- */
@@ -1149,7 +1001,7 @@ function TenantInsightCard({ insight: t }: { insight: TenantInsight }) {
               {t.status ? <StatusBadge status={t.status} /> : null}
               <span className="inline-flex items-center gap-1">
                 <KeyRound className="size-3" />
-                <span className="tabular-nums">{formatNumber(t.activeTokens)}</span> 活跃令牌
+                <span className="tabular-nums">{formatNumber(t.activePlatformSessions)}</span> 活跃平台会话
               </span>
             </CardDescription>
           </div>
@@ -1298,34 +1150,4 @@ function StatusCard({
       </CardHeader>
     </Card>
   )
-}
-
-/** 简化语法高亮:teal key 着色 */
-function JsonBlock({ data }: { data: OAuthDiscovery | Record<string, unknown> }) {
-  const entries = Object.entries(data)
-  return (
-    <pre className="max-h-96 overflow-auto scroll-area rounded-lg border bg-muted/40 p-4 font-mono text-xs leading-relaxed">
-      {"{"}
-      {entries.map(([k, v], i) => (
-        <React.Fragment key={k}>
-          <br />
-          {"  "}
-          <span className="text-primary">"{k}"</span>
-          {": "}
-          <span className={typeof v === "string" ? "text-foreground" : "text-muted-foreground"}>
-            {formatVal(v)}
-          </span>
-          {i < entries.length - 1 ? "," : ""}
-        </React.Fragment>
-      ))}
-      <br />
-      {"}"}
-    </pre>
-  )
-}
-
-function formatVal(v: unknown): string {
-  if (Array.isArray(v)) return JSON.stringify(v)
-  if (typeof v === "object" && v !== null) return JSON.stringify(v)
-  return JSON.stringify(v)
 }

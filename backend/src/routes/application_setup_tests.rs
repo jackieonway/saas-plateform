@@ -14,7 +14,6 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::entity_creation_tests::Database;
-use crate::util::jwt;
 
 const SECRET: &str = "application-setup-disposable-test-only";
 
@@ -91,25 +90,7 @@ async fn user_session(
         .bind(organization)
         .execute(pool)
         .await?;
-    let sid = crate::sso_test_fixture::session(pool, user, tenant, organization).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(organization.to_string()),
-            cid: None,
-            scope: None,
-            sid: Some(sid.to_string()),
-            ver: Some(0),
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, organization, SECRET).await
 }
 
 impl Fixture {

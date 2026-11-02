@@ -1,7 +1,7 @@
-//! Shared validation for application and OAuth client admission management.
+//! Shared validation for application admission management.
 
 use crate::error::AppError;
-use crate::identity_policy::{normalize_member_types, MemberType, SubjectMode};
+use crate::identity_policy::{normalize_member_types, MemberType};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -10,8 +10,6 @@ pub(super) struct PolicyUpdate {
     pub allowed_member_types: Vec<MemberType>,
     pub access_policy_version: i64,
     pub reason: String,
-    #[serde(default, deserialize_with = "present_value")]
-    pub subject_mode: Option<SubjectMode>,
 }
 
 /// Omission keeps legacy defaults; an explicitly provided null is malformed.

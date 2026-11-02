@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-28T11:47:59.677413+00:00",
+  "rp": {
+    "inputs": {
+      "src/app.mjs": "621129fc0838b3adc80204c2e03f29666e55dbaa85a19edc8c3b5dbb013e0109",
+      "src/backchannel.mjs": "61a2bd05c795390f33fa403e9b7f83059b37063c0c33a448a676bc6c7e27be7a",
+      "src/config.mjs": "05d80f16c20ad27aae2b7ba069698c05186b544664e2a4b119bd7c7ae453a7ee",
+      "src/oidc.mjs": "dc87ba55094f841f8fb515d6b9904d98a7b7e2a28c98d9f434c6c19df43c2506",
+      "src/store.mjs": "0ea97aa7378c2ae368084acff4d100c63ccfb2ff783e5f011f018bc79aa06e70",
+      "src/transport.mjs": "20ec3360ad0e354afd57479d437731a270755087f58eb55ef12fae51a1441b05",
+      "public/app.js": "5ee0feed9771c5ae5cc5bfa0689ef3e51e00ad66095645b4a3c884a586b48c7a",
+      "public/index.html": "531aa3c8cef4391ce55e5aa119808b9ae0666e7e17cdb89a4f44b241e103d3b2",
+      "public/style.css": "5b684ba4d5ffdd37aac8726b9382351a439e9e439175f79ca501f042c815f27b",
+      "server.mjs": "6dd231739c0a32eeb6a6f87a361386fcd741f983a65cff38bfe3282769d390d9",
+      "machine.mjs": "7bbe37d8acbcf3cea1657a87da884e952827d3acbdcf3f8b6a351a06bbcba45b",
+      "package.json": "5add1eacc24926b54e576bdd44cd6e2f8736b2ea12f1aa0172a280d4a5c69d0b",
+      "package-lock.json": "21c07d7780538f611551a5d248c41a87893dc7dffe36b92acec592c4852c26ce",
+      "config.env.example": "9ca2a689816608e9feaa6439ccde292b3c76bddd9f653e3564e913b2aa61ccbf"
+    },
+    "sourceSha256": "72e685c26f4aae783c8b0f16e9c5e0ce692cd86fa0782f912ca5250a13d3fc0a"
+  },
+  "nodeArchiveSha256": "6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6",
+  "nodeVersion": "v24.22.1",
+  "identity": {
+    "sourceSnapshot": "phase20-freshness-r2",
+    "binarySha256": "92ee9eeb11df364701dcb427258f51700d980ad853e487f7be065feddbdf45f0"
+  },
+  "platform": {
+    "sourceSnapshot": "phase20-final-r1",
+    "binarySha256": "c4d0a23b96a157be18d680b36f28e801e412286a0eaa981550ddfc46954a2ef7",
+    "migrationBinarySha256": "cdc8c8e9ee8e5d9c2317a53831a39898b64e0283b3727d4728c409eb2ad8ff1e"
+  },
+  "canonical": {
+    "migrations/0001_init.sql": "33a3cb1f47b80ee38d97ed3d077b5c8296e5383edf75e909b310e183a0b03b59",
+    "ops/identity-deployment/create-roles.sql": "5389a1c2187aba441f8ce7b936950112369293818b0e7f2c5f84be7ec6681259",
+    "ops/identity-deployment/provision.sql": "7cd110d890c99fc8e532e5c4ca3bb185f787bc61a72acdac955b8fdeac80871b",
+    "ops/identity-deployment/verify.sql": "621e5d9efb1c3191d15b14263a44fba0e5da50519f680957c7d58e4417e39eb0"
+  },
+  "protocolLibraries": {
+    "openid-client": "6.8.8",
+    "jose": "6.2.13",
+    "oauth4webapi": "3.8.8"
+  },
+  "harness": {
+    "phase21-fixture.py": "3453f470957b95db27855407adb12fe508a8bef0aa2bea04998c053bf610806c",
+    "phase21-gateway.py": "2be3cfe391b9841ba92a52ad768d051348746c024b25d62f0567c1e83ea8218c",
+    "phase21-run-rp.py": "a68a7c02f1478b5faaaa1eebdb16d80ef343b969e5111801ee72c3dea12c039d",
+    "phase21-protocol.mjs": "fe2a6648257a949c5202c35875ed95aa3f7c168aefdd1f4802e7e543b0e163a5",
+    "phase21-browser.mjs": "47744ded7520791a943c3a3da4b87d7725f6b71dd197a71327f35aa9bbbe2154"
+  },
+  "reports": {
+    "phase-21-capacity-https-browser.json": "9d804a473d7ea26b6016e8b8b8bb22f8dfe61991b6706698d6996d050d5bda95",
+    "phase-21-capacity-rp-desktop.png": "16711a1f456a28407c5f5844db4c92cdfcbd02efc5e694fd24608d430ed18367",
+    "phase-21-capacity-rp-mobile.png": "d7aead4143761a13729b4fc657d6629a9827fc112924a63a650c47e73bad5113",
+    "phase-21-capacity-components.json": "c4c846d9824140d878ca3d0de2961ae58907fcde20e6cb1069cbc255b253a606",
+    "phase-21-capacity-log-redaction.json": "21389909e13a3b078288519709ae787fe13d22f6c2f0d560b1c640d591b2cb41",
+    "phase-21-capacity-cleanup.json": "db632dbbd7451b961b6a813267df21362f3bc2ca8afc0a1d7a800cd6692edf64",
+    "phase-21-capacity-production.patch": "9346783eaaf5f93d597ba6e564881c147d79b7bc05836c82ee773e135fffc37b"
+  },
+  "clientConfigurationKeys": [
+    "NODE_EXTRA_CA_CERTS",
+    "OIDC_CLIENT_ID",
+    "OIDC_CLIENT_SECRET_FILE",
+    "OIDC_ISSUER",
+    "OIDC_SCOPES",
+    "RP_BIND_HOST",
+    "RP_BIND_PORT",
+    "RP_ORIGIN"
+  ],
+  "clientHasDatabaseConfiguration": false,
+  "revalidationOf": {
+    "rpSourceSha256": "791bb5b83fab6ed06f031fe48e6cc4e5fa9c9fa4eb16141b09995126c91e64b0",
+    "resultSha256": "c18fac53077962e5a9da200159ddae22b8d6e9f4f58b33cbd19317115a47e471",
+    "separateOldEvidenceRetained": true
+  },
+  "componentRepairSha256": "c4c846d9824140d878ca3d0de2961ae58907fcde20e6cb1069cbc255b253a606"
+}

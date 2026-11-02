@@ -1,0 +1,61 @@
+{
+  "contractVersion": "phase20-platform-bff-component-evidence/1",
+  "recordedAt": "2026-10-28T08:29:02.024959+00:00",
+  "scope": "platform RP component; canonical identity/worker and actual cross-service HTTPS remain the Phase20 owner gate",
+  "baseHead": "34105757b040165daa5477bf6afff9637f617466",
+  "preExistingDirtyChangesPreserved": true,
+  "sourceInputs": {
+    "docs/sso-only.md": "34bce3669296fa21443d07da1951ddb48964ee19bf275ccc7f6a9adcf9686c75",
+    "src/bff/backchannel.rs": "cf86b0f755beef4e797767e01a25096ea0398550d78bcd037689f8ff29cf2953",
+    "src/bff/mod.rs": "d4af9b493f69a9697adcba280b129dc41ce0715156ddff69bb4464c262e62e82",
+    "src/bff/protocol.rs": "2cedd3d653ef040cf8ef22cbd0b7b17493b4504feab73e0e2015a2e160c6a5f9",
+    "src/bff/routes.rs": "8eed9b4699a091282f5ff3a486943b673e086c09822be4dada1130c24081eb21",
+    "src/bff/store.rs": "43a42fb5dfc363af506d966d60a6ad9b04233a15ba1994d7b6379a0fef19bea0",
+    "src/bff/transport.rs": "9e398dbe993ea7e75259b6051ebc5a27c63024d458a19aacbb7283ab7ff312d6",
+    "src/bff_tests.rs": "475b1bb94d8209c8aaab07d9e4a8f5fcbeb8fc720a0121b300bcba7eebb62fdd",
+    "src/bff_tests/backchannel.rs": "4280e20632cc68e048afb5870cd4168f80e5823e521b294fa6a30534246405d6"
+  },
+  "sourceSha256": "5722ca8ea10fe9972c0876f2a938b43c54cce9529899412d1bd04d3136ce520a",
+  "runtimeInputsSha256": "2bf8a8c12a1efa15f6fb746174974951d0a77056fa1ad20769640f8692933b6a",
+  "sourceManifestScope": "listed component-owned source inputs only; not a full-repository build attestation",
+  "focusedSuite": {
+    "passed": 6,
+    "ignored": 0,
+    "pureRsaClaimMatrices": 2,
+    "actualPostgresCases": 4,
+    "elapsedSeconds": 26.33
+  },
+  "additionalRefreshSourceCase": {
+    "passed": 1,
+    "ignored": 0,
+    "elapsedSeconds": 5.58,
+    "runtimeChangedSinceFocusedSuite": false,
+    "testOnlyFixtureBranchesAdded": true
+  },
+  "checkBinAndTests": true,
+  "strictClippyBinAndTests": true,
+  "targetedFmtAndDiffCheck": true,
+  "docBuildSucceeded": true,
+  "docWarnings": [
+    "existing bin/lib output filename collision",
+    "existing notifications regex intra-doc link",
+    "existing extractors unclosed session HTML tag"
+  ],
+  "ownedFixtureDatabasesCreatedAcrossRuns": 7,
+  "ownedDatabasesRemaining": 0,
+  "ownedDatabaseConnectionsRemaining": 0,
+  "clusterIdentifierVerified": "7701548153213487841",
+  "fixtureDatabasePoolAndKeysetCleanupVerified": true,
+  "rolesCreated": 0,
+  "dockerContainersCreatedOrReused": 0,
+  "newTargetDirectoriesCreated": 0,
+  "sharedClusterAndBuildCacheRetainedByRoot": true,
+  "actualIdentityHttpsInteroperability": false,
+  "receiverUnknownSidTombstoneBarrierVerified": true,
+  "receiverExpiresAfterRealAdvisoryWaitHttpStatus": 400,
+  "receiverExpiredWaitFactsRolledBack": true,
+  "lateRpcConfirmsOriginalReceiptWithoutClearingNewBrowser": true,
+  "confirmedReceiptScopeAndBrowserBindingVerified": true,
+  "noIdRefreshPreservesOriginalPublicSidSub": true,
+  "changedSidRefreshRejectedWithoutAdoptingTokens": true
+}

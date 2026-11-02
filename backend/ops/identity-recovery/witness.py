@@ -20,13 +20,14 @@ import re
 import secrets
 import stat
 import uuid
-from urllib.parse import urlsplit
+
+from inventory import InventoryError, highwater as inventory_highwater, validate_inventory
 
 
-DOMAIN = b"saas-identity-recovery-witness/1\x00"
-CURRENT_DOMAIN = b"saas-identity-recovery-current/1\x00"
-FORMAT = "saas-identity-recovery-witness/1"
-CURRENT_FORMAT = "saas-identity-recovery-current/1"
+DOMAIN = b"saas-identity-recovery-witness/2\x00"
+CURRENT_DOMAIN = b"saas-identity-recovery-current/2\x00"
+FORMAT = "saas-identity-recovery-witness/2"
+CURRENT_FORMAT = "saas-identity-recovery-current/2"
 MAX_BYTES = 8 * 1024 * 1024
 MAX_CHAIN_BYTES = 32 * 1024 * 1024
 MAX_RECORDS = 1024
@@ -36,25 +37,6 @@ ZERO = "0" * 64
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 RECORD = re.compile(r"witness-([0-9]{8})\.json\Z")
 LABEL = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
-FAMILIES = {
-    "users": "id status is_super_admin session_version",
-    "memberships": "id user_id organization_id member_type status identity_version",
-    "tenants": "id status expires_at",
-    "organizations": "id tenant_id parent_id status expires_at",
-    "oidc_clients": "id purpose allowed_member_types redirect_uris post_logout_redirect_uris refresh_enabled status access_policy_version",
-    "oauth_clients": "id client_id subject_mode allowed_member_types status access_policy_version application_id",
-    "applications": "id allowed_member_types status access_policy_version",
-    "roles": "id status",
-    "user_roles": "user_id role_id organization_id",
-    "role_menus": "role_id menu_id",
-    "membership_data_grants": "id membership_id application_id resource_code action_code scope_type",
-    "tenant_applications": "tenant_id application_id",
-    "tenant_menus": "tenant_id menu_id",
-    "organization_applications": "organization_id application_id",
-    "organization_menus": "organization_id menu_id",
-    "identity_account_tombstones": "user_id operation_id retired_at",
-}
-FAMILIES = {name: frozenset(columns.split()) for name, columns in FAMILIES.items()}
 
 
 class WitnessError(RuntimeError):
@@ -92,11 +74,11 @@ def _digest(value):
 def canonical(value):
     """Canonical UTF-8 JSON, with no floats, duplicate keys or non-JSON values."""
     def visit(item, depth=0):
-        require(depth <= 10, "WITNESS_DEPTH_EXCEEDED")
+        require(depth <= 16, "WITNESS_DEPTH_EXCEEDED")
         if type(item) is dict:
             require(len(item) <= MAX_ROWS, "WITNESS_OBJECT_TOO_LARGE")
             for key, child in item.items():
-                require(type(key) is str and len(key) <= 256, "WITNESS_KEY_INVALID")
+                require(type(key) is str and len(key) <= 2048, "WITNESS_KEY_INVALID")
                 visit(child, depth + 1)
         elif type(item) is list:
             require(len(item) <= MAX_ROWS, "WITNESS_ARRAY_TOO_LARGE")
@@ -105,9 +87,13 @@ def canonical(value):
         else:
             require(item is None or type(item) in (str, bool, int), "WITNESS_VALUE_INVALID")
             if type(item) is str:
-                require(len(item) <= 2048 and all(ord(c) >= 32 for c in item), "WITNESS_TEXT_INVALID")
+                # Typed inventory text may contain legal newlines. JSON escapes
+                # them; they never become executable log or SQL text here.
+                require(len(item) <= 16384 and "\x00" not in item, "WITNESS_TEXT_INVALID")
             elif type(item) is int:
-                _integer(item)
+                # Business sort positions can be negative. Security counters
+                # and sequence/floor values are checked separately as >= 0.
+                _integer(item, -MAX_VERSION)
     visit(value)
     try:
         raw = json.dumps(value, sort_keys=True, separators=(",", ":"),
@@ -145,11 +131,15 @@ def make_binding(task_id, cluster_id, checkpoint_sha256, databases,
     _keys(databases, ("platform", "portal"))
     for kind, database in databases.items():
         _keys(database, ("name", "marker"))
-        require(database["name"] == "identity_phase13_" + kind + "_" + task_id.replace("-", ""),
+        prefix = "unified_auth_https_" if kind == "platform" else "unified_auth_portal_"
+        require(type(database["name"]) is str
+                and re.fullmatch(re.escape(prefix) + r"[0-9a-f]{32}", database["name"]),
                 "WITNESS_DATABASE_INVALID")
         marker = database["marker"]
         require(type(marker) is str and 1 <= len(marker) <= 256 and task_id in marker
                 and all(32 <= ord(c) <= 126 for c in marker), "WITNESS_MARKER_INVALID")
+    require(databases["platform"]["name"][-32:] == databases["portal"]["name"][-32:],
+            "WITNESS_DATABASE_PAIR_MISMATCH")
     return _parse(canonical({"task_id": task_id, "cluster_id": cluster_id,
                              "checkpoint_sha256": checkpoint_sha256,
                              "databases": databases, "issuer": issuer}))
@@ -162,78 +152,23 @@ def _binding(value):
 
 def validate_payload(payload):
     """Only complete, typed public security projections may enter a witness."""
-    _keys(payload, ("recovery_epoch", "captured_at_ms", "account_highwater", "inventory", "business_markers"))
+    _keys(payload, ("recovery_epoch", "captured_at_ms", "highwater", "inventory", "business_markers"))
     _uuid(payload["recovery_epoch"])
     _integer(payload["captured_at_ms"], 1)
-    highwater = payload["account_highwater"]
+    highwater = payload["highwater"]
     require(type(highwater) is dict and len(highwater) <= MAX_ROWS, "WITNESS_HIGHWATER_INVALID")
-    for account, version in highwater.items():
-        _uuid(account)
+    for reference, version in highwater.items():
+        require(type(reference) is str and 1 <= len(reference) <= 2048
+                and re.match(r"^(platform|portal)/[a-z][a-z0-9_]{0,62}/", reference)
+                and all(ord(character) >= 32 for character in reference), "WITNESS_HIGHWATER_REFERENCE_INVALID")
         _integer(version)
-    inventory = payload["inventory"]
-    _keys(inventory, FAMILIES)
-    total = 0
-    for family, rows in inventory.items():
-        require(type(rows) is list and len(rows) <= MAX_ROWS, "WITNESS_ROWS_INVALID")
-        total += len(rows)
-        require(total <= MAX_ROWS, "WITNESS_ROWS_EXCEEDED")
-        identities = set()
-        for row in rows:
-            _keys(row, FAMILIES[family])
-            for key, value in row.items():
-                if key == "client_id":
-                    require(type(value) is str and re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", value),
-                            "WITNESS_CLIENT_ID_INVALID")
-                elif key == "id" or key.endswith("_id"):
-                    if value is None and ((key == "parent_id" and family == "organizations")
-                                          or (key == "application_id" and family == "oauth_clients")):
-                        continue
-                    _uuid(value)
-                elif key in ("session_version", "identity_version", "access_policy_version"):
-                    _integer(value, 0 if key == "session_version" else 1)
-                elif key in ("is_super_admin", "refresh_enabled"):
-                    require(type(value) is bool, "WITNESS_BOOLEAN_INVALID")
-                elif key == "status":
-                    require(value in ("ENABLED", "DISABLED"), "WITNESS_STATUS_INVALID")
-                elif key == "member_type":
-                    require(value in ("EMPLOYEE", "CUSTOMER"), "WITNESS_MEMBER_TYPE_INVALID")
-                elif key == "subject_mode":
-                    require(value in ("MACHINE", "USER", "LEGACY_MIXED"), "WITNESS_SUBJECT_MODE_INVALID")
-                elif key == "purpose":
-                    require(value in ("PLATFORM_CONSOLE", "CUSTOMER_PORTAL", "ACCOUNT"), "WITNESS_PURPOSE_INVALID")
-                elif key == "allowed_member_types":
-                    require(type(value) is list and len(value) <= 2
-                            and all(type(item) is str and item in ("EMPLOYEE", "CUSTOMER") for item in value)
-                            and len(set(value)) == len(value),
-                            "WITNESS_MEMBER_TYPES_INVALID")
-                    require((len(value) == 0) == (family == "oauth_clients" and row["subject_mode"] == "MACHINE"),
-                            "WITNESS_MEMBER_TYPES_INVALID")
-                elif key in ("redirect_uris", "post_logout_redirect_uris"):
-                    require(type(value) is list and len(value) <= 16, "WITNESS_REDIRECT_INVALID")
-                    for uri in value:
-                        require(type(uri) is str and len(uri) <= 2048, "WITNESS_REDIRECT_INVALID")
-                        try:
-                            parsed = urlsplit(uri)
-                            valid = parsed.scheme == "https" and parsed.hostname is not None and not (
-                                parsed.username or parsed.password or parsed.fragment or parsed.query)
-                        except ValueError:
-                            valid = False
-                        require(valid, "WITNESS_REDIRECT_INVALID")
-                elif key in ("expires_at", "retired_at"):
-                    require((value is None and key == "expires_at") or (type(value) is str
-                            and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9:.+Z-]{8,40}", value)),
-                            "WITNESS_TIMESTAMP_INVALID")
-                else:
-                    require(type(value) is str and re.fullmatch(r"[A-Za-z0-9_.:* /-]{1,100}", value),
-                            "WITNESS_POLICY_TEXT_INVALID")
-            identity_keys = ({"id"} if "id" in row else {"user_id"}
-                             if family == "identity_account_tombstones" else set(row))
-            identity = canonical({key: row[key] for key in identity_keys})
-            require(identity not in identities, "WITNESS_DUPLICATE_IDENTITY")
-            identities.add(identity)
-            if family == "users":
-                require(row["id"] in highwater and highwater[row["id"]] >= row["session_version"],
-                        "WITNESS_HIGHWATER_BELOW_ACCOUNT")
+    try:
+        validate_inventory(payload["inventory"])
+        current = inventory_highwater(payload["inventory"])
+    except InventoryError:
+        raise WitnessError("WITNESS_INVENTORY_INVALID") from None
+    require(all(reference in highwater and highwater[reference] == version
+                for reference, version in current.items()), "WITNESS_HIGHWATER_BELOW_INVENTORY")
     markers = payload["business_markers"]
     require(type(markers) is dict and len(markers) <= 64, "WITNESS_MARKERS_INVALID")
     for label, digest in markers.items():
@@ -241,6 +176,42 @@ def validate_payload(payload):
         _digest(digest)
     canonical(payload)
     return payload
+
+
+def make_payload(inventory, recovery_epoch, captured_at_ms, business_markers, previous=None):
+    """Retain every version floor, including objects absent from a later snapshot.
+
+    The external driver must retain an authenticated minimum sequence outside
+    the backup and witness restore set. This helper does not replace that floor.
+    """
+    if previous is not None:
+        validate_payload(previous)
+    try:
+        validate_inventory(inventory, previous=None if previous is None else previous["inventory"])
+        current = inventory_highwater(inventory)
+    except InventoryError:
+        raise WitnessError("WITNESS_INVENTORY_INVALID") from None
+    highwater = {} if previous is None else dict(previous["highwater"])
+    for reference, version in current.items():
+        highwater[reference] = max(version, highwater.get(reference, 0))
+    payload = {"recovery_epoch": recovery_epoch, "captured_at_ms": captured_at_ms,
+               "highwater": highwater, "inventory": inventory, "business_markers": business_markers}
+    validate_payload(payload)
+    if previous is not None:
+        _advance(previous, payload)
+    return _parse(canonical(payload))
+
+
+def _advance(previous, current):
+    """Check all authenticated chain transitions, on append and on full read."""
+    require(current["recovery_epoch"] == previous["recovery_epoch"], "WITNESS_EPOCH_MISMATCH")
+    require(current["captured_at_ms"] >= previous["captured_at_ms"], "WITNESS_TIME_REGRESSION")
+    require(all(reference in current["highwater"] and current["highwater"][reference] >= version
+                for reference, version in previous["highwater"].items()), "WITNESS_HIGHWATER_REGRESSION")
+    try:
+        validate_inventory(current["inventory"], previous=previous["inventory"])
+    except InventoryError:
+        raise WitnessError("WITNESS_INVENTORY_REGRESSION") from None
 
 
 def _tag(key, domain, document):
@@ -349,7 +320,7 @@ class WitnessStore:
             os.close(fd)
         os.fsync(directory_fd)
 
-    def _latest(self, directory_fd, minimum_sequence):
+    def _latest(self, directory_fd, minimum_sequence, authenticated_history=None):
         _integer(minimum_sequence, 0, MAX_RECORDS)
         names = os.listdir(directory_fd)
         records = sorted(name for name in names if RECORD.fullmatch(name))
@@ -372,19 +343,21 @@ class WitnessStore:
         require(records == ["witness-%08d.json" % index for index in range(1, head["sequence"] + 1)],
                 "WITNESS_CHAIN_FILES_MISMATCH")
         previous, latest, total = ZERO, None, 0
-        highwater = {}
+        previous_payload = None
         for index, name in enumerate(records, 1):
             latest = verify(self.key, self.binding, self._read(directory_fd, name))
             document = latest["document"]
             require(document["sequence"] == index and document["previous_sha256"] == previous,
                     "WITNESS_CHAIN_MISMATCH")
-            current_highwater = document["payload"]["account_highwater"]
-            require(all(account in current_highwater and current_highwater[account] >= version
-                        for account, version in highwater.items()), "WITNESS_HIGHWATER_REGRESSION")
-            highwater = current_highwater
+            current_payload = document["payload"]
+            if previous_payload is not None:
+                _advance(previous_payload, current_payload)
+            previous_payload = current_payload
             total += len(canonical(latest))
             require(total <= MAX_CHAIN_BYTES, "WITNESS_CHAIN_BYTES_EXCEEDED")
             previous = _sha(latest)
+            if authenticated_history is not None:
+                authenticated_history.append(latest)
         require(previous == head["record_sha256"], "WITNESS_HEAD_MISMATCH")
         return latest
 
@@ -395,6 +368,21 @@ class WitnessStore:
             require(latest is not None, "WITNESS_CURRENT_MISSING")
             return latest
 
+    def load_history(self, minimum_sequence=0):
+        """Return sequence-ordered, fully authenticated retained envelopes.
+
+        Reading, chain/transition verification, CURRENT and the caller's external
+        minimum are checked under the same anchored storage lock. No record is
+        returned until the whole chain and its authenticated head agree. This
+        exposes existing secret-free projections only; it creates no raw-secret
+        archive and changes neither the payload nor its format.
+        """
+        with self._locked() as directory_fd:
+            history = []
+            latest = self._latest(directory_fd, minimum_sequence, history)
+            require(latest is not None, "WITNESS_CURRENT_MISSING")
+            return history
+
     def verify_candidate(self, envelope, minimum_sequence=0):
         """Reject a valid old record using the still-present durable CURRENT."""
         candidate = verify(self.key, self.binding, envelope, minimum_sequence)
@@ -404,7 +392,7 @@ class WitnessStore:
         return candidate
 
     def append(self, payload, expected_sequence):
-        """Append exactly CURRENT+1, preserving every previous account floor.
+        """Append exactly CURRENT+1, preserving every previous security floor.
 
         A crash after record fsync and before CURRENT commit leaves an orphan
         and fails closed. No automatic healing can choose a weaker snapshot.
@@ -416,12 +404,7 @@ class WitnessStore:
             sequence = 0 if latest is None else latest["document"]["sequence"]
             require(sequence == expected_sequence, "WITNESS_SEQUENCE_CONFLICT")
             if latest is not None:
-                old = latest["document"]["payload"]
-                require(payload["captured_at_ms"] >= old["captured_at_ms"], "WITNESS_TIME_REGRESSION")
-                require(all(account in payload["account_highwater"]
-                            and payload["account_highwater"][account] >= version
-                            for account, version in old["account_highwater"].items()),
-                        "WITNESS_HIGHWATER_REGRESSION")
+                _advance(latest["document"]["payload"], payload)
             envelope = seal(self.key, self.binding, payload, sequence + 1,
                             ZERO if latest is None else _sha(latest))
             new_size = len(canonical(envelope))

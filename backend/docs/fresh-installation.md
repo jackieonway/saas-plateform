@@ -9,14 +9,16 @@
 | 工单库 | 工单 API | `saas-work-orders/backend/migrations/0001_work_orders.sql` |
 | 客户门户库 | 客户门户 BFF | `saas-customer-portal/backend/migrations/0001_customer_portal.sql` |
 
-身份服务使用平台共享库中的账号、SSO/OIDC 和身份命令表；通知服务使用该库中的通知表，不创建第二份账号或通知数据。SDK、微应用前端和示例不另建业务数据库。
+身份服务使用共享库中的账号、SSO 与统一认证 `auth_*` 模型，包括唯一应用投影／客户端／凭据、资源和 scope、同意、pairwise subject、授权请求／code、grant、opaque Access Token、refresh family、密钥生命周期和可靠投递。平台 runtime 无权直接读取或写入身份私有表。通知服务只使用平台通知数据。
+
+当前 canonical `0001` 已删除旧 `oauth_*`／`oidc_*` 登记、签发、consent/token 运行表及其桥接函数和 ACL；新库只建立统一体系。管理命令收据与平台 intent 分别使用 `identity_auth_command_receipts`、`platform_auth_command_intents`，保留原 operation、摘要与来源 fence，不构成第二个登记权威。平台内部 BFF 会话、`platform_app_capabilities` 与 `platform_resource_services` 分别承担会话、内部应用能力和私有调用方登记。
 
 ## 初始化顺序
 
 1. 明确环境与数据库名，创建四个空数据库和专属账号。不要将库名、密码或账号从旧环境隐式继承到新环境。
 2. 在平台 `backend` 目录，以明确的进程 `DATABASE_URL` 执行 `cargo run --locked --bin platform-migrate`。该命令只建表，不启动 HTTP、不导入数据，也不创建用户或演示业务数据。
 3. 在门店、工单 `backend` 目录分别以专属 URL 执行 `stores-migrate`、`work-orders-migrate`。完整命令和环境变量见各项目 README。客户门户在完整配置校验后应用自身 SQLx 基线；也可由统一发布作业调用其同一迁移文件。
-4. 配置管理员 bootstrap、固定 HTTPS issuer、独立签名密钥、PLATFORM_CONSOLE 与 CUSTOMER_PORTAL RP、精确 callback、CA 和不同用途的服务凭据。表结构存在不代表账号、RP 或业务授权已登记。
+4. 配置管理员 bootstrap、固定 HTTPS issuer、独立签名密钥、分别为平台员工和门户客户登记的独立 WEB_BFF / USER / PLATFORM_CONTEXT RP、精确 callback、CA 和不同用途的服务凭据。表结构存在不代表账号、RP 或业务授权已登记。
 5. 在共享平台库完成[运行角色交接](../ops/identity-deployment/README.md)，再用只读 readiness 验证启动身份和平台 runtime。独立部署的 runtime 不代替迁移作业执行 DDL。
 6. 使用新数据库分别启动业务 API、客户门户与通知服务，最后启动宿主和所需微应用。
 

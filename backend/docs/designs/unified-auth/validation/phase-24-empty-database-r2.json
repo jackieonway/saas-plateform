@@ -1,0 +1,247 @@
+{
+  "status": "FAIL",
+  "validationLevel": "ACTUAL_EMPTY_POSTGRESQL",
+  "snapshot": "phase24-schema-r1",
+  "snapshotSha256": "0f25637ce6aa10f2464c39064f4f0234a1c01ea3d497e92f26595e2e648fe076",
+  "migrationSha256": "ae0ed8dc3e6a0b9a48db2696f7f23a346154660cff5bc07908bd3c8643bae796",
+  "migrationBinarySha256": "a54620232ba916f3448559252609a2e68af0744db7cdc5938f45c08f823724e4",
+  "dockerCreated": 0,
+  "dockerReused": 0,
+  "checks": [
+    {
+      "name": "fresh_database_absent",
+      "status": "PASS"
+    },
+    {
+      "name": "fresh_migration",
+      "status": "PASS"
+    },
+    {
+      "name": "repeat_same_migration",
+      "status": "PASS"
+    },
+    {
+      "name": "create-roles.sql",
+      "status": "PASS"
+    },
+    {
+      "name": "provision.sql",
+      "status": "PASS"
+    },
+    {
+      "name": "verify.sql",
+      "status": "PASS"
+    },
+    {
+      "name": "legacy_relations_absent",
+      "status": "PASS"
+    },
+    {
+      "name": "sqlx_single_successful_baseline",
+      "status": "PASS"
+    },
+    {
+      "name": "identity_login_readiness_and_owned_read",
+      "status": "PASS"
+    },
+    {
+      "name": "identity_cross_owner_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "identity_ddl_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "identity_owner_role_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "platform_login_readiness_and_owned_read",
+      "status": "PASS"
+    },
+    {
+      "name": "platform_cross_owner_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "platform_ddl_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "platform_owner_role_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_applications",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_audit_logs",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_access_token_scopes",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_access_tokens",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_application_admissions",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_applications",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_authorization_codes",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_authorization_requests",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_client_credentials",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_client_permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_clients",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_consent_group_clients",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_consent_groups",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_consent_revocation_outbox",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_consent_scopes",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_consents",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_context_interactions",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_delivery_jobs",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_delivery_targets",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_grant_scopes",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_grants",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_invitation_activation_receipts",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_invitation_verifications",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_invitations",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_logout_command_receipts",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_mfa_recovery_approvals",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_mfa_recovery_receipts",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_refresh_families",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_refresh_tokens",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_resources",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_rp_sessions",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_scopes",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_security_notification_outbox",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_subject_links",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_subject_sectors",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_totp_enrollments",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_totp_factors",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_auth_totp_recovery_codes",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_bff_sessions",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_console_browsers",
+      "status": "PASS"
+    },
+    {
+      "name": "inventory_console_login_flows",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": {
+    "databaseAbsent": true,
+    "rolesAbsent": true
+  },
+  "tableCount": 105,
+  "errorType": "AssertionError",
+  "error": "inventory_context_selection_registrations"
+}

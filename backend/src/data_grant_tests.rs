@@ -18,7 +18,6 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::entity_creation_tests::Database;
 use crate::routes;
-use crate::util::jwt;
 
 const SECRET: &str = "isolated-phase14-data-grant-regression-only";
 const CLIENT_SECRET: &str = "owned-phase14-client-secret";
@@ -114,7 +113,6 @@ fn config(policy: &Value) -> Result<Config> {
 fn router(pool: &PgPool, policy: &Value) -> Result<Router> {
     let state = crate::sso_test_fixture::state(pool.clone(), Arc::new(config(policy)?));
     Ok(routes::api_router()
-        .nest("/oauth", routes::oauth2::oauth_router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::observability::observe,
@@ -172,29 +170,7 @@ async fn user(pool: &PgPool, name: &str, super_admin: bool, org: Uuid) -> Result
 }
 
 async fn session(pool: &PgPool, user: Uuid, tenant: Uuid, org: Uuid) -> Result<String> {
-    let ver = sqlx::query_scalar("SELECT session_version FROM users WHERE id=$1")
-        .bind(user)
-        .fetch_one(pool)
-        .await?;
-    let sid = crate::sso_test_fixture::session(pool, user, tenant, org).await?;
-    let now = chrono::Utc::now().timestamp();
-    jwt::sign(
-        &jwt::Claims {
-            sub: user.to_string(),
-            typ: "session".into(),
-            tenant: Some(tenant.to_string()),
-            org: Some(org.to_string()),
-            sid: Some(sid.to_string()),
-            ver: Some(ver),
-            cid: None,
-            scope: None,
-            aud: None,
-            jti: None,
-            iat: now,
-            exp: now + 3600,
-        },
-        SECRET,
-    )
+    crate::sso_test_fixture::token(pool, user, tenant, org, SECRET).await
 }
 
 async fn role(pool: &PgPool, tenant: Uuid, org: Uuid, user: Uuid, menus: &[Uuid]) -> Result<Uuid> {
@@ -336,9 +312,6 @@ impl Harness {
             sqlx::query("INSERT INTO membership_data_grants(membership_id,application_id,resource_code,action_code,scope_type,id) SELECT id,$2,'ticket','create',$3 ,$5 FROM memberships WHERE user_id=$1 AND organization_id=$4")
                 .bind(subject).bind(application).bind(scope).bind(root).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         }
-        sqlx::query("INSERT INTO oauth_clients(client_id,client_name,client_secret_hash,application_id,client_type,grant_types,scopes,id) VALUES('phase14-business-client','Owned data grant client',$1,$2,'CONFIDENTIAL','password,refresh_token','profile',$3)")
-            .bind(crate::util::hash::sha256_hex(CLIENT_SECRET))
-            .bind(application).bind(crate::util::uuid7::new_uuid()).execute(pool).await?;
         let (org_admin, _) = user(pool, "phase14-org-admin", false, child).await?;
         role(pool, platform, child, org_admin, &menus[..5]).await?;
         let (reader, _) = user(pool, "phase14-reader", false, child).await?;
@@ -942,7 +915,7 @@ async fn next_business_context_and_member_request_see_http_grant_changes() -> Re
     let db = database().await?;
     let result=async {
         let h=Harness::new(&db.pool).await?;
-        let issue=call(&h.app,&h.business_session,Method::POST,"/api/oauth/session-token",json!({"appCode":CODE})).await?;
+        let issue=call(&h.app,&h.business_session,Method::POST,"/api/apps/session-token",json!({"appCode":CODE})).await?;
         ensure!(issue.status==StatusCode::CREATED,"business app token could not be issued");
         let token=issue.body["accessToken"].as_str().ok_or_else(||anyhow!("missing real business app token"))?;
         let context_path=format!("/api/apps/{CODE}/context");

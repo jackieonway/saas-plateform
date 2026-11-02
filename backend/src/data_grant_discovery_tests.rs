@@ -189,21 +189,22 @@ async fn actor(pool: &PgPool, person: Person, menus: &[Uuid]) -> Result<Actor> {
         .fetch_one(pool)
         .await?;
     let now = chrono::Utc::now().timestamp();
-    let token = jwt::sign(
+    let token = jwt::sign_internal(
         &jwt::Claims {
             sub: person.user.to_string(),
-            typ: "session".into(),
+            typ: "platform_session".into(),
             tenant: Some(person.tenant.to_string()),
             org: Some(person.organization.to_string()),
             sid: Some(session.to_string()),
             ver: Some(version),
             cid: None,
             scope: None,
-            aud: None,
+            aud: Some(jwt::PLATFORM_API_AUDIENCE.into()),
             jti: None,
             iat: now,
             exp: now + 3600,
         },
+        jwt::InternalUse::PlatformSession,
         SECRET,
     )?;
     Ok(Actor {

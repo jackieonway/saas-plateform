@@ -1,0 +1,53 @@
+{
+  "contractVersion": "unified-auth-phase25-safe-app-diagnostics/1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-29T12:01:16.228857+00:00",
+  "scope": "Safe lifecycle/configuration failure diagnostics only. No application startup, schema fix or current complete runtime pass is claimed.",
+  "change": "Parent start errors retain a fixed service name and safeAppFailureCode before rollback. Protected logs are read at most 128 KiB, full JSON records at most 8192 bytes; only exact production fields.event/category literals map to fixed PHASE25_APP enums. Raw text, connection strings, reasons and source chains never enter output. Notification has no matching JSON/error.rs contract and remains DIAGNOSTIC_UNAVAILABLE.",
+  "inputs": {
+    "saas-plateform/backend/tests/unified-auth-https/phase25-business-runtime.py": "ddd3afedc60e686f0968a05480a88b5b96c9f2fea315408dcfbfca3acdc03046",
+    "saas-plateform/backend/tests/unified-auth-https/test_phase25_business_runtime.py": "ae47623f49c465586e0efd02a33733b494a083867f3a1f10f8d99fd3f94766e6",
+    "saas-stores/backend/src/error.rs": "a1d57a764e46cb12b2b531997bce46fb99d3c5cf7ed19ef9626c026f56af9438",
+    "saas-stores/backend/src/main.rs": "a695f86dc57c3798f00c7f44784e6c2c7d5fafe483057e72e9212eb92befe7b3",
+    "saas-work-orders/backend/src/error.rs": "a10406e1dd4d39807db86a2f7752472f4dde523338148eddae1a6f5d04e67782",
+    "saas-work-orders/backend/src/main.rs": "eeed39e38f0d4186a3d543e763f186c4a38b125f4961d601cdc717c892a555bb"
+  },
+  "validation": {
+    "command": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "saas-plateform/backend/tests/unified-auth-https",
+      "-p",
+      "test_phase25_business_runtime.py",
+      "-q"
+    ],
+    "tests": 53,
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 0.182,
+    "evidence": "Includes actual protected Task.read refusing a temporary native log modified during reading; private temporary directory was removed by finally. Other process/service control uses mocks.",
+    "negatives": [
+      "Unknown/wrong-service events",
+      "Category substring/secret suffix",
+      "Arbitrary raw private stderr",
+      "Duplicate JSON keys",
+      "Unexpected fields",
+      "Oversized full log",
+      "Oversized/truncated JSON records",
+      "Permission denied/missing/changed file",
+      "Untrusted exception attributes"
+    ]
+  },
+  "resources": {
+    "applicationServicesStarted": 0,
+    "databasesCreated": 0,
+    "namespacesCreated": 0,
+    "containersCreated": 0,
+    "temporaryNativeLogRemoved": true
+  }
+}

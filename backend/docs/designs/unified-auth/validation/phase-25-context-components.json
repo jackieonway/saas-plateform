@@ -1,0 +1,60 @@
+{
+  "contractVersion": "unified-auth-phase25-context-components/1",
+  "result": "PASS",
+  "recordedAtUtc": "2026-10-29T11:54:51.8142858Z",
+  "pythonVersion": "Python 3.14.2",
+  "nodeVersion": "v24.22.1",
+  "commands": [
+    {
+      "tests": 10,
+      "result": "PASS",
+      "errors": 0,
+      "command": "python -B -m unittest discover -s saas-plateform/backend/tests/unified-auth-https -p test_phase25_context_control.py -q",
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "result": "PASS",
+      "command": "node --check saas-plateform/backend/tests/unified-auth-https/phase25-context-browser.mjs"
+    }
+  ],
+  "evidenceLayer": "PURE_OWNERSHIP_COMPONENTS_AND_STATIC_SYNTAX",
+  "sourceInputs": [
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-context-control.py",
+      "sha256": "5f6dc64bf2c33c76616b284b077947e87df23300dc542a633cb2622c3e7fab4b"
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/phase25-context-browser.mjs",
+      "sha256": "d9c0a649a091570420a7917bcd9edd5fc0520017195f0d34294ceb2217a13460"
+    },
+    {
+      "path": "saas-plateform/backend/tests/unified-auth-https/test_phase25_context_control.py",
+      "sha256": "67a9c2cbbac7c634c1498c6de85928d79c4a2c5663c0f56482ebc25f4a256583"
+    }
+  ],
+  "coverage": [
+    "Foreign cluster/database/deployment/snapshot denied",
+    "Foreign user/tenant/organization/application/menu scope denied",
+    "Unknown manifest fields and SQL input rejected before Task/database I/O",
+    "Unique UUIDv7 and fixed grant count enforced",
+    "Invalid prepare/cleanup state rejected",
+    "Committed cleanup removes its protected private marker",
+    "New deployment can create a new marker in the same task",
+    "Foreign task file is preserved"
+  ],
+  "cleanup": {
+    "temporaryComponentDirectories": 2,
+    "containersCreated": 0,
+    "temporaryComponentDirectoriesRemoved": true,
+    "applicationProcessesStarted": 0,
+    "containersReused": 0,
+    "wslEnvironmentTouched": false,
+    "databaseOperations": 0
+  },
+  "limitations": [
+    "No actual PostgreSQL fixture preparation or cleanup executed",
+    "No actual host or browser/socket interoperability executed",
+    "The real current C13 runner must execute under the root-owned frozen SOURCE environment"
+  ]
+}

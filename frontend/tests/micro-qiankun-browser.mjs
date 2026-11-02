@@ -90,7 +90,7 @@ async function fixture(run, customRoutes) {
     return route.fulfill({ status: 404, body: 'Unknown isolated qiankun fixture' })
   })
   // Business applications may request their APIs; this fixture grants no business data.
-  await context.route(url => url.origin === origin && /^\/(?:api|work-orders-api|stores-api|oauth-playground-api)\//.test(url.pathname),
+  await context.route(url => url.origin === origin && /^\/(?:api|work-orders-api|stores-api)\//.test(url.pathname),
     route => route.fulfill({ status: 403, contentType: 'application/json', body: '{"code":"FORBIDDEN","message":"Isolated fixture"}' }))
   try {
     await page.goto(origin)
@@ -298,7 +298,6 @@ try {
       ['legacy-jquery', 'saas-examples/micro-jquery/dist'],
       ['report-center', 'saas-examples/report-center/dist'],
       ['websocket-chat', 'saas-examples/websocket/dist'],
-      ['oauth-playground', 'saas-examples/oauth-playground/frontend/dist'],
       ['work-orders', 'saas-work-orders/frontend/dist'],
       ['stores', 'saas-stores/frontend/dist'],
     ]) {

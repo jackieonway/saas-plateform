@@ -1,0 +1,48 @@
+{
+  "contractVersion": "unified-auth-runtime-attestation/1",
+  "recordedAt": "2026-10-28T09:58:23.750261+00:00",
+  "components": {
+    "identity": {
+      "binarySha256": "92ee9eeb11df364701dcb427258f51700d980ad853e487f7be065feddbdf45f0",
+      "sourceSnapshotSha256": "3c73aab55e123ede952ce9171118cd3a1661480e186f6d19a721f4cd0c8cc4a6",
+      "attestation": "phase-20-identity-update-attestation.json"
+    },
+    "platform": {
+      "binarySha256": "c4d0a23b96a157be18d680b36f28e801e412286a0eaa981550ddfc46954a2ef7",
+      "sourceSnapshotSha256": "1df2243ca1fada96de892869d3af1335337cc57f760d7cadfbcaea0bc65e77cf",
+      "attestation": "phase-20-build-attestation.json"
+    },
+    "portal": {
+      "binarySha256": "eda7961fef7b5b0de601125a03566e428452b4e3f316eaa64c1ab4b1db3c7c66",
+      "sourceSnapshotSha256": "1df2243ca1fada96de892869d3af1335337cc57f760d7cadfbcaea0bc65e77cf",
+      "attestation": "phase-20-build-attestation.json"
+    }
+  },
+  "staticAndGatewayAndCollectorSnapshotSha256": "1df2243ca1fada96de892869d3af1335337cc57f760d7cadfbcaea0bc65e77cf",
+  "schemaAndPlatformPortalBackendInputsUnchanged": true,
+  "identityRuntimeChanges": [
+    "saas-identity/src/delivery/worker.rs",
+    "saas-identity/src/delivery/worker/registration_tests.rs"
+  ],
+  "collectorSourceSha256": "858f1e737fd4ca0fe2571e4c7dec9fd0079ccc5fbedb5f00b5dd47128d4f79d7",
+  "harnessAtEnvironmentReadySha256": "804781b4ba0a77660373fc9a005fe7bb07d3870aa7783ae1c3d95cb41827aa36",
+  "snapshotHarnessSha256": "a054f3db3a2d9276a2ee9487a41481b2993a23665372e9fa6b448eabc0f36bad",
+  "harnessChangedSinceSnapshot": true,
+  "tlsVerificationDisabled": false,
+  "databaseFreshlyInitialized": true,
+  "initialStrictCaHealth": {
+    "identity": 200,
+    "platform": 200,
+    "portal": 200,
+    "sslVerifyResult": 0
+  },
+  "collectorControlReady": true,
+  "loggingGate": {
+    "identityRustLog": "info",
+    "binaryChanged": false,
+    "identityPid": 299191,
+    "report": "phase-20-https-browser-logging.json",
+    "reportSha256": "b2755e6f024d14d185910fdc91c4a17d31f8be7eaf1a95a42c4a01c617d30dbb",
+    "logScan": "phase-20-log-redaction.json"
+  }
+}
