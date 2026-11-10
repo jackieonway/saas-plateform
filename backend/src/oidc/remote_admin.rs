@@ -42,11 +42,6 @@ struct Deadline {
 }
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
-        .route("/api/identity/keys/publish", post(publish))
-        .route("/api/identity/keys/activate", post(activate))
-        .route("/api/identity/keys/{kid}", axum::routing::delete(retire))
-        .route("/api/identity/keys/{kid}/revoke", post(revoke))
-        .route("/api/identity/key-operations/{id}", get(operation))
         .route(
             "/api/identity/applications/{id}/projection",
             get(get_application_projection).put(project_application),
@@ -68,26 +63,7 @@ pub(crate) fn routes() -> Router<AppState> {
             "/api/identity/clients/{id}/credentials/revoke",
             post(revoke_auth_client_credentials),
         )
-        .route("/api/identity/consent-groups", post(create_consent_group))
-        .route(
-            "/api/identity/applications/{application}/consent-groups",
-            get(list_consent_groups),
-        )
-        .route(
-            "/api/identity/consent-groups/{group}/clients",
-            post(add_consent_group_client),
-        )
         .route("/api/identity/client-operations/{id}", get(operation))
-        .route("/api/identity/review/operations/{id}", get(operation))
-        .route("/api/identity/invitation-operations/{id}", get(operation))
-        .route(
-            "/api/identity/invitations",
-            get(list_invitations).post(issue_invitation),
-        )
-        .route(
-            "/api/identity/invitations/{id}/revoke",
-            post(revoke_invitation),
-        )
         .layer(DefaultBodyLimit::max(LIMIT))
         .route_layer(middleware::from_fn(bounded))
 }
@@ -263,6 +239,7 @@ impl Target {
         }
         Ok(target)
     }
+    #[cfg(test)]
     fn consent_group_list(application: Uuid) -> Self {
         Self {
             method: Method::GET,
@@ -296,6 +273,7 @@ impl Target {
             sync_read_permission: None,
         })
     }
+    #[cfg(test)]
     fn review_sync_read(
         application: Uuid,
         environment: &str,
@@ -817,6 +795,10 @@ fn prepare(target: &Target, value: Option<Value>) -> Result<Option<Value>, AppEr
                 .or_insert(json!("SHORT_SESSION_ONLINE_CHECK"));
             object.entry("backchannelLogoutUri").or_insert(Value::Null);
             object.entry("backchannelTargetId").or_insert(Value::Null);
+            object.entry("autoAuthorize").or_insert(json!(false));
+            for field in ["accessTokenTtlSeconds","refreshTokenTtlSeconds","clientTokenTtlSeconds"] {
+                object.entry(field).or_insert(Value::Null);
+            }
             let keys = [
                 "expectedVersion",
                 "applicationId",
@@ -837,6 +819,10 @@ fn prepare(target: &Target, value: Option<Value>) -> Result<Option<Value>, AppEr
                 "status",
                 "consentGroupId",
                 "permissions",
+                "autoAuthorize",
+                "accessTokenTtlSeconds",
+                "refreshTokenTtlSeconds",
+                "clientTokenTtlSeconds",
             ];
             let create = path == AUTH_CLIENTS_PREFIX;
             if !exact(&value, &keys)
@@ -850,6 +836,7 @@ fn prepare(target: &Target, value: Option<Value>) -> Result<Option<Value>, AppEr
                     .is_none_or(|raw| id(raw).is_err())
                 || !value["permissions"].is_array()
                 || !client_logout_fields_valid(&value)
+                || !client_token_policy_valid(&value, false)
                 || (create && value["logoutMode"] != "SHORT_SESSION_ONLINE_CHECK")
             {
                 return Err(AppError::bad_request("统一客户端请求字段无效"));
@@ -1437,6 +1424,19 @@ fn exact(value: &Value, keys: &[&str]) -> bool {
         .as_object()
         .is_some_and(|o| o.len() == keys.len() && keys.iter().all(|k| o.contains_key(*k)))
 }
+fn client_token_policy_valid(value: &Value, response: bool) -> bool {
+    let ttl = |name: &str, refresh: bool| value[name].is_null() || value[name].as_i64().is_some_and(|seconds|
+        if refresh { (300..=604800).contains(&seconds) } else { (60..=3600).contains(&seconds) });
+    let basic = value["autoAuthorize"].is_boolean() && ttl("accessTokenTtlSeconds",false)
+        && ttl("refreshTokenTtlSeconds",true) && ttl("clientTokenTtlSeconds",false);
+    if !response { return basic; }
+    let defaults = &value["tokenDefaults"];
+    basic && value["refreshTokenStrategy"] == "ROTATE"
+        && exact(defaults, &["accessTokenTtlSeconds","refreshTokenTtlSeconds","offlineRefreshTokenTtlSeconds","clientTokenTtlSeconds"])
+        && ["accessTokenTtlSeconds","clientTokenTtlSeconds"].iter().all(|key| defaults[*key].as_i64().is_some_and(|v| (60..=3600).contains(&v)))
+        && ["refreshTokenTtlSeconds","offlineRefreshTokenTtlSeconds"].iter().all(|key| defaults[*key].as_i64().is_some_and(|v| (300..=604800).contains(&v)))
+}
+
 fn client_logout_fields_valid(value: &Value) -> bool {
     match value["logoutMode"].as_str() {
         Some("SHORT_SESSION_ONLINE_CHECK") => {
@@ -1496,8 +1496,14 @@ fn auth_client_projection(value: &Value) -> bool {
             "updatedAt",
             "consentGroupId",
             "permissions",
+            "autoAuthorize",
+            "accessTokenTtlSeconds",
+            "refreshTokenTtlSeconds",
+            "clientTokenTtlSeconds",
+            "refreshTokenStrategy",
+            "tokenDefaults",
         ],
-    ) && client_logout_fields_valid(value)
+    ) && client_logout_fields_valid(value) && client_token_policy_valid(value, true)
         && value["id"].as_str().is_some_and(|v| id(v).is_ok())
         && value["clientId"]
             .as_str()
@@ -2016,12 +2022,14 @@ pub(crate) struct Failure {
     operation: Option<Uuid>,
 }
 impl Failure {
+    #[cfg(test)]
     pub(crate) fn with_operation(mut self, operation: Uuid) -> Self {
         self.operation = Some(operation);
         self
     }
 }
 
+#[cfg(test)]
 fn fresh_deadline() -> Deadline {
     Deadline {
         at: tokio::time::Instant::now() + Duration::from_secs(3),
@@ -2029,6 +2037,7 @@ fn fresh_deadline() -> Deadline {
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn review_current(
     state: &AppState,
     user: &CurrentUser,
@@ -2051,6 +2060,7 @@ pub(crate) async fn review_current(
     .map(|Json(value)| value)
 }
 
+#[cfg(test)]
 pub(crate) async fn review_sync(
     state: &AppState,
     user: &CurrentUser,
@@ -2083,6 +2093,7 @@ pub(crate) async fn review_sync(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg(test)]
 struct InvitationIssue {
     recipient_ref: String,
     purpose: String,
@@ -2090,10 +2101,12 @@ struct InvitationIssue {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg(test)]
 struct InvitationRevoke {
     expected_version: i64,
 }
 
+#[cfg(test)]
 async fn list_invitations(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2111,6 +2124,7 @@ async fn list_invitations(
     .await
 }
 
+#[cfg(test)]
 async fn issue_invitation(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2130,6 +2144,7 @@ async fn issue_invitation(
     .await
 }
 
+#[cfg(test)]
 async fn revoke_invitation(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2285,6 +2300,7 @@ async fn call(
         .await?,
     ))
 }
+#[cfg(test)]
 async fn publish(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2302,6 +2318,7 @@ async fn publish(
     )
     .await
 }
+#[cfg(test)]
 async fn activate(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2319,6 +2336,7 @@ async fn activate(
     )
     .await
 }
+#[cfg(test)]
 async fn retire(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2337,6 +2355,7 @@ async fn retire(
     )
     .await
 }
+#[cfg(test)]
 async fn revoke(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2483,6 +2502,7 @@ async fn list_auth_clients(
     .await
 }
 
+#[cfg(test)]
 async fn list_consent_groups(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2502,6 +2522,7 @@ async fn list_consent_groups(
     .await
 }
 
+#[cfg(test)]
 async fn create_consent_group(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -2520,6 +2541,7 @@ async fn create_consent_group(
     .await
 }
 
+#[cfg(test)]
 async fn add_consent_group_client(
     State(state): State<AppState>,
     user: CurrentUser,

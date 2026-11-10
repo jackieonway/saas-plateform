@@ -1870,6 +1870,10 @@ CREATE TABLE public.auth_scopes (
 );
 
 CREATE TABLE public.auth_clients (
+    auto_authorize boolean NOT NULL DEFAULT false,
+    access_token_ttl_seconds bigint CHECK (access_token_ttl_seconds BETWEEN 60 AND 3600),
+    refresh_token_ttl_seconds bigint CHECK (refresh_token_ttl_seconds BETWEEN 300 AND 604800),
+    client_token_ttl_seconds bigint CHECK (client_token_ttl_seconds BETWEEN 60 AND 3600),
     id uuid PRIMARY KEY CHECK (public.is_uuid_v7(id)),
     client_id text NOT NULL UNIQUE CHECK (length(client_id) BETWEEN 1 AND 100),
     display_name text NOT NULL CHECK (length(btrim(display_name)) BETWEEN 1 AND 120),

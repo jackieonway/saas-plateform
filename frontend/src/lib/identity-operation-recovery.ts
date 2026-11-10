@@ -2,7 +2,7 @@ import { ApiError } from "@/lib/api"
 import { isUuidV7, newUuid } from "@/lib/uuid"
 import { authStore } from "@/stores/auth"
 
-export type IdentityOperationAction = "create" | "update" | "rotate" | "revoke" | "retire" | "group_create" | "group_member" | "review" | "invite"
+export type IdentityOperationAction = "create" | "update" | "rotate" | "revoke" | "retire"
 export interface PendingIdentityOperation {
   schema: 1
   operationId: string
@@ -15,7 +15,7 @@ export interface PendingIdentityOperation {
 interface Owner { accountId: string; sessionId: string; contextKey: string }
 const PREFIX = "platform-identity-operation-v1:"
 const FIELDS = ["accountId", "action", "clientLabel", "contextKey", "operationId", "schema", "sessionId"]
-const ACTIONS: IdentityOperationAction[] = ["create", "update", "rotate", "revoke", "retire", "group_create", "group_member", "review", "invite"]
+const ACTIONS: IdentityOperationAction[] = ["create", "update", "rotate", "revoke", "retire"]
 
 /** Persist only recovery metadata. Mutation bodies and credentials never enter storage. */
 export function createIdentityOperationRecovery(storage: () => Storage, owner: () => Owner | null) {

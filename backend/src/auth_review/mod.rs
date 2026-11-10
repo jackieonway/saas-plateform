@@ -1,12 +1,15 @@
 //! Manual partner intake and the platform's human authorization boundary.
 //! Identity remains the registry and credential authority.
 mod policy;
+#[cfg(test)]
 mod routes;
+#[cfg(test)]
 mod service;
 mod store;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
 pub(crate) use routes::routes;
 pub(crate) use store::{
     application_allowed, complete_remote, known_permission, local_not_applied, local_operation,
@@ -14,6 +17,7 @@ pub(crate) use store::{
 };
 
 use crate::{error::AppError, extractors::CurrentUser, state::AppState};
+#[cfg(test)]
 use serde_json::Value;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
@@ -68,6 +72,7 @@ pub(crate) async fn assert_actor(
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn manifest_value(value: policy::Manifest) -> Result<Value, AppError> {
     serde_json::to_value(policy::validate_manifest(value)?).map_err(|_| AppError::Unavailable)
 }

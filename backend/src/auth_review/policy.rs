@@ -1,6 +1,10 @@
+#[cfg(test)]
 use crate::{error::AppError, util::uuid7};
+#[cfg(test)]
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use std::collections::BTreeSet;
+#[cfg(test)]
 use uuid::Uuid;
 
 pub(super) const VIEW: &str = "system:oauth:view";
@@ -12,6 +16,7 @@ pub(super) const DISABLE: &str = "system:oauth:disable";
 pub(super) const SCOPES: &str = "system:oauth:scopes";
 pub(super) const INVITE: &str = "system:oauth:invite";
 
+#[cfg(test)]
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Manifest {
@@ -29,6 +34,7 @@ pub(crate) struct Manifest {
     pub backchannel_logout_uri: Option<String>,
 }
 
+#[cfg(test)]
 pub(crate) fn id(raw: &str) -> Result<Uuid, AppError> {
     let parsed = uuid7::parse_uuid(raw)?;
     if parsed.to_string() != raw {
@@ -37,6 +43,7 @@ pub(crate) fn id(raw: &str) -> Result<Uuid, AppError> {
     Ok(parsed)
 }
 
+#[cfg(test)]
 pub(crate) fn environment(raw: &str) -> Result<&str, AppError> {
     if matches!(raw, "test" | "production") {
         Ok(raw)
@@ -47,10 +54,12 @@ pub(crate) fn environment(raw: &str) -> Result<&str, AppError> {
     }
 }
 
+#[cfg(test)]
 pub(super) fn evidence(raw: &str) -> Result<Uuid, AppError> {
     id(raw)
 }
 
+#[cfg(test)]
 pub(super) fn bounded_text(raw: &str, max: usize) -> Result<String, AppError> {
     let value = raw.trim();
     if value.is_empty() || value.chars().count() > max || value.chars().any(char::is_control) {
@@ -59,6 +68,7 @@ pub(super) fn bounded_text(raw: &str, max: usize) -> Result<String, AppError> {
     Ok(value.to_owned())
 }
 
+#[cfg(test)]
 fn exact_https(raw: &str) -> Result<reqwest::Url, AppError> {
     let parsed = reqwest::Url::parse(raw)
         .map_err(|_| AppError::bad_request("接入地址必须为精确 HTTPS URL"))?;
@@ -80,6 +90,7 @@ fn exact_https(raw: &str) -> Result<reqwest::Url, AppError> {
     Ok(parsed)
 }
 
+#[cfg(test)]
 pub(crate) fn validate_manifest(mut value: Manifest) -> Result<Manifest, AppError> {
     value.display_name = bounded_text(&value.display_name, 120)?;
     value.purpose = bounded_text(&value.purpose, 1000)?;
@@ -185,6 +196,7 @@ pub(crate) fn validate_manifest(mut value: Manifest) -> Result<Manifest, AppErro
     Ok(value)
 }
 
+#[cfg(test)]
 pub(super) fn transition(from: &str, to: &str, env: &str) -> Result<&'static str, AppError> {
     let permission = match (from, to, env) {
         ("SUBMITTED", "RETURNED", _) => REVIEW,

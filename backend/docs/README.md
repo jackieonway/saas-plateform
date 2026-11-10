@@ -15,7 +15,6 @@
 - [成员与访问控制](identity-and-access.md)
 - [SSO 登录保护](login-protection.md)、[统一 OAuth/OIDC 与客户端管理](oauth-issuance.md)
 - [应用授权合同](application-authorization-contract.md)
-- [合作方人工接入、近期 TOTP 与受控邀请](designs/unified-auth/phase-19-partner-onboarding.md)
 - [组织目录](application-organization-directory.md)
 - [数据授权管理](data-grant-management.md)、[使用指南](data-grant-user-guide.md)
 - [管理审计](management-audit.md)、[通知协议](realtime-protocol.md)
@@ -28,7 +27,7 @@
 - [ZIP 分发](zip-distribution-runbook.md)、[版本保留](upgrade-and-retention.md)
 - [管理 CLI](../tools/platform-admin/README.md)、[部署代理](../tools/deployment-agent/README.md)、[制品代理](../tools/artifact-agent/README.md)
 - [运维工具](../ops/README.md)
-- [签名密钥轮换](../../../saas-identity/docs/signing-key-rotation.md)、[统一身份隔离恢复](../ops/identity-recovery/README.md)
+- [统一身份隔离恢复](../ops/identity-recovery/README.md)
 - [HTTPS 验证驱动与证据范围](../tests/unified-auth-https/README.md)
 
 ## 证据边界

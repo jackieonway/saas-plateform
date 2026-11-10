@@ -10,6 +10,21 @@ fn deadline() -> Deadline {
         dispatched: Arc::new(Mutex::new(None)),
     }
 }
+
+#[test]
+fn client_token_policy_proxy_rejects_unbounded_or_ambiguous_settings() {
+    let mut value=json!({"autoAuthorize":false,"accessTokenTtlSeconds":null,"refreshTokenTtlSeconds":null,"clientTokenTtlSeconds":null});
+    assert!(client_token_policy_valid(&value,false));
+    for invalid in [json!(-1),json!(0),json!(3601),json!("300"),json!(1.5)] {
+        value["accessTokenTtlSeconds"]=invalid;
+        assert!(!client_token_policy_valid(&value,false));
+    }
+    value["accessTokenTtlSeconds"]=json!(60);
+    value["refreshTokenTtlSeconds"]=json!(300);
+    assert!(client_token_policy_valid(&value,false));
+    value["autoAuthorize"]=json!("true");
+    assert!(!client_token_policy_valid(&value,false));
+}
 fn command() -> Command {
     let target = Target::new(Method::POST, "/keys/publish").unwrap();
     let body = Some(json!({"kid":"owned-a"}));
@@ -264,6 +279,8 @@ fn phase04_auth_client_responses_are_bounded_and_keep_one_time_secret_out_of_lis
     let client = uuid7::new_uuid();
     let application = uuid7::new_uuid();
     let record = json!({
+    "autoAuthorize":false,"accessTokenTtlSeconds":null,"refreshTokenTtlSeconds":null,"clientTokenTtlSeconds":null,
+    "refreshTokenStrategy":"ROTATE","tokenDefaults":{"accessTokenTtlSeconds":300,"refreshTokenTtlSeconds":1800,"offlineRefreshTokenTtlSeconds":86400,"clientTokenTtlSeconds":300},
         "id":client,
         "clientId":client,
         "displayName":"Console BFF",
@@ -352,6 +369,8 @@ fn phase04_auth_client_responses_are_bounded_and_keep_one_time_secret_out_of_lis
 fn phase25_public_client_identifiers_are_opaque_but_internal_route_ids_stay_bound() {
     let client = uuid7::new_uuid();
     let record = json!({
+    "autoAuthorize":false,"accessTokenTtlSeconds":null,"refreshTokenTtlSeconds":null,"clientTokenTtlSeconds":null,
+    "refreshTokenStrategy":"ROTATE","tokenDefaults":{"accessTokenTtlSeconds":300,"refreshTokenTtlSeconds":1800,"offlineRefreshTokenTtlSeconds":86400,"clientTokenTtlSeconds":300},
         "id":client,"clientId":client,"displayName":"Owned standard RP",
         "applicationId":uuid7::new_uuid(),"applicationName":"Owned application",
         "ownership":"FIRST_PARTY","partnerId":null,"environment":"test",

@@ -587,6 +587,13 @@ export interface UnifiedClientPermission {
 }
 
 export interface UnifiedClientRecord {
+  autoAuthorize: boolean
+  accessTokenTtlSeconds: number | null
+  refreshTokenTtlSeconds: number | null
+  clientTokenTtlSeconds: number | null
+  refreshTokenStrategy: "ROTATE"
+  tokenDefaults: { accessTokenTtlSeconds: number; refreshTokenTtlSeconds: number; offlineRefreshTokenTtlSeconds: number; clientTokenTtlSeconds: number }
+
   id: string
   clientId: string
   displayName: string
@@ -648,6 +655,11 @@ export interface UnifiedClientListParams {
 }
 
 export interface UnifiedClientPayload {
+  autoAuthorize: boolean
+  accessTokenTtlSeconds: number | null
+  refreshTokenTtlSeconds: number | null
+  clientTokenTtlSeconds: number | null
+
   expectedVersion: number | null
   applicationId: string
   environment: string

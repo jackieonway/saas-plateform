@@ -27,11 +27,11 @@
 
 统一客户端管理使用独立 `AUTH_ADMIN` 服务用途和平台 `IDENTITY_AUTH_ADMIN_SERVICE_CLIENT_ID` / `IDENTITY_AUTH_ADMIN_SERVICE_CLIENT_SECRET` 配置；它既不复用 `KEY_ADMIN`，也不复用 `APPLICATION_PROJECTION`。该服务只操作身份 owner 的 `auth_*` 客户端/资源/scope/凭据记录。客户端 secret 只在原 operation 的一次性返回/恢复 DTO 出现，receipt 保存前会移除；凭据轮换让旧 secret 最多重叠 24 小时，紧急撤销会推进客户端策略版本。角色交接脚本不会自动生成这些 service client，须由受控初始化配置登记用途和秘密。
 
-签名密钥生命周期使用独立 `KEY_ADMIN` 服务用途，平台配置 `IDENTITY_KEY_ADMIN_SERVICE_CLIENT_ID` / `IDENTITY_KEY_ADMIN_SERVICE_CLIENT_SECRET`。平台只通过 `/api/identity/keys/*` 和 `/api/identity/key-operations/{id}` 代理私有 `/internal/identity/auth/keys/*` 和原操作查询；不登记第二套 OIDC 客户端管理接口。管理员的 `system:oauth:keys`、最近五分钟真实 TOTP、原会话及操作摘要仍由两侧复验。统一命令 receipt 与 intent 为 `identity_auth_command_receipts` / `platform_auth_command_intents`。具体轮换见[密钥手册](../../../../saas-identity/docs/signing-key-rotation.md)。
+平台现仅开放客户端管理，不再提供签名密钥管理代理，也无需为该页面配置 `KEY_ADMIN`。认证中心仍使用独立部署的签名材料、JWKS 和既有密钥生命周期事实完成协议签发与校验；这些内部能力不构成平台管理入口。
 
 管理员 TOTP 恢复使用另一个独立的 `AUTH_SECURITY` 服务用途；该凭据不能复用上述服务密钥。平台在 Phase 19 接入时必须先校验两名不同管理员的当前角色、近期密码认证和 TOTP step-up，再为每名审批人签署与目标账号、操作 ID、审批 ID 及理由摘要绑定的 HMAC 证明。没有配置该服务身份时，两人恢复接口保持不可调用。
 
-合作方人工审核与邀请管理分别使用 `AUTH_REVIEW`、`AUTH_INVITATION` 及平台同名 `IDENTITY_REVIEW_SERVICE_CLIENT_ID/SECRET`、`IDENTITY_INVITATION_SERVICE_CLIENT_ID/SECRET` 配置，不能复用其他管理用途。敏感操作由平台 owner 的当前员工/细权限/TOTP predicate 与身份提交时的审核/邀请 intent fence 双重约束。`identity_admin_assurance` 只返回绑定原 BFF canonical 来源的最小 TOTP 事实，不开放 auth_* 表读取。`platform_auth_release_bindings` 默认关闭，platform runtime 只有 SELECT；真实审核/发布账号和运营数据政策必须由部署责任人明确登记。邀请管理不返回原 token；独立投递/消费用途及邀请 keyset 详见[人工接入合同](../../docs/designs/unified-auth/phase-19-partner-onboarding.md)。
+合作方人工审核、生产接入发布及账号邀请已从平台移除，相关公开管理路由和菜单权限不再提供。平台无需配置 `AUTH_REVIEW` 或 `AUTH_INVITATION` 的服务凭据；schema 中保留的审核、邀请、来源与审计结构属于共享认证边界，不能据此推断已移除功能仍有可用入口。
 
 `verify.sql` 使用相同四个参数，只读核验数据库、marker、角色、owner、列权限、PUBLIC EXECUTE 与 definer search_path。它还核对每张 `auth_*` 表归 `_identity_owner` 所有、identity runtime 仅有各表所需的 DML（append-only receipt／来源记录没有 UPDATE/DELETE）、platform runtime 没有表/列权限。两个 runtime 分别核对 current_user、固定 issuer 和当前 schema_version；任一失败均不进入服务状态。身份 readiness 复核同一新结构与权限，并确认平台仍不能读取认证秘密。
 

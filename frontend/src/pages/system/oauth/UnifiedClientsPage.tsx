@@ -1,4 +1,6 @@
 import * as React from "react"
+import { ClientAuthorizationSettings } from "./ClientAuthorizationSettings"
+import { tokenSeconds, validTokenSeconds } from "./client-policy"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useFieldArray, useForm } from "react-hook-form"
 import { useSearchParams } from "react-router-dom"
@@ -29,7 +31,6 @@ import {
 
 import { applicationsApi } from "@/api/applications"
 import { identityClientsApi } from "@/api/identity-clients"
-import PartnerIntakePanel from "@/pages/system/oauth/PartnerIntakePanel"
 import type {
   ApplicationAuthProjection,
   ApplicationRecord,
@@ -83,6 +84,10 @@ const clientFormSchema = z.object({
   contextMode: z.enum(["ACCOUNT_ONLY", "PLATFORM_CONTEXT", "NONE"]),
   allowedMemberTypes: z.array(z.enum(MEMBER_TYPES)).max(2),
   refreshToken: z.boolean(),
+  autoAuthorize: z.boolean(),
+  accessTokenTtlSeconds: z.string().refine(raw => validTokenSeconds(raw), "请输入 60～3600 的整数秒数"),
+  refreshTokenTtlSeconds: z.string().refine(raw => validTokenSeconds(raw, true), "请输入 300～604800 的整数秒数"),
+  clientTokenTtlSeconds: z.string().refine(raw => validTokenSeconds(raw), "请输入 60～3600 的整数秒数"),
   redirectUrisText: z.string().max(32_768),
   postLogoutRedirectUrisText: z.string().max(32_768),
   logoutMode: z.enum(["SHORT_SESSION_ONLINE_CHECK", "BACK_CHANNEL"]),
@@ -164,7 +169,7 @@ const clientFormSchema = z.object({
 })
 
 type ClientFormValues = z.infer<typeof clientFormSchema>
-type RecoveryAction = "create" | "update" | "rotate" | "revoke" | "retire" | "group_create" | "group_member" | "review" | "invite"
+type RecoveryAction = "create" | "update" | "rotate" | "revoke" | "retire"
 type RecoveryState = { operationId: string; action: RecoveryAction; clientLabel: string; contextKey?: string; sessionId?: string; restored?: boolean; error?: string }
 type FilterKey = "ownership" | "environment" | "clientType" | "subjectMode" | "status"
 
@@ -177,6 +182,10 @@ const defaultFormValues: ClientFormValues = {
   contextMode: "ACCOUNT_ONLY",
   allowedMemberTypes: [],
   refreshToken: false,
+  autoAuthorize: false,
+  accessTokenTtlSeconds: "",
+  refreshTokenTtlSeconds: "",
+  clientTokenTtlSeconds: "",
   redirectUrisText: "",
   postLogoutRedirectUrisText: "",
   logoutMode: "SHORT_SESSION_ONLINE_CHECK",
@@ -231,6 +240,10 @@ function payloadFromRecord(client: UnifiedClientRecord, status: UnifiedClientSta
     backchannelTargetId: client.backchannelTargetId ?? null,
     status,
     consentGroupId: client.consentGroupId,
+    autoAuthorize: client.autoAuthorize,
+    accessTokenTtlSeconds: client.accessTokenTtlSeconds,
+    refreshTokenTtlSeconds: client.refreshTokenTtlSeconds,
+    clientTokenTtlSeconds: client.clientTokenTtlSeconds,
     permissions: client.permissions.map(({ resourceKey, scopes }) => ({ resourceKey, scopes })),
   }
 }
@@ -245,6 +258,10 @@ function formValuesFromClient(client: UnifiedClientRecord): ClientFormValues {
     contextMode: client.contextMode,
     allowedMemberTypes: [...client.allowedMemberTypes],
     refreshToken: client.grantTypes.includes("refresh_token"),
+    autoAuthorize: client.autoAuthorize,
+    accessTokenTtlSeconds: client.accessTokenTtlSeconds === null ? "" : String(client.accessTokenTtlSeconds),
+    refreshTokenTtlSeconds: client.refreshTokenTtlSeconds === null ? "" : String(client.refreshTokenTtlSeconds),
+    clientTokenTtlSeconds: client.clientTokenTtlSeconds === null ? "" : String(client.clientTokenTtlSeconds),
     redirectUrisText: client.redirectUris.join("\n"),
     postLogoutRedirectUrisText: client.postLogoutRedirectUris.join("\n"),
     logoutMode: client.logoutMode ?? "SHORT_SESSION_ONLINE_CHECK",
@@ -264,21 +281,12 @@ export default function UnifiedClientsPage() {
   const recoveryScope = useAuthStore((state) => `${state.contextKey ?? ""}:${state.sessionId ?? ""}`)
   const [searchParams, setSearchParams] = useSearchParams()
   const [applicationDraft, setApplicationDraft] = React.useState(searchParams.get("applicationId") ?? "")
-  const [partnerDraft, setPartnerDraft] = React.useState(searchParams.get("partnerId") ?? "")
   const [editorOpen, setEditorOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<UnifiedClientRecord | null>(null)
   const [detail, setDetail] = React.useState<UnifiedClientRecord | null>(null)
   const [rotateTarget, setRotateTarget] = React.useState<UnifiedClientRecord | null>(null)
   const [revokeTarget, setRevokeTarget] = React.useState<UnifiedClientRecord | null>(null)
   const [retireTarget, setRetireTarget] = React.useState<UnifiedClientRecord | null>(null)
-  const [groupDialogOpen, setGroupDialogOpen] = React.useState(false)
-  const [intakeMode, setIntakeMode] = React.useState<"partners" | "invitations" | null>(null)
-  const [groupApplicationId, setGroupApplicationId] = React.useState(searchParams.get("applicationId") ?? "")
-  const [groupDisplayName, setGroupDisplayName] = React.useState("")
-  const [groupEnvironment, setGroupEnvironment] = React.useState<"test" | "production">("test")
-  const [groupContext, setGroupContext] = React.useState<"ACCOUNT_ONLY" | "PLATFORM_CONTEXT">("ACCOUNT_ONLY")
-  const [memberGroupId, setMemberGroupId] = React.useState("")
-  const [memberClientId, setMemberClientId] = React.useState("")
   const [secret, setSecret] = React.useState<string | null>(null)
   const [secretTitle, setSecretTitle] = React.useState("客户端密钥")
   const [recovery, setRecovery] = React.useState<RecoveryState | null>(() => {
@@ -299,7 +307,6 @@ export default function UnifiedClientsPage() {
   const page = Math.min(toPageNumber(searchParams.get("page"), 1), maxPage)
   const filters = React.useMemo(() => ({
     applicationId: searchParams.get("applicationId") ?? "",
-    partnerId: searchParams.get("partnerId") ?? "",
     ownership: searchParams.get("ownership") ?? ALL,
     environment: searchParams.get("environment") ?? ALL,
     clientType: searchParams.get("clientType") ?? ALL,
@@ -308,7 +315,6 @@ export default function UnifiedClientsPage() {
   }), [searchParams])
 
   React.useEffect(() => setApplicationDraft(filters.applicationId), [filters.applicationId])
-  React.useEffect(() => setPartnerDraft(filters.partnerId), [filters.partnerId])
 
   const updateSearch = React.useCallback((patch: Record<string, string>, resetPage = false) => {
     setSearchParams((previous) => {
@@ -324,7 +330,6 @@ export default function UnifiedClientsPage() {
 
   const queryParams: UnifiedClientListParams = {
     applicationId: filters.applicationId || undefined,
-    partnerId: filters.partnerId || undefined,
     ownership: filters.ownership === ALL ? undefined : filters.ownership as UnifiedClientListParams["ownership"],
     environment: filters.environment === ALL ? undefined : filters.environment,
     clientType: filters.clientType === ALL ? undefined : filters.clientType as UnifiedClientListParams["clientType"],
@@ -375,38 +380,9 @@ export default function UnifiedClientsPage() {
     staleTime: 15_000,
     retry: false,
   })
-  const editorConsentGroupsQuery = useQuery({
-    queryKey: ["identity-consent-groups", selectedApplicationId],
-    queryFn: () => identityClientsApi.consentGroups(selectedApplicationId),
-    enabled: editorOpen && subjectMode === "USER" && isUuidV7(selectedApplicationId),
-    staleTime: 15_000,
-    retry: false,
-  })
-  const editorConsentGroups = (editorConsentGroupsQuery.data?.groups ?? []).filter((group) =>
-    group.environment === form.watch("environment")
-    && group.contextMode === contextMode
-    && group.status === "ACTIVE",
-  )
   const projection: ApplicationAuthProjection | undefined = projectionQuery.data
   const projectionScopes = projection?.approvedScopes ?? []
   const projectionBlocked = !editing && projection?.status !== undefined && projection.status !== "APPROVED"
-
-  const consentGroupsQuery = useQuery({
-    queryKey: ["identity-consent-groups", groupApplicationId],
-    queryFn: () => identityClientsApi.consentGroups(groupApplicationId),
-    enabled: groupDialogOpen && isUuidV7(groupApplicationId),
-    staleTime: 15_000,
-    retry: false,
-  })
-  const groupClientsQuery = useQuery({
-    queryKey: ["identity-clients-for-consent-groups", groupApplicationId],
-    queryFn: () => identityClientsApi.list({ applicationId: groupApplicationId, limit: 100, offset: 0 }),
-    enabled: groupDialogOpen && isUuidV7(groupApplicationId),
-    staleTime: 15_000,
-    retry: false,
-  })
-  const consentGroups = consentGroupsQuery.data?.groups ?? []
-  const groupClients = groupClientsQuery.data?.records ?? []
 
   const openCreate = () => {
     if (writeLock.current || recovery) return
@@ -452,21 +428,10 @@ export default function UnifiedClientsPage() {
       finishIdentityOperation(state.operationId, state.contextKey)
       setRecovery(null)
       if (!state.restored && (state.action === "create" || state.action === "update")) setEditorOpen(true)
-      if (!state.restored && (state.action === "group_create" || state.action === "group_member")) setGroupDialogOpen(true)
       toast.warning("服务器确认该操作未执行，可安全地重新提交")
       return
     }
     if (operation.state !== "COMPLETED") throw new Error("原操作尚未返回可核验的终态")
-    if (state.action === "group_create" || state.action === "group_member" || state.action === "review" || state.action === "invite") {
-      finishIdentityOperation(state.operationId, state.contextKey)
-      setRecovery(null)
-      await queryClient.invalidateQueries({ queryKey: ["identity-consent-groups"] })
-      await queryClient.invalidateQueries({ queryKey: ["identity-clients"] })
-      await queryClient.invalidateQueries({ queryKey: ["identity-review"] })
-      await queryClient.invalidateQueries({ queryKey: ["identity-invitations"] })
-      toast.success(`${state.clientLabel}：原同意组操作已完成`)
-      return
-    }
     const result = operation.result as Record<string, unknown> | null
     if (!result) throw new Error("原操作返回的结果为空")
     finishIdentityOperation(state.operationId, state.contextKey)
@@ -512,7 +477,6 @@ export default function UnifiedClientsPage() {
     restoredScope.current = recoveryScope
     setSecret(null)
     setEditorOpen(false)
-    setGroupDialogOpen(false)
     try {
       const pending = pendingIdentityOperation()
       const restored = pending ? { ...pending, restored: true } : null
@@ -571,6 +535,10 @@ export default function UnifiedClientsPage() {
     backchannelLogoutUri: values.backchannelLogoutUri || null,
     backchannelTargetId: values.backchannelTargetId || null,
     status: values.status,
+    autoAuthorize: values.subjectMode === "USER" && values.autoAuthorize,
+    accessTokenTtlSeconds: values.subjectMode === "USER" ? tokenSeconds(values.accessTokenTtlSeconds) : null,
+    refreshTokenTtlSeconds: values.subjectMode === "USER" && values.refreshToken ? tokenSeconds(values.refreshTokenTtlSeconds, true) : null,
+    clientTokenTtlSeconds: values.subjectMode === "MACHINE" ? tokenSeconds(values.clientTokenTtlSeconds) : null,
     consentGroupId: values.consentGroupId.trim() ? values.consentGroupId.trim().toLowerCase() : null,
     permissions: values.permissions.map((permission) => ({
       resourceKey: permission.resourceKey.trim(),
@@ -651,84 +619,16 @@ export default function UnifiedClientsPage() {
     }
   })
 
-  const openGroupManager = () => {
-    if (writeLock.current || recovery) return
-    setGroupApplicationId(filters.applicationId || applicationDraft.trim())
-    setGroupDialogOpen(true)
-  }
-
-  const createGroup = async () => withWriteLock(async () => {
-    const applicationId = groupApplicationId.trim().toLowerCase()
-    if (!isUuidV7(applicationId)) {
-      toast.error("同意组必须绑定规范 UUIDv7 应用标识")
-      return
-    }
-    if (!groupDisplayName.trim()) {
-      toast.error("请输入同意组名称")
-      return
-    }
-    try {
-      const application = await identityClientsApi.applicationProjection(applicationId)
-      if (application.status !== "APPROVED") {
-        toast.error("应用尚未批准，不能建立用户同意组")
-        return
-      }
-      const created = await identityClientsApi.createConsentGroup({
-        applicationId,
-        environment: groupEnvironment,
-        displayName: groupDisplayName.trim(),
-        purpose: application.purpose,
-        contextMode: groupContext,
-      })
-      toast.success(`已建立同意组 ${created.displayName}`)
-      setGroupDisplayName("")
-      setMemberGroupId(created.id)
-      await queryClient.invalidateQueries({ queryKey: ["identity-consent-groups", groupApplicationId] })
-    } catch (error) {
-      await reportMutationError(error, "group_create", groupDisplayName.trim() || "同意组")
-    }
-  })
-
-  const addGroupMember = async () => withWriteLock(async () => {
-    const group = consentGroups.find((item) => item.id === memberGroupId)
-    const client = groupClients.find((item) => item.id === memberClientId)
-    if (!group || !client) {
-      toast.error("请选择同意组和可加入的人员客户端")
-      return
-    }
-    try {
-      const result = await identityClientsApi.addConsentGroupClient(group.id, {
-        clientId: client.id,
-        expectedGroupVersion: group.version,
-      })
-      toast.success(`已将 ${client.displayName} 加入同意组；已有用户需要重新确认组内客户端变化`)
-      setMemberClientId("")
-      setMemberGroupId("")
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["identity-consent-groups", groupApplicationId] }),
-        queryClient.invalidateQueries({ queryKey: ["identity-clients"] }),
-      ])
-      if (result.version <= group.version) toast.warning("组版本未递增，请刷新核对最新状态")
-    } catch (error) {
-      await reportMutationError(error, "group_member", client.displayName)
-    }
-  })
-
   const changeFilter = (key: FilterKey, value: string) => updateSearch({ [key]: value }, true)
   const applyTextFilters = () => {
     if (applicationDraft.trim() && !isUuidV7(applicationDraft.trim())) {
       toast.error("应用筛选必须是 UUIDv7")
       return
     }
-    if (partnerDraft.trim() && !isUuidV7(partnerDraft.trim())) {
-      toast.error("合作方筛选必须是 UUIDv7")
-      return
-    }
-    updateSearch({ applicationId: applicationDraft.trim().toLowerCase(), partnerId: partnerDraft.trim().toLowerCase() }, true)
+    updateSearch({ applicationId: applicationDraft.trim().toLowerCase() }, true)
   }
   const clearFilters = () => {
     setApplicationDraft("")
-    setPartnerDraft("")
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous)
       for (const key of ["applicationId", "partnerId", "ownership", "environment", "clientType", "subjectMode", "status", "page"]) next.delete(key)
@@ -775,12 +675,12 @@ export default function UnifiedClientsPage() {
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100/20 bg-emerald-50/10 px-3 py-1 text-[11px] font-semibold tracking-[0.16em] text-emerald-50">
                 <span className="size-1.5 rounded-full bg-[#b8d79c] shadow-[0_0_12px_rgba(184,215,156,.9)]" />
-                IDENTITY / REGISTRY
+                CLIENT MANAGEMENT
               </span>
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">authority 01</span>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">统一客户端注册簿</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-emerald-50/70">应用、合作方、人员与机器客户端共用一套身份权威。回调、权限范围和凭据版本都在这里收口。</p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">客户端管理</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-emerald-50/70">管理客户端、登录回调、授权范围与访问凭据。</p>
           </div>
           <div className="flex items-end justify-between gap-6 sm:justify-end">
             <div>
@@ -791,20 +691,12 @@ export default function UnifiedClientsPage() {
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/50">本页机密客户端</p>
               <p className="mt-1 font-mono text-3xl font-medium tabular-nums">{clients.filter((client) => client.clientType === "CONFIDENTIAL").length}</p>
             </div>
-            <Button variant="outline" onClick={openGroupManager} disabled={writing || !!recovery} className="h-10 shrink-0 border-white/25 bg-white/5 text-white hover:bg-white/15 hover:text-white">
-              <Layers3 className="size-4" />同意组管理
-            </Button>
             <Button onClick={openCreate} disabled={writing || !!recovery} className="h-10 shrink-0 bg-[#d2e7c0] text-[#12332f] hover:bg-[#e1efd5]">
-              <Plus className="size-4" />登记客户端
+              <Plus className="size-4" />新增客户端
             </Button>
           </div>
         </div>
       </section>
-
-      <div className="flex flex-wrap gap-2" aria-label="认证接入管理">
-        <Button size="sm" variant="outline" disabled={writing || !!recovery} onClick={() => setIntakeMode("partners")}><Building2 className="size-3.5" />合作方接入</Button>
-        <Button size="sm" variant="outline" disabled={writing || !!recovery} onClick={() => setIntakeMode("invitations")}><ShieldCheck className="size-3.5" />账号邀请</Button>
-      </div>
 
       {recovery && (
         <div role="status" className="flex flex-col gap-3 rounded-xl border border-amber-500/35 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -825,7 +717,7 @@ export default function UnifiedClientsPage() {
           <div className="flex items-center gap-2">
             <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary"><Search className="size-4" /></div>
             <div>
-              <h2 className="text-sm font-semibold">筛选注册条目</h2>
+              <h2 className="text-sm font-semibold">筛选客户端</h2>
               <p className="text-xs text-muted-foreground">筛选与页码保存在当前地址中</p>
             </div>
           </div>
@@ -845,13 +737,6 @@ export default function UnifiedClientsPage() {
           <div className="space-y-1.5">
             <Label htmlFor="filter-application" className="text-[11px] font-medium text-muted-foreground">应用 UUID</Label>
             <Input id="filter-application" value={applicationDraft} onChange={(event) => setApplicationDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyTextFilters() }} placeholder="粘贴 UUIDv7" className="h-9 font-mono text-xs" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="filter-partner" className="text-[11px] font-medium text-muted-foreground">合作方 UUID</Label>
-            <div className="flex gap-1.5">
-              <Input id="filter-partner" value={partnerDraft} onChange={(event) => setPartnerDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyTextFilters() }} placeholder="可选" className="h-9 min-w-0 font-mono text-xs" />
-              <Button variant="secondary" size="icon" className="size-9 shrink-0" aria-label="应用 ID 筛选" onClick={applyTextFilters}><Search className="size-4" /></Button>
-            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-4 py-2.5 sm:px-5">
@@ -925,95 +810,6 @@ export default function UnifiedClientsPage() {
 
       {clientsQuery.data && <DataPagination page={page} size={pageSize} total={total} onPageChange={setPage} onSizeChange={setSize} />}
 
-      <Dialog open={groupDialogOpen} onOpenChange={(open) => { if (!open && !writing && !recovery) setGroupDialogOpen(false) }}>
-        <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>用户同意组</DialogTitle>
-            <DialogDescription>同意组只共享同一应用、环境、责任主体、用途、用户上下文与数据范围。成员变更会推进组版本，已有用户在继续登录前必须重新确认。</DialogDescription>
-          </DialogHeader>
-          <section className="space-y-4 rounded-xl border bg-muted/15 p-4">
-            <h3 className="text-sm font-semibold">建立同意组</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label="应用 UUIDv7">
-                <Input value={groupApplicationId} onChange={(event) => setGroupApplicationId(event.target.value)} placeholder="019a…" className="font-mono text-xs" />
-              </FormField>
-              <FormField label="同意组名称">
-                <Input value={groupDisplayName} maxLength={120} onChange={(event) => setGroupDisplayName(event.target.value)} placeholder="平台浏览器客户端" />
-              </FormField>
-              <FormField label="运行环境">
-                <Select value={groupEnvironment} onValueChange={(value) => setGroupEnvironment(value as "test" | "production")}>
-                  <SelectTrigger aria-label="同意组环境"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="test">测试 / test</SelectItem><SelectItem value="production">生产 / production</SelectItem></SelectContent>
-                </Select>
-              </FormField>
-              <FormField label="用户上下文">
-                <Select value={groupContext} onValueChange={(value) => setGroupContext(value as typeof groupContext)}>
-                  <SelectTrigger aria-label="同意组用户上下文"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="ACCOUNT_ONLY">纯账号</SelectItem><SelectItem value="PLATFORM_CONTEXT">业务身份</SelectItem></SelectContent>
-                </Select>
-              </FormField>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">用途从应用已批准投影读取；未批准的应用不能建立同意组。</p>
-              <Button type="button" onClick={() => void createGroup()} disabled={writing || !!recovery || !isUuidV7(groupApplicationId.trim()) || !groupDisplayName.trim()}>
-                {writing ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}建立同意组
-              </Button>
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">已登记同意组</h3>
-              <div className="flex items-center gap-2">
-                {consentGroupsQuery.isFetching && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
-                <Button type="button" variant="outline" size="sm" onClick={() => void consentGroupsQuery.refetch()} disabled={!isUuidV7(groupApplicationId.trim()) || consentGroupsQuery.isFetching}><RefreshCw className="size-3.5" />刷新</Button>
-              </div>
-            </div>
-            {!isUuidV7(groupApplicationId.trim()) ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">输入应用 UUIDv7 后查看该应用的同意组。</p>
-            ) : consentGroupsQuery.isError ? (
-              <ErrorState message={consentGroupsQuery.error instanceof Error ? consentGroupsQuery.error.message : undefined} onRetry={() => void consentGroupsQuery.refetch()} />
-            ) : consentGroups.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">此应用尚未登记同意组。客户端可以保持未分组，未分组客户端不会继承其他客户端的用户授权。</p>
-            ) : consentGroups.map((group) => {
-              const candidates = groupClients.filter((client) =>
-                client.applicationId === group.applicationId
-                && client.environment === group.environment
-                && client.subjectMode === "USER"
-                && client.contextMode === group.contextMode
-                && client.consentGroupId === null
-                && client.status !== "RETIRED",
-              )
-              return (
-                <article key={group.id} className="space-y-3 rounded-xl border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2"><h4 className="text-sm font-semibold">{group.displayName}</h4><Badge variant={group.status === "ACTIVE" ? "default" : "outline"}>{group.status}</Badge><Badge variant="secondary">{group.environment}</Badge><Badge variant="outline">{contextLabel(group.contextMode)}</Badge><span className="font-mono text-[10px] text-muted-foreground">v{group.version}</span></div>
-                      <p className="mt-1 text-xs text-muted-foreground">{group.applicationName} · {group.purpose}</p>
-                      <div className="mt-1 flex items-center gap-1.5"><code className="break-all font-mono text-[10px] text-muted-foreground">{group.id}</code><CopyButton text={group.id} size="icon" className="size-6 shrink-0 border-0 p-0 text-muted-foreground" /></div>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.clients.length ? group.clients.map((client) => <Badge key={client.id} variant="outline">{client.displayName}</Badge>) : <span className="text-xs text-muted-foreground">尚无成员</span>}
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <Select value={memberGroupId === group.id ? memberClientId || "NONE" : "NONE"} onValueChange={(value) => { setMemberGroupId(group.id); setMemberClientId(value === "NONE" ? "" : value) }} disabled={group.status !== "ACTIVE" || groupClientsQuery.isLoading || candidates.length === 0}>
-                      <SelectTrigger aria-label={`选择加入 ${group.displayName} 的客户端`}><SelectValue placeholder="选择未分组的人员客户端" /></SelectTrigger>
-                      <SelectContent><SelectItem value="NONE">选择未分组的人员客户端</SelectItem>{candidates.map((client) => <SelectItem key={client.id} value={client.id}>{client.displayName} · {client.clientId}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <Button type="button" variant="outline" onClick={() => void addGroupMember()} disabled={writing || !!recovery || memberGroupId !== group.id || !memberClientId || group.status !== "ACTIVE"}>
-                      {writing ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}加入同意组
-                    </Button>
-                  </div>
-                  <p className="text-[11px] leading-5 text-muted-foreground">加入后该组旧授权会标记为待重新确认。新客户端不会因管理员扩组而自动取得旧授权。</p>
-                </article>
-              )
-            })}
-          </section>
-          <DialogFooter><Button type="button" variant="outline" onClick={() => setGroupDialogOpen(false)} disabled={writing}>关闭</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={editorOpen} onOpenChange={(open) => { if (!open && !writing && !recovery) { setEditorOpen(false); setEditing(null) } }}>
         <DialogContent className="flex max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl" onCloseAutoFocus={(event) => {
           // Several external buttons open this controlled dialog without a Radix trigger.
@@ -1062,23 +858,6 @@ export default function UnifiedClientsPage() {
                         <SelectContent><SelectItem value="DISABLED">停用</SelectItem><SelectItem value="ENABLED">启用</SelectItem></SelectContent>
                       </Select>
                     </FormField>
-                    {!machine && (
-                      <FormField label="用户同意组" error={form.formState.errors.consentGroupId?.message} hint="同组授权按资源范围共享；新客户端加入已有组后，用户需重新确认组成员变化。">
-                        <Select value={form.watch("consentGroupId") || "NONE"} disabled={!!editing} onValueChange={(value) => form.setValue("consentGroupId", value === "NONE" ? "" : value, { shouldDirty: true, shouldValidate: true })}>
-                          <SelectTrigger aria-label="用户同意组"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="NONE">未分组 · 不复用其他客户端授权</SelectItem>
-                            {editorConsentGroups.map((group) => (
-                              <SelectItem key={group.id} value={group.id}>
-                                {group.displayName} · v{group.version}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {editorConsentGroupsQuery.isError && <p className="text-[11px] leading-4 text-warning">同意组列表暂时不可用；可先未分组登记，之后在同意组管理中加入。</p>}
-                        {!editorConsentGroupsQuery.isError && editorConsentGroups.length === 0 && <p className="text-[11px] leading-4 text-muted-foreground">当前应用、环境与用户上下文下没有活动组。可先建立同意组。</p>}
-                      </FormField>
-                    )}
                   </section>
 
                   <section className="space-y-4 rounded-xl border p-4">
@@ -1092,6 +871,10 @@ export default function UnifiedClientsPage() {
                           form.setValue("contextMode", next === "MACHINE" ? "NONE" : "ACCOUNT_ONLY", { shouldDirty: true })
                           form.setValue("allowedMemberTypes", [], { shouldDirty: true })
                           form.setValue("refreshToken", false, { shouldDirty: true })
+                          form.setValue("autoAuthorize", false, { shouldDirty: true })
+                          form.setValue("accessTokenTtlSeconds", "", { shouldDirty: true })
+                          form.setValue("refreshTokenTtlSeconds", "", { shouldDirty: true })
+                          form.setValue("clientTokenTtlSeconds", "", { shouldDirty: true })
                           form.setValue("logoutMode", "SHORT_SESSION_ONLINE_CHECK", { shouldDirty: true })
                           form.setValue("backchannelLogoutUri", "", { shouldDirty: true })
                           form.setValue("backchannelTargetId", "", { shouldDirty: true })
@@ -1150,13 +933,18 @@ export default function UnifiedClientsPage() {
                         </div>
                       </FormField>
                     )}
-                    {!machine && (
-                      <label className={`flex items-start gap-3 rounded-lg border p-3 ${editing ? "bg-muted/20" : "bg-background"}`}>
-                        <Checkbox checked={form.watch("refreshToken")} disabled={!!editing} onCheckedChange={(checked) => form.setValue("refreshToken", checked === true, { shouldDirty: true })} />
-                        <span><span className="block text-sm font-medium">允许 refresh_token</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">实际期限仍受原 SSO／业务来源与应用批准范围限制。</span></span>
-                      </label>
-                    )}
                   </section>
+
+                  <ClientAuthorizationSettings machine={machine} editing={!!editing}
+                    firstParty={(editing?.ownership ?? projection?.ownership) === "FIRST_PARTY"}
+                    value={form.watch()} defaults={editing?.tokenDefaults}
+                    errors={{ accessTokenTtlSeconds: form.formState.errors.accessTokenTtlSeconds?.message,
+                      refreshTokenTtlSeconds: form.formState.errors.refreshTokenTtlSeconds?.message,
+                      clientTokenTtlSeconds: form.formState.errors.clientTokenTtlSeconds?.message }}
+                    onChange={(field, value) => {
+                      if (field === "autoAuthorize" || field === "refreshToken") form.setValue(field, value === true, { shouldDirty: true, shouldValidate: true })
+                      else form.setValue(field, String(value), { shouldDirty: true, shouldValidate: true })
+                    }} />
 
                   {!machine && (
                     <section className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2">
@@ -1238,7 +1026,7 @@ export default function UnifiedClientsPage() {
                     <div className="flex items-center gap-2"><CircleDot className="size-4 text-primary" /><p className="text-sm font-semibold">登记约束</p></div>
                     <ul className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
                       <li>• 应用必须已批准；scope 只能取自应用批准集合。</li>
-                      <li>• 应用、环境、主体与同意组不能在编辑时转换。</li>
+                      <li>• 应用、环境与主体不能在编辑时转换。</li>
                       <li>• secret 只在凭据轮换后一次显示，不会保存进此页面状态。</li>
                     </ul>
                   </div>
@@ -1273,11 +1061,6 @@ export default function UnifiedClientsPage() {
       <ConfirmDialog open={!!rotateTarget} onOpenChange={(open) => { if (!open && !writing) setRotateTarget(null) }} title="轮换客户端凭据？" confirmText="生成新密钥" loading={writing} onConfirm={() => rotateTarget && void rotate(rotateTarget)} description={rotateTarget && <span>为 <strong>{rotateTarget.displayName}</strong> 生成一份新密钥。旧密钥最多保留 24 小时用于平滑切换；本次 secret 只显示一次。</span>} />
       <ConfirmDialog open={!!revokeTarget} onOpenChange={(open) => { if (!open && !writing) setRevokeTarget(null) }} title="紧急撤销全部凭据？" confirmText="立即撤销" loading={writing} onConfirm={() => revokeTarget && void revoke(revokeTarget)} description={revokeTarget && <span><strong>{revokeTarget.displayName}</strong> 的当前与重叠凭据会立即失效，相关 client policyVersion 会递增。</span>} />
       <ConfirmDialog open={!!retireTarget} onOpenChange={(open) => { if (!open && !writing) setRetireTarget(null) }} title="永久退役客户端？" confirmText="退役客户端" loading={writing} onConfirm={() => retireTarget && void retire(retireTarget)} description={retireTarget && <span><strong>{retireTarget.displayName}</strong> 退役后不能恢复；应用和环境绑定仍留在审计记录中。</span>} />
-      {intakeMode && <PartnerIntakePanel key={recoveryScope} mode={intakeMode} onClose={() => setIntakeMode(null)} onUnknown={() => {
-        setIntakeMode(null)
-        try { const pending = pendingIdentityOperation(); if (pending) void recoverOperation(pending) }
-        catch (error) { toast.error(error instanceof Error ? error.message : "无法读取原接入操作") }
-      }} />}
       {secret && <SecretDialog open onOpenChange={closeSecret} secret={secret} title={secretTitle} />}
     </div>
   )
@@ -1330,7 +1113,13 @@ function ClientMobileCard({ client, actions, onView }: { client: UnifiedClientRe
 function ClientDetail({ client }: { client: UnifiedClientRecord }) {
   return <div className="max-h-[65dvh] space-y-4 overflow-y-auto pr-1 text-sm">
     <div className="grid gap-3 sm:grid-cols-2"><Detail label="所有者" value={`${ownershipLabel(client.ownership)} · ${client.applicationName}`} /><Detail label="环境" value={client.environment} /><Detail label="主体 / 运行" value={`${subjectLabel(client.subjectMode)} · ${runtimeLabel(client.runtimeKind)}`} /><Detail label="上下文" value={contextLabel(client.contextMode)} /><Detail label="版本" value={`client v${client.version} · policy v${client.policyVersion}`} /><Detail label="Token 认证" value={client.tokenEndpointAuthMethod} /></div>
-    <Detail label="应用 UUID / Partner UUID" value={`${client.applicationId}${client.partnerId ? ` / ${client.partnerId}` : ""}`} mono />
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Detail label="授权确认" value={client.subjectMode === "MACHINE" ? "服务间调用，无用户授权" : client.autoAuthorize ? "自动授权" : "用户确认授权"} />
+      <Detail label={client.subjectMode === "MACHINE" ? "客户端令牌有效期" : "访问令牌有效期"}
+        value={`${client.subjectMode === "MACHINE" ? client.clientTokenTtlSeconds ?? client.tokenDefaults.clientTokenTtlSeconds : client.accessTokenTtlSeconds ?? client.tokenDefaults.accessTokenTtlSeconds} 秒（受原来源期限限制）`} />
+      {client.grantTypes.includes("refresh_token") && <Detail label="刷新令牌" value={`${client.refreshTokenTtlSeconds ?? client.tokenDefaults.refreshTokenTtlSeconds} 秒空闲有效期 · 每次轮换`} />}
+    </div>
+    <Detail label="应用 UUID" value={client.applicationId} mono />
     <div className="rounded-lg border p-3"><p className="text-xs font-medium text-muted-foreground">回调地址</p>{client.redirectUris.length ? client.redirectUris.map((uri) => <p key={uri} className="mt-1 break-all font-mono text-xs">{uri}</p>) : <p className="mt-1 text-xs">无（机器客户端）</p>}</div>
     <div className="rounded-lg border p-3"><p className="text-xs font-medium text-muted-foreground">退出后返回地址</p>{client.postLogoutRedirectUris.length ? client.postLogoutRedirectUris.map((uri) => <p key={uri} className="mt-1 break-all font-mono text-xs">{uri}</p>) : <p className="mt-1 text-xs">未登记</p>}</div>
     <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2"><Detail label="登出合同" value={client.logoutMode === "BACK_CHANNEL" ? "已绑定 back-channel" : "短会话与在线检查"} />{client.backchannelLogoutUri && <Detail label="Back-channel HTTPS 地址" value={client.backchannelLogoutUri} />}{client.backchannelTargetId && <Detail label="owner核验目标引用" value={client.backchannelTargetId} />}</div>

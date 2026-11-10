@@ -1,11 +1,10 @@
 use super::{assert_actor, global_operator, policy, require_application};
-use crate::{
-    error::AppError,
-    extractors::CurrentUser,
-    state::AppState,
-    util::{audit, hash::sha256_hex},
-};
-use axum::http::{HeaderMap, Method};
+#[cfg(test)]
+use crate::util::{audit, hash::sha256_hex};
+use crate::{error::AppError, extractors::CurrentUser, state::AppState};
+#[cfg(test)]
+use axum::http::HeaderMap;
+use axum::http::Method;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
@@ -85,6 +84,7 @@ pub(crate) async fn application_allowed(
     Ok(assigned)
 }
 
+#[cfg(test)]
 pub(super) fn operation(headers: &HeaderMap) -> Result<Uuid, AppError> {
     let mut values = headers.get_all("x-identity-operation").iter();
     let raw = values
@@ -96,12 +96,14 @@ pub(super) fn operation(headers: &HeaderMap) -> Result<Uuid, AppError> {
     }
     policy::id(raw)
 }
+#[cfg(test)]
 pub(super) fn digest(path: &str, body: &Value) -> Result<String, AppError> {
     Ok(sha256_hex(
         &serde_json::to_string(&json!({"path":path,"body":body}))
             .map_err(|_| AppError::Unavailable)?,
     ))
 }
+#[cfg(test)]
 pub(super) async fn replay(
     tx: &mut Transaction<'_, Postgres>,
     user: &CurrentUser,
@@ -137,6 +139,7 @@ pub(super) async fn replay(
     }
     Ok(None)
 }
+#[cfg(test)]
 pub(super) struct Record<'a> {
     pub operation: Uuid,
     pub digest: &'a str,
@@ -147,6 +150,7 @@ pub(super) struct Record<'a> {
     pub remote: bool,
     pub result: &'a Value,
 }
+#[cfg(test)]
 pub(super) async fn record(
     tx: &mut Transaction<'_, Postgres>,
     user: &CurrentUser,
@@ -279,7 +283,7 @@ pub(crate) async fn complete_remote(
     let receipt:Option<(Option<Uuid>,Value)>=sqlx::query_as("SELECT request_id,result_json FROM platform_auth_review_operations WHERE operation_id=$1 AND remote_required FOR UPDATE")
         .bind(operation).fetch_optional(&mut **tx).await?;
     let request = if let Some((request, local)) = receipt {
-        let completed = super::service::synchronized_result(local, result)?;
+        let completed = synchronized_result(local, result)?;
         sqlx::query("UPDATE platform_auth_review_operations SET remote_result=$2,result_json=$3,remote_applied_at=clock_timestamp() WHERE operation_id=$1")
             .bind(operation).bind(result).bind(completed).execute(&mut **tx).await?;
         request
@@ -308,4 +312,16 @@ pub(crate) async fn complete_remote(
         }
     }
     Ok(())
+}
+
+// Preserve read-only recovery of commands accepted before administration was retired.
+pub(super) fn synchronized_result(mut result: Value, remote: &Value) -> Result<Value, AppError> {
+    if result["id"] != remote["requestId"] || result["version"] != remote["requestVersion"] {
+        return Err(AppError::Unavailable);
+    }
+    result["syncedVersion"] = remote["requestVersion"].clone();
+    result["identityProjectionVersion"] = remote["projectionVersion"].clone();
+    result["identityAdmissionVersion"] = remote["admissionVersion"].clone();
+    result["syncState"] = json!("COMPLETED");
+    Ok(result)
 }

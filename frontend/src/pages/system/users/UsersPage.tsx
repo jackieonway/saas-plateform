@@ -75,6 +75,7 @@ import { useColumnVisibility, type ColumnDef } from "@/hooks/use-column-visibili
 import { useAuthStore } from "@/stores/auth"
 import { useAuthorizedPaths } from "@/hooks/use-authorized-paths"
 import { usersApi } from "@/api/users"
+import { UserManagementActions } from "./UserManagementActions"
 import { rolesApi } from "@/api/roles"
 import { tenantsApi } from "@/api/tenants"
 import { organizationsApi } from "@/api/organizations"
@@ -193,7 +194,7 @@ export function UserDirectory({ memberType, informationOnly = false }: { memberT
   usePageRecovery(page, size, listQuery, setPage)
 
   const invalidate = () => {
-    for (const name of ["users", "user-detail", "memberships", "profile"]) void queryClient.invalidateQueries({ queryKey: [name] })
+    for (const name of ["users", "user-detail", "memberships", "membership-account-candidates", "profile"]) void queryClient.invalidateQueries({ queryKey: [name] })
   }
 
   /* ---- 新建 / 编辑 ---- */
@@ -203,6 +204,12 @@ export function UserDirectory({ memberType, informationOnly = false }: { memberT
     resolver: zResolver(userSchema),
     defaultValues: { username: "", password: "", realName: "", email: "", phone: "", gender: "UNKNOWN" },
   })
+
+  const openCreate = () => {
+    setEditing(null)
+    form.reset({ username: "", password: "", realName: "", email: "", phone: "", gender: "UNKNOWN" })
+    setDialogOpen(true)
+  }
 
   const openEdit = (u: UserRecord) => {
     setEditing(u)
@@ -363,10 +370,8 @@ export function UserDirectory({ memberType, informationOnly = false }: { memberT
         description={memberType === "EMPLOYEE" ? "维护用户资料、员工组织、部门、岗位和角色；添加员工时绑定已有账号。账号启停、密码与删除影响该账号的所有身份。" : "维护客户账号资料；添加客户时绑定已有账号。账号启停、密码与删除影响该账号的所有身份。"}
         icon={<Users className="size-5" />}
         actions={
-          <Button disabled={!!createGate} title={createGate ?? undefined} onClick={() => setBindingOpen(true)}>
-            <UserPlus className="size-4" />
-            {memberType === "EMPLOYEE" ? "添加员工" : "添加客户"}
-          </Button>
+          <UserManagementActions memberType={memberType} createMembershipBlockedReason={createGate}
+            onCreateAccount={openCreate} onAddMembership={() => setBindingOpen(true)} />
         }
       />
 

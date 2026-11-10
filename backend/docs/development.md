@@ -16,6 +16,10 @@
 
 成员、客户能力和双身份写入通过当前显式功能开关配置；三元唯一键已在基线中建立，不使用旧 rollout receipt。
 
+用户管理的“新增账号”建立独立账号；平台根管理员创建的账号默认没有组织成员关系，随后用“添加员工”选择该账号并绑定目标组织。“添加员工”由 `MEMBERSHIP_LIFECYCLE_ENABLED=true` 控制；客户成员和双身份另需对应开关。成员写入关闭时，账号创建入口仍可使用。
+
+数据授权页的目标应用来自 `DATA_GRANT_POLICY` 中的应用白名单和管理边界，未配置时返回空列表。必须使用当前环境的应用、租户和组织 UUID，并让 capability 与该应用的有效菜单权限相交；参见[数据授权配置](data-grant-management.md)。修改启动策略后需重启平台，菜单管理权限本身不会自动填充目标应用。
+
 修改后运行[工具链与验证](engineering-baseline.md)中的相应门禁。数据库测试要使用任务自有空库，记录实际通过范围，并清理本次运行资源；旧阶段报告不作为当前通过证据。
 
 GitHub Actions 的数据库集成任务使用 runner 自有 PostgreSQL 服务，宿主端口为 `55494`。任务从该实例读取 `pg_control_system().system_identifier`，向当前 BFF 回归测试显式提供 `IDENTITY_PHASE24_TEST_DATABASE_URL` 和 `IDENTITY_PHASE24_TEST_CLUSTER_ID`；身份模型与权限测试分别使用 `IDENTITY_PHASE02_TEST_DATABASE_URL` 和 `IDENTITY_PHASE12_TEST_DATABASE_URL`。这些值只指向本次 CI 实例，各测试建立并清理自己的数据库，不使用开发或生产库。

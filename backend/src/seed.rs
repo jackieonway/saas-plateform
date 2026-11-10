@@ -177,7 +177,7 @@ pub async fn initialize(pool: &PgPool, config: &crate::config::Config) -> anyhow
         ),
         (
             system,
-            "统一接入管理",
+            "客户端管理",
             "/system/oauth/clients",
             "Key",
             "system:oauth",
@@ -598,7 +598,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         sys,
         Some(open_dir),
         "MENU",
-        "统一接入管理",
+        "客户端管理",
         "/system/oauth/clients",
         "Key",
         "",
@@ -1108,16 +1108,11 @@ async fn initialize_auth_management_permissions(
     role: Uuid,
 ) -> anyhow::Result<()> {
     for (index, (title, permission)) in [
-        ("查看统一接入", "system:oauth:view"),
-        ("登记统一接入", "system:oauth:register"),
-        ("审核合作方申请", "system:oauth:review"),
-        ("发布生产接入", "system:oauth:publish"),
+        ("查看客户端", "system:oauth:view"),
+        ("新增客户端", "system:oauth:register"),
         ("轮换客户端凭据", "system:oauth:rotate"),
-        ("停用统一接入", "system:oauth:disable"),
+        ("停用客户端", "system:oauth:disable"),
         ("管理授权范围", "system:oauth:scopes"),
-        ("管理账号邀请", "system:oauth:invite"),
-        ("管理客户端公钥", "system:oauth:keys"),
-        ("委派合作方应用", "system:oauth:assign"),
     ]
     .into_iter()
     .enumerate()

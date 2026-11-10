@@ -8,7 +8,6 @@ import type {
   UnifiedClientPage,
   UnifiedClientPayload,
   UnifiedClientRecord,
-  UnifiedConsentGroup,
   UnifiedCredentialRotation,
 } from "./types"
 
@@ -60,19 +59,4 @@ export const identityClientsApi = {
       expectedProjectionVersion,
       approvedScopes,
     }, { operationId })),
-  consentGroups: (applicationId: string) =>
-    api.get<{ groups: UnifiedConsentGroup[] }>(`/api/identity/applications/${encodeURIComponent(applicationId)}/consent-groups`),
-  createConsentGroup: (body: {
-    applicationId: string
-    environment: string
-    displayName: string
-    purpose: string
-    contextMode: "ACCOUNT_ONLY" | "PLATFORM_CONTEXT"
-  }) => identityMutation("group_create", body.displayName, operationId => api.post<Omit<UnifiedConsentGroup, "clients">>("/api/identity/consent-groups", body, { operationId })),
-  addConsentGroupClient: (groupId: string, body: { clientId: string; expectedGroupVersion: number }) =>
-    identityMutation("group_member", body.clientId, operationId => api.post<{ groupId: string; clientId: string; version: number }>(
-      `/api/identity/consent-groups/${encodeURIComponent(groupId)}/clients`,
-      body,
-      { operationId },
-    )),
 }
