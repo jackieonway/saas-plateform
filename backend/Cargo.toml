@@ -48,5 +48,14 @@ tower = { version = "0.5", features = ["util"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [profile.dev]
+incremental = false
 opt-level = 0
 debug = 1
+
+[profile.test]
+debug = 1
+incremental = false
+
+[profile.release]
+strip = "debuginfo"
+debug = 0

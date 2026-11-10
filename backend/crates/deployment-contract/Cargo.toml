@@ -11,3 +11,15 @@ serde_json = "1"
 sha2 = "0.10"
 base64 = "0.22"
 url = "2"
+
+[profile.dev]
+debug = 1
+incremental = false
+
+[profile.test]
+debug = 1
+incremental = false
+
+[profile.release]
+strip = "debuginfo"
+debug = 0

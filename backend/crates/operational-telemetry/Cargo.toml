@@ -4,3 +4,15 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 description = "Fixed-cardinality operational stage observations, without domain or transport dependencies"
+
+[profile.dev]
+debug = 1
+incremental = false
+
+[profile.test]
+debug = 1
+incremental = false
+
+[profile.release]
+strip = "debuginfo"
+debug = 0

@@ -17,4 +17,13 @@ uuid = { version = "1", features = ["v7"] }
 rustix = { version = "1.1.5", features = ["fs"] }
 
 [profile.dev]
+incremental = false
 debug = 1
+
+[profile.test]
+debug = 1
+incremental = false
+
+[profile.release]
+strip = "debuginfo"
+debug = 0
