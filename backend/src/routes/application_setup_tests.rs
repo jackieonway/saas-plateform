@@ -468,13 +468,13 @@ async fn application_setup_rejects_cross_scope_disabled_targets_and_missing_perm
             h.call(&h.admin, Method::GET, &partial, None).await?.0 == StatusCode::BAD_REQUEST,
             "partial target accepted"
         );
-        let invalid_environment = h.setup_path(false).replace("development", "unrecognized");
+        let invalid_environment = h.setup_path(false).replace("development", "INVALID");
         ensure!(
             h.call(&h.admin, Method::GET, &invalid_environment, None)
                 .await?
                 .0
                 == StatusCode::BAD_REQUEST,
-            "unknown environment accepted"
+            "malformed environment accepted"
         );
         for (table, id) in [
             ("tenants", h.tenant),

@@ -223,6 +223,8 @@ async fn exercise(platform: bool) -> Result<()> {
         let leaf_user = account(pool, "leaf-user", &[leaf], false).await?;
         let sibling_user = account(pool, "sibling-user", &[sibling], false).await?;
         let shared = account(pool, "shared-user", &[child, sibling], false).await?;
+        sqlx::query("UPDATE users SET phone='13800139101' WHERE id=$1")
+            .bind(shared).execute(pool).await?;
         let parent_role = role(pool, tenant, root, "parent-role", &[parent_user, shared]).await?;
         let child_role = role(pool, tenant, child, "child-role", &[child_user, shared, sibling_user]).await?;
         let leaf_role = role(pool, tenant, leaf, "leaf-role", &[leaf_user]).await?;

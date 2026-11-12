@@ -1355,7 +1355,7 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
         sqlx::query("INSERT INTO tenant_menus(tenant_id,menu_id) VALUES($1,$2)").bind(h.tenant_a).bind(menu).execute(&db.pool).await?;
         sqlx::query("INSERT INTO organization_menus(organization_id,menu_id) VALUES($1,$2)").bind(h.root).bind(menu).execute(&db.pool).await?;
         sqlx::query("INSERT INTO role_menus(role_id,menu_id) VALUES($1,$2)").bind(h.root_role).bind(menu).execute(&db.pool).await?;
-        let created=ok(&h.router,Method::POST,"/api/users",&h.publisher_session.token,Some(json!({"username":"notification-created","password":"initial-test-password"}))).await?;
+        let created=ok(&h.router,Method::POST,"/api/users",&h.publisher_session.token,Some(json!({"username":"notification-created","phone":"13800139001","password":"initial-test-password"}))).await?;
         let uid=id_of(&created,"id")?;
         let welcome:Vec<(Uuid,Uuid,String)>=sqlx::query_as("SELECT tenant_id,organization_id,source_kind FROM notifications WHERE user_id=$1").bind(uid).fetch_all(&db.pool).await?;
         ensure!(welcome==vec![(h.tenant_a,h.root,"SYSTEM".to_string())],"tenant creation did not produce exactly one contextual SYSTEM welcome");
@@ -1370,7 +1370,7 @@ async fn notification_system_call_sites_preserve_context_and_domain_transactions
         // Device-code issuance and its SYSTEM side effect retired with the old provider.
         sqlx::query("CREATE FUNCTION notification_system_test_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected SYSTEM failure'; END $$").execute(&db.pool).await?;
         sqlx::query("CREATE TRIGGER notification_system_test_failure BEFORE INSERT ON notifications FOR EACH ROW WHEN(NEW.source_kind='SYSTEM') EXECUTE FUNCTION notification_system_test_fail()").execute(&db.pool).await?;
-        rejected(&h.router,Method::POST,"/api/users",&h.publisher_session.token,Some(json!({"username":"notification-rollback-created","password":"initial-test-password"})),&[StatusCode::INTERNAL_SERVER_ERROR]).await?;
+        rejected(&h.router,Method::POST,"/api/users",&h.publisher_session.token,Some(json!({"username":"notification-rollback-created","phone":"13800139002","password":"initial-test-password"})),&[StatusCode::INTERNAL_SERVER_ERROR]).await?;
         let partial_user:i64=sqlx::query_scalar("SELECT count(*) FROM users WHERE username='notification-rollback-created'").fetch_one(&db.pool).await?;
         ensure!(partial_user==0,"SYSTEM welcome failure committed account creation");
         rejected(&h.router,Method::POST,&reset_path,&h.publisher_session.token,Some(json!({"newPassword":"changed-test-password"})),&[StatusCode::INTERNAL_SERVER_ERROR]).await?;
