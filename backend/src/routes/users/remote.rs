@@ -34,7 +34,7 @@ pub(super) async fn create(
     let target = crate::util::uuid7::new_uuid();
     let command=remote.command(target,0,"CREATE",json!({"username":username,"realName":body.real_name,"email":body.email,"phone":body.phone,"gender":gender,"password":body.password}),None)?;
     let scope = state.scoped_org_ids(actor).await?;
-    let welcome_title = if scope.is_some() {
+    let welcome_title = if scope.is_some() && body.membership.is_none() {
         Some(format!(
             "欢迎加入 {}",
             crate::platform_settings::load_branding(&state.pool)
@@ -47,7 +47,18 @@ pub(super) async fn create(
     let mut tx = state.pool.begin().await?;
     super::require_employee_permission_in_tx(&mut tx, actor, "system:user").await?;
     super::require_scope_unchanged_in_tx(&mut tx, actor, scope.as_deref()).await?;
-    let followup = json!({"kind":"USER_MUTATION","commandKind":"CREATE","action":"CREATE_USER","before":null,"targetTenants":[actor.tenant_id],"createMembership":scope.as_ref().map(|_|json!({"tenantId":actor.tenant_id,"organizationId":actor.org_id,"membershipId":crate::util::uuid7::new_uuid()})),"username":username,"welcomeTitle":welcome_title});
+    let create_membership = if let Some(input) = &body.membership {
+        let tenant_id = crate::membership_lifecycle::validate_new_account_membership(
+            state, actor, &mut tx, input,
+        )
+        .await?;
+        Some(
+            json!({"tenantId":tenant_id,"organizationId":input.organization_id,"membershipId":crate::util::uuid7::new_uuid(),"memberType":input.member_type.as_str(),"position":input.position.trim(),"reason":input.reason.trim()}),
+        )
+    } else {
+        scope.as_ref().map(|_|json!({"tenantId":actor.tenant_id,"organizationId":actor.org_id,"membershipId":crate::util::uuid7::new_uuid()}))
+    };
+    let followup = json!({"kind":"USER_MUTATION","commandKind":"CREATE","action":"CREATE_USER","before":null,"targetTenants":[actor.tenant_id],"createMembership":create_membership,"username":username,"welcomeTitle":welcome_title});
     commands::accept_in_tx(&mut tx, actor, headers, &command, followup).await?;
     tx.commit().await?;
     let receipt = commands::dispatch(state, &command).await?;
@@ -164,10 +175,18 @@ type IntentRow = (
 );
 
 async fn finalize(state: &AppState, operation: Uuid) -> Result<Value, AppError> {
+    finalize_as(state, operation, None).await
+}
+
+async fn finalize_as(
+    state: &AppState,
+    operation: Uuid,
+    recovery_actor: Option<&CurrentUser>,
+) -> Result<Value, AppError> {
     let mut tx = state.pool.begin().await?;
     let row:IntentRow=sqlx::query_as("SELECT target_user_id,actor_user_id,actor_tenant_id,actor_organization_id,actor_session_id,state,canonical_digest,followup,receipt FROM platform_account_command_intents WHERE id=$1 FOR UPDATE")
         .bind(operation).fetch_optional(&mut *tx).await?.ok_or_else(||AppError::not_found("账号操作不存在"))?;
-    let (target, actor, tenant, org, _sid, status, _digest, followup, receipt) = row;
+    let (target, actor, tenant, org, sid, status, _digest, followup, receipt) = row;
     if followup["kind"] != "USER_MUTATION" {
         return Err(AppError::bad_request("此操作须通过原业务入口恢复"));
     }
@@ -218,7 +237,41 @@ async fn finalize(state: &AppState, operation: Uuid) -> Result<Value, AppError> 
             .bind(target)
             .fetch_one(&mut *tx)
             .await?;
-        let inserted=sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type) VALUES($1,$2,$3,'EMPLOYEE')").bind(membership_id).bind(target).bind(organization_id).execute(&mut *tx).await?.rows_affected();
+        let member_type = membership
+            .get("memberType")
+            .and_then(Value::as_str)
+            .unwrap_or("EMPLOYEE");
+        let position = membership
+            .get("position")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if membership.contains_key("memberType") {
+            let input: crate::membership_lifecycle::NewAccountMembership = serde_json::from_value(json!({"organizationId":organization_id,"memberType":member_type,"position":position,"reason":membership.get("reason")})).map_err(|_|AppError::Unavailable)?;
+            let original_actor = CurrentUser {
+                user_id: actor,
+                username: followup["actorUsername"].as_str().unwrap_or("").into(),
+                real_name: String::new(),
+                is_super_admin: false,
+                tenant_id: tenant,
+                org_id: org,
+                session_id: sid,
+            };
+            let acting = recovery_actor.unwrap_or(&original_actor);
+            if acting.user_id != actor {
+                return Err(AppError::forbidden("仅原操作人可恢复创建"));
+            }
+            crate::membership_lifecycle::validate_new_account_membership(
+                state, acting, &mut tx, &input,
+            )
+            .await?;
+            let phone: String =
+                sqlx::query_scalar("SELECT COALESCE(phone,'') FROM users WHERE id=$1")
+                    .bind(target)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            crate::membership_lifecycle::validate_member_phone(&phone)?;
+        }
+        let inserted=sqlx::query("INSERT INTO memberships(id,user_id,organization_id,member_type,position) VALUES($1,$2,$3,$4,$5)").bind(membership_id).bind(target).bind(organization_id).bind(member_type).bind(position).execute(&mut *tx).await?.rows_affected();
         if inserted != 1 {
             return Err(AppError::Unavailable);
         }
@@ -369,7 +422,7 @@ pub(super) async fn recover(
             }
         }
     }
-    finalize(&state, operation).await.map(Json)
+    finalize_as(&state, operation, Some(&user)).await.map(Json)
 }
 
 #[cfg(test)]

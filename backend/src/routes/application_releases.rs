@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::HeaderMap;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,10 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/api/applications/{id}/releases/upload",
             post(upload).layer(DefaultBodyLimit::max(release_archives::MAX_ARCHIVE_BYTES)),
+        )
+        .route(
+            "/api/applications/{id}/releases/{release_id}",
+            delete(remove),
         )
         .route(
             "/api/applications/{id}/releases/{release_id}/preflight",
@@ -111,6 +115,98 @@ async fn list(
         WHERE r.application_id=$1 AND ($2::text IS NULL OR r.environment=$2) ORDER BY r.created_at DESC, r.id"))
         .bind(app).bind(environment).fetch_all(&state.pool).await?;
     Ok(Json(json!(rows)))
+}
+
+async fn remove(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    headers: HeaderMap,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<Json<Value>, AppError> {
+    authorize(&state, &user).await?;
+    let app = uuid(&app)?;
+    let id = uuid(&id)?;
+    let mut tx = state.pool.begin().await?;
+    // Match activation's lock order. The parent lock also fences new operation
+    // leases while we check existing work and remove this release.
+    sqlx::query_scalar::<_, Uuid>("SELECT id FROM applications WHERE id=$1 FOR UPDATE")
+        .bind(app)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("应用不存在"))?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    crate::routes::platform_application_permissions(&mut tx, &user).await?;
+    let before = release_audit_snapshot(&mut tx, app, id).await?;
+    let referenced: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM application_deployments WHERE application_id=$1 \
+           AND (active_release_id=$2 OR previous_release_id=$2)) \
+         OR EXISTS(SELECT 1 FROM managed_deployment_bindings WHERE release_id=$2) \
+         OR EXISTS(SELECT 1 FROM managed_deployment_jobs WHERE release_id=$2) \
+         OR EXISTS(SELECT 1 FROM zip_distribution_jobs WHERE release_id=$2)",
+    )
+    .bind(app)
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if referenced {
+        return Err(AppError::conflict(
+            "该版本正在使用、用于回滚或已关联交付任务，不能删除",
+        ));
+    }
+    let pending: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM application_release_operations WHERE application_id=$1)",
+    )
+    .bind(app)
+    .fetch_one(&mut *tx)
+    .await?;
+    if pending {
+        return Err(AppError::conflict(
+            "应用仍有版本操作未完成，请完成或核对原操作后再删除",
+        ));
+    }
+    sqlx::query("DELETE FROM application_releases WHERE application_id=$1 AND id=$2")
+        .bind(app)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| {
+            if error
+                .as_database_error()
+                .is_some_and(|value| value.is_foreign_key_violation())
+            {
+                AppError::conflict("该版本已被其他操作引用，不能删除")
+            } else {
+                error.into()
+            }
+        })?;
+    let detail = audit::change_detail("application_release", id, before, Value::Null);
+    write_audit(
+        &mut tx,
+        &user,
+        &headers,
+        app,
+        "DELETE_APPLICATION_RELEASE",
+        &detail,
+    )
+    .await?;
+    crate::session::require_active_in_tx(
+        &mut tx,
+        user.user_id,
+        user.tenant_id,
+        user.org_id,
+        user.session_id,
+    )
+    .await?;
+    crate::routes::platform_application_permissions(&mut tx, &user).await?;
+    tx.commit().await?;
+    Ok(Json(Value::Null))
 }
 
 #[derive(Deserialize)]

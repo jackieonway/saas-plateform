@@ -50,7 +50,7 @@ export interface ApplicationSetupStatus {
 export const applicationSetupApi = {
   organizations: (id: string, tenantId: string) =>
     api.get<ApplicationOrganizationOption[]>(`/api/applications/${encodeURIComponent(id)}/setup/organizations${qs({ tenantId })}`),
-  status: (id: string, environment: ApplicationEnvironment, target?: ApplicationAccessTarget) =>
+  status: (id: string, environment?: ApplicationEnvironment, target?: ApplicationAccessTarget) =>
     api.get<ApplicationSetupStatus>(`/api/applications/${encodeURIComponent(id)}/setup${qs({ environment,
       tenantId: target?.tenantId, organizationId: target?.organizationId, roleId: target?.roleId })}`),
   grantAccess: (id: string, body: ApplicationAccessPayload) =>

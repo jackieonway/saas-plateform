@@ -164,6 +164,23 @@ impl RemoteAccounts {
             bytes.extend_from_slice(&chunk);
         }
         if !status.is_success() {
+            // Only forward these fixed, non-sensitive conflict messages.
+            if status == StatusCode::CONFLICT {
+                if let Ok(error) = serde_json::from_slice::<Value>(&bytes) {
+                    match error["message"].as_str() {
+                        Some("电话号码已被占用") => {
+                            return Err(AppError::conflict("电话号码已被占用"))
+                        }
+                        Some("邮箱已被占用") => {
+                            return Err(AppError::conflict("邮箱已被占用"))
+                        }
+                        Some("用户名已被占用") => {
+                            return Err(AppError::conflict("用户名已被占用"))
+                        }
+                        _ => {}
+                    }
+                }
+            }
             // Never forward provider bodies (or errors containing submitted secrets).
             return Err(match status {
                 StatusCode::UNAUTHORIZED => AppError::Unavailable,

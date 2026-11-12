@@ -533,6 +533,7 @@ export interface UserPayload {
   email?: string
   phone?: string
   gender?: string
+  membership?: { organizationId: string; memberType: "EMPLOYEE" | "CUSTOMER"; position?: string; reason: string }
 }
 
 export interface UserMembershipItem {

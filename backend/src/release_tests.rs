@@ -31,6 +31,7 @@ mod managed_gate;
 mod node_fixture;
 mod phase31;
 mod qiankun_only;
+mod removal;
 mod url_entries;
 mod zip_registration;
 

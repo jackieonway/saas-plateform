@@ -7,5 +7,9 @@ mod routes;
 mod service;
 
 pub(crate) use routes::routes;
+pub(crate) use service::bind_account_by_phone;
 pub(crate) use service::cleanup_employee_roles_after_departure_in_tx;
 pub(crate) use service::ensure_employee_creation_allowed_in_tx;
+pub(crate) use service::{
+    validate_member_phone, validate_new_account_membership, NewAccountMembership,
+};

@@ -2705,9 +2705,9 @@ CREATE INDEX idx_user_roles_org ON public.user_roles USING btree (organization_i
 
 CREATE INDEX idx_user_roles_role ON public.user_roles USING btree (role_id);
 
-CREATE INDEX idx_users_login_email ON public.users USING btree (lower((email)::text)) WHERE ((email)::text <> ''::text);
+CREATE UNIQUE INDEX idx_users_login_email ON public.users USING btree (lower(btrim((email)::text))) WHERE (btrim((email)::text) <> ''::text);
 
-CREATE INDEX idx_users_login_phone ON public.users USING btree (regexp_replace((phone)::text, '[[:space:]()\-]'::text, ''::text, 'g'::text)) WHERE ((phone)::text <> ''::text);
+CREATE UNIQUE INDEX idx_users_login_phone ON public.users USING btree (NULLIF(regexp_replace((phone)::text, '[[:space:]()\-]'::text, ''::text, 'g'::text),''::text)) WHERE ((phone)::text <> ''::text);
 
 CREATE UNIQUE INDEX managed_deployment_one_worker ON public.managed_deployment_jobs USING btree (artifact_id) WHERE (state = ANY (ARRAY['QUEUED'::text, 'RUNNING'::text]));
 

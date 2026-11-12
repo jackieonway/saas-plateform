@@ -26,7 +26,7 @@ import { asArray } from "@/lib/api"
 import { AppIcon } from "@/lib/icons"
 import { toast } from "sonner"
 import { ApplicationSetupPanel } from "./ApplicationSetupPanel"
-import { setupEnvironment, setupStep, isQiankunApp, type ApplicationSetupStep } from "./application-setup-policy"
+import { setupStep, isQiankunApp, type ApplicationSetupStep } from "./application-setup-policy"
 import type { ApplicationRecord } from "@/api/types"
 
 export default function ApplicationsPage() {
@@ -70,7 +70,7 @@ export default function ApplicationsPage() {
   const setupId = params.get("setup")
   const setupApplication = apps.find(application => application.id === setupId)
     ?? (createdApplication?.id === setupId ? createdApplication : null)
-  const setSetupParam = (key: "step" | "environment", value: string) => setParams(previous => {
+  const setSetupParam = (key: "step", value: string) => setParams(previous => {
     const next = new URLSearchParams(previous)
     next.set(key, value)
     return next
@@ -88,7 +88,7 @@ export default function ApplicationsPage() {
     <div>
       <PageHeader
         title="应用管理"
-        description="接入 qiankun 微应用，按环境配置 HTTP/HTTPS 入口与访问范围"
+        description="接入 qiankun 微应用，配置应用地址与访问范围"
         icon={<LayoutGrid className="size-5" />}
         actions={
           <Button onClick={openCreate}>
@@ -253,9 +253,7 @@ export default function ApplicationsPage() {
         <ApplicationSetupPanel
           key={setupApplication.id}
           application={setupApplication}
-          environment={setupEnvironment(params.get("environment"))}
           step={setupStep(params.get("step"))}
-          onEnvironmentChange={value => setSetupParam("environment", value)}
           onStepChange={value => setSetupParam("step", value)}
           onClose={closeSetup}
           onEdit={() => openEdit(setupApplication)}

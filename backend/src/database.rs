@@ -4,6 +4,7 @@ use sqlx::migrate::Migrator;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::{Connection, Error, PgConnection, PgPool};
 use std::str::FromStr;
+pub mod bootstrap;
 mod imported;
 mod migrate_only;
 pub use imported::{ImportedDatabase, ImportedDatabaseError};

@@ -14,8 +14,9 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { EntityTreePicker, type PickerNode } from "@/components/EntityTreePicker"
 import { ErrorState } from "@/components/states"
-import { MembershipAccountPicker, type SelectedMembershipAccount } from "./MembershipAccountPicker"
-import { buildCreateMembership, buildIdentityTransition, buildMembershipDelete, buildMembershipStatusChange, currentEmployeeMutationBlockedReason, membershipWriteBlockedReason, oppositeMemberType } from "./membership-model"
+import { usersApi } from "@/api/users"
+import { newMemberPayload, type NewMemberAccount } from "./new-member-policy"
+import { buildIdentityTransition, buildMembershipDelete, buildMembershipStatusChange, currentEmployeeMutationBlockedReason, membershipWriteBlockedReason, oppositeMemberType } from "./membership-model"
 
 export type MembershipAction =
   | { kind: "create"; memberType: MembershipMemberType }
@@ -23,7 +24,7 @@ export type MembershipAction =
   | { kind: "delete" | "secondIdentity" | "replaceIdentity"; source: MembershipRecord }
 
 const typeLabel = (type: MembershipMemberType) => type === "EMPLOYEE" ? "员工" : "客户"
-const actionLabel = (action: MembershipAction) => action.kind === "create" ? `添加${typeLabel(action.memberType)}` : action.kind === "status" ? `${action.nextStatus === "ENABLED" ? "启用" : "停用"}成员` : action.kind === "delete" ? "删除成员关系" : action.kind === "secondIdentity" ? "新增第二身份" : "替换身份"
+const actionLabel = (action: MembershipAction) => action.kind === "create" ? `新建${typeLabel(action.memberType)}` : action.kind === "status" ? `${action.nextStatus === "ENABLED" ? "启用" : "停用"}成员` : action.kind === "delete" ? "删除成员关系" : action.kind === "secondIdentity" ? "新增第二身份" : "替换身份"
 
 function IdentityCard({ title, member, memberType }: { title: string; member?: MembershipRecord | null; memberType: MembershipMemberType }) {
   return <div className="min-w-0 flex-1 rounded-lg border bg-muted/20 p-3">
@@ -42,7 +43,9 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
   onSaved: () => void
 }) {
   const currentMembershipId = useAuthStore(state => state.identity?.membershipId)
-  const [account, setAccount] = React.useState<SelectedMembershipAccount | null>(null)
+  const [newAccount, setNewAccount] = React.useState<NewMemberAccount>({ username: "", password: "", realName: "", phone: "", email: "" })
+  const recoveryKey = `member-account-operation:${namespace}:${action.kind === "create" ? action.memberType : "other"}`
+  const [pendingOperation, setPendingOperation] = React.useState<string | null>(() => action.kind === "create" ? sessionStorage.getItem(recoveryKey) : null)
   const [organizationId, setOrganizationId] = React.useState("")
   const [reason, setReason] = React.useState("")
   const [bindingSource, setBindingSource] = React.useState("")
@@ -67,7 +70,8 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
   const targetType = action.kind === "create" ? action.memberType : oppositeMemberType(action.source.memberType)
   const transition = action.kind === "secondIdentity" || action.kind === "replaceIdentity"
   const create = action.kind === "create"
-  const targetUserId = create ? account?.id : source?.userId
+  const creatingAccount = create
+  const targetUserId = create ? undefined : source?.userId
   const targetOrgId = create ? organizationId : source?.organizationId
   const targetQuery = useQuery({
     queryKey: ["membership-counterpart", namespace, targetUserId, targetOrgId],
@@ -77,17 +81,16 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
     retry: 1,
   })
   const target = targetQuery.data?.records.find(row => row.memberType === targetType) ?? null
-  const existingCreateRelation = create ? target : undefined
-  const otherCreateRelation = create ? targetQuery.data?.records.find(row => row.memberType !== targetType) : undefined
-  const targetProof = !create && !transition || targetQuery.isSuccess && !targetQuery.isFetching
+  const targetProof = creatingAccount || !create && !transition || targetQuery.isSuccess && !targetQuery.isFetching
   const sourceProof = create || sourceQuery.isSuccess && !sourceQuery.isFetching
   const proofSignature = `${targetUserId ?? ""}:${targetOrgId ?? ""}:${target?.id ?? "new"}:${target?.identityVersion ?? ""}:${source?.identityVersion ?? ""}`
   React.useEffect(() => { setReuseTarget(false); setEnableTarget(false); setBindingConfirmed(false) }, [proofSignature])
   const gate = membershipWriteBlockedReason(capabilities, action.kind, create || transition ? targetType : undefined)
   const selfGate = source && (action.kind === "status" || action.kind === "delete" || action.kind === "replaceIdentity") ? currentEmployeeMutationBlockedReason(source, currentMembershipId) : null
-  const blocked = gate || selfGate || (otherCreateRelation && !capabilities?.dualMembershipsEnabled ? "当前尚未开放同账号在组织内同时绑定员工和客户" : null) || (!namespace ? "当前身份尚未确认" : !sourceProof || !targetProof ? "正在重新核验源成员与目标成员" : null)
-  const ready = !blocked && !saving && (!create || !!account && !!organizationId && !existingCreateRelation)
-  const close = () => { if (!savingRef.current) onClose() }
+  const blocked = gate || selfGate || (!namespace ? "当前身份尚未确认" : !sourceProof || !targetProof ? "正在重新核验源成员与目标成员" : null)
+  const ready = !blocked && !saving && !pendingOperation && (!create || !!organizationId && !!newAccount.phone.trim())
+  const close = () => { if (!savingRef.current && !pendingOperation) onClose() }
+  const finish = () => { sessionStorage.removeItem(recoveryKey);setPendingOperation(null);onSaved();onClose() }
 
   const submit = async () => {
     if (!ready || savingRef.current) return
@@ -95,9 +98,10 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
     savingRef.current = true
     setSaving(true)
     try {
+      let successMessage = `${actionLabel(action)}成功`
       if (action.kind === "create") {
-        const body = buildCreateMembership({ userId: account!.id, organizationId, memberType: action.memberType, reason, position: action.memberType === "EMPLOYEE" ? position : undefined, accountBindingConfirmed: bindingConfirmed, bindingSource, existingMemberships: targetQuery.data?.records }, capabilities)
-        await membershipsApi.create(body)
+        const result = await usersApi.create(newMemberPayload(newAccount, organizationId, action.memberType, position, reason))
+        if (result.accountReused) successMessage = `已自动关联已有账号并新建${typeLabel(action.memberType)}`
       } else if (!source) throw new Error("源成员尚未加载")
       else if (action.kind === "status") await membershipsApi.changeStatus(source.id, buildMembershipStatusChange(source, action.nextStatus, reason, capabilities, currentMembershipId))
       else if (action.kind === "delete") await membershipsApi.remove(source.id, buildMembershipDelete(source, reason, capabilities, currentMembershipId))
@@ -107,11 +111,15 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
         else await membershipsApi.replaceIdentity(source.id, body)
       }
       if (!alive.current) return
-      toast.success(`${actionLabel(action)}成功`)
-      onSaved()
-      onClose()
+      toast.success(successMessage)
+      finish()
     } catch (cause) {
-      if (alive.current) setError(cause instanceof Error ? cause.message : "操作失败，请重新核验成员后重试")
+      if (alive.current) {
+        const message = cause instanceof Error ? cause.message : "操作失败，请重新核验成员后重试"
+        setError(message)
+        const operation = message.match(/操作编号\s+([0-9a-f-]{36})/i)?.[1]
+        if (creatingAccount && operation) { setPendingOperation(operation);sessionStorage.setItem(recoveryKey,operation) }
+      }
     } finally {
       savingRef.current = false
       if (alive.current) setSaving(false)
@@ -122,17 +130,17 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onEscapeKeyDown={event => { if (saving) event.preventDefault() }} onPointerDownOutside={event => { if (saving) event.preventDefault() }}>
       <DialogHeader>
         <DialogTitle>{actionLabel(action)}</DialogTitle>
-        <DialogDescription>{create ? "绑定已经核实的既有账号，组织范围由服务器再次验证。" : "操作具体成员关系；账号及同组织的另一身份保持独立。"}</DialogDescription>
+        <DialogDescription>{create ? "填写电话和目标组织，后台自动匹配账号。新电话需填写姓名、用户名和初始密码；已有账号沿用原资料。" : "操作具体成员关系；账号及同组织的另一身份保持独立。"}</DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
         {!create && sourceQuery.isError ? <ErrorState message="源成员读取失败，不能提交变更" onRetry={() => sourceQuery.refetch()} /> : null}
         {create ? <>
-          <div className="space-y-2"><Label>既有账号 <span className="text-destructive">*</span></Label><MembershipAccountPicker namespace={namespace} value={account} disabled={saving} onChange={value => { setAccount(value); setBindingConfirmed(false); setBindingSource("") }} /></div>
-          <div className="space-y-2"><Label>目标组织 <span className="text-destructive">*</span></Label><EntityTreePicker nodes={organizations} value={organizationId} onSelect={id => setOrganizationId(id ?? "")} placeholder="选择管理范围内的组织" disabled={saving} ariaLabel="成员目标组织" /></div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {([['phone','电话','tel',30],['realName','姓名（新账号填写）','text',100],['username','用户名（新账号填写）','text',100],['password','初始密码（新账号填写）','password',1024],['email','邮箱（可选）','email',100]] as const).map(([key,label,type,maxLength]) => <div className="space-y-2" key={key}><Label htmlFor={`new-member-${key}`}>{label}{key === 'phone' && <span className="text-destructive"> *</span>}</Label><Input id={`new-member-${key}`} type={type} autoComplete={key === 'password' ? 'new-password' : 'off'} required={key === 'phone'} maxLength={maxLength} value={newAccount[key]} disabled={saving || !!pendingOperation} onChange={event => setNewAccount(previous => ({...previous,[key]:event.target.value}))} />{key === 'phone' && <p className="text-xs text-muted-foreground">必填，已有账号自动识别并关联。</p>}{key === 'email' && <p className="text-xs text-muted-foreground">邮箱须唯一；电话和邮箱属于不同账号时不能合并。</p>}</div>)}
+          </div>
+          <div className="space-y-2"><Label>目标组织 <span className="text-destructive">*</span></Label><EntityTreePicker nodes={organizations} value={organizationId} onSelect={id => setOrganizationId(id ?? "")} placeholder="选择管理范围内的组织" disabled={saving || !!pendingOperation} ariaLabel="成员目标组织" /></div>
           <IdentityCard title="新增成员类型" memberType={action.memberType} />
           {action.memberType === "EMPLOYEE" && <div className="space-y-2"><Label htmlFor="member-position">岗位（可选）</Label><Input id="member-position" value={position} maxLength={50} onChange={event => setPosition(event.target.value)} disabled={saving} /></div>}
-          {!!existingCreateRelation && <p role="status" className="rounded-lg border bg-muted/30 p-3 text-sm">该账号在目标组织已绑定{typeLabel(existingCreateRelation.memberType)}，无需重复添加。</p>}
-          {!!otherCreateRelation && !existingCreateRelation && <p className="rounded-lg border bg-muted/30 p-3 text-sm">该账号已有{typeLabel(otherCreateRelation.memberType)}关系，添加{typeLabel(action.memberType)}后将保留原有关系及其状态。</p>}
         </> : source ? <>
           <div className="space-y-1 rounded-lg border p-3"><p className="text-xs text-muted-foreground">账号 ID / 组织 ID</p><p className="break-all font-mono text-xs">{source.userId}</p><p className="break-all font-mono text-xs text-muted-foreground">{source.organizationId}</p></div>
           {transition ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center"><IdentityCard title={action.kind === "replaceIdentity" ? "源成员 · 完成后停用" : "源成员 · 保留原状态"} member={source} memberType={source.memberType} /><ArrowRight className="mx-auto size-4 shrink-0 text-muted-foreground sm:mx-0" /><IdentityCard title={target ? "目标成员 · 显式复用" : "目标成员 · 新增"} member={target} memberType={targetType} /></div> : <IdentityCard title="本次操作的具体成员" member={source} memberType={source.memberType} />}
@@ -142,18 +150,25 @@ export function MembershipActionDialog({ action, namespace, capabilities, organi
           <label className="flex items-start gap-2 text-sm"><Checkbox checked={reuseTarget} onCheckedChange={value => setReuseTarget(value === true)} disabled={saving} /><span>我已核对目标成员 ID 与 v{target.identityVersion}，明确复用此关系。</span></label>
           {target.status === "DISABLED" && <label className="flex items-start gap-2 text-sm"><Checkbox checked={enableTarget} onCheckedChange={value => setEnableTarget(value === true)} disabled={saving} /><span>明确启用已停用的目标。旧会话和旧代授权不会因此恢复。</span></label>}
         </div>}
-        {(create || transition) && targetType === "CUSTOMER" && <div className="space-y-3 rounded-lg border p-3">
+        {transition && targetType === "CUSTOMER" && <div className="space-y-3 rounded-lg border p-3">
           <label className="flex items-start gap-2 text-sm"><Checkbox checked={bindingConfirmed} onCheckedChange={value => setBindingConfirmed(value === true)} disabled={saving} /><span>已核实该既有账号的归属，确认将客户关系绑定到显示的精确账号 ID。</span></label>
           <div className="space-y-2"><Label htmlFor="member-binding-source">绑定依据 <span className="text-destructive">*</span></Label><Input id="member-binding-source" value={bindingSource} onChange={event => setBindingSource(event.target.value)} maxLength={200} placeholder="填写管理员已经核实的绑定来源" disabled={saving} /></div>
         </div>}
         <div className="rounded-lg border-l-2 border-primary bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
           {action.kind === "secondIdentity" ? "新增第二身份保留源成员，不属于登录切换；两个成员拥有独立状态、凭据与通知。" : action.kind === "replaceIdentity" ? "替换会停用源成员并使其旧会话失效，源数据授权会清理；历史通知不会改绑目标。" : action.kind === "delete" ? "删除的是此条组织成员关系，原成员凭据立即失效，历史收件记录保留其原始归属。全局账号及其他成员关系不会删除。" : action.kind === "status" ? action.nextStatus === "ENABLED" ? "启用产生新的身份代际，旧会话不会恢复。" : "停用只撤销此成员资格；员工角色配置可以保留，但停用期间不授予权限。" : "新成员使用独立成员 ID。管理端展示客户关系不代表客户可使用旧控制台登录。"}
         </div>
-        <div className="space-y-2"><Label htmlFor="membership-reason">本次操作原因 <span className="text-destructive">*</span></Label><Textarea id="membership-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={500} rows={3} placeholder="说明实际业务原因，将随源成员、目标成员和绑定依据一起记录" disabled={saving} /></div>
+        <div className="space-y-2"><Label htmlFor="membership-reason">本次操作原因 {create ? "（可选）" : <span className="text-destructive">*</span>}</Label><Textarea id="membership-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={500} rows={3} placeholder={create ? "可补充创建原因" : "说明实际业务原因"} disabled={saving || !!pendingOperation} /></div>
         {blocked && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">{blocked}</p>}
-        {error && <div role="alert" className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p>{error}</p><Button type="button" variant="outline" size="sm" disabled={saving || sourceQuery.isFetching || targetQuery.isFetching} onClick={() => { setError(null); if (!create) void sourceQuery.refetch(); if (create || transition) void targetQuery.refetch() }}>重新核验成员</Button></div>}
+        {pendingOperation && <div role="status" className="space-y-2 rounded-lg border p-3 text-sm"><p>创建结果待确认，请查询原操作，避免重复创建。</p><Button type="button" size="sm" disabled={saving} onClick={async () => {
+          if (savingRef.current) return
+          savingRef.current=true;setSaving(true)
+          try { await usersApi.recoverAccountOperation(pendingOperation);toast.success("成员创建已完成");finish() }
+          catch (cause) { setError(cause instanceof Error ? cause.message : "原操作结果仍待确认") }
+          finally { savingRef.current=false;if(alive.current)setSaving(false) }
+        }}>查询并恢复原操作</Button></div>}
+        {error && <div role="alert" className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p>{error}</p>{!creatingAccount && <Button type="button" variant="outline" size="sm" disabled={saving || sourceQuery.isFetching || targetQuery.isFetching} onClick={() => { setError(null); if (!create) void sourceQuery.refetch(); if (create || transition) void targetQuery.refetch() }}>重新核验成员</Button>}</div>}
       </div>
-      <DialogFooter><Button variant="outline" disabled={saving} onClick={close}>取消</Button><Button variant={action.kind === "delete" || action.kind === "replaceIdentity" ? "destructive" : "default"} onClick={submit} disabled={!ready}>{saving && <Loader2 className="size-4 animate-spin" />}{actionLabel(action)}</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" disabled={saving || !!pendingOperation} onClick={close}>取消</Button><Button variant={action.kind === "delete" || action.kind === "replaceIdentity" ? "destructive" : "default"} onClick={submit} disabled={!ready}>{saving && <Loader2 className="size-4 animate-spin" />}{actionLabel(action)}</Button></DialogFooter>
     </DialogContent>
   </Dialog>
 }

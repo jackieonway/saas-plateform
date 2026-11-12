@@ -83,10 +83,10 @@ export function ApplicationUrlEntryForm({ application, environment, entry, ready
   React.useEffect(() => { onBusyChange(pending); return () => onBusyChange(false) }, [pending, onBusyChange])
   const disabled = busy || pending || !ready
 
-  return <section className="mb-6 rounded-xl border border-primary/25 bg-primary/[0.025] p-4" aria-label="直接地址接入">
+  return <section className="mb-6 rounded-xl border border-primary/25 bg-primary/[0.025] p-4" aria-label="已部署应用接入">
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-      <div><h3 className="flex items-center gap-2 text-sm font-semibold"><Globe className="size-4 text-primary" />直接配置 HTTP/HTTPS 入口</h3>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">适合独立部署的应用，无需固定版本目录。保存后覆盖当前环境的版本入口；下方仍可维护版本和回滚。</p></div>
+      <div><h3 className="flex items-center gap-2 text-sm font-semibold"><Globe className="size-4 text-primary" />已部署应用</h3>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">填写应用地址，保存后即可使用，无需上传文件或填写版本号。</p></div>
       <Badge variant={entry && !reconfigure ? "default" : "outline"}>{reconfigure ? "需重新配置" : entry ? "当前使用" : "按环境配置"}</Badge>
     </div>
     <Form {...form}><form className="space-y-4" onSubmit={form.handleSubmit(values => { if (!disabled) save.mutate(values) })}>
@@ -94,14 +94,19 @@ export function ApplicationUrlEntryForm({ application, environment, entry, ready
         此应用需要重新配置 qiankun 入口。保存时会改为 qiankun HTML 应用并保持停用；子应用代码将在平台页面中执行，请确认已导出标准生命周期并完成审核。配置成功后，可在应用信息中启用。
       </div>}
       <FormField control={form.control} name="entryUrl" render={({ field }) => <FormItem>
-        <FormLabel>上游入口地址</FormLabel><FormControl><Input {...field} type="url" placeholder="https://app1.example.com/" className="font-mono" disabled={disabled} /></FormControl>
-        <FormDescription>可填写域名根目录、以 / 结尾的应用目录或具体 HTML 文件。服务端检查允许的上游来源。</FormDescription><FormMessage />
+        <FormLabel>应用地址</FormLabel><FormControl><Input {...field} type="url" placeholder="https://app1.example.com/" className="font-mono" disabled={disabled} /></FormControl>
+        <FormDescription>填写应用首页、目录地址或 HTML 页面地址。</FormDescription><FormMessage />
       </FormItem>} />
+      <details className="rounded-lg border bg-background/70">
+        <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">高级设置 · {form.watch("proxyEnabled") ? "已启用平台代理" : "直接访问应用"}</summary>
+        <div className="space-y-3 border-t p-3">
       <FormField control={form.control} name="proxyEnabled" render={({ field }) => <FormItem className="flex items-center justify-between gap-4 rounded-lg border bg-background/70 p-3">
         <div><FormLabel>通过平台同域代理</FormLabel><FormDescription className="mt-1">页面和相对静态资源通过平台域名访问；业务 API 仍需单独配置。</FormDescription></div>
         <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={disabled} aria-label="通过平台同域代理" /></FormControl>
       </FormItem>} />
       {entry && <p className="break-all text-xs text-muted-foreground">浏览器加载入口 <code className="font-mono">{entry.browserEntryUrl}</code></p>}
+        </div>
+      </details>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
         <p className="text-xs text-muted-foreground">当前配置仅影响 {environment} 环境，菜单与访问范围继续由平台管理。</p>
         <div className="flex gap-2">{entry && <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => { if (!disabled) remove.mutate() }}>{remove.isPending ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}恢复版本入口</Button>}

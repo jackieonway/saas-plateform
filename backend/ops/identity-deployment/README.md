@@ -35,7 +35,7 @@
 
 `verify.sql` 使用相同四个参数，只读核验数据库、marker、角色、owner、列权限、PUBLIC EXECUTE 与 definer search_path。它还核对每张 `auth_*` 表归 `_identity_owner` 所有、identity runtime 仅有各表所需的 DML（append-only receipt／来源记录没有 UPDATE/DELETE）、platform runtime 没有表/列权限。两个 runtime 分别核对 current_user、固定 issuer 和当前 schema_version；任一失败均不进入服务状态。身份 readiness 复核同一新结构与权限，并确认平台仍不能读取认证秘密。
 
-同库权限交接不会为全新环境自动登记账号、RP 或服务客户端。这些由明确的初始化配置准备，不从旧部署导入。部署后还需验证真实双角色允许/拒绝、SSO/RP、回调、撤销与故障关闭。
+同库权限交接不会自动登记账号、RP 或服务客户端。全新环境应在 canonical migration 完成后、执行权限交接前，以管理连接运行 `platform-bootstrap`，初始化一个平台租户、根组织和超管及基础菜单授权；密码由 `BOOTSTRAP_ADMIN_PASSWORD` 明确传入，用户名默认 `admin`。命令和数据 SQL 见[全新安装](../../docs/fresh-installation.md#平台租户与超管初始化)。RP 和服务客户端仍由当前部署明确登记。部署后还需验证真实双角色允许/拒绝、SSO/RP、回调、撤销与故障关闭。
 
 
 资源后端使用平台 owner 的 `platform_resource_services` 认证独立私有调用方。`APP_RESOURCE` 服务登记准确目标业务应用、`audience=applications.code`、成员类型及 `resource:action` allowlist；客户资料独立使用 `CUSTOMER_PROFILE`，类型准确为 CUSTOMER，操作准确为 `customer:profile`。`CUSTOMER_PROFILE_CLIENT_REF` 配置继续保留名称，但指向新私有服务的 UUID，而不是 OAuth client。服务任何用途、密钥、应用、受众或范围变化都推进 `credential_version`，不能通过重新启用修复原客户 context。

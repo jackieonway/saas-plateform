@@ -13,6 +13,7 @@ export interface SelectedMembershipAccount {
   id: string
   username: string
   realName: string
+  phone?: string
 }
 
 /** A directory result must be explicitly selected. Matching contact details
@@ -56,7 +57,7 @@ export function MembershipAccountPicker({ namespace, value, onChange, disabled =
       {debounced.length >= 2 && !query.isError && (
         <div className="max-h-44 overflow-y-auto rounded-lg border">
           {query.isFetching ? <p className="p-3 text-xs text-muted-foreground">正在检索可管理账号…</p> : query.data?.records.length ? query.data.records.map(account => (
-            <button type="button" key={account.id} className="block w-full space-y-1 border-b px-3 py-2.5 text-left last:border-b-0 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none" disabled={disabled} onClick={() => onChange({ id: account.id, username: account.username, realName: account.realName })}>
+            <button type="button" key={account.id} className="block w-full space-y-1 border-b px-3 py-2.5 text-left last:border-b-0 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none" disabled={disabled} onClick={() => onChange({ id: account.id, username: account.username, realName: account.realName, phone: account.phone ?? "" })}>
               <p className="text-sm font-medium">{account.realName || account.username}<span className="ml-2 text-xs font-normal text-muted-foreground">@{account.username}</span></p>
               <p className="break-all font-mono text-[11px] text-muted-foreground">{account.id}</p>
             </button>

@@ -62,7 +62,7 @@ export function ApplicationEditorDialog({ editor }: { editor: ReturnType<typeof 
                 <div className="min-w-0 space-y-1">
                   <p className="text-sm font-medium">qiankun 微应用 · 独立部署</p>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    {useQuickSetup ? "自动生成访问路径和首页菜单，下一步填写 HTTP/HTTPS 入口或上传构建包。" : "使用自定义路径，创建后继续配置菜单与应用入口。"}
+                    {useQuickSetup ? "自动生成访问路径和首页菜单，下一步填写已部署应用的地址。" : "使用自定义路径，创建后继续配置菜单与应用入口。"}
                   </p>
                   <code className="block break-all font-mono text-xs text-primary">{useQuickSetup ? generatedPath : form.watch("basePath") || "尚未填写自定义路径"}</code>
                 </div>

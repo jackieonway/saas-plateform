@@ -205,12 +205,6 @@ export function UserDirectory({ memberType, informationOnly = false }: { memberT
     defaultValues: { username: "", password: "", realName: "", email: "", phone: "", gender: "UNKNOWN" },
   })
 
-  const openCreate = () => {
-    setEditing(null)
-    form.reset({ username: "", password: "", realName: "", email: "", phone: "", gender: "UNKNOWN" })
-    setDialogOpen(true)
-  }
-
   const openEdit = (u: UserRecord) => {
     setEditing(u)
     form.reset({
@@ -367,11 +361,11 @@ export function UserDirectory({ memberType, informationOnly = false }: { memberT
     <div>
       <PageHeader
         title={memberType === "EMPLOYEE" ? "用户管理" : "客户管理"}
-        description={memberType === "EMPLOYEE" ? "维护用户资料、员工组织、部门、岗位和角色；添加员工时绑定已有账号。账号启停、密码与删除影响该账号的所有身份。" : "维护客户账号资料；添加客户时绑定已有账号。账号启停、密码与删除影响该账号的所有身份。"}
+        description={memberType === "EMPLOYEE" ? "新建员工时按电话自动匹配账号，未匹配时创建新账号。电话必填，邮箱须唯一。" : "新建客户时按电话自动匹配账号，未匹配时创建新账号。电话必填，邮箱须唯一。"}
         icon={<Users className="size-5" />}
         actions={
           <UserManagementActions memberType={memberType} createMembershipBlockedReason={createGate}
-            onCreateAccount={openCreate} onAddMembership={() => setBindingOpen(true)} />
+            onAddMembership={() => setBindingOpen(true)} />
         }
       />
 
@@ -478,12 +472,12 @@ export function UserDirectory({ memberType, informationOnly = false }: { memberT
         ) : records.length === 0 ? (
           <EmptyState
             title={keyword || orgFilter ? "没有匹配的用户" : "还没有用户"}
-            description={keyword || orgFilter ? "调整筛选条件试试" : "查询已有账号并绑定到组织后，将在这里显示"}
+            description={keyword || orgFilter ? "调整筛选条件试试" : "新建成员并填写账号信息后，将在这里显示"}
             action={
               !keyword && !orgFilter && (
                 <Button size="sm" disabled={!!createGate} title={createGate ?? undefined} onClick={() => setBindingOpen(true)}>
                   <UserPlus className="size-4" />
-                  {memberType === "EMPLOYEE" ? "添加员工" : "添加客户"}
+                  {memberType === "EMPLOYEE" ? "新建员工" : "新建客户"}
                 </Button>
               )
             }

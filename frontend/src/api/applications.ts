@@ -31,16 +31,10 @@ export const applicationsApi = {
       entryUrl: body.entryUrl, healthUrl: body.healthUrl,
       resources: body.resources.map(({ url, kind }) => ({ url, kind })),
     }),
-  uploadRelease: (id: string, environment: ApplicationEnvironment, version: string, file: File) => {
-    const format = file.name.toLowerCase().endsWith(".tar.gz") ? "tar.gz" : "zip"
-    return api.postRaw<ApplicationReleaseRecord>(
-      `/api/applications/${id}/releases/upload${qs({ environment, version, entryType: "HTML", format })}`,
-      file,
-      format === "zip" ? "application/zip" : "application/gzip",
-    )
-  },
   preflightRelease: (id: string, releaseId: string) =>
     api.post<ApplicationReleaseRecord>(`/api/applications/${id}/releases/${releaseId}/preflight`),
+  removeRelease: (id: string, releaseId: string) =>
+    api.del(`/api/applications/${encodeURIComponent(id)}/releases/${encodeURIComponent(releaseId)}`),
   activateRelease: (id: string, releaseId: string) =>
     api.post<ApplicationDeploymentRecord>(`/api/applications/${id}/releases/${releaseId}/activate`),
   deployments: (id: string) =>

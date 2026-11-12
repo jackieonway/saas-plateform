@@ -76,7 +76,7 @@ const permissionSchema = z.object({
 })
 
 const clientFormSchema = z.object({
-  applicationId: z.string().trim().min(1, "请输入应用 UUIDv7").max(36),
+  applicationId: z.string().trim().min(1, "请选择应用").max(36),
   environment: z.enum(["test", "production"]),
   displayName: z.string().trim().min(1, "请输入客户端名称").max(120),
   subjectMode: z.enum(["USER", "MACHINE"]),
@@ -281,6 +281,7 @@ export default function UnifiedClientsPage() {
   const recoveryScope = useAuthStore((state) => `${state.contextKey ?? ""}:${state.sessionId ?? ""}`)
   const [searchParams, setSearchParams] = useSearchParams()
   const [applicationDraft, setApplicationDraft] = React.useState(searchParams.get("applicationId") ?? "")
+  const applicationFilterRef = React.useRef<HTMLInputElement>(null)
   const [editorOpen, setEditorOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<UnifiedClientRecord | null>(null)
   const [detail, setDetail] = React.useState<UnifiedClientRecord | null>(null)
@@ -622,7 +623,7 @@ export default function UnifiedClientsPage() {
   const changeFilter = (key: FilterKey, value: string) => updateSearch({ [key]: value }, true)
   const applyTextFilters = () => {
     if (applicationDraft.trim() && !isUuidV7(applicationDraft.trim())) {
-      toast.error("应用筛选必须是 UUIDv7")
+      toast.error("请选择应用或输入有效的应用标识")
       return
     }
     updateSearch({ applicationId: applicationDraft.trim().toLowerCase() }, true)
@@ -735,8 +736,20 @@ export default function UnifiedClientsPage() {
           <FilterSelect label="主体" value={filters.subjectMode} onChange={(value) => changeFilter("subjectMode", value)} options={[[ALL, "全部主体"], ["USER", "人员"], ["MACHINE", "机器"]]} />
           <FilterSelect label="状态" value={filters.status} onChange={(value) => changeFilter("status", value)} options={[[ALL, "全部状态"], ["ENABLED", "启用"], ["DISABLED", "停用"], ["RETIRED", "已退役"]]} />
           <div className="space-y-1.5">
-            <Label htmlFor="filter-application" className="text-[11px] font-medium text-muted-foreground">应用 UUID</Label>
-            <Input id="filter-application" value={applicationDraft} onChange={(event) => setApplicationDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyTextFilters() }} placeholder="粘贴 UUIDv7" className="h-9 font-mono text-xs" />
+            <Label htmlFor="filter-application" className="text-[11px] font-medium text-muted-foreground">应用</Label>
+            <div className="relative">
+              <Input ref={applicationFilterRef} id="filter-application" list="identity-client-filter-apps" value={applicationDraft} onChange={(event) => {
+                const value = event.target.value
+                setApplicationDraft(value)
+                if (!value.trim() || isUuidV7(value.trim())) updateSearch({ applicationId: value.trim().toLowerCase() }, true)
+              }} onKeyDown={(event) => { if (event.key === "Enter") applyTextFilters() }} placeholder="选择应用或输入应用标识" className={`h-9 pr-10 font-mono text-xs ${applicationDraft ? "[&::-webkit-calendar-picker-indicator]:hidden" : ""}`} />
+              {applicationDraft && <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground" aria-label="清除应用筛选" onClick={() => {
+                setApplicationDraft("")
+                updateSearch({ applicationId: "" }, true)
+                applicationFilterRef.current?.focus()
+              }}><X className="size-3.5" /></Button>}
+            </div>
+            <datalist id="identity-client-filter-apps">{(appsQuery.data ?? []).map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}</datalist>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-4 py-2.5 sm:px-5">
@@ -839,8 +852,15 @@ export default function UnifiedClientsPage() {
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="space-y-5">
                   <section className="grid gap-4 rounded-xl border bg-muted/15 p-4 sm:grid-cols-2">
-                    <FormField label="应用 UUIDv7" error={form.formState.errors.applicationId?.message} hint="第三方 ID 可手动粘贴；审核状态以身份权威为准。">
-                      <Input list="identity-client-apps" className="font-mono text-xs" placeholder="019a…" disabled={!!editing} {...form.register("applicationId")} />
+                    <FormField label="应用" error={form.formState.errors.applicationId?.message} hint="选择应用，也可粘贴应用标识。">
+                      <div className="relative">
+                        <Input aria-label="应用" list="identity-client-apps" className={`pr-10 font-mono text-xs ${selectedApplicationId ? "[&::-webkit-calendar-picker-indicator]:hidden" : ""}`} placeholder="选择应用或输入应用标识" disabled={!!editing} {...form.register("applicationId")} />
+                        {!editing && selectedApplicationId && <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground" aria-label="清除应用选择" onClick={() => {
+                          form.setValue("applicationId", "", { shouldDirty: true })
+                          form.clearErrors("applicationId")
+                          form.setFocus("applicationId")
+                        }}><X className="size-3.5" /></Button>}
+                      </div>
                       <datalist id="identity-client-apps">{(appsQuery.data ?? []).map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}</datalist>
                     </FormField>
                     <FormField label="显示名称" error={form.formState.errors.displayName?.message}>

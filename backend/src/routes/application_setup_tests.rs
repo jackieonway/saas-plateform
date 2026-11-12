@@ -17,6 +17,20 @@ use crate::entity_creation_tests::Database;
 
 const SECRET: &str = "application-setup-disposable-test-only";
 
+#[test]
+fn setup_environment_defaults_to_runtime_configuration() {
+    let query: super::SetupQuery = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(query.environment("production").unwrap(), "production");
+    assert_eq!(query.environment("staging").unwrap(), "staging");
+    assert_eq!(query.environment("development").unwrap(), "development");
+    let explicit: super::SetupQuery =
+        serde_json::from_value(json!({"environment":"staging"})).unwrap();
+    assert_eq!(explicit.environment("production").unwrap(), "staging");
+    let invalid: super::SetupQuery =
+        serde_json::from_value(json!({"environment":"../invalid"})).unwrap();
+    assert!(invalid.environment("production").is_err());
+}
+
 struct Fixture {
     router: Router,
     admin: String,

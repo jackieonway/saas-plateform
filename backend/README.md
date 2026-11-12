@@ -14,7 +14,7 @@ cargo run --locked --bin platform-migrate
 
 该命令只初始化结构，不启动服务、不导入行、不创建用户或演示业务数据。独立身份部署由管理作业完成初始化与 owner/ACL 交接；平台 runtime 设置 `IDENTITY_REMOTE_ENABLED=true`，只做 readiness，不代为迁移和 seed。
 
-[全新安装](docs/fresh-installation.md)说明四个库的边界和初始化顺序。[开发指南](docs/development.md)说明 SSO、RP、TLS、配置和运行命令。受控初次 bootstrap 使用明确管理员配置；不得将默认演示账号或历史客户端用于正式部署。
+[全新安装](docs/fresh-installation.md)说明四个库的边界和初始化顺序。初次安装可执行 `cargo run --locked --bin platform-bootstrap` 一次完成当前结构及平台基础数据初始化：创建一个平台租户、根组织和超管，补齐员工身份、角色及基础菜单授权。`DATABASE_URL`、`BOOTSTRAP_ADMIN_PASSWORD` 必须明确提供，用户名 `BOOTSTRAP_ADMIN_USERNAME` 默认 `admin`；重复执行保留原有账号和密码。[开发指南](docs/development.md)说明 SSO、RP、TLS、配置和运行命令。
 
 ## 开发与检查
 

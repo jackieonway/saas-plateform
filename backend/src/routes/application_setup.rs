@@ -52,18 +52,13 @@ pub(super) fn routes() -> Router<AppState> {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SetupQuery {
-    #[serde(default = "development")]
-    environment: String,
+    environment: Option<String>,
     #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     tenant_id: Option<Uuid>,
     #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     organization_id: Option<Uuid>,
     #[serde(default, deserialize_with = "crate::util::uuid7::deserialize_optional")]
     role_id: Option<Uuid>,
-}
-
-fn development() -> String {
-    "development".into()
 }
 
 #[derive(Deserialize)]
@@ -154,10 +149,11 @@ struct Target {
 }
 
 impl SetupQuery {
+    fn environment(&self, current: &str) -> Result<String, AppError> {
+        crate::releases::validate_environment(self.environment.as_deref().unwrap_or(current))
+    }
+
     fn validate(&self) -> Result<Option<Target>, AppError> {
-        if !["development", "staging", "production"].contains(&self.environment.as_str()) {
-            return Err(AppError::bad_request("发布环境无效"));
-        }
         match (self.tenant_id, self.organization_id, self.role_id) {
             (None, None, None) => Ok(None),
             (Some(tenant_id), Some(organization_id), Some(role_id))
@@ -373,6 +369,7 @@ async fn read(
         .await?;
     state.require_platform(&actor).await?;
     let Query(query) = query.map_err(|_| AppError::bad_request("应用接入查询参数无效"))?;
+    let environment = query.environment(&state.config.application_environment)?;
     let target = query.validate()?;
     let mut tx = state.pool.begin().await?;
     sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
@@ -388,7 +385,7 @@ async fn read(
     let (entry_source, proxy_enabled): (String, bool) =
         sqlx::query_as("SELECT source,proxy_enabled FROM application_effective_entry($1,$2)")
             .bind(id)
-            .bind(&query.environment)
+            .bind(&environment)
             .fetch_one(&mut *tx)
             .await?;
     let url_entry_configured = entry_source == "URL";
@@ -398,7 +395,7 @@ async fn read(
         "SELECT r.version,r.validation_status,r.entry_type FROM application_deployments d \
          JOIN application_releases r ON r.id=d.active_release_id AND r.application_id=d.application_id AND r.environment=d.environment \
          WHERE d.application_id=$1 AND d.environment=$2",
-    ).bind(id).bind(&query.environment).fetch_optional(&mut *tx).await?;
+    ).bind(id).bind(&environment).fetch_optional(&mut *tx).await?;
     let release_validated = if !qiankun {
         false
     } else if release_required {
@@ -420,7 +417,7 @@ async fn read(
     };
     tx.commit().await?;
     Ok(Json(
-        json!({"applicationId":id,"environment":query.environment,"applicationEnabled":app.status=="ENABLED",
+        json!({"applicationId":id,"environment":environment,"applicationEnabled":app.status=="ENABLED",
         "entryType":app.entry_type,"runtimeMode":app.runtime_mode,"releaseRequired":release_required,
         "activeVersion":if url_entry_configured { None } else { deployment.map(|value|value.0) },"releaseValidated":release_validated,
         "urlEntryConfigured":url_entry_configured,"entrySource":entry_source,"proxyEnabled":proxy_enabled,

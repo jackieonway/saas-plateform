@@ -19,6 +19,54 @@ use crate::util::{audit, uuid7};
 const COLUMNS: &str = "m.id, m.user_id, m.organization_id, m.member_type, m.status, \
     m.identity_version, m.department_id, COALESCE(m.position,'') AS position, m.updated_at";
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct NewAccountMembership {
+    #[serde(deserialize_with = "uuid7::deserialize")]
+    pub organization_id: Uuid,
+    pub member_type: MemberType,
+    #[serde(default)]
+    pub position: String,
+    pub reason: String,
+}
+
+pub(crate) fn validate_member_phone(phone: &str) -> Result<(), AppError> {
+    let normalized: String = phone
+        .chars()
+        .filter(|c| !c.is_whitespace() && !matches!(c, '(' | ')' | '-'))
+        .collect();
+    if normalized.is_empty() {
+        return Err(AppError::bad_request("电话必填"));
+    }
+    let digits = normalized.strip_prefix('+').unwrap_or(&normalized);
+    if phone.len() > 30 || digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+        return Err(AppError::bad_request("电话号码格式不正确"));
+    }
+    Ok(())
+}
+
+pub(crate) async fn validate_new_account_membership(
+    state: &AppState,
+    actor: &CurrentUser,
+    tx: &mut Transaction<'_, Postgres>,
+    input: &NewAccountMembership,
+) -> Result<Uuid, AppError> {
+    if !state.config.membership_lifecycle_enabled {
+        return Err(AppError::forbidden("成员生命周期写入尚未开放"));
+    }
+    creation_gate(state, input.member_type)?;
+    validate_reason(&input.reason)?;
+    if input.position.trim().chars().count() > 50 {
+        return Err(AppError::bad_request("岗位名称最多 50 字符"));
+    }
+    if input.member_type == MemberType::Customer && !input.position.trim().is_empty() {
+        return Err(AppError::bad_request("客户身份不得绑定员工岗位"));
+    }
+    Ok(authority_in_tx(tx, actor, input.organization_id)
+        .await?
+        .tenant_id)
+}
+
 #[derive(Clone, sqlx::FromRow, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Membership {
@@ -49,6 +97,40 @@ pub(super) struct CreateMembership {
     account_binding_confirmed: bool,
     binding_source: Option<String>,
     reason: String,
+    #[serde(skip)]
+    expected_phone: Option<String>,
+}
+
+pub(crate) async fn bind_account_by_phone(
+    state: &AppState,
+    actor: &CurrentUser,
+    headers: &HeaderMap,
+    user_id: Uuid,
+    phone: &str,
+    input: &NewAccountMembership,
+) -> Result<Value, AppError> {
+    create(
+        state,
+        actor,
+        headers,
+        CreateMembership {
+            user_id,
+            organization_id: input.organization_id,
+            member_type: input.member_type,
+            department_id: None,
+            position: input.position.clone(),
+            account_binding_confirmed: true,
+            binding_source: Some("管理员按唯一电话自动匹配已有账号".into()),
+            reason: input.reason.clone(),
+            expected_phone: Some(
+                phone
+                    .chars()
+                    .filter(|c| !c.is_whitespace() && !matches!(c, '(' | ')' | '-'))
+                    .collect(),
+            ),
+        },
+    )
+    .await
 }
 
 #[derive(Deserialize)]
@@ -138,6 +220,21 @@ fn validate_reason(reason: &str) -> Result<&str, AppError> {
     Ok(reason)
 }
 
+#[cfg(test)]
+mod creation_phone_tests {
+    use super::validate_member_phone;
+
+    #[test]
+    fn employee_and_customer_phone_is_required() {
+        for phone in ["", "  ", " () - ", "+", "not-a-number"] {
+            assert!(validate_member_phone(phone).is_err());
+        }
+        for phone in ["13800000001", "+86 (138) 0000-0001"] {
+            assert!(validate_member_phone(phone).is_ok());
+        }
+    }
+}
+
 async fn lock_users(
     tx: &mut Transaction<'_, Postgres>,
     actor: &CurrentUser,
@@ -179,6 +276,11 @@ pub(crate) async fn ensure_employee_creation_allowed_in_tx(
     organization_id: Uuid,
     dual_memberships_enabled: bool,
 ) -> Result<(), AppError> {
+    let phone: String = sqlx::query_scalar("SELECT COALESCE(phone,'') FROM users WHERE id=$1")
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await?;
+    validate_member_phone(&phone)?;
     if dual_memberships_enabled {
         return Ok(());
     }
@@ -431,6 +533,11 @@ async fn insert(
     department_id: Option<Uuid>,
     position: &str,
 ) -> Result<Membership, AppError> {
+    let phone: String = sqlx::query_scalar("SELECT COALESCE(phone,'') FROM users WHERE id=$1")
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await?;
+    validate_member_phone(&phone)?;
     let id = uuid7::new_uuid();
     sqlx::query(
         "INSERT INTO memberships (id,user_id,organization_id,member_type,status,identity_version,department_id,position) \
@@ -476,6 +583,20 @@ pub(super) async fn create(
     let mut tx = state.pool.begin().await?;
     let authority = authority_in_tx(&mut tx, actor, input.organization_id).await?;
     lock_users(&mut tx, actor, input.user_id, true).await?;
+    let phone: String = sqlx::query_scalar("SELECT COALESCE(phone,'') FROM users WHERE id=$1")
+        .bind(input.user_id)
+        .fetch_one(&mut *tx)
+        .await?;
+    validate_member_phone(&phone)?;
+    if let Some(expected) = &input.expected_phone {
+        let current: String = phone
+            .chars()
+            .filter(|c| !c.is_whitespace() && !matches!(c, '(' | ')' | '-'))
+            .collect();
+        if &current != expected {
+            return Err(AppError::conflict("账号电话已变更，请重新提交"));
+        }
+    }
     revalidate(&mut tx, actor, input.organization_id, &authority).await?;
     let tenant_id = authority.tenant_id;
     let members = lock_memberships(&mut tx, input.user_id, input.organization_id).await?;

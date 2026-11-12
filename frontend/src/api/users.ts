@@ -20,7 +20,8 @@ export const usersApi = {
     const q = qs.toString()
     return api.get<unknown>(`/api/users${q ? `?${q}` : ""}`)
   },
-  create: (body: UserPayload) => api.post("/api/users", body),
+  create: (body: UserPayload) => api.post<{ id: string; username: string; accountReused?: boolean }>("/api/users", body),
+  recoverAccountOperation: (id: string) => api.post(`/api/users/account-operations/${encodeURIComponent(id)}`),
   update: (id: string, body: { realName: string; email?: string; phone?: string; gender?: string }) =>
     api.put(`/api/users/${id}`, body),
   remove: (id: string) => api.del(`/api/users/${id}`),

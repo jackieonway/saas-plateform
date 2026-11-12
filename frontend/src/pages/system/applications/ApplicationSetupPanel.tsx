@@ -5,30 +5,23 @@ import { ArrowRight, CheckCircle2, Circle, FileCheck2, ListTree, Loader2, Packag
 import { applicationSetupApi, type ApplicationAccessTarget } from "@/api/application-setup"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ErrorState } from "@/components/states"
 import { cn } from "@/lib/utils"
-import type { ApplicationEnvironment, ApplicationRecord } from "@/api/types"
+import type { ApplicationRecord } from "@/api/types"
 import { ApplicationAccessSetup } from "./ApplicationAccessSetup"
 import { ApplicationReleasesPanel } from "./ApplicationReleasesPanel"
 import { applicationSetupChecks, isQiankunApp, type ApplicationSetupStep } from "./application-setup-policy"
 
 type Props = {
   application: ApplicationRecord
-  environment: ApplicationEnvironment
   step: ApplicationSetupStep
-  onEnvironmentChange: (environment: ApplicationEnvironment) => void
   onStepChange: (step: ApplicationSetupStep) => void
   onClose: () => void
   onEdit: () => void
 }
 
-const environments: { value: ApplicationEnvironment; label: string }[] = [
-  { value: "development", label: "开发环境" }, { value: "staging", label: "预发环境" }, { value: "production", label: "生产环境" },
-]
-
-export function ApplicationSetupPanel({ application, environment, step, onEnvironmentChange, onStepChange, onClose, onEdit }: Props) {
+export function ApplicationSetupPanel({ application, step, onStepChange, onClose, onEdit }: Props) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [releaseBusy, setReleaseBusy] = React.useState(false)
@@ -36,13 +29,14 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
   const [selectedTarget, setSelectedTarget] = React.useState<ApplicationAccessTarget | null>(null)
   const busy = releaseBusy || accessBusy
   const statusQuery = useQuery({
-    queryKey: ["application-setup", application.id, environment, application.status, application.entryType, application.runtimeMode, application.entryUrl],
-    queryFn: () => applicationSetupApi.status(application.id, environment),
+    queryKey: ["application-setup", application.id, "runtime", application.status, application.entryType, application.runtimeMode, application.entryUrl],
+    queryFn: () => applicationSetupApi.status(application.id),
     retry: 1,
     staleTime: 0,
   })
   const status = statusQuery.isSuccess && !statusQuery.isPlaceholderData
-    && statusQuery.data.applicationId === application.id && statusQuery.data.environment === environment ? statusQuery.data : null
+    && statusQuery.data.applicationId === application.id ? statusQuery.data : null
+  const environment = status?.environment
   const targetStatusQuery = useQuery({
     queryKey: ["application-setup-target", application.id, environment, selectedTarget?.tenantId ?? "", selectedTarget?.organizationId ?? "", selectedTarget?.roleId ?? ""],
     queryFn: () => applicationSetupApi.status(application.id, environment, selectedTarget ?? undefined),
@@ -62,7 +56,7 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
   const entryReady = checks.find(check => check.id === "release")?.complete ?? false
   const steps = [
     { id: "overview" as const, title: "接入检查", detail: "查看还缺哪些配置", icon: FileCheck2 },
-    { id: "release" as const, title: "应用入口", detail: "直接地址或固定版本", icon: PackageOpen },
+    { id: "release" as const, title: "应用入口", detail: "填写已部署地址", icon: PackageOpen },
     { id: "access" as const, title: "访问范围", detail: "选择组织、角色与菜单", icon: ShieldCheck },
   ]
   const refresh = React.useCallback(() => {
@@ -85,10 +79,6 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
           <SheetDescription>配置入口，检查页面，再明确谁可以访问。所有步骤都可稍后继续。</SheetDescription>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2"><Badge variant="outline" className="font-mono">{application.code}</Badge><Badge variant={isQiankunApp(application) ? "secondary" : "destructive"}>{isQiankunApp(application) ? "qiankun 微应用" : "需重新配置 qiankun 入口"}</Badge></div>
-            <Select value={environment} onValueChange={value => { if (!busy) onEnvironmentChange(value as ApplicationEnvironment) }} disabled={busy}>
-              <SelectTrigger className="w-36" aria-label="接入环境"><SelectValue /></SelectTrigger>
-              <SelectContent>{environments.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
-            </Select>
           </div>
         </SheetHeader>
         <nav className="grid shrink-0 grid-cols-3 border-b bg-muted/20" aria-label="应用接入步骤">
@@ -105,7 +95,7 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
               <div><h3 className="font-semibold">应用已创建，接着完成以下配置</h3><p className="mt-1 text-sm text-muted-foreground">检查结果来自当前环境。访问范围需按具体租户、组织和角色核对。</p></div>
               <Button variant="ghost" size="icon" aria-label="刷新接入检查" disabled={statusQuery.isFetching || targetStatusQuery.isFetching || busy} onClick={refresh}><RefreshCw className={cn("size-4", (statusQuery.isFetching || targetStatusQuery.isFetching) && "animate-spin")} /></Button>
             </div>
-            {statusQuery.isError ? <ErrorState message={statusQuery.error.message} onRetry={() => statusQuery.refetch()} /> : !status ? <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在检查应用配置…</div> : <div className="overflow-hidden rounded-xl border">
+            {statusQuery.isError ? <ErrorState message={statusQuery.error.message} onRetry={() => statusQuery.refetch()} /> : !status || !environment ? <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在检查应用配置…</div> : <div className="overflow-hidden rounded-xl border">
               {checks.map(check => <div key={check.id} className="flex items-start gap-3 border-b p-4 last:border-0">
                 {check.complete ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="mt-0.5 size-5 shrink-0 text-muted-foreground/60" />}
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium">{check.title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{check.description}</p></div>
@@ -121,9 +111,9 @@ export function ApplicationSetupPanel({ application, environment, step, onEnviro
             </div>
             <div className="flex justify-end"><Button disabled={busy} onClick={() => go(entryReady ? "access" : "release")}>{entryReady ? "配置访问范围" : "继续配置入口"}<ArrowRight className="size-4" /></Button></div>
           </div>}
-          {step === "release" && <ApplicationReleasesPanel application={application} open onOpenChange={() => {}} embedded environment={environment}
-            onEnvironmentChange={onEnvironmentChange} onBusyChange={setReleaseBusy} onDeploymentChanged={refresh} onContinue={() => go("access")} />}
-          {step === "access" && (statusQuery.isError ? <ErrorState message={statusQuery.error.message} onRetry={() => statusQuery.refetch()} /> : !status ? <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取配置权限…</div> : <ApplicationAccessSetup key={`${application.id}:${environment}`} application={application} environment={environment} canConfigureAccess={status.canConfigureAccess}
+          {step === "release" && (statusQuery.isError ? <ErrorState message={statusQuery.error.message} onRetry={() => statusQuery.refetch()} /> : !environment ? <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取应用配置…</div> : <ApplicationReleasesPanel application={application} open onOpenChange={() => {}} embedded environment={environment}
+            onBusyChange={setReleaseBusy} onDeploymentChanged={refresh} onContinue={() => go("access")} />)}
+          {step === "access" && (statusQuery.isError ? <ErrorState message={statusQuery.error.message} onRetry={() => statusQuery.refetch()} /> : !status || !environment ? <div role="status" className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取配置权限…</div> : <ApplicationAccessSetup key={`${application.id}:${environment}`} application={application} environment={environment} canConfigureAccess={status.canConfigureAccess}
             entryReady={entryReady} initialTarget={selectedTarget} onTargetChange={updateTarget} onConfigured={refresh} onBusyChange={setAccessBusy} />)}
         </div>
         <div className="flex shrink-0 items-center justify-between gap-3 border-t bg-muted/10 px-5 py-3">

@@ -19,6 +19,7 @@ use crate::routes::{page_json, paging};
 use crate::state::AppState;
 use crate::util::audit;
 
+mod member_creation;
 pub(super) mod remote;
 
 pub fn routes() -> Router<AppState> {
@@ -500,7 +501,9 @@ async fn list(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserBody {
+    #[serde(default)]
     username: String,
+    #[serde(default)]
     password: String,
     #[serde(default)]
     real_name: String,
@@ -510,6 +513,8 @@ struct UserBody {
     phone: String,
     #[serde(default = "default_gender")]
     gender: String,
+    #[serde(default)]
+    membership: Option<crate::membership_lifecycle::NewAccountMembership>,
 }
 
 fn default_gender() -> String {
@@ -533,12 +538,22 @@ async fn create(
     RequirePermission("system:user")
         .check(&state, &user)
         .await?;
+    if let Some(result) = member_creation::try_bind_existing(&state, &user, &headers, &body).await?
+    {
+        return Ok(Json(result));
+    }
     let username = body.username.trim().to_string();
     if username.is_empty() {
         return Err(AppError::bad_request("用户名不能为空"));
     }
+    if body.membership.is_some() && body.real_name.trim().is_empty() {
+        return Err(AppError::bad_request("新账号请填写姓名"));
+    }
     state.accounts.validate_password(&body.password)?;
     let gender = parse_gender(&body.gender)?;
+    if body.membership.is_some() || state.scoped_org_ids(&user).await?.is_some() {
+        crate::membership_lifecycle::validate_member_phone(&body.phone)?;
+    }
     if state.remote_accounts.is_some() {
         return remote::create(&state, &headers, &user, &username, &body, &gender)
             .await
@@ -546,13 +561,17 @@ async fn create(
     }
     let password = state.accounts.prepare_password(&body.password).await?;
     let platform = state.scoped_org_ids(&user).await?.is_none();
-    let welcome_title = if platform {
+    let welcome_title = if platform || body.membership.is_some() {
         None
     } else {
         let branding = crate::platform_settings::load_branding(&state.pool).await?;
         Some(format!("欢迎加入 {}", branding.platform_name))
     };
     let mut tx = state.pool.begin().await?;
+    if let Some(input) = &body.membership {
+        crate::membership_lifecycle::validate_new_account_membership(&state, &user, &mut tx, input)
+            .await?;
+    }
     let created = {
         let mut accounts = crate::authentication::PostgresAccountTransaction::new(&mut tx);
         state
@@ -572,6 +591,11 @@ async fn create(
             .await?
     };
     let row = (created.id, created.username);
+    if let Some(input) = &body.membership {
+        sqlx::query("INSERT INTO memberships (id,user_id,organization_id,member_type,position) VALUES($1,$2,$3,$4,$5)")
+            .bind(crate::util::uuid7::new_uuid()).bind(row.0).bind(input.organization_id)
+            .bind(input.member_type.as_str()).bind(input.position.trim()).execute(&mut *tx).await?;
+    }
     if let Some(welcome_title) = welcome_title {
         sqlx::query("INSERT INTO memberships (user_id, organization_id, member_type, id) VALUES ($1, $2, 'EMPLOYEE', $3)")
             .bind(row.0)
