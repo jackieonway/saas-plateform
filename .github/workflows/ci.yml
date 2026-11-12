@@ -121,6 +121,8 @@ jobs:
           IDENTITY_PHASE02_TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
           IDENTITY_PHASE12_TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
         run: 'cargo test --locked --bin saas-platform-backend identity_deployment_tests:: -- --ignored --test-threads=1'
+      - name: Administrator sessions and revocation audit
+        run: 'cargo test --locked --bin saas-platform-backend routes::sessions::tests:: -- --ignored --test-threads=1'
       - name: Micro application setup and access
         run: 'cargo test --locked --bin saas-platform-backend routes::application_setup::tests:: -- --ignored --test-threads=2'
   operations:

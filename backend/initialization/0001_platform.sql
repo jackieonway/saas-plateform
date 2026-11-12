@@ -91,7 +91,9 @@ BEGIN
         ('system','应用管理','/system/applications','Grid3x3','system:application',9,'平台配置'),
         ('system','菜单管理','/system/menus','ListTree','system:menu',10,'平台配置'),
         ('system','平台设置','/system/settings','Settings','system:settings',11,'平台配置'),
+        ('system','地区管理','/system/regions','MapPinned','system:region',12,'平台配置'),
         ('system','客户端管理','/system/oauth/clients','Key','system:oauth',12,'开放平台'),
+        ('system','设备与会话','/system/sessions','MonitorSmartphone','system:session',13,'开放平台'),
         ('system','审计日志','/system/audit-logs','ScrollText','system:audit',13,'开放平台'),
         ('system','平台监控','/system/monitor','Activity','system:monitor',14,'开放平台'),
         ('hermes','收件箱','/hermes/inbox','Inbox','hermes:inbox',15,NULL),
@@ -105,6 +107,7 @@ BEGIN
 
     FOR item IN SELECT * FROM (VALUES
         ('/system/tenants','授权','system:tenant:auth',1),
+        ('/system/sessions','吊销会话','system:session:revoke',1),
         ('/system/applications','查看镜像部署','system:deployment:read',20),
         ('/system/applications','管理镜像部署','system:deployment:write',21),
         ('/system/applications','查看ZIP分发','system:distribution:read',22),

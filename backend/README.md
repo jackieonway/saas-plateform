@@ -2,6 +2,8 @@
 
 Rust/Axum 平台 API。账号认证由独立身份服务提供，平台拥有租户、组织、成员、授权、应用、发布、审计与通知业务。
 
+[管理员设备与会话](docs/admin-sessions.md)说明平台会话查询、设备撤销、认证中心全账号吊销及操作恢复。
+
 ## 数据库与启动
 
 当前唯一结构基线为 `migrations/0001_init.sql`，目标为 PostgreSQL 17+ 的空数据库。应用生成 UUIDv7；SQLx 历史和 checksum 必须匹配，不能接管旧库或重写历史。

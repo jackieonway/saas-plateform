@@ -107,7 +107,19 @@ pub(crate) async fn mutate(
         vec![actor.tenant_id]
     } else {
         let tenants = super::lock_global_user_mutation(state, actor, target, &mut tx).await?;
-        super::require_employee_permission_in_tx(&mut tx, actor, "system:user").await?;
+        super::require_employee_permission_in_tx(
+            &mut tx,
+            actor,
+            if kick {
+                "system:session:revoke"
+            } else {
+                "system:user"
+            },
+        )
+        .await?;
+        if kick {
+            crate::routes::sessions::require_in_tx(&mut tx, actor, true).await?;
+        }
         super::require_scope_unchanged_in_tx(&mut tx, actor, scope.as_deref()).await?;
         tenants
     };
@@ -382,7 +394,13 @@ async fn accessible(
             return Err(AppError::forbidden("个人操作只能本人查询"));
         }
     } else {
-        state.require(user, "system:user").await?;
+        if followup["commandKind"] == "REVOKE_ALL" {
+            state.require_platform(user).await?;
+            state.require(user, "system:session").await?;
+            state.require(user, "system:session:revoke").await?;
+        } else {
+            state.require(user, "system:user").await?;
+        }
     }
     Ok((target, status, digest, receipt))
 }

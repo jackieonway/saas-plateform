@@ -27,6 +27,7 @@ mod resource_directories;
 mod retention;
 pub mod roles;
 pub mod search;
+mod sessions;
 pub mod tenants;
 pub mod users;
 
@@ -83,6 +84,7 @@ pub fn api_router_for_deployment(identity_remote: bool) -> Router<AppState> {
         .merge(roles::routes())
         .merge(regions::routes())
         .merge(search::routes())
+        .merge(sessions::routes())
         .merge(external::routes())
         .merge(notifications::routes())
         .merge(platform_settings::routes())

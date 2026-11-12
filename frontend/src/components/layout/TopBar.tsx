@@ -482,6 +482,8 @@ export function auditActionLabel(action: string): string {
     DEVICE_DENY: "拒绝设备",
     TOKEN_ISSUED: "签发令牌",
     TOKEN_REVOKED: "吊销令牌",
+    ADMIN_REVOKE_SESSION: "管理员吊销设备",
+    KICK_SESSIONS: "踢出用户全部会话",
     TENANT_AUTH: "租户授权变更",
     ORG_AUTH: "组织授权变更",
     ROLE_MENUS: "角色菜单变更",

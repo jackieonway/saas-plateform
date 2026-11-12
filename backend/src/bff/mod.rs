@@ -22,6 +22,14 @@ use uuid::Uuid;
 const LOGIN_COOKIE: &str = "__Host-saas_console_login";
 const SESSION_COOKIE: &str = "__Host-saas_console";
 
+/// The caller holds the account and browser-session locks before device revocation.
+pub(crate) async fn revoke_browser_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+) -> Result<(), AppError> {
+    store::revoke(tx, id).await
+}
+
 fn secret() -> Result<String, AppError> {
     crate::sso::opaque_secret()
 }

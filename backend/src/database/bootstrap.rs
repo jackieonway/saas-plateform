@@ -68,6 +68,9 @@ pub async fn initialize_platform(
         .execute(&mut *tx)
         .await
         .context("平台初始化失败：需要当前结构空库，或与原平台超管一致的已初始化数据")?;
+    super::regions::initialize_in_tx(&mut tx)
+        .await
+        .context("平台地区基础数据初始化失败")?;
     let result = sqlx::query_as(
         "SELECT created,tenant_id,organization_id,admin_id FROM platform_bootstrap_result",
     )

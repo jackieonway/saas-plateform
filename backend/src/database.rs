@@ -7,6 +7,7 @@ use std::str::FromStr;
 pub mod bootstrap;
 mod imported;
 mod migrate_only;
+pub mod regions;
 pub use imported::{ImportedDatabase, ImportedDatabaseError};
 pub use migrate_only::{
     ensure_server_initialization_mode, run_migration_command, MigrationCommandError,

@@ -60,6 +60,8 @@ const ACTION_OPTIONS = [
   "DEVICE_DENY",
   "TOKEN_ISSUED",
   "TOKEN_REVOKED",
+  "ADMIN_REVOKE_SESSION",
+  "KICK_SESSIONS",
 ]
 
 /** 审计表列定义:时间/用户/动作常显(标识性列), 租户/组织/详情/IP/UA 可隐藏
