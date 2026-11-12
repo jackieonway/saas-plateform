@@ -23,9 +23,7 @@ const checks = changes => policy.applicationSetupChecks(app, status(changes))
 const check = (items, id) => items.find(item => item.id === id)
 
 test('setup links normalize unknown steps and environments to safe defaults', () => {
-  assert.equal(policy.setupEnvironment('production'), 'production')
-  assert.equal(policy.setupEnvironment('staging'), 'staging')
-  for (const value of [null, 'PRODUCTION', 'invalid', 'https://external.test']) assert.equal(policy.setupEnvironment(value), 'development')
+  assert.equal(policy.setupEnvironment, undefined)
   assert.equal(policy.setupStep('release'), 'release')
   assert.equal(policy.setupStep('access'), 'access')
   for (const value of [null, 'complete', '/system/users']) assert.equal(policy.setupStep(value), 'overview')

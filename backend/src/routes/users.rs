@@ -1276,6 +1276,14 @@ async fn put_memberships(
             state.config.dual_memberships_enabled,
         )
         .await?;
+        if !before_items.iter().any(|(existing, _, _)| existing == org) {
+            let phone: String =
+                sqlx::query_scalar("SELECT COALESCE(phone,'') FROM users WHERE id=$1")
+                    .bind(uid)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            crate::membership_lifecycle::validate_member_phone(&phone)?;
+        }
         sqlx::query(
             "INSERT INTO memberships (user_id, organization_id, department_id, position, member_type, id) VALUES ($1, $2, $3, $4, 'EMPLOYEE', $5) \
              ON CONFLICT(user_id,organization_id,member_type) DO UPDATE \

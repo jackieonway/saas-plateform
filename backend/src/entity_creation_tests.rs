@@ -767,6 +767,7 @@ async fn creation_without_administrator_preserves_grants_and_supports_later_assi
 
         let account = h.ok(Method::POST, "/api/users", Some(json!({
             "username": "deferred-administrator", "password": "Isolated-Test-Account-123!",
+            "phone": "13800138991",
         }))).await?;
         let account_id = id(&account)?;
         h.invalid(Method::PUT, &format!("/api/users/{account_id}/roles"), json!({
@@ -1008,7 +1009,7 @@ async fn contacts_initialize_administrators_with_sso_permissions() -> Result<()>
 
 #[tokio::test]
 #[ignore = "creates and drops an isolated PostgreSQL database using TEST_DATABASE_URL"]
-async fn shared_contact_identifiers_preserve_accounts_and_sso_tenant_isolation() -> Result<()> {
+async fn unique_contact_identifiers_preserve_accounts_and_sso_tenant_isolation() -> Result<()> {
     let database = Database::create().await?;
     let result = async {
         let pool = &database.pool;
@@ -1017,13 +1018,21 @@ async fn shared_contact_identifiers_preserve_accounts_and_sso_tenant_isolation()
             "name": "同电话租户甲", "code": "contact-first", "contactName": "联系人甲",
             "contactPhone": "13800138002", "contactEmail": "shared@example.com",
         }))).await?;
+        request(&h.app,&h.token,Method::POST,"/api/tenants",Some(json!({
+            "name":"电话冲突租户","code":"contact-phone-conflict","contactName":"其他联系人",
+            "contactPhone":"13800138002","contactEmail":"conflict@example.com"
+        })),StatusCode::CONFLICT).await?;
+        request(&h.app,&h.token,Method::POST,"/api/tenants",Some(json!({
+            "name":"邮箱冲突租户","code":"contact-email-conflict","contactName":"其他联系人",
+            "contactPhone":"13800138004","contactEmail":"SHARED@example.com"
+        })),StatusCode::CONFLICT).await?;
         let second = h.ok(Method::POST, "/api/tenants", Some(json!({
             "name": "同电话租户乙", "code": "contact-second", "contactName": "联系人乙",
-            "contactPhone": "13800138002", "contactEmail": "second@example.com",
+            "contactPhone": "13800138003", "contactEmail": "second@example.com",
         }))).await?;
         let third = h.ok(Method::POST, "/api/tenants", Some(json!({
             "name": "同邮箱租户丙", "code": "contact-third", "contactName": "联系人丙",
-            "contactPhone": "13800138003", "contactEmail": "shared@example.com",
+            "contactPhone": "13800138004", "contactEmail": "third@example.com",
         }))).await?;
         let _first_id = id(&first)?;
         let second_id = id(&second)?;
@@ -1034,7 +1043,10 @@ async fn shared_contact_identifiers_preserve_accounts_and_sso_tenant_isolation()
         let second_secret = second["administrator"]["initialPassword"].as_str().ok_or_else(|| anyhow!("second credential missing"))?;
         let _third_secret = third["administrator"]["initialPassword"].as_str().ok_or_else(|| anyhow!("third credential missing"))?;
         ensure!(first_user != second_user && first_secret != second_secret,
-            "shared telephone merged distinct people or reused a credential");
+            "distinct contacts merged accounts or reused a credential");
+        let conflicts: i64 = sqlx::query_scalar("SELECT count(*) FROM tenants WHERE code IN ('contact-phone-conflict','contact-email-conflict')")
+            .fetch_one(pool).await?;
+        ensure!(conflicts==0,"contact conflict left partial tenant data");
         let same_person = h.ok(Method::POST, "/api/tenants", Some(json!({
             "name": "同一联系人另一个租户", "code": "contact-same-person", "contactName": "联系人甲",
             "contactPhone": "13800138002", "contactEmail": "shared@example.com",

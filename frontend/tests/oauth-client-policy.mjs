@@ -4,6 +4,8 @@ import { componentFixture } from './helpers/component-fixture.mjs'
 
 const uuid = '01962345-6789-7abc-8def-000000000001'
 const fixture = componentFixture('src/pages/system/oauth/UnifiedClientsPage.tsx', ['clientFormSchema', 'clientTypeFor', 'tokenMethodFor'], {
+  './ClientAuthorizationSettings': { ClientAuthorizationSettings: 'ClientAuthorizationSettings' },
+  './client-policy': { validTokenSeconds: value => value === '' || /^\d+$/.test(value) && Number(value)>=60 && Number(value)<=604800 },
   '@/lib/uuid': { isUuidV7: value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) },
 })
 const { clientFormSchema, clientTypeFor, tokenMethodFor } = fixture.exports
@@ -19,6 +21,7 @@ const user = (overrides = {}) => ({
   contextMode: 'ACCOUNT_ONLY',
   allowedMemberTypes: [],
   refreshToken: false,
+  autoAuthorize: false, accessTokenTtlSeconds: '', refreshTokenTtlSeconds: '', clientTokenTtlSeconds: '',
   redirectUrisText: 'https://client.example.test/callback',
   postLogoutRedirectUrisText: '',
   logoutMode: 'SHORT_SESSION_ONLINE_CHECK',

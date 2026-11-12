@@ -88,6 +88,8 @@ jobs:
         run: 'cargo test --locked --bin saas-platform-backend management_audit_tests::oauth_ -- --ignored --test-threads=1'
       - name: Entity creation and menu relationships
         run: 'cargo test --locked --bin saas-platform-backend entity_creation_tests:: -- --ignored --test-threads=2'
+      - name: Platform bootstrap and contact uniqueness
+        run: 'cargo test --locked --test platform_bootstrap --test contact_uniqueness -- --ignored --test-threads=1'
       - name: Notification publication and visibility
         run: 'cargo test --locked --bin saas-platform-backend notification_tests:: -- --ignored --test-threads=2'
       - name: Organization subtree reporting and search
@@ -104,6 +106,8 @@ jobs:
         run: 'cargo test --locked --bin saas-platform-backend release_tests::qiankun_only:: -- --ignored --test-threads=1'
       - name: Environment URL entries and proxy configuration
         run: 'cargo test --locked --bin saas-platform-backend release_tests::url_entries:: -- --ignored --test-threads=1'
+      - name: Release removal protections and audit
+        run: 'cargo test --locked --bin saas-platform-backend release_tests::removal:: -- --ignored --test-threads=1'
       - name: Data grant changes and isolation
         run: 'cargo test --locked --bin saas-platform-backend data_grant_tests:: -- --ignored --test-threads=2'
       - name: Data grant discovery boundaries

@@ -30,6 +30,7 @@ function fixture(apiOverrides = {}) {
     'react-hook-form': { useForm: options => form ??= {
       values: { ...options.defaultValues }, control: {},
       reset(values) { this.values = values },
+      watch(name) { return this.values[name] },
       handleSubmit(callback) { return () => callback(this.values) },
     } },
     '@/api/applications': { applicationsApi: {

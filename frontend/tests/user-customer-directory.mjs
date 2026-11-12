@@ -12,6 +12,7 @@ const member = type => ({id:id(type==='EMPLOYEE'?3:4),userId:id(1),organizationI
 test('users page has one employee management directory without customer or global-account tabs', () => {
   const f=componentFixture('src/pages/system/users/UsersPage.tsx',['UsersPage'],{
     '@/stores/auth':{useAuthStore:selector=>selector({contextKey:'scope'})},
+    './UserManagementActions': { UserManagementActions: 'UserManagementActions' },
     './MembershipActionDialog':{MembershipActionDialog:'MembershipActionDialog'},
     './membership-model':model,
   })
@@ -34,6 +35,7 @@ function directoryFixture() {
     '@/lib/form': { zResolver: () => undefined },
     'react-hook-form': { useForm: () => form },
     '@/api/users': { usersApi: { update: async (...args) => writes.push(args) } },
+    './UserManagementActions': { UserManagementActions: 'UserManagementActions' },
     './MembershipActionDialog': { MembershipActionDialog: 'MembershipActionDialog' },
     './membership-model': model,
     sonner: { toast: { success: value => messages.push(value), error: value => messages.push(value) } },
@@ -58,7 +60,7 @@ for (const memberType of ['EMPLOYEE', 'CUSTOMER']) test(`${memberType} profiles 
   assert.deepEqual(f.writes, [[id(1), { realName: 'After', email: '', phone: '', gender: 'FEMALE' }]])
   assert.equal(f.messages.at(-1), '用户已更新')
   const header = elements(tree, n => n.type === 'PageHeader')[0]
-  header.props.actions.props.onClick()
+  header.props.actions.props.onAddMembership()
   tree = f.render('UserDirectory', { memberType })
   assert.equal(elements(tree, n => n.type === 'MembershipActionDialog')[0].props.action.memberType, memberType)
 })
@@ -70,42 +72,44 @@ test('an explicitly read-only directory still hides account mutations', () => {
   assert.equal(elements(tree, n => n.type === 'Switch').length, 0)
 })
 
-for(const type of ['EMPLOYEE','CUSTOMER']) test(`adding ${type} binds a searched account even when the other relationship exists`, async () => {
-  const writes=[]
+
+const creationPolicy=componentFixture('src/pages/system/users/new-member-policy.ts',[],{'@/lib/uuid':uuid}).exports
+function creationFixture(api={}) {
+  const writes=[],saved=[];const storage=new Map()
+  Object.defineProperty(globalThis,'sessionStorage',{configurable:true,value:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)}})
   const f=componentFixture('src/pages/system/users/MembershipActionDialog.tsx',['MembershipActionDialog'],{
     '@/stores/auth':{useAuthStore:selector=>selector({identity:{membershipId:id(9)}})},
-    '@/api/memberships':{membershipsApi:{create:async body=>writes.push(body)}},
-    './MembershipAccountPicker':{MembershipAccountPicker:'MembershipAccountPicker'},
-    './membership-model':model,
+    '@/api/users':{usersApi:{create:async value=>{writes.push(value);return api.create?api.create(value):{id:id(1),username:'existing',accountReused:true}},recoverAccountOperation:async value=>{writes.push({recovery:value});return {ok:true}}}},
+    './new-member-policy':creationPolicy,'./membership-model':model,
   })
-  f.queries.set('membership-counterpart', {...success({records:[member(type==='EMPLOYEE'?'CUSTOMER':'EMPLOYEE')]}),isFetching:false})
-  const props={action:{kind:'create',memberType:type},namespace:'scope',capabilities,organizations:[],onClose(){},onSaved(){}}
+  return {...f,writes,saved,storage}
+}
+for(const type of ['EMPLOYEE','CUSTOMER']) test(`creating ${type} delegates telephone matching without an account picker`,async()=>{
+  const f=creationFixture()
+  const props={action:{kind:'create',memberType:type},namespace:'scope',capabilities,organizations:[],onClose(){},onSaved(){f.saved.push(true)}}
   let tree=f.render('MembershipActionDialog',props)
-  elements(tree,n=>n.type==='MembershipAccountPicker')[0].props.onChange({id:id(1),username:'existing',realName:'Existing'})
+  assert.equal(elements(tree,n=>n.type==='MembershipAccountPicker').length,0)
+  assert.equal(button(tree,`新建${type==='EMPLOYEE'?'员工':'客户'}`).props.disabled,true)
+  elements(tree,n=>n.type==='Input'&&n.props.id==='new-member-phone')[0].props.onChange({target:{value:'13800138000'}})
   elements(tree,n=>n.type==='EntityTreePicker')[0].props.onSelect(id(2))
   tree=f.render('MembershipActionDialog',props)
-  elements(tree,n=>n.type==='Textarea')[0].props.onChange({target:{value:'管理员核实后绑定'}})
-  if(type==='CUSTOMER') {
-    elements(tree,n=>n.type==='Checkbox')[0].props.onCheckedChange(true)
-    elements(tree,n=>n.type==='Input'&&n.props.id==='member-binding-source')[0].props.onChange({target:{value:'已核实所属组织'}})
-  }
-  tree=f.render('MembershipActionDialog',props)
-  const submit=button(tree,`添加${type==='EMPLOYEE'?'员工':'客户'}`)
+  const submit=button(tree,`新建${type==='EMPLOYEE'?'员工':'客户'}`)
   assert.equal(submit.props.disabled,false)
-  assert.doesNotMatch(JSON.stringify(tree),/改用明确的第二身份流程/)
   await submit.props.onClick()
-  assert.equal(writes.length,1)
-  assert.equal(writes[0].userId,id(1))
-  assert.equal(writes[0].memberType,type)
+  assert.equal(f.writes.length,1)
+  assert.equal(f.writes[0].phone,'13800138000')
+  assert.equal(f.writes[0].username,'')
+  assert.equal(f.writes[0].membership.memberType,type)
+  assert.equal(f.saved.length,1)
 })
-
-test('same-type existing relationship remains blocked instead of creating a duplicate', () => {
-  const f=componentFixture('src/pages/system/users/MembershipActionDialog.tsx',['MembershipActionDialog'],{
-    '@/stores/auth':{useAuthStore:selector=>selector({identity:{membershipId:id(9)}})},
-    './MembershipAccountPicker':{MembershipAccountPicker:'MembershipAccountPicker'},
-    './membership-model':model,
-  })
-  f.queries.set('membership-counterpart', {...success({records:[member('EMPLOYEE')]}),isFetching:false})
-  const tree=f.render('MembershipActionDialog',{action:{kind:'create',memberType:'EMPLOYEE'},namespace:'scope',capabilities,organizations:[],onClose(){},onSaved(){}})
-  assert.equal(button(tree,'添加员工').props.disabled,true)
+test('contact conflict keeps the editor open and does not report success',async()=>{
+  const f=creationFixture({create:async()=>{throw new Error('电话和邮箱属于不同账号')}})
+  const props={action:{kind:'create',memberType:'EMPLOYEE'},namespace:'scope',capabilities,organizations:[],onClose(){},onSaved(){f.saved.push(true)}}
+  let tree=f.render('MembershipActionDialog',props)
+  elements(tree,n=>n.type==='Input'&&n.props.id==='new-member-phone')[0].props.onChange({target:{value:'13800138000'}})
+  elements(tree,n=>n.type==='EntityTreePicker')[0].props.onSelect(id(2))
+  tree=f.render('MembershipActionDialog',props);await button(tree,'新建员工').props.onClick()
+  tree=f.render('MembershipActionDialog',props)
+  assert.equal(f.saved.length,0)
+  assert.ok(JSON.stringify(tree).includes('电话和邮箱属于不同账号'))
 })

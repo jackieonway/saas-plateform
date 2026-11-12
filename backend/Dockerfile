@@ -15,6 +15,7 @@ RUN mkdir -p src && echo 'fn main() { println!("cache"); }' > src/main.rs \
 COPY src ./src
 COPY assets ./assets
 COPY migrations ./migrations
+COPY initialization ./initialization
 RUN touch src/main.rs && cargo build --release --locked
 
 # ===== 运行阶段 =====

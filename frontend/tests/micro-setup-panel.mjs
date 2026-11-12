@@ -26,8 +26,8 @@ test('setup does not present cached results as current after a failed read', () 
   assert.equal(elements(tree, node => node.props?.children === 'check').length, 0)
 })
 
-test('setup rejects status from another application or environment', () => {
-  for (const wrong of [{ applicationId: 'app-b' }, { environment: 'production' }]) {
+test('setup rejects status from another application', () => {
+  for (const wrong of [{ applicationId: 'app-b' }]) {
     const { f } = fixture()
     f.queries.set('application-setup', success(status(wrong)))
     const tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
@@ -47,7 +47,7 @@ test('busy publication blocks parent close, steps and environment while keeping 
   panel.props.onBusyChange(true)
   tree = f.render('ApplicationSetupPanel', p)
   elements(tree, node => node.type === 'Sheet')[0].props.onOpenChange(false)
-  elements(tree, node => node.type === 'Select')[0].props.onValueChange('production')
+  assert.equal(elements(tree, node => node.type === 'Select').length,0)
   for (const nav of elements(tree, node => node.type === 'button' && node.props['aria-current'] !== undefined)) nav.props.onClick()
   assert.equal(button(tree, '稍后继续').props.disabled, true)
   assert.deepEqual([steps, environments, closes], [[], [], []])
@@ -110,4 +110,12 @@ test('losing access management permission cannot reuse a cached audience check',
   f.queries.set('application-setup', success(status({ canConfigureAccess: false })))
   f.render('ApplicationSetupPanel', props({ step: 'overview' }))
   assert.equal(statuses.at(-1).access, null)
+})
+
+test('setup derives the environment from the server instead of an old page parameter', () => {
+  const {f}=fixture()
+  f.queries.set('application-setup',success(status({environment:'production'})))
+  const tree=f.render('ApplicationSetupPanel',props({environment:'development',step:'release'}))
+  assert.equal(elements(tree,n=>n.type==='ApplicationReleasesPanel')[0].props.environment,'production')
+  assert.equal(elements(tree,n=>n.type==='Select').length,0)
 })

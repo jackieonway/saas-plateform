@@ -220,21 +220,6 @@ fn validate_reason(reason: &str) -> Result<&str, AppError> {
     Ok(reason)
 }
 
-#[cfg(test)]
-mod creation_phone_tests {
-    use super::validate_member_phone;
-
-    #[test]
-    fn employee_and_customer_phone_is_required() {
-        for phone in ["", "  ", " () - ", "+", "not-a-number"] {
-            assert!(validate_member_phone(phone).is_err());
-        }
-        for phone in ["13800000001", "+86 (138) 0000-0001"] {
-            assert!(validate_member_phone(phone).is_ok());
-        }
-    }
-}
-
 async fn lock_users(
     tx: &mut Transaction<'_, Postgres>,
     actor: &CurrentUser,
@@ -276,11 +261,6 @@ pub(crate) async fn ensure_employee_creation_allowed_in_tx(
     organization_id: Uuid,
     dual_memberships_enabled: bool,
 ) -> Result<(), AppError> {
-    let phone: String = sqlx::query_scalar("SELECT COALESCE(phone,'') FROM users WHERE id=$1")
-        .bind(user_id)
-        .fetch_one(&mut **tx)
-        .await?;
-    validate_member_phone(&phone)?;
     if dual_memberships_enabled {
         return Ok(());
     }
@@ -1000,4 +980,19 @@ async fn audit_change(
         },
     )
     .await
+}
+
+#[cfg(test)]
+mod creation_phone_tests {
+    use super::validate_member_phone;
+
+    #[test]
+    fn employee_and_customer_phone_is_required() {
+        for phone in ["", "  ", " () - ", "+", "not-a-number"] {
+            assert!(validate_member_phone(phone).is_err());
+        }
+        for phone in ["13800000001", "+86 (138) 0000-0001"] {
+            assert!(validate_member_phone(phone).is_ok());
+        }
+    }
 }

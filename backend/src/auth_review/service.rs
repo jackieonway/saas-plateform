@@ -165,14 +165,6 @@ pub(super) async fn partner_create(
         .finish(value(row)?, "PARTNER_CREATE", None, false)
         .await
 }
-pub(super) async fn partners(state: &AppState, user: &CurrentUser) -> Result<Value, AppError> {
-    let mut tx = store::management_tx(state, user, policy::VIEW, false).await?;
-    let global = global_operator(&mut tx, user).await?;
-    let rows:Vec<Partner>=sqlx::query_as("SELECT id,name,contact_name,contact_channel,subject_reference,status,version FROM platform_auth_partners partner WHERE $1 OR EXISTS(SELECT 1 FROM platform_auth_applications app JOIN platform_auth_application_operators operator USING(application_id) WHERE app.partner_id=partner.id AND operator.user_id=$2) ORDER BY created_at DESC,id DESC LIMIT 100")
-        .bind(global).bind(user.user_id).fetch_all(&mut *tx).await?;
-    tx.commit().await?;
-    Ok(json!({"partners":rows}))
-}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -217,27 +209,6 @@ pub(super) async fn application_create(
     command
         .finish(result, "APPLICATION_CREATE", None, false)
         .await
-}
-pub(super) async fn applications(state: &AppState, user: &CurrentUser) -> Result<Value, AppError> {
-    let mut tx = store::management_tx(state, user, policy::VIEW, false).await?;
-    let global = global_operator(&mut tx, user).await?;
-    let rows:Vec<(Uuid,Uuid,String,Uuid)>=sqlx::query_as("SELECT application_id,partner_id,display_name,created_by FROM platform_auth_applications app WHERE $1 OR EXISTS(SELECT 1 FROM platform_auth_application_operators operator WHERE operator.application_id=app.application_id AND operator.user_id=$2) ORDER BY created_at DESC,application_id DESC LIMIT 100")
-        .bind(global).bind(user.user_id).fetch_all(&mut *tx).await?;
-    let mut records = Vec::with_capacity(rows.len());
-    for (application, partner, name, creator) in rows {
-        let requests: Vec<Request> = sqlx::query_as(&format!(
-            "{REQUEST} WHERE application_id=$1 ORDER BY environment"
-        ))
-        .bind(application)
-        .fetch_all(&mut *tx)
-        .await?;
-        records.push(json!({"applicationId":application,"partnerId":partner,"displayName":name,"createdBy":creator,"requests":requests}));
-    }
-    let ready = production_ready(&mut tx).await?;
-    let menus = crate::authorization::context_menu_rows_in_tx(&mut tx, user, None).await?;
-    let permissions = crate::authorization::permissions_of(&menus);
-    tx.commit().await?;
-    Ok(json!({"applications":records,"productionReady":ready,"permissions":permissions}))
 }
 
 #[derive(Deserialize)]
@@ -547,22 +518,6 @@ fn sync_permission(row: &Request) -> Result<&'static str, AppError> {
         )),
     }
 }
-pub(super) async fn sync_context(
-    state: &AppState,
-    user: &CurrentUser,
-    request: Uuid,
-) -> Result<(Uuid, String, &'static str), AppError> {
-    let row: Request = sqlx::query_as(&format!("{REQUEST} WHERE id=$1"))
-        .bind(request)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(|| AppError::not_found("申请不存在"))?;
-    let permission = sync_permission(&row)?;
-    let mut tx = store::management_tx(state, user, permission, true).await?;
-    require_application(&mut tx, user, row.application_id).await?;
-    tx.commit().await?;
-    Ok((row.application_id, row.environment, permission))
-}
 
 pub(super) struct SyncPlan {
     pub operation: Uuid,
@@ -710,18 +665,4 @@ pub(super) async fn prepare_sync(
         payload: Some(payload),
         result,
     })
-}
-
-/// Return the exact approved proposal even if another proposal is submitted
-/// while Identity is processing this operation. No fresh read permission is
-/// needed after a mutation has committed and its result is already authorized.
-pub(super) fn synchronized_result(mut result: Value, remote: &Value) -> Result<Value, AppError> {
-    if result["id"] != remote["requestId"] || result["version"] != remote["requestVersion"] {
-        return Err(AppError::Unavailable);
-    }
-    result["syncedVersion"] = remote["requestVersion"].clone();
-    result["identityProjectionVersion"] = remote["projectionVersion"].clone();
-    result["identityAdmissionVersion"] = remote["admissionVersion"].clone();
-    result["syncState"] = json!("COMPLETED");
-    Ok(result)
 }

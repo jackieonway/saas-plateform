@@ -2,15 +2,11 @@
 //! Identity remains the registry and credential authority.
 mod policy;
 #[cfg(test)]
-mod routes;
-#[cfg(test)]
 mod service;
 mod store;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-pub(crate) use routes::routes;
 pub(crate) use store::{
     application_allowed, complete_remote, known_permission, local_not_applied, local_operation,
     management_tx, permission_for,

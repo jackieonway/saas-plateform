@@ -16,7 +16,7 @@ const app = { id: 'app-a', code: 'sample', name: '示例应用', status: 'ENABLE
 const release = { id: 'release-a', applicationId: app.id, environment: 'development', version: '1.0.0',
   entryType: 'HTML', entryUrl: '/sub-apps/sample/versions/1.0.0/index.html', resources: [],
   validationStatus: 'PASSED', checkedAt: '2026-10-22T00:00:00Z', createdAt: '2026-10-22T00:00:00Z', active: false }
-const props = (changes = {}) => ({ application: app, open: true, onOpenChange() {}, ...changes })
+const props = (changes = {}) => ({ application: app, environment: 'development', open: true, onOpenChange() {}, ...changes })
 const text = value => typeof value === 'string' || typeof value === 'number' ? String(value)
   : Array.isArray(value) ? value.map(text).join('') : value && typeof value === 'object' ? text(value.props?.children) : ''
 const findButton = (tree, label) => elements(tree, item => item.type === 'Button' && text(item).includes(label))[0]
@@ -119,27 +119,17 @@ function fixture(relative = 'ApplicationReleasesPanel.tsx', names = ['Applicatio
   }
 }
 
-test('release panel embeds without a nested sheet and retains its standalone sheet', () => {
+test('release editor shows direct URL entry and optional version management without upload or environment controls', () => {
   const embedded = fixture().render(props({ embedded: true }))
   assert.equal(elements(embedded, item => item.type === 'Sheet').length, 0)
-  assert.equal(byLabel(embedded, '上传新版本').length, 1)
-  const standalone = fixture().render()
-  assert.equal(elements(standalone, item => item.type === 'Sheet').length, 1)
-})
-
-test('release source defaults to the archive and renders one selected form at a time', () => {
-  const f = fixture()
-  let tree = f.render()
-  assert.equal(byLabel(tree, '上传新版本').length, 1)
-  assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm').length, 0)
-  findButton(tree, '已部署地址').props.onClick()
-  tree = f.render()
-  assert.equal(byLabel(tree, '上传新版本').length, 0)
-  assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm').length, 1)
-  findButton(tree, '上传构建包').props.onClick()
-  tree = f.render()
-  assert.equal(byLabel(tree, '上传新版本').length, 1)
-  assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm').length, 0)
+  assert.equal(elements(embedded, item => item.type === 'ApplicationUrlEntryForm').length, 1)
+  assert.equal(byLabel(embedded, '上传新版本').length, 0)
+  assert.equal(elements(embedded, item => item.type === 'Select').length, 0)
+  const versions = byLabel(embedded, '版本管理（可选）')[0]
+  assert.ok(versions)
+  assert.ok(!versions.props.open)
+  assert.equal(elements(versions, item => item.type === 'ExternalReleaseForm').length, 1)
+  assert.equal(elements(fixture().render(), item => item.type === 'Sheet').length, 1)
 })
 
 test('a direct URL overrides the displayed deployment while the retained version can be reactivated', () => {
@@ -148,8 +138,7 @@ test('a direct URL overrides the displayed deployment while the retained version
     entryUrl: 'http://localhost:3100/', proxyEnabled: true, browserEntryUrl: '/micro-proxy/sample/', updatedAt: '' }))
   f.queries.set('application-deployments', success([{ ...release, activeReleaseId: release.id }]))
   const tree = f.render()
-  const current = byLabel(tree, '当前环境部署')[0]
-  assert.match(text(current), /直接地址.*http:\/\/localhost:3100\//)
+  assert.equal(byLabel(tree, '当前环境部署').length, 0)
   assert.equal(findButton(tree, '激活').props.disabled, false)
   const direct = elements(tree, item => item.type === 'ApplicationUrlEntryForm')[0]
   assert.equal(direct.props.ready, true)
@@ -168,16 +157,13 @@ test('failed or mismatched direct entry reads cannot make an editable current en
   }
 })
 
-test('saving a direct URL blocks source and environment changes in the enclosing release editor', () => {
+test('saving a direct URL blocks version operations in the enclosing release editor', () => {
   const f = fixture()
   let tree = f.render()
   elements(tree, item => item.type === 'ApplicationUrlEntryForm')[0].props.onBusyChange(true)
   tree = f.render()
-  assert.equal(findButton(tree, '上传构建包').props.disabled, true)
-  const environment = elements(tree, item => item.type === 'Select')[0]
-  assert.equal(environment.props.disabled, true)
-  environment.props.onValueChange('production')
-  assert.equal(elements(f.render(), item => item.type === 'ApplicationUrlEntryForm')[0].props.environment, 'development')
+  assert.equal(findButton(tree, '激活').props.disabled, true)
+  assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm')[0].props.busy, true)
 })
 
 test('publishing requires the explicit confirmation action before activating a validated release', async () => {
@@ -187,9 +173,9 @@ test('publishing requires the explicit confirmation action before activating a v
   findButton(tree, '激活').props.onClick()
   tree = f.render()
   assert.equal(f.calls.length, 0)
-  const confirm = elements(tree, item => item.type === 'AlertDialogAction')[0]
+  const confirm = elements(tree, item => item.type === 'AlertDialogAction' && text(item).includes('确认激活'))[0]
   confirm.props.onClick({ preventDefault() {} })
-  await f.mutations[3].promise
+  await f.mutations[2].promise
   assert.deepEqual(f.calls, [{ method: 'activateRelease', args: [app.id, release.id] }])
 })
 
@@ -207,13 +193,11 @@ test('successful current deployment notifies the wizard but a result from anothe
   const values = props({ onDeploymentChanged() { changes++ } })
   let tree = f.render(values)
   const request = { kind: 'activate', target: { applicationId: app.id, environment: 'development' }, release }
-  await f.mutations[3].options.onSuccess({ version: release.version, environment: 'development' }, request)
+  await f.mutations[2].options.onSuccess({ version: release.version, environment: 'development' }, request)
   assert.equal(changes, 1)
-  const environment = elements(tree, item => item.type === 'Select' && item.props.value === 'development')[0]
-  environment.props.onValueChange('production')
-  tree = f.render(values)
-  assert.equal(elements(tree, item => item.type === 'Select' && item.props.value === 'production').length, 1)
-  await f.mutations[3].options.onSuccess({ version: release.version, environment: 'development' }, request)
+  tree = f.render({ ...values, environment: 'production' })
+  assert.equal(elements(tree, item => item.type === 'ApplicationUrlEntryForm')[0].props.environment, 'production')
+  await f.mutations[2].options.onSuccess({ version: release.version, environment: 'development' }, request)
   assert.equal(changes, 1)
 })
 
@@ -221,19 +205,17 @@ test('parent-controlled environment resets drafts and fences an old activation c
   const f = fixture()
   let tree = f.render(props({ embedded: true, environment: 'development' }))
   assert.equal(byLabel(tree, '发布环境').length, 0)
-  findButton(tree, '已部署地址').props.onClick()
   tree = f.render(props({ embedded: true, environment: 'development' }))
   assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm').length, 1)
   findButton(tree, '激活').props.onClick()
   tree = f.render(props({ embedded: true, environment: 'development' }))
-  const oldConfirmation = elements(tree, item => item.type === 'AlertDialogAction')[0]
-  assert.equal(elements(tree, item => item.type === 'AlertDialog')[0].props.open, true)
+  const oldConfirmation = elements(tree, item => item.type === 'AlertDialogAction' && text(item).includes('确认激活'))[0]
+  assert.equal(elements(tree, item => item.type === 'AlertDialog')[1].props.open, true)
   tree = f.render(props({ embedded: true, environment: 'production' }))
-  assert.equal(elements(tree, item => item.type === 'AlertDialog')[0].props.open, false)
-  assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm').length, 0)
-  assert.equal(byLabel(tree, '上传新版本').length, 1)
+  assert.equal(elements(tree, item => item.type === 'AlertDialog')[1].props.open, false)
+  assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm')[0].props.environment, 'production')
   oldConfirmation.props.onClick({ preventDefault() {} })
-  assert.equal(f.mutations[3].variables, undefined)
+  assert.equal(f.mutations[2].variables, undefined)
   assert.equal(f.calls.length, 0)
 })
 
@@ -246,7 +228,7 @@ test('closed release panel ignores a late deployment result and next step is an 
   assert.equal(continues, 1)
   assert.equal(f.calls.length, 0)
   tree = f.render({ ...values, open: false })
-  await f.mutations[3].options.onSuccess({ version: release.version, environment: 'development' }, {
+  await f.mutations[2].options.onSuccess({ version: release.version, environment: 'development' }, {
     kind: 'activate', target: { applicationId: app.id, environment: 'development' }, release,
   })
   assert.equal(changes, 0)
@@ -292,7 +274,7 @@ test('URL registration automatically checks the newly registered release without
   const f = fixture(undefined, undefined, { registerRelease: async () => registered, preflightRelease: async () => checked })
   f.render()
   const request = urlRequest()
-  const result = await f.mutations[1].options.mutationFn(request)
+  const result = await f.mutations[0].options.mutationFn(request)
   assert.equal(result.release, checked)
   assert.ok(!result.preflightError)
   assert.deepEqual(f.calls, [
@@ -307,10 +289,10 @@ test('automatic check failure preserves successful registration and reports a re
     preflightRelease: async () => { throw new Error('检查连接中断') } })
   f.render()
   const request = urlRequest()
-  const result = await f.mutations[1].options.mutationFn(request)
+  const result = await f.mutations[0].options.mutationFn(request)
   assert.equal(result.release, registered)
   assert.equal(result.preflightError, '检查连接中断')
-  f.mutations[1].options.onSuccess(result, request)
+  f.mutations[0].options.onSuccess(result, request)
   assert.deepEqual(f.calls.map(call => call.method), ['registerRelease', 'preflightRelease'])
   assert.ok(!f.toasts.some(values => text(values).includes('URL 登记失败')))
   assert.ok(f.toasts.some(values => text(values).includes('已登记')))
@@ -319,7 +301,7 @@ test('automatic check failure preserves successful registration and reports a re
 test('uncertain registration failure never starts a check or silently repeats registration', async () => {
   const f = fixture(undefined, undefined, { registerRelease: async () => { throw new Error('登记结果未知') } })
   f.render()
-  await assert.rejects(f.mutations[1].options.mutationFn(urlRequest()), /登记结果未知/)
+  await assert.rejects(f.mutations[0].options.mutationFn(urlRequest()), /登记结果未知/)
   assert.deepEqual(f.calls.map(call => call.method), ['registerRelease'])
 })
 
@@ -329,12 +311,10 @@ test('URL registration stays busy while registration and resource checking run i
   const check = new Promise(resolve => { completeCheck = resolve })
   const f = fixture(undefined, undefined, { registerRelease: () => registration, preflightRelease: () => check })
   let tree = f.render()
-  findButton(tree, '已部署地址').props.onClick()
   f.render()
-  f.mutations[1].mutate(urlRequest())
+  f.mutations[0].mutate(urlRequest())
   await Promise.resolve()
   tree = f.render()
-  assert.equal(findButton(tree, '上传构建包').props.disabled, true)
   assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm')[0].props.busy, true)
   assert.deepEqual(f.calls.map(call => call.method), ['registerRelease'])
   completeRegistration({ ...release, id: 'registered-pending-check', validationStatus: 'DRAFT' })
@@ -343,7 +323,7 @@ test('URL registration stays busy while registration and resource checking run i
   assert.deepEqual(f.calls.map(call => call.method), ['registerRelease', 'preflightRelease'])
   assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm')[0].props.busy, true)
   completeCheck(release)
-  await f.mutations[1].promise
+  await f.mutations[0].promise
   tree = f.render()
   assert.equal(elements(tree, item => item.type === 'ExternalReleaseForm')[0].props.busy, false)
 })
@@ -359,4 +339,21 @@ test('version records summarize automatically checked scripts and styles without
   const tree = f.render()
   assert.match(text(tree), /已检查 2 个脚本 · 1 个样式/)
   assert.ok(!text(tree).includes('0 项补充资源'))
+})
+
+
+test('release deletion requires confirmation and protects deployed and rollback versions', async () => {
+  const f = fixture()
+  let tree = f.render()
+  byLabel(tree, `删除版本 ${release.version}`)[0].props.onClick()
+  tree = f.render()
+  assert.equal(f.calls.length, 0)
+  elements(tree, item => item.type === 'AlertDialogAction' && text(item).includes('确认删除'))[0].props.onClick({ preventDefault() {} })
+  await f.mutations[3].promise
+  assert.deepEqual(f.calls, [{ method: 'removeRelease', args: [app.id, release.id] }])
+  for (const field of ['activeReleaseId', 'previousReleaseId']) {
+    const protectedFixture = fixture()
+    protectedFixture.queries.set('application-deployments', success([{ environment: 'development', [field]: release.id }]))
+    assert.equal(byLabel(protectedFixture.render(), `删除版本 ${release.version}`)[0].props.disabled, true)
+  }
 })

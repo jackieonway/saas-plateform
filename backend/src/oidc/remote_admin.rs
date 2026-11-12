@@ -796,7 +796,11 @@ fn prepare(target: &Target, value: Option<Value>) -> Result<Option<Value>, AppEr
             object.entry("backchannelLogoutUri").or_insert(Value::Null);
             object.entry("backchannelTargetId").or_insert(Value::Null);
             object.entry("autoAuthorize").or_insert(json!(false));
-            for field in ["accessTokenTtlSeconds","refreshTokenTtlSeconds","clientTokenTtlSeconds"] {
+            for field in [
+                "accessTokenTtlSeconds",
+                "refreshTokenTtlSeconds",
+                "clientTokenTtlSeconds",
+            ] {
                 object.entry(field).or_insert(Value::Null);
             }
             let keys = [
@@ -1425,16 +1429,49 @@ fn exact(value: &Value, keys: &[&str]) -> bool {
         .is_some_and(|o| o.len() == keys.len() && keys.iter().all(|k| o.contains_key(*k)))
 }
 fn client_token_policy_valid(value: &Value, response: bool) -> bool {
-    let ttl = |name: &str, refresh: bool| value[name].is_null() || value[name].as_i64().is_some_and(|seconds|
-        if refresh { (300..=604800).contains(&seconds) } else { (60..=3600).contains(&seconds) });
-    let basic = value["autoAuthorize"].is_boolean() && ttl("accessTokenTtlSeconds",false)
-        && ttl("refreshTokenTtlSeconds",true) && ttl("clientTokenTtlSeconds",false);
-    if !response { return basic; }
+    let ttl = |name: &str, refresh: bool| {
+        value[name].is_null()
+            || value[name].as_i64().is_some_and(|seconds| {
+                if refresh {
+                    (300..=604800).contains(&seconds)
+                } else {
+                    (60..=3600).contains(&seconds)
+                }
+            })
+    };
+    let basic = value["autoAuthorize"].is_boolean()
+        && ttl("accessTokenTtlSeconds", false)
+        && ttl("refreshTokenTtlSeconds", true)
+        && ttl("clientTokenTtlSeconds", false);
+    if !response {
+        return basic;
+    }
     let defaults = &value["tokenDefaults"];
-    basic && value["refreshTokenStrategy"] == "ROTATE"
-        && exact(defaults, &["accessTokenTtlSeconds","refreshTokenTtlSeconds","offlineRefreshTokenTtlSeconds","clientTokenTtlSeconds"])
-        && ["accessTokenTtlSeconds","clientTokenTtlSeconds"].iter().all(|key| defaults[*key].as_i64().is_some_and(|v| (60..=3600).contains(&v)))
-        && ["refreshTokenTtlSeconds","offlineRefreshTokenTtlSeconds"].iter().all(|key| defaults[*key].as_i64().is_some_and(|v| (300..=604800).contains(&v)))
+    basic
+        && value["refreshTokenStrategy"] == "ROTATE"
+        && exact(
+            defaults,
+            &[
+                "accessTokenTtlSeconds",
+                "refreshTokenTtlSeconds",
+                "offlineRefreshTokenTtlSeconds",
+                "clientTokenTtlSeconds",
+            ],
+        )
+        && ["accessTokenTtlSeconds", "clientTokenTtlSeconds"]
+            .iter()
+            .all(|key| {
+                defaults[*key]
+                    .as_i64()
+                    .is_some_and(|v| (60..=3600).contains(&v))
+            })
+        && ["refreshTokenTtlSeconds", "offlineRefreshTokenTtlSeconds"]
+            .iter()
+            .all(|key| {
+                defaults[*key]
+                    .as_i64()
+                    .is_some_and(|v| (300..=604800).contains(&v))
+            })
 }
 
 fn client_logout_fields_valid(value: &Value) -> bool {
@@ -1503,7 +1540,8 @@ fn auth_client_projection(value: &Value) -> bool {
             "refreshTokenStrategy",
             "tokenDefaults",
         ],
-    ) && client_logout_fields_valid(value) && client_token_policy_valid(value, true)
+    ) && client_logout_fields_valid(value)
+        && client_token_policy_valid(value, true)
         && value["id"].as_str().is_some_and(|v| id(v).is_ok())
         && value["clientId"]
             .as_str()
@@ -2037,134 +2075,6 @@ fn fresh_deadline() -> Deadline {
     }
 }
 
-#[cfg(test)]
-pub(crate) async fn review_current(
-    state: &AppState,
-    user: &CurrentUser,
-    headers: &HeaderMap,
-    application: Uuid,
-    environment: &str,
-    permission: &'static str,
-) -> Result<Value, Failure> {
-    let mut headers = headers.clone();
-    headers.remove("x-identity-operation");
-    call(
-        state,
-        user,
-        &headers,
-        Target::review_sync_read(application, environment, permission)?,
-        None,
-        fresh_deadline(),
-    )
-    .await
-    .map(|Json(value)| value)
-}
-
-#[cfg(test)]
-pub(crate) async fn review_sync(
-    state: &AppState,
-    user: &CurrentUser,
-    headers: &HeaderMap,
-    application: Uuid,
-    environment: &str,
-    mut body: Value,
-) -> Result<Value, Failure> {
-    if !headers.contains_key("x-identity-operation") {
-        return Err(AppError::bad_request("审核同步必须查询或复用浏览器保存的原操作编号").into());
-    }
-    let object = body
-        .as_object_mut()
-        .ok_or_else(|| AppError::bad_request("审核同步字段无效"))?;
-    object.insert("applicationId".into(), json!(application));
-    object.insert("environment".into(), json!(environment));
-    object.insert("actorUserId".into(), json!(user.user_id));
-    object.insert("actorSessionId".into(), json!(user.session_id));
-    call(
-        state,
-        user,
-        headers,
-        Target::review(Method::PUT, application, environment)?,
-        Some(body),
-        fresh_deadline(),
-    )
-    .await
-    .map(|Json(value)| value)
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg(test)]
-struct InvitationIssue {
-    recipient_ref: String,
-    purpose: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg(test)]
-struct InvitationRevoke {
-    expected_version: i64,
-}
-
-#[cfg(test)]
-async fn list_invitations(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Extension(deadline): Extension<Deadline>,
-) -> Result<Json<Value>, Failure> {
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::invitation(Method::GET, None)?,
-        None,
-        deadline,
-    )
-    .await
-}
-
-#[cfg(test)]
-async fn issue_invitation(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Extension(deadline): Extension<Deadline>,
-    ApiJson(body): ApiJson<InvitationIssue>,
-) -> Result<Json<Value>, Failure> {
-    let body = json!({"actorUserId":user.user_id,"actorSessionId":user.session_id,"recipientRef":body.recipient_ref,"purpose":body.purpose});
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::invitation(Method::POST, None)?,
-        Some(body),
-        deadline,
-    )
-    .await
-}
-
-#[cfg(test)]
-async fn revoke_invitation(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Path(raw): Path<String>,
-    Extension(deadline): Extension<Deadline>,
-    ApiJson(body): ApiJson<InvitationRevoke>,
-) -> Result<Json<Value>, Failure> {
-    let invitation = id(&raw)?;
-    let body = json!({"actorUserId":user.user_id,"actorSessionId":user.session_id,"expectedVersion":body.expected_version});
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::invitation(Method::POST, Some(invitation))?,
-        Some(body),
-        deadline,
-    )
-    .await
-}
 impl From<AppError> for Failure {
     fn from(error: AppError) -> Self {
         Self {
@@ -2300,80 +2210,6 @@ async fn call(
         .await?,
     ))
 }
-#[cfg(test)]
-async fn publish(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Extension(d): Extension<Deadline>,
-    ApiJson(v): ApiJson<Value>,
-) -> Result<Json<Value>, Failure> {
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::new(Method::POST, "/keys/publish")?,
-        Some(v),
-        d,
-    )
-    .await
-}
-#[cfg(test)]
-async fn activate(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Extension(d): Extension<Deadline>,
-    ApiJson(v): ApiJson<Value>,
-) -> Result<Json<Value>, Failure> {
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::new(Method::POST, "/keys/activate")?,
-        Some(v),
-        d,
-    )
-    .await
-}
-#[cfg(test)]
-async fn retire(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Path(raw): Path<String>,
-    Extension(d): Extension<Deadline>,
-) -> Result<Json<Value>, Failure> {
-    kid(&raw)?;
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::new(Method::DELETE, &format!("/keys/{raw}"))?,
-        None,
-        d,
-    )
-    .await
-}
-#[cfg(test)]
-async fn revoke(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Path(raw): Path<String>,
-    Extension(d): Extension<Deadline>,
-) -> Result<Json<Value>, Failure> {
-    kid(&raw)?;
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::new(Method::POST, &format!("/keys/{raw}/revoke"))?,
-        None,
-        d,
-    )
-    .await
-}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2497,66 +2333,6 @@ async fn list_auth_clients(
         &headers,
         Target::auth_client_list(&query)?,
         None,
-        deadline,
-    )
-    .await
-}
-
-#[cfg(test)]
-async fn list_consent_groups(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Path(raw_application): Path<String>,
-    Extension(deadline): Extension<Deadline>,
-) -> Result<Json<Value>, Failure> {
-    let application = id(&raw_application)?;
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::consent_group_list(application),
-        None,
-        deadline,
-    )
-    .await
-}
-
-#[cfg(test)]
-async fn create_consent_group(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Extension(deadline): Extension<Deadline>,
-    ApiJson(value): ApiJson<Value>,
-) -> Result<Json<Value>, Failure> {
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::consent_group_create(),
-        Some(value),
-        deadline,
-    )
-    .await
-}
-
-#[cfg(test)]
-async fn add_consent_group_client(
-    State(state): State<AppState>,
-    user: CurrentUser,
-    headers: HeaderMap,
-    Path(raw_group): Path<String>,
-    Extension(deadline): Extension<Deadline>,
-    ApiJson(value): ApiJson<Value>,
-) -> Result<Json<Value>, Failure> {
-    let group = id(&raw_group)?;
-    call(
-        &state,
-        &user,
-        &headers,
-        Target::consent_group_member(group),
-        Some(value),
         deadline,
     )
     .await

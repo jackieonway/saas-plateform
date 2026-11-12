@@ -6,6 +6,7 @@ const role = { id: 'role-a', name: 'Role A', organizationId: 'org-a', organizati
 const user = { id: 'user-a', memberships: [{ organizationId: 'org-a', organizationName: 'Org A', memberType: 'EMPLOYEE', status: 'ENABLED' }] }
 const props = value => ({ ...value, onClose() {}, onSaved() {} })
 const userPageFixture = (names, dependencies = {}) => componentFixture('src/pages/system/users/UsersPage.tsx', names, {
+  './UserManagementActions': { UserManagementActions: 'UserManagementActions' },
   './MembershipDirectory': { MembershipDirectory: 'MembershipDirectory' },
   './MembershipActionDialog': { MembershipActionDialog: 'MembershipActionDialog' },
   './membership-model': { membershipWriteBlockedReason: () => null },

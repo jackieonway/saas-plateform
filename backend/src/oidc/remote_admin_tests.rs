@@ -13,17 +13,17 @@ fn deadline() -> Deadline {
 
 #[test]
 fn client_token_policy_proxy_rejects_unbounded_or_ambiguous_settings() {
-    let mut value=json!({"autoAuthorize":false,"accessTokenTtlSeconds":null,"refreshTokenTtlSeconds":null,"clientTokenTtlSeconds":null});
-    assert!(client_token_policy_valid(&value,false));
-    for invalid in [json!(-1),json!(0),json!(3601),json!("300"),json!(1.5)] {
-        value["accessTokenTtlSeconds"]=invalid;
-        assert!(!client_token_policy_valid(&value,false));
+    let mut value = json!({"autoAuthorize":false,"accessTokenTtlSeconds":null,"refreshTokenTtlSeconds":null,"clientTokenTtlSeconds":null});
+    assert!(client_token_policy_valid(&value, false));
+    for invalid in [json!(-1), json!(0), json!(3601), json!("300"), json!(1.5)] {
+        value["accessTokenTtlSeconds"] = invalid;
+        assert!(!client_token_policy_valid(&value, false));
     }
-    value["accessTokenTtlSeconds"]=json!(60);
-    value["refreshTokenTtlSeconds"]=json!(300);
-    assert!(client_token_policy_valid(&value,false));
-    value["autoAuthorize"]=json!("true");
-    assert!(!client_token_policy_valid(&value,false));
+    value["accessTokenTtlSeconds"] = json!(60);
+    value["refreshTokenTtlSeconds"] = json!(300);
+    assert!(client_token_policy_valid(&value, false));
+    value["autoAuthorize"] = json!("true");
+    assert!(!client_token_policy_valid(&value, false));
 }
 fn command() -> Command {
     let target = Target::new(Method::POST, "/keys/publish").unwrap();
