@@ -359,14 +359,16 @@ async fn exercise(platform: bool) -> Result<()> {
             let email = format!("{phone}@example.com");
             sqlx::query("UPDATE users SET real_name=$2,phone=$3,email=$4 WHERE id=$1")
                 .bind(outside).bind(name).bind(phone).bind(&email).execute(pool).await?;
-            let created = call(&app, &token, Method::POST, "/api/organizations", Some(json!({
+            let organization_count: i64 = sqlx::query_scalar("SELECT count(*) FROM organizations")
+                .fetch_one(pool).await?;
+            call(&app, &token, Method::POST, "/api/organizations", Some(json!({
                 "tenantId":tenant,"parentId":child,"name":format!("Created for {name}"),
                 "contactName":name,"contactPhone":phone,"contactEmail":email,
-            })), StatusCode::OK).await?;
-            ensure!(created["administrator"]["created"] == true
-                && created["administrator"]["userId"] != json!(outside)
-                && created["administrator"]["initialPassword"].is_string(),
-                "child organization reused an out-of-scope contact account");
+            })), StatusCode::CONFLICT).await?;
+            let after_count: i64 = sqlx::query_scalar("SELECT count(*) FROM organizations")
+                .fetch_one(pool).await?;
+            ensure!(after_count == organization_count,
+                "occupied out-of-scope contact left a partial organization");
             let untouched: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1")
                 .bind(outside).fetch_one(pool).await?;
             ensure!(untouched == "test-only", "contact onboarding changed outside password");
@@ -375,11 +377,13 @@ async fn exercise(platform: bool) -> Result<()> {
             .bind(parent_user).execute(pool).await?;
         sqlx::query("UPDATE organizations SET contact_name='Outside initialization contact',contact_phone='13800138103',contact_email='outside-init@example.com' WHERE id=$1")
             .bind(leaf).execute(pool).await?;
-        let initialized = call(&app, &token, Method::POST,
-            &format!("/api/organizations/{leaf}/initialize-administrator"), None, StatusCode::OK).await?;
-        ensure!(initialized["administrator"]["created"] == true
-            && initialized["administrator"]["userId"] != json!(parent_user),
-            "explicit child initialization reused ancestor-only contact account");
+        call(&app, &token, Method::POST,
+            &format!("/api/organizations/{leaf}/initialize-administrator"), None, StatusCode::CONFLICT).await?;
+        let outside_memberships: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM memberships WHERE user_id=$1 AND organization_id=$2")
+            .bind(parent_user).bind(leaf).fetch_one(pool).await?;
+        ensure!(outside_memberships == 0,
+            "explicit child initialization attached an ancestor-only contact account");
         for (candidate, name, phone, actor, parent) in [
             (child_user, "Scoped contact", "13800138104", &token, child),
             (leaf_user, "Tenant root contact", "13800138105", &root_token, root),
