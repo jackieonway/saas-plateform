@@ -88,7 +88,7 @@ export default function ApplicationsPage() {
     <div>
       <PageHeader
         title="应用管理"
-        description="接入 qiankun 微应用，配置应用地址与访问范围"
+        description="接入 qiankun 微应用，配置应用地址并检查页面"
         icon={<LayoutGrid className="size-5" />}
         actions={
           <Button onClick={openCreate}>
@@ -282,7 +282,7 @@ function OnboardingGuide({ onCreate }: { onCreate: () => void }) {
     <div className="mb-6 flex flex-col justify-between gap-4 rounded-xl border bg-muted/20 p-5 sm:flex-row sm:items-center">
       <div>
         <p className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-primary" />从一个首页开始接入</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">名称与编码 → 配置应用入口 → 配置访问范围</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">名称与编码 → 配置应用入口 → 检查接入结果</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">新建应用默认仅允许员工。创建后可在「身份准入」中独立设置员工与客户集合，再配置入口与发布版本。</p>
       </div>
       <Button variant="outline" className="shrink-0" onClick={onCreate}>开始接入<ArrowRight className="size-4" /></Button>

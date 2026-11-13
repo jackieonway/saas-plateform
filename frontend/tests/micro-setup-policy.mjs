@@ -25,7 +25,7 @@ const check = (items, id) => items.find(item => item.id === id)
 test('setup links normalize unknown steps and environments to safe defaults', () => {
   assert.equal(policy.setupEnvironment, undefined)
   assert.equal(policy.setupStep('release'), 'release')
-  assert.equal(policy.setupStep('access'), 'access')
+  assert.equal(policy.setupStep('access'), 'overview')
   for (const value of [null, 'complete', '/system/users']) assert.equal(policy.setupStep(value), 'overview')
 })
 
@@ -34,8 +34,7 @@ test('created metadata and page counts never imply a published release or grante
   assert.equal(check(result, 'application').complete, true)
   assert.equal(check(result, 'menus').complete, true)
   assert.equal(check(result, 'release').complete, false)
-  assert.equal(check(result, 'access').complete, false)
-  assert.match(check(result, 'access').description, /选择租户/)
+  assert.equal(check(result, 'access'), undefined)
 })
 
 test('active version must also pass checks and executable menus must exist', () => {
@@ -45,14 +44,10 @@ test('active version must also pass checks and executable menus must exist', () 
   assert.equal(check(checks({ menuCount: 8, entryMenuCount: 0 }), 'menus').complete, false)
 })
 
-test('one selected audience must have the complete same-entry grant chain and effective members', () => {
-  for (const key of ['tenantAuthorized', 'organizationAuthorized', 'roleAuthorized']) {
-    assert.equal(check(checks({ access: target({ [key]: false }) }), 'access').complete, false)
+test('onboarding does not request tenant organization role or menu grants', () => {
+  for (const access of [null, target({}), target({ roleAuthorized: false })]) {
+    assert.deepEqual(checks({ access }).map(item => item.id), ['application', 'release', 'menus'])
   }
-  const empty = check(checks({ access: target({ assignedUserCount: 0 }) }), 'access')
-  assert.equal(empty.complete, false)
-  assert.match(empty.description, /尚无/)
-  assert.equal(check(checks({ access: target({}) }), 'access').complete, true)
 })
 
 test('legacy incompatible modes never become ready even with an active version or direct address', () => {
@@ -63,12 +58,12 @@ test('legacy incompatible modes never become ready even with an active version o
   }
 })
 
-test('a validated direct URL is ready without an active version and still requires audience grants', () => {
+test('a validated direct URL is ready without an active version without asking for audience grants', () => {
   const live = checks({ entrySource: 'URL', urlEntryConfigured: true, releaseRequired: false, releaseValidated: true,
     runtimeMode: 'TRUSTED', proxyEnabled: true })
   assert.equal(check(live, 'release').complete, true)
   assert.match(check(live, 'release').description, /直接地址.*代理/)
-  assert.equal(check(live, 'access').complete, false)
+  assert.equal(check(live, 'access'), undefined)
   assert.equal(check(checks({ entrySource: 'URL', releaseRequired: false, releaseValidated: false }), 'release').complete, false)
 })
 

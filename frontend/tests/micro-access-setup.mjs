@@ -197,6 +197,22 @@ test('roles load all pages and omit disabled, foreign and managed targets', asyn
   assert.equal(roles.some(item => ['managed', 'disabled', 'foreign'].includes(item.id)), false)
 })
 
+test('tenant options retain enabled permanent tenants and omit disabled or expired tenants', async () => {
+  const context = fixture({ '@/api/tenants': { tenantsApi: { options: async () => [
+    { ...tenant, expiresAt: null },
+    { ...tenant, id: 'disabled', status: 'DISABLED', expiresAt: null },
+    { ...tenant, id: 'expired', expiresAt: '2000-01-01T00:00:00Z' },
+  ] } } })
+  context.render()
+  const candidates = await context.f.queryOptions.get('application-access-tenants').queryFn()
+  assert.deepEqual(candidates.map(item => item.id), [tenant.id])
+  context.f.queries.set('application-access-tenants', success(candidates))
+  let tree = context.render()
+  elements(tree, item => item.type === 'Select')[0].props.onValueChange(tenant.id)
+  context.render()
+  assert.equal(context.f.queryOptions.get('application-access-organizations').enabled, true)
+})
+
 test('incomplete role pagination fails rather than presenting a partial candidate set', async () => {
   const context = fixture({ '@/api/roles': { rolesApi: { list: async ({ page }) => ({ records: page === 1 ? [role] : [], total: 2 }) } } })
   await assert.rejects(context.f.exports.loadRoleCandidates(tenant.id, organization.id), /未完整返回/)

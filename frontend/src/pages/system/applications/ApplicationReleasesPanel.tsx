@@ -328,8 +328,8 @@ function ApplicationReleasesPanelContent({ application, open, onOpenChange, embe
               </div>
             </details>
             {onContinue && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-              <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">{compatible && (urlEntry || deployment) ? "入口已配置，接下来选择哪些租户、组织和角色可以访问。" : "可以先配置访问范围；该环境仍需保存 qiankun 直接地址或激活版本后才能使用。"}</p>
-              <Button type="button" disabled={busy} onClick={onContinue}>继续配置访问范围<ArrowRight className="size-4" /></Button>
+              <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">{compatible && (urlEntry || deployment) ? "入口已配置，可查看接入检查结果。" : "保存应用入口后，可查看接入检查结果。"}</p>
+              <Button type="button" disabled={busy} onClick={onContinue}>查看接入检查<ArrowRight className="size-4" /></Button>
             </div>}
           </div>
           {busy && <div className="flex shrink-0 items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground" role="status"><Loader2 className="size-3.5 animate-spin" />正在{urlEntryBusy ? "保存应用入口" : deleteMutation.isPending ? "删除版本记录" : deploymentMutation.isPending ? "验证并切换部署" : preflightMutation.isPending ? "预检资源" : "登记地址并检查脚本与样式"}，完成后可关闭面板。</div>}

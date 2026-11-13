@@ -309,7 +309,7 @@ async fn authorization_isolation_respects_selected_tenant_and_revocation() -> Re
             call(&app, &selected, Method::GET, path, None, StatusCode::FORBIDDEN).await?;
         }
         let choices = call(&app, &selected, Method::GET, "/api/tenants/options", None, StatusCode::OK).await?;
-        ensure!(choices == json!([{"id":tenant,"name":"Isolation tenant","code":"isolation-a","isPlatform":false}]),
+        ensure!(choices == json!([{"id":tenant,"name":"Isolation tenant","code":"isolation-a","isPlatform":false,"status":"ENABLED","expiresAt":null}]),
             "tenant choices leaked another tenant or detailed management data");
         call(&app, &selected, Method::GET, &format!("/api/menus/tree?applicationId={app_id}"), None, StatusCode::FORBIDDEN).await?;
         call(&app, &selected, Method::POST, "/api/apps/session-token", Some(json!({"appCode":"isolation-denied"})), StatusCode::FORBIDDEN).await?;

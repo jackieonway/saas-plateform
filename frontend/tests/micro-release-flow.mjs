@@ -224,7 +224,7 @@ test('closed release panel ignores a late deployment result and next step is an 
   let changes = 0, continues = 0
   const values = props({ onDeploymentChanged() { changes++ }, onContinue() { continues++ } })
   let tree = f.render(values)
-  findButton(tree, '配置访问范围').props.onClick()
+  findButton(tree, '查看接入检查').props.onClick()
   assert.equal(continues, 1)
   assert.equal(f.calls.length, 0)
   tree = f.render({ ...values, open: false })

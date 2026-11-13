@@ -61,8 +61,8 @@ async fn options(
         return Err(AppError::forbidden("无租户选择权限"));
     }
     let scope = if platform { None } else { Some(user.tenant_id) };
-    let rows: Vec<(Uuid, String, String, bool)> = sqlx::query_as(
-        "SELECT id,name,COALESCE(code,''),is_platform FROM tenants \
+    let rows: Vec<(Uuid, String, String, bool, String, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT id,name,COALESCE(code,''),is_platform,status,expires_at FROM tenants \
          WHERE ($1::uuid IS NULL OR id=$1) ORDER BY created_at,id",
     )
     .bind(scope)
@@ -70,8 +70,8 @@ async fn options(
     .await?;
     Ok(Json(json!(rows
         .into_iter()
-        .map(|(id, name, code, is_platform)| {
-            json!({"id":id,"name":name,"code":code,"isPlatform":is_platform})
+        .map(|(id, name, code, is_platform, status, expires_at)| {
+            json!({"id":id,"name":name,"code":code,"isPlatform":is_platform,"status":status,"expiresAt":expires_at})
         })
         .collect::<Vec<_>>())))
 }

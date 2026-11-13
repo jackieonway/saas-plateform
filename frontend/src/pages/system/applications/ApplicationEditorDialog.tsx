@@ -33,7 +33,7 @@ export function ApplicationEditorDialog({ editor }: { editor: ReturnType<typeof 
         <DialogHeader>
           <DialogTitle>{editing ? "编辑应用" : "创建微应用"}</DialogTitle>
           <DialogDescription>
-            {editing ? `编辑「${editing.name}」的基本信息` : "先填写名称和编码，创建后配置入口地址与访问范围。"}
+            {editing ? `编辑「${editing.name}」的基本信息` : "先填写名称和编码，创建后配置入口地址。"}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

@@ -30,7 +30,7 @@ test('setup rejects status from another application', () => {
   for (const wrong of [{ applicationId: 'app-b' }]) {
     const { f } = fixture()
     f.queries.set('application-setup', success(status(wrong)))
-    const tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
+    const tree = f.render('ApplicationSetupPanel', props({ step: 'overview' }))
     assert.equal(elements(tree, node => node.type === 'ApplicationAccessSetup').length, 0)
     assert.equal(elements(tree, node => node.props?.role === 'status').length, 1)
   }
@@ -57,8 +57,8 @@ test('legacy entry modes cannot pass readiness and use the same reconfiguration 
   for (const legacy of [{ entryType: 'ESM', runtimeMode: 'TRUSTED' }, { entryType: 'HTML', runtimeMode: 'IFRAME' }]) {
     const { f } = fixture()
     f.queries.set('application-setup', success(status({ ...legacy, releaseValidated: true })))
-    let tree = f.render('ApplicationSetupPanel', props({ application: { ...application, ...legacy }, step: 'access' }))
-    assert.equal(elements(tree, node => node.type === 'ApplicationAccessSetup')[0].props.entryReady, false)
+    let tree = f.render('ApplicationSetupPanel', props({ application: { ...application, ...legacy }, step: 'overview' }))
+    assert.equal(elements(tree, node => node.type === 'ApplicationAccessSetup').length, 0)
     tree = f.render('ApplicationSetupPanel', props({ application: { ...application, ...legacy }, step: 'release' }))
     assert.equal(elements(tree, node => node.type === 'ApplicationReleasesPanel').length, 1)
     assert.match(JSON.stringify(tree), /需重新配置 qiankun/)
@@ -68,48 +68,24 @@ test('legacy entry modes cannot pass readiness and use the same reconfiguration 
 test('pending checks never mount access configuration with guessed permissions', () => {
   const { f } = fixture()
   f.queries.set('application-setup', pending())
-  const tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
+  const tree = f.render('ApplicationSetupPanel', props({ step: 'overview' }))
   assert.equal(elements(tree, node => node.type === 'ApplicationAccessSetup').length, 0)
 })
 
-test('a selected audience survives step changes and feeds the actual overview check', () => {
-  const { f, statuses } = fixture()
-  const target = { tenantId: 'tenant-a', organizationId: 'org-a', roleId: 'role-a' }
-  f.queries.set('application-setup', success(status({ releaseValidated: true })))
-  let tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
-  elements(tree, node => node.type === 'ApplicationAccessSetup')[0].props.onTargetChange(target)
-  f.queries.set('application-setup-target', success(status({ access: { ...target, tenantAuthorized: true, organizationAuthorized: true, roleAuthorized: true, assignedUserCount: 2 } })))
-  tree = f.render('ApplicationSetupPanel', props({ step: 'overview' }))
-  assert.equal(statuses.at(-1).access.roleId, 'role-a')
-  tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
-  const access = elements(tree, node => node.type === 'ApplicationAccessSetup')[0]
-  assert.deepEqual(access.props.initialTarget, target)
-  access.props.onTargetChange(null)
-  f.render('ApplicationSetupPanel', props({ step: 'overview' }))
-  assert.equal(statuses.at(-1).access, null)
-})
-
-test('changing an audience does not unmount its editor while its new check is pending', () => {
+test('onboarding exposes only deployment steps and never requests audience configuration', () => {
   const { f } = fixture()
-  f.queries.set('application-setup', success(status({})))
-  let tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
-  const access = elements(tree, node => node.type === 'ApplicationAccessSetup')[0]
-  access.props.onTargetChange({ tenantId: 'tenant-a', organizationId: 'org-a', roleId: 'role-a' })
-  f.queries.set('application-setup-target', pending())
-  tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
-  assert.equal(elements(tree, node => node.type === 'ApplicationAccessSetup').length, 1)
-})
-
-test('losing access management permission cannot reuse a cached audience check', () => {
-  const { f, statuses } = fixture()
-  const target = { tenantId: 'tenant-a', organizationId: 'org-a', roleId: 'role-a' }
-  f.queries.set('application-setup', success(status({})))
-  const tree = f.render('ApplicationSetupPanel', props({ step: 'access' }))
-  elements(tree, node => node.type === 'ApplicationAccessSetup')[0].props.onTargetChange(target)
-  f.queries.set('application-setup-target', success(status({ access: { ...target, tenantAuthorized: true, organizationAuthorized: true, roleAuthorized: true, assignedUserCount: 2 } })))
-  f.queries.set('application-setup', success(status({ canConfigureAccess: false })))
-  f.render('ApplicationSetupPanel', props({ step: 'overview' }))
-  assert.equal(statuses.at(-1).access, null)
+  f.queries.set('application-setup', success(status({ releaseValidated: true })))
+  const changes = []
+  let tree = f.render('ApplicationSetupPanel', props({ onStepChange: value => changes.push(value) }))
+  const nav = elements(tree, node => node.type === 'nav')[0]
+  assert.equal(elements(nav, node => node.type === 'button').length, 2)
+  assert.equal(elements(tree, node => node.type === 'ApplicationAccessSetup').length, 0)
+  assert.equal(f.queryOptions.has('application-setup-target'), false)
+  button(tree, '查看应用入口').props.onClick()
+  assert.deepEqual(changes, ['release'])
+  tree = f.render('ApplicationSetupPanel', props({ step: 'release', onStepChange: value => changes.push(value) }))
+  elements(tree, node => node.type === 'ApplicationReleasesPanel')[0].props.onContinue()
+  assert.deepEqual(changes, ['release', 'overview'])
 })
 
 test('setup derives the environment from the server instead of an old page parameter', () => {
